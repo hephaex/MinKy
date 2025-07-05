@@ -1,0 +1,119 @@
+.markdown-editor-container {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.editor-toolbar {
+  background: #f8f9fa;
+  border-bottom: 1px solid #ddd;
+  padding: 0;
+}
+
+.editor-mode-tabs {
+  display: flex;
+  margin: 0;
+  padding: 0;
+}
+
+.mode-tab {
+  background: none;
+  border: none;
+  padding: 12px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.mode-tab:hover {
+  background: #e9ecef;
+  color: #333;
+}
+
+.mode-tab.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  background: white;
+}
+
+.editor-content {
+  background: white;
+}
+
+/* Override MDEditor styles */
+.w-md-editor {
+  background: white !important;
+}
+
+.w-md-editor-toolbar {
+  background: #f8f9fa !important;
+  border-bottom: 1px solid #ddd !important;
+}
+
+.w-md-editor-toolbar button {
+  color: #666 !important;
+}
+
+.w-md-editor-toolbar button:hover {
+  background: #e9ecef !important;
+  color: #333 !important;
+}
+
+.w-md-editor-text-textarea,
+.w-md-editor-text {
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
+}
+
+.w-md-editor-preview {
+  background: white !important;
+  padding: 20px !important;
+}
+
+.w-md-editor-preview h1,
+.w-md-editor-preview h2,
+.w-md-editor-preview h3,
+.w-md-editor-preview h4,
+.w-md-editor-preview h5,
+.w-md-editor-preview h6 {
+  color: #333 !important;
+  margin-top: 1.5em !important;
+  margin-bottom: 0.8em !important;
+}
+
+.w-md-editor-preview h1 {
+  border-bottom: 1px solid #eee !important;
+  padding-bottom: 0.3em !important;
+}
+
+.w-md-editor-preview h2 {
+  border-bottom: 1px solid #eee !important;
+  padding-bottom: 0.3em !important;
+}
+
+.w-md-editor-preview code {
+  background: #f6f8fa !important;
+  padding: 0.2em 0.4em !important;
+  border-radius: 3px !important;
+  font-size: 85% !important;
+}
+
+.w-md-editor-preview pre {
+  background: #f6f8fa !important;
+  border-radius: 6px !important;
+  padding: 16px !important;
+  overflow-x: auto !important;
+}
+
+.w-md-editor-preview blockquote {
+  border-left: 4px solid #dfe2e5 !important;
+  background: #f8f9fa !important;
+  color: #6a737d !important;
+  margin: 1em 0 !important;
+  padding: 0.5em 1em !important;
+}
