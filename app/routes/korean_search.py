@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity, jwt_required_optional
+from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 from app.models.document import Document
 from app.models.user import User
 from app.utils.korean_text import korean_processor, search_korean_text, process_korean_document
@@ -24,12 +24,12 @@ class KoreanSearchSchema(Schema):
     use_opensearch = fields.Bool(missing=False)
 
 @korean_search_bp.route('/search/korean', methods=['POST'])
-@jwt_required_optional
 @rate_limit_search("30 per minute")
 @validate_request_security
 @audit_log("korean_text_search")
 def korean_text_search():
     """한국어 텍스트 전용 검색"""
+    verify_jwt_in_request(optional=True)
     current_user_id = get_jwt_identity()
     
     data = request.get_json()
@@ -192,11 +192,11 @@ def _search_with_postgresql(search_params: dict, user_id: int = None) -> dict:
     })
 
 @korean_search_bp.route('/search/suggest-tags', methods=['GET'])
-@jwt_required_optional
 @rate_limit_api("60 per minute")
 @validate_request_security
 def suggest_korean_tags():
     """한국어 태그 자동완성"""
+    verify_jwt_in_request(optional=True)
     query = request.args.get('q', '').strip()
     limit = min(int(request.args.get('limit', 10)), 20)
     
@@ -314,11 +314,11 @@ def _generate_korean_recommendations(analysis: dict) -> dict:
     return recommendations
 
 @korean_search_bp.route('/search/statistics', methods=['GET'])
-@jwt_required_optional
 @rate_limit_api("10 per minute")
 @validate_request_security
 def get_korean_search_statistics():
     """한국어 검색 통계"""
+    verify_jwt_in_request(optional=True)
     current_user_id = get_jwt_identity()
     
     try:
@@ -373,10 +373,10 @@ def get_korean_search_statistics():
         return jsonify({'error': 'Failed to get statistics', 'details': str(e)}), 500
 
 @korean_search_bp.route('/search/health', methods=['GET'])
-@jwt_required_optional
 @rate_limit_api("5 per minute")
 def get_search_health():
     """검색 시스템 상태 확인"""
+    verify_jwt_in_request(optional=True)
     health_info = {
         'postgresql': {'status': 'available'},
         'opensearch': {'status': 'unavailable'},

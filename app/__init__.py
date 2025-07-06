@@ -53,7 +53,7 @@ def create_app():
     from app.routes.security import security_bp
     from app.routes.workflows import workflows_bp
     from app.routes.korean_search import korean_search_bp
-    from app.routes.org_roam import org_roam_bp
+    # from app.routes.org_roam import org_roam_bp
     app.register_blueprint(documents_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(health_bp, url_prefix='/api')
@@ -67,6 +67,6 @@ def create_app():
     app.register_blueprint(security_bp, url_prefix='/api')
     app.register_blueprint(workflows_bp, url_prefix='/api')
     app.register_blueprint(korean_search_bp, url_prefix='/api')
-    app.register_blueprint(org_roam_bp, url_prefix='/api')
+    # app.register_blueprint(org_roam_bp, url_prefix='/api')  # Temporarily disabled due to decorator conflicts
     
     return app

@@ -159,7 +159,7 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
                 if org_doc.get('id'):
                     # org-roam ID로 검색
                     existing_doc = Document.query.filter(
-                        Document.metadata['org_roam_id'].astext == org_doc['id']
+                        Document.document_metadata['org_roam_id'].astext == org_doc['id']
                     ).first()
                 
                 if not existing_doc:
@@ -189,7 +189,7 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
                     existing_doc.updated_at = datetime.utcnow()
                     
                     # 메타데이터 업데이트
-                    existing_doc.metadata.update({
+                    existing_doc.document_metadata.update({
                         'org_roam_id': org_doc.get('id'),
                         'org_filename': org_doc['filename'],
                         'roam_tags': org_doc.get('roam_tags', []),
@@ -211,7 +211,7 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
                     )
                     
                     # 메타데이터 설정
-                    document.metadata = {
+                    document.document_metadata = {
                         'org_roam_id': org_doc.get('id'),
                         'org_filename': org_doc['filename'],
                         'org_file_path': org_doc.get('file_path', ''),
@@ -337,7 +337,7 @@ def get_org_roam_documents():
         # org-roam 메타데이터가 있는 문서들만 검색
         base_query = Document.query.filter(
             Document.user_id == current_user_id,
-            Document.metadata.has_key('org_roam_id')  # org-roam ID가 있는 문서
+            Document.document_metadata.has_key('org_roam_id')  # org-roam ID가 있는 문서
         )
         
         paginated_results = base_query.order_by(
@@ -349,7 +349,7 @@ def get_org_roam_documents():
             doc_dict = doc.to_dict()
             
             # org-roam 특별 정보 추가
-            metadata = doc.metadata or {}
+            metadata = doc.document_metadata or {}
             doc_dict['org_roam_info'] = {
                 'org_roam_id': metadata.get('org_roam_id'),
                 'org_filename': metadata.get('org_filename'),
@@ -396,7 +396,7 @@ def get_document_links(document_id):
         return jsonify({'error': 'Access denied'}), 403
     
     try:
-        metadata = document.metadata or {}
+        metadata = document.document_metadata or {}
         
         # 백링크 정보
         backlinks = metadata.get('backlinks', [])
@@ -407,15 +407,15 @@ def get_document_links(document_id):
         for backlink in backlinks:
             source_doc = None
             if backlink.get('source_id'):
-                source_doc = Document.query.filter_by(
-                    metadata['org_roam_id'].astext == backlink['source_id']
+                source_doc = Document.query.filter(
+                    Document.document_metadata['org_roam_id'].astext == backlink['source_id']
                 ).first()
             
             if not source_doc and backlink.get('source_filename'):
                 source_doc = Document.query.filter_by(
                     user_id=current_user_id
                 ).filter(
-                    Document.metadata['org_filename'].astext == backlink['source_filename']
+                    Document.document_metadata['org_filename'].astext == backlink['source_filename']
                 ).first()
             
             enhanced_backlink = {
@@ -432,15 +432,15 @@ def get_document_links(document_id):
         for outbound_link in outbound_links:
             target_doc = None
             if outbound_link.get('target_id'):
-                target_doc = Document.query.filter_by(
-                    metadata['org_roam_id'].astext == outbound_link['target_id']
+                target_doc = Document.query.filter(
+                    Document.document_metadata['org_roam_id'].astext == outbound_link['target_id']
                 ).first()
             
             if not target_doc and outbound_link.get('target_filename'):
                 target_doc = Document.query.filter_by(
                     user_id=current_user_id
                 ).filter(
-                    Document.metadata['org_filename'].astext == outbound_link['target_filename']
+                    Document.document_metadata['org_filename'].astext == outbound_link['target_filename']
                 ).first()
             
             enhanced_outbound_link = {
@@ -488,33 +488,33 @@ def get_org_roam_statistics():
         # 기본 통계
         total_org_docs = Document.query.filter(
             Document.user_id == current_user_id,
-            Document.metadata.has_key('org_roam_id')
+            Document.document_metadata.has_key('org_roam_id')
         ).count()
         
         # 언어별 분포
         language_stats = db.session.query(
-            Document.metadata['language'].astext.label('language'),
+            Document.document_metadata['language'].astext.label('language'),
             func.count(Document.id).label('count')
         ).filter(
             Document.user_id == current_user_id,
-            Document.metadata.has_key('org_roam_id')
+            Document.document_metadata.has_key('org_roam_id')
         ).group_by('language').all()
         
         # 최근 임포트 문서들
         recent_imports = Document.query.filter(
             Document.user_id == current_user_id,
-            Document.metadata.has_key('org_roam_id')
+            Document.document_metadata.has_key('org_roam_id')
         ).order_by(Document.created_at.desc()).limit(5).all()
         
         # roam_tags 통계
         roam_tags_stats = {}
         org_docs = Document.query.filter(
             Document.user_id == current_user_id,
-            Document.metadata.has_key('org_roam_id')
+            Document.document_metadata.has_key('org_roam_id')
         ).all()
         
         for doc in org_docs:
-            roam_tags = doc.metadata.get('roam_tags', [])
+            roam_tags = doc.document_metadata.get('roam_tags', [])
             for tag in roam_tags:
                 roam_tags_stats[tag] = roam_tags_stats.get(tag, 0) + 1
         
@@ -522,8 +522,8 @@ def get_org_roam_statistics():
         total_backlinks = 0
         total_outbound_links = 0
         for doc in org_docs:
-            total_backlinks += len(doc.metadata.get('backlinks', []))
-            total_outbound_links += len(doc.metadata.get('outbound_links', []))
+            total_backlinks += len(doc.document_metadata.get('backlinks', []))
+            total_outbound_links += len(doc.document_metadata.get('outbound_links', []))
         
         statistics = {
             'total_org_roam_documents': total_org_docs,
@@ -536,9 +536,9 @@ def get_org_roam_statistics():
                 {
                     'id': doc.id,
                     'title': doc.title,
-                    'filename': doc.metadata.get('org_filename'),
+                    'filename': doc.document_metadata.get('org_filename'),
                     'imported_at': doc.created_at.isoformat(),
-                    'language': doc.metadata.get('language')
+                    'language': doc.document_metadata.get('language')
                 }
                 for doc in recent_imports
             ]

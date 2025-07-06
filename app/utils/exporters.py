@@ -2,7 +2,7 @@ import os
 import tempfile
 from datetime import datetime
 import markdown
-from weasyprint import HTML, CSS
+# from weasyprint import HTML, CSS  # Commented out due to system dependencies
 from docx import Document as DocxDocument
 from docx.shared import Inches
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
@@ -140,27 +140,28 @@ class DocumentExporter:
     
     def export_to_pdf(self):
         """Export document to PDF format using WeasyPrint"""
-        html_content = self.export_to_html(include_styles=True)
+        raise NotImplementedError("PDF export is currently disabled due to WeasyPrint dependencies")
+        # html_content = self.export_to_html(include_styles=True)
         
         # Additional CSS for PDF
-        pdf_css = CSS(string="""
-            @page {
-                margin: 1in;
-                @bottom-center {
-                    content: counter(page) " of " counter(pages);
-                    font-size: 10px;
-                    color: #666;
-                }
-            }
-            body { font-size: 12px; }
-            h1 { page-break-before: avoid; }
-            pre, table { page-break-inside: avoid; }
-        """)
+        # pdf_css = CSS(string="""
+        #     @page {
+        #         margin: 1in;
+        #         @bottom-center {
+        #             content: counter(page) " of " counter(pages);
+        #             font-size: 10px;
+        #             color: #666;
+        #         }
+        #     }
+        #     body { font-size: 12px; }
+        #     h1 { page-break-before: avoid; }
+        #     pre, table { page-break-inside: avoid; }
+        # """)
         
-        pdf_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}.pdf")
-        HTML(string=html_content).write_pdf(pdf_file, stylesheets=[pdf_css])
+        # pdf_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}.pdf")
+        # HTML(string=html_content).write_pdf(pdf_file, stylesheets=[pdf_css])
         
-        return pdf_file
+        # return pdf_file
     
     def export_to_docx(self):
         """Export document to DOCX format"""

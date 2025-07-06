@@ -346,7 +346,7 @@ class OrgRoamImporter:
                     )
                     
                     # 메타데이터 저장
-                    document.metadata = {
+                    document.document_metadata = {
                         'org_roam_id': org_doc.get('id'),
                         'org_filename': org_doc['filename'],
                         'org_file_path': org_doc['file_path'],
