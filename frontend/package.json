@@ -10,7 +10,8 @@
     "react-markdown": "^8.0.7",
     "react-syntax-highlighter": "^15.5.0",
     "@uiw/react-md-editor": "^3.23.5",
-    "@uiw/react-codemirror": "^4.21.21"
+    "@uiw/react-codemirror": "^4.21.21",
+    "react-scripts": "5.0.1"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -36,7 +37,6 @@
     ]
   },
   "devDependencies": {
-    "react-scripts": "5.0.1"
   },
   "proxy": "http://localhost:5000"
 }

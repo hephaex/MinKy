@@ -19,7 +19,7 @@ class Document(db.Model):
     is_public = db.Column(db.Boolean, default=True)
     is_published = db.Column(db.Boolean, default=False)
     published_at = db.Column(db.DateTime, nullable=True)
-    metadata = db.Column(db.JSON, nullable=True)  # 확장 가능한 메타데이터 저장
+    document_metadata = db.Column(db.JSON, nullable=True)  # 확장 가능한 메타데이터 저장
     
     # Relationships
     tags = db.relationship('Tag', secondary=document_tags, backref='documents', lazy='dynamic')
@@ -180,7 +180,7 @@ class Document(db.Model):
             'is_public': self.is_public,
             'is_published': self.is_published,
             'published_at': self.published_at.isoformat() if self.published_at else None,
-            'metadata': self.metadata,
+            'metadata': self.document_metadata,
             'owner': self.owner.to_dict() if self.owner else None,
             'tags': [tag.to_dict() for tag in self.tags],
             'tag_names': self.get_tag_names(),
