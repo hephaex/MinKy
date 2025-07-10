@@ -15,6 +15,7 @@ services:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs
+      - ./migrations:/app/migrations
     restart: unless-stopped
 
   db:
