@@ -15,7 +15,7 @@ class DocumentVersion(db.Model):
     author = db.Column(db.String(255))
     content_hash = db.Column(db.String(64), nullable=False)  # SHA-256 hash
     change_summary = db.Column(db.Text)  # Optional summary of changes
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
