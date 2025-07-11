@@ -38,6 +38,18 @@ export const documentService = {
     const response = await api.delete(`/documents/${id}`);
     return response.data;
   },
+
+  uploadDocument: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await api.post('/documents/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
 };
 
 export default api;
