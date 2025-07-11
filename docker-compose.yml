@@ -26,7 +26,6 @@ services:
       - POSTGRES_PASSWORD=minky_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations/add_indexes.sql:/docker-entrypoint-initdb.d/02_indexes.sql
     ports:
       - "5432:5432"
     healthcheck:
