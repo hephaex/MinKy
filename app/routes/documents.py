@@ -5,6 +5,9 @@ from app.models.document import Document
 from app.models.user import User
 from sqlalchemy import or_
 import bleach
+import os
+import re
+from datetime import datetime
 
 documents_bp = Blueprint('documents', __name__)
 
@@ -172,3 +175,137 @@ def delete_document(document_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+def extract_markdown_metadata(content):
+    """Extract metadata from markdown frontmatter"""
+    frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n'
+    match = re.match(frontmatter_pattern, content, re.DOTALL)
+    
+    if match:
+        yaml_content = match.group(1)
+        # Remove frontmatter from content
+        content = re.sub(frontmatter_pattern, '', content, flags=re.DOTALL)
+        
+        # Parse simple YAML-like metadata
+        metadata = {}
+        for line in yaml_content.split('\n'):
+            if ':' in line:
+                key, value = line.split(':', 1)
+                metadata[key.strip()] = value.strip().strip('"\'')
+        
+        return metadata, content
+    
+    return {}, content
+
+def validate_markdown_file(file):
+    """Validate uploaded markdown file"""
+    if not file or not file.filename:
+        return False, "No file provided"
+    
+    # Check file extension
+    if not file.filename.lower().endswith('.md'):
+        return False, "File must be a markdown (.md) file"
+    
+    # Check file size (max 10MB)
+    file.seek(0, os.SEEK_END)
+    file_size = file.tell()
+    file.seek(0)
+    
+    if file_size > 10 * 1024 * 1024:  # 10MB
+        return False, "File size must be less than 10MB"
+    
+    if file_size == 0:
+        return False, "File cannot be empty"
+    
+    return True, None
+
+@documents_bp.route('/documents/upload', methods=['POST'])
+@jwt_required(optional=True)
+def upload_markdown_file():
+    """Upload a markdown file and create a document"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        current_user_id = get_current_user_id()
+        
+        # Validate file
+        is_valid, error_message = validate_markdown_file(file)
+        if not is_valid:
+            return jsonify({'error': error_message}), 400
+        
+        # Read file content
+        try:
+            content = file.read().decode('utf-8')
+        except UnicodeDecodeError:
+            return jsonify({'error': 'File must be UTF-8 encoded'}), 400
+        
+        # Extract metadata from frontmatter
+        metadata, markdown_content = extract_markdown_metadata(content)
+        
+        # Get title from metadata or filename
+        title = metadata.get('title', '')
+        if not title:
+            # Use filename without extension as title
+            title = os.path.splitext(file.filename)[0]
+        
+        # Clean and validate title
+        title = bleach.clean(title.strip())
+        if not title:
+            return jsonify({'error': 'Document title cannot be empty'}), 400
+        
+        # Get other metadata
+        author = metadata.get('author', '')
+        if author:
+            author = bleach.clean(author.strip())
+        
+        # Get tags from metadata
+        tags = []
+        if 'tags' in metadata:
+            tags_str = metadata['tags']
+            if tags_str:
+                # Parse tags (assume comma-separated or array-like format)
+                tags_str = tags_str.strip('[]')
+                tags = [tag.strip().strip('"\',') for tag in tags_str.split(',') if tag.strip()]
+        
+        # Get visibility setting
+        is_public = True
+        if 'public' in metadata:
+            is_public = metadata['public'].lower() in ['true', 'yes', '1']
+        elif 'private' in metadata:
+            is_public = metadata['private'].lower() not in ['true', 'yes', '1']
+        
+        # Create document
+        document = Document(
+            title=title,
+            markdown_content=markdown_content,
+            author=author if author else None,
+            user_id=current_user_id,
+            is_public=is_public
+        )
+        
+        # Add tags if provided
+        if tags:
+            document.add_tags(tags)
+        
+        # Store additional metadata
+        if metadata:
+            # Remove processed metadata
+            stored_metadata = {k: v for k, v in metadata.items() 
+                             if k not in ['title', 'author', 'tags', 'public', 'private']}
+            if stored_metadata:
+                document.document_metadata = stored_metadata
+        
+        db.session.add(document)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'File uploaded successfully',
+            'document': document.to_dict(),
+            'metadata_found': bool(metadata)
+        }), 201
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500

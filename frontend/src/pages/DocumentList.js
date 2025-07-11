@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
 import SearchBar from '../components/SearchBar';
 import Pagination from '../components/Pagination';
+import FileUpload from '../components/FileUpload';
 import { highlightTextReact, truncateWithHighlight } from '../utils/highlightText';
 import './DocumentList.css';
 
@@ -13,6 +14,9 @@ const DocumentList = () => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState(null);
+  const navigate = useNavigate();
 
   const fetchDocuments = async (page = 1, search = '') => {
     try {
@@ -43,6 +47,33 @@ const DocumentList = () => {
     fetchDocuments(page, searchQuery);
   };
 
+  const handleUploadSuccess = (response) => {
+    setUploadStatus({
+      type: 'success',
+      message: `File uploaded successfully! Document "${response.document.title}" has been created.`
+    });
+    setShowUpload(false);
+    
+    // Refresh document list
+    fetchDocuments(currentPage, searchQuery);
+    
+    // Navigate to the new document after a brief delay
+    setTimeout(() => {
+      navigate(`/documents/${response.document.id}`);
+    }, 1500);
+  };
+
+  const handleUploadError = (error) => {
+    setUploadStatus({
+      type: 'error',
+      message: error
+    });
+  };
+
+  const clearUploadStatus = () => {
+    setUploadStatus(null);
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -67,11 +98,41 @@ const DocumentList = () => {
         <h2>Documents</h2>
         <div className="header-actions">
           <SearchBar onSearch={handleSearch} initialValue={searchQuery} />
-          <Link to="/documents/new" className="btn btn-primary">
-            + New Document
-          </Link>
+          <div className="action-buttons">
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => setShowUpload(!showUpload)}
+            >
+              📁 Upload .md
+            </button>
+            <Link to="/documents/new" className="btn btn-primary">
+              + New Document
+            </Link>
+          </div>
         </div>
       </div>
+
+      {/* Upload Status Messages */}
+      {uploadStatus && (
+        <div className={`upload-status ${uploadStatus.type}`}>
+          <span>{uploadStatus.message}</span>
+          <button className="close-btn" onClick={clearUploadStatus}>×</button>
+        </div>
+      )}
+
+      {/* File Upload Area */}
+      {showUpload && (
+        <div className="upload-section">
+          <div className="upload-header">
+            <h3>Upload Markdown File</h3>
+            <button className="close-btn" onClick={() => setShowUpload(false)}>×</button>
+          </div>
+          <FileUpload 
+            onUploadSuccess={handleUploadSuccess}
+            onUploadError={handleUploadError}
+          />
+        </div>
+      )}
 
       {documents.length === 0 ? (
         <div className="no-documents">
