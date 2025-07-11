@@ -114,16 +114,13 @@ class Document(db.Model):
                 page=page, per_page=per_page, error_out=False
             )
         
+        # Use simple ILIKE search instead of full-text search for better compatibility
         search_query = base_query.filter(
-            func.to_tsvector('english', cls.title + ' ' + cls.markdown_content).match(
-                func.plainto_tsquery('english', query_text)
+            db.or_(
+                cls.title.ilike(f'%{query_text}%'),
+                cls.markdown_content.ilike(f'%{query_text}%')
             )
-        ).order_by(
-            func.ts_rank(
-                func.to_tsvector('english', cls.title + ' ' + cls.markdown_content),
-                func.plainto_tsquery('english', query_text)
-            ).desc()
-        )
+        ).order_by(cls.updated_at.desc())
         
         return search_query.paginate(page=page, per_page=per_page, error_out=False)
     
