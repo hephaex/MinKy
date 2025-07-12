@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 from app.utils.obsidian_parser import ObsidianParser
+from app.utils.backup_manager import create_document_backup, update_document_backup
 
 documents_bp = Blueprint('documents', __name__)
 
@@ -81,6 +82,17 @@ def create_document():
         
         db.session.add(document)
         db.session.commit()
+        
+        # 문서 백업 생성
+        try:
+            backup_path = create_document_backup(document)
+            if backup_path:
+                print(f"Document backup created: {backup_path}")
+            else:
+                print(f"Failed to create backup for document {document.id}")
+        except Exception as backup_error:
+            print(f"Backup creation error for document {document.id}: {backup_error}")
+            # 백업 실패가 문서 생성을 막지 않도록 함
         
         return jsonify(document.to_dict()), 201
     
@@ -224,6 +236,17 @@ def update_document(document_id):
             document.add_tags(all_tags)
         
         db.session.commit()
+        
+        # 문서 업데이트 백업 생성
+        try:
+            backup_path = update_document_backup(document)
+            if backup_path:
+                print(f"Document update backup created: {backup_path}")
+            else:
+                print(f"Failed to create update backup for document {document.id}")
+        except Exception as backup_error:
+            print(f"Update backup creation error for document {document.id}: {backup_error}")
+            # 백업 실패가 문서 업데이트를 막지 않도록 함
         
         return jsonify(document.to_dict())
     
@@ -655,6 +678,17 @@ def upload_markdown_file():
         db.session.add(document)
         db.session.commit()
         
+        # 업로드된 문서 백업 생성
+        try:
+            backup_path = create_document_backup(document)
+            if backup_path:
+                print(f"Uploaded document backup created: {backup_path}")
+            else:
+                print(f"Failed to create backup for uploaded document {document.id}")
+        except Exception as backup_error:
+            print(f"Upload backup creation error for document {document.id}: {backup_error}")
+            # 백업 실패가 업로드를 막지 않도록 함
+        
         return jsonify({
             'message': 'File uploaded successfully',
             'document': document.to_dict(),
@@ -664,3 +698,77 @@ def upload_markdown_file():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
+
+@documents_bp.route('/documents/backups', methods=['GET'])
+@jwt_required(optional=True)
+def list_document_backups():
+    """백업 파일 목록 조회"""
+    try:
+        from app.utils.backup_manager import backup_manager
+        
+        current_user_id = get_current_user_id()
+        if not current_user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        backups = backup_manager.list_backups()
+        
+        return jsonify({
+            'backups': backups,
+            'count': len(backups)
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@documents_bp.route('/documents/backups/cleanup', methods=['POST'])
+@jwt_required(optional=True)
+def cleanup_old_backups():
+    """오래된 백업 파일 정리"""
+    try:
+        from app.utils.backup_manager import backup_manager
+        
+        current_user_id = get_current_user_id()
+        if not current_user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        data = request.get_json() or {}
+        days_to_keep = data.get('days_to_keep', 30)
+        
+        deleted_count = backup_manager.cleanup_old_backups(days_to_keep)
+        
+        return jsonify({
+            'message': f'Cleanup completed',
+            'deleted_count': deleted_count,
+            'days_to_keep': days_to_keep
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@documents_bp.route('/documents/<int:document_id>/backup', methods=['POST'])
+@jwt_required(optional=True)
+def create_manual_backup(document_id):
+    """특정 문서의 수동 백업 생성"""
+    try:
+        current_user_id = get_current_user_id()
+        
+        document = Document.query.get_or_404(document_id)
+        
+        # 문서 접근 권한 확인
+        if not document.can_view(current_user_id):
+            return jsonify({'error': 'Access denied'}), 403
+        
+        # 백업 생성
+        backup_path = create_document_backup(document)
+        
+        if backup_path:
+            return jsonify({
+                'message': 'Backup created successfully',
+                'backup_path': backup_path,
+                'document_id': document_id
+            })
+        else:
+            return jsonify({'error': 'Failed to create backup'}), 500
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
