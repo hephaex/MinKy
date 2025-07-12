@@ -176,6 +176,84 @@
   font-weight: 600;
 }
 
+/* 옵시디언 스타일 기능 */
+.frontmatter-display {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.frontmatter-display h4 {
+  margin: 0 0 10px 0;
+  color: #6c757d;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metadata-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.metadata-item {
+  display: flex;
+  gap: 8px;
+}
+
+.metadata-item strong {
+  color: #495057;
+  min-width: 80px;
+}
+
+.metadata-item span {
+  color: #6c757d;
+}
+
+/* 내부 링크 스타일 */
+.internal-link {
+  color: #7c3aed;
+  text-decoration: none;
+  border-bottom: 1px dotted #7c3aed;
+  transition: all 0.2s ease;
+}
+
+.internal-link:hover {
+  color: #5b21b6;
+  background-color: #f3f4f6;
+  text-decoration: none;
+}
+
+.internal-link.broken {
+  color: #dc2626;
+  border-bottom-color: #dc2626;
+  cursor: help;
+}
+
+.internal-link.broken:hover {
+  background-color: #fef2f2;
+}
+
+/* 해시태그 스타일 */
+.hashtag {
+  color: #059669;
+  text-decoration: none;
+  background-color: #f0fdfa;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 0.9em;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.hashtag:hover {
+  color: #047857;
+  background-color: #d1fae5;
+  text-decoration: none;
+}
+
 .markdown-source {
   padding: 20px;
 }

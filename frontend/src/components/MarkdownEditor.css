@@ -135,3 +135,39 @@
   background-color: #f6f8fa !important;
   font-weight: 600 !important;
 }
+
+/* 옵시디언 스타일 - 프리뷰 모드 */
+.w-md-editor-preview .internal-link {
+  color: #7c3aed !important;
+  text-decoration: none !important;
+  border-bottom: 1px dotted #7c3aed !important;
+  transition: all 0.2s ease !important;
+}
+
+.w-md-editor-preview .internal-link:hover {
+  color: #5b21b6 !important;
+  background-color: #f3f4f6 !important;
+}
+
+.w-md-editor-preview .internal-link.broken {
+  color: #dc2626 !important;
+  border-bottom-color: #dc2626 !important;
+  cursor: help !important;
+}
+
+.w-md-editor-preview .hashtag {
+  color: #059669 !important;
+  text-decoration: none !important;
+  background-color: #f0fdfa !important;
+  padding: 2px 6px !important;
+  border-radius: 12px !important;
+  font-size: 0.9em !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.w-md-editor-preview .hashtag:hover {
+  color: #047857 !important;
+  background-color: #d1fae5 !important;
+  text-decoration: none !important;
+}

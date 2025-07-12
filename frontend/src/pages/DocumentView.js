@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { documentService } from '../services/api';
+import { extractFrontmatter, processInternalLinks, processHashtags } from '../utils/obsidianRenderer';
 import './DocumentView.css';
 
 const DocumentView = () => {
@@ -14,6 +15,8 @@ const DocumentView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showMarkdown, setShowMarkdown] = useState(false);
+  const [frontmatter, setFrontmatter] = useState({});
+  const [processedContent, setProcessedContent] = useState('');
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -21,6 +24,18 @@ const DocumentView = () => {
         setLoading(true);
         const data = await documentService.getDocument(id);
         setDocument(data);
+        
+        // 옵시디언 스타일 콘텐츠 처리
+        if (data.markdown_content) {
+          const { metadata, content } = extractFrontmatter(data.markdown_content);
+          setFrontmatter(metadata);
+          
+          // 내부 링크와 해시태그 처리
+          let processed = processInternalLinks(content, navigate);
+          processed = processHashtags(processed);
+          setProcessedContent(processed);
+        }
+        
         setError(null);
       } catch (err) {
         setError('Failed to fetch document');
@@ -123,9 +138,32 @@ const DocumentView = () => {
           </div>
         ) : (
           <div className="markdown-rendered">
+            {/* 프론트매터 표시 */}
+            {Object.keys(frontmatter).length > 0 && (
+              <div className="frontmatter-display">
+                <h4>메타데이터</h4>
+                <div className="metadata-grid">
+                  {Object.entries(frontmatter).map(([key, value]) => (
+                    <div key={key} className="metadata-item">
+                      <strong>{key}:</strong> 
+                      <span>{Array.isArray(value) ? value.join(', ') : String(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
+                // 텍스트 노드에서 이미 처리된 HTML을 렌더링
+                text({ children }) {
+                  if (typeof children === 'string' && 
+                      (children.includes('<a') || children.includes('<span'))) {
+                    return <span dangerouslySetInnerHTML={{ __html: children }} />;
+                  }
+                  return children;
+                },
                 code({ node, inline, className, children, ...props }) {
                   const match = /language-(\w+)/.exec(className || '');
                   return !inline && match ? (
@@ -145,7 +183,7 @@ const DocumentView = () => {
                 }
               }}
             >
-              {document.markdown_content}
+              {processedContent || document.markdown_content}
             </ReactMarkdown>
           </div>
         )}
