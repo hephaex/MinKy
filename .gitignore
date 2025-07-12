@@ -51,6 +51,7 @@ logs/
 # Document Backups
 backup/
 *.backup
+backup_config.json
 
 # Node modules (for frontend)
 node_modules/

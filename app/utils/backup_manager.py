@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 import logging
+from .backup_config import backup_config
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,11 @@ class DocumentBackupManager:
     
     def create_backup(self, document) -> Optional[str]:
         """문서 백업 생성"""
+        # 백업 기능이 비활성화된 경우 건너뛰기
+        if not backup_config.is_backup_enabled():
+            logger.info("Backup is disabled in configuration")
+            return None
+            
         try:
             # 백업 파일명 생성
             filename = self.generate_backup_filename(
@@ -75,11 +81,24 @@ class DocumentBackupManager:
             # 백업 내용 생성
             backup_content = self.generate_backup_content(document)
             
+            # 파일 크기 확인
+            content_size_mb = len(backup_content.encode('utf-8')) / (1024 * 1024)
+            max_size_mb = backup_config.get_max_backup_size_mb()
+            
+            if content_size_mb > max_size_mb:
+                logger.warning(f"Backup content too large ({content_size_mb:.2f}MB > {max_size_mb}MB), skipping backup for document {document.id}")
+                return None
+            
             # 파일 저장
             with open(backup_path, 'w', encoding='utf-8') as f:
                 f.write(backup_content)
             
             logger.info(f"Document backup created: {backup_path}")
+            
+            # 자동 정리 실행 (설정에 따라)
+            if backup_config.is_auto_cleanup_enabled():
+                self.auto_cleanup_if_needed()
+            
             return str(backup_path)
             
         except Exception as e:
@@ -169,8 +188,19 @@ class DocumentBackupManager:
             logger.error(f"Failed to list backups: {e}")
             return []
     
-    def cleanup_old_backups(self, days_to_keep: int = 30) -> int:
+    def auto_cleanup_if_needed(self) -> int:
+        """자동 정리가 필요한 경우 실행"""
+        if not backup_config.is_auto_cleanup_enabled():
+            return 0
+        
+        days_to_keep = backup_config.get_auto_cleanup_days()
+        return self.cleanup_old_backups(days_to_keep)
+    
+    def cleanup_old_backups(self, days_to_keep: int = None) -> int:
         """오래된 백업 파일 정리"""
+        if days_to_keep is None:
+            days_to_keep = backup_config.get_auto_cleanup_days()
+            
         try:
             cutoff_date = datetime.now().timestamp() - (days_to_keep * 24 * 60 * 60)
             deleted_count = 0
@@ -181,20 +211,58 @@ class DocumentBackupManager:
                     deleted_count += 1
                     logger.info(f"Old backup deleted: {file_path}")
             
-            logger.info(f"Cleanup completed: {deleted_count} old backups deleted")
+            logger.info(f"Cleanup completed: {deleted_count} old backups deleted (keeping {days_to_keep} days)")
             return deleted_count
             
         except Exception as e:
             logger.error(f"Failed to cleanup old backups: {e}")
             return 0
+    
+    def cleanup_excess_backups(self) -> int:
+        """백업 파일 개수 제한에 따른 정리"""
+        try:
+            max_backups = backup_config.get_max_total_backups()
+            backup_files = list(self.backup_root_dir.glob("*.md"))
+            
+            if len(backup_files) <= max_backups:
+                return 0
+            
+            # 생성일 기준으로 정렬 (오래된 것부터)
+            backup_files.sort(key=lambda f: f.stat().st_ctime)
+            
+            # 초과된 개수만큼 삭제
+            excess_count = len(backup_files) - max_backups
+            deleted_count = 0
+            
+            for file_path in backup_files[:excess_count]:
+                file_path.unlink()
+                deleted_count += 1
+                logger.info(f"Excess backup deleted: {file_path}")
+            
+            logger.info(f"Excess cleanup completed: {deleted_count} old backups deleted (max: {max_backups})")
+            return deleted_count
+            
+        except Exception as e:
+            logger.error(f"Failed to cleanup excess backups: {e}")
+            return 0
 
 # 전역 백업 매니저 인스턴스
 backup_manager = DocumentBackupManager()
 
-def create_document_backup(document) -> Optional[str]:
+def create_document_backup(document, force: bool = False) -> Optional[str]:
     """문서 백업 생성 (편의 함수)"""
+    if not force and not backup_config.should_backup_on_create():
+        return None
     return backup_manager.create_backup(document)
 
-def update_document_backup(document) -> Optional[str]:
+def update_document_backup(document, force: bool = False) -> Optional[str]:
     """문서 업데이트 백업 생성 (편의 함수)"""
+    if not force and not backup_config.should_backup_on_update():
+        return None
     return backup_manager.update_backup(document)
+
+def upload_document_backup(document, force: bool = False) -> Optional[str]:
+    """문서 업로드 백업 생성 (편의 함수)"""
+    if not force and not backup_config.should_backup_on_upload():
+        return None
+    return backup_manager.create_backup(document)
