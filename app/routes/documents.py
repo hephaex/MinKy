@@ -11,7 +11,7 @@ import re
 from datetime import datetime
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 from app.utils.obsidian_parser import ObsidianParser
-from app.utils.backup_manager import create_document_backup, update_document_backup
+from app.utils.backup_manager import create_document_backup, update_document_backup, upload_document_backup
 
 documents_bp = Blueprint('documents', __name__)
 
@@ -680,11 +680,11 @@ def upload_markdown_file():
         
         # 업로드된 문서 백업 생성
         try:
-            backup_path = create_document_backup(document)
+            backup_path = upload_document_backup(document)
             if backup_path:
                 print(f"Uploaded document backup created: {backup_path}")
             else:
-                print(f"Failed to create backup for uploaded document {document.id}")
+                print(f"Backup skipped or failed for uploaded document {document.id}")
         except Exception as backup_error:
             print(f"Upload backup creation error for document {document.id}: {backup_error}")
             # 백업 실패가 업로드를 막지 않도록 함
@@ -769,6 +769,98 @@ def create_manual_backup(document_id):
             })
         else:
             return jsonify({'error': 'Failed to create backup'}), 500
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@documents_bp.route('/documents/backup-config', methods=['GET'])
+@jwt_required(optional=True)
+def get_backup_config():
+    """백업 설정 조회"""
+    try:
+        from app.utils.backup_config import backup_config
+        
+        current_user_id = get_current_user_id()
+        if not current_user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        return jsonify({
+            'config': backup_config.to_dict(),
+            'status': {
+                'backup_enabled': backup_config.is_backup_enabled(),
+                'auto_cleanup_enabled': backup_config.is_auto_cleanup_enabled(),
+                'backup_on_create': backup_config.should_backup_on_create(),
+                'backup_on_update': backup_config.should_backup_on_update(),
+                'backup_on_upload': backup_config.should_backup_on_upload()
+            }
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@documents_bp.route('/documents/backup-config', methods=['PUT'])
+@jwt_required(optional=True)
+def update_backup_config():
+    """백업 설정 업데이트"""
+    try:
+        from app.utils.backup_config import backup_config
+        
+        current_user_id = get_current_user_id()
+        if not current_user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No configuration data provided'}), 400
+        
+        # 허용된 설정 키들
+        allowed_keys = {
+            'auto_cleanup_enabled', 'auto_cleanup_days', 'backup_enabled',
+            'backup_on_create', 'backup_on_update', 'backup_on_upload',
+            'max_backup_size_mb', 'max_total_backups', 'compression_enabled'
+        }
+        
+        # 유효한 설정만 필터링
+        valid_updates = {k: v for k, v in data.items() if k in allowed_keys}
+        
+        if not valid_updates:
+            return jsonify({'error': 'No valid configuration keys provided'}), 400
+        
+        # 설정 업데이트
+        success = backup_config.update(valid_updates)
+        
+        if success:
+            return jsonify({
+                'message': 'Backup configuration updated successfully',
+                'updated_keys': list(valid_updates.keys()),
+                'config': backup_config.to_dict()
+            })
+        else:
+            return jsonify({'error': 'Failed to update configuration'}), 500
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@documents_bp.route('/documents/backup-config/reset', methods=['POST'])
+@jwt_required(optional=True)
+def reset_backup_config():
+    """백업 설정 초기화"""
+    try:
+        from app.utils.backup_config import backup_config
+        
+        current_user_id = get_current_user_id()
+        if not current_user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+        
+        success = backup_config.reset_to_defaults()
+        
+        if success:
+            return jsonify({
+                'message': 'Backup configuration reset to defaults',
+                'config': backup_config.to_dict()
+            })
+        else:
+            return jsonify({'error': 'Failed to reset configuration'}), 500
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
