@@ -24,3 +24,4 @@ mecab-python3==1.0.6
 opensearch-py==2.4.2
 orgparse==0.3.2
 charset-normalizer==3.3.2
+PyYAML==6.0.1
