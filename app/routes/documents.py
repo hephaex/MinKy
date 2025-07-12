@@ -41,7 +41,17 @@ def create_document():
             return jsonify({'error': 'Title cannot be empty'}), 400
         
         # 옵시디언 스타일 콘텐츠 처리
-        obsidian_data = process_obsidian_content(data['markdown_content'])
+        try:
+            obsidian_data = process_obsidian_content(data['markdown_content'])
+        except Exception as e:
+            print(f"Error processing Obsidian content during creation: {e}")
+            # 옵시디언 처리 실패시 기본값 설정
+            obsidian_data = {
+                'frontmatter': {},
+                'internal_links': [],
+                'hashtags': [],
+                'all_tags': []
+            }
         
         # 프론트매터에서 제목 오버라이드 (옵션)
         if 'title' in obsidian_data['frontmatter'] and not title:
@@ -163,15 +173,26 @@ def update_document(document_id):
             document.is_public = bool(data['is_public'])
         
         # 옵시디언 스타일 콘텐츠 처리 및 메타데이터 업데이트
+        obsidian_data = None
         if data.get('markdown_content'):
-            obsidian_data = process_obsidian_content(data['markdown_content'])
-            
-            # 문서 메타데이터 업데이트
-            document.document_metadata = {
-                'frontmatter': obsidian_data['frontmatter'],
-                'internal_links': obsidian_data['internal_links'],
-                'hashtags': obsidian_data['hashtags']
-            }
+            try:
+                obsidian_data = process_obsidian_content(data['markdown_content'])
+                
+                # 문서 메타데이터 업데이트
+                document.document_metadata = {
+                    'frontmatter': obsidian_data['frontmatter'],
+                    'internal_links': obsidian_data['internal_links'],
+                    'hashtags': obsidian_data['hashtags']
+                }
+            except Exception as e:
+                print(f"Error processing Obsidian content: {e}")
+                # 옵시디언 처리 실패시 기본값 설정
+                obsidian_data = {
+                    'frontmatter': {},
+                    'internal_links': [],
+                    'hashtags': [],
+                    'all_tags': []
+                }
         
         # Update tags if provided
         if 'tags' in data:
@@ -180,8 +201,8 @@ def update_document(document_id):
             obsidian_tags = []
             if data.get('markdown_content'):
                 auto_tags = detect_auto_tags(data['markdown_content'])
-                obsidian_data = process_obsidian_content(data['markdown_content'])
-                obsidian_tags = obsidian_data.get('all_tags', [])
+                if obsidian_data:
+                    obsidian_tags = obsidian_data.get('all_tags', [])
             
             all_tags = merge_tags(merge_tags(data['tags'], auto_tags), obsidian_tags)
             
@@ -192,8 +213,9 @@ def update_document(document_id):
         elif data.get('markdown_content'):
             # If content is updated but tags aren't specified, still process obsidian tags
             auto_tags = detect_auto_tags(data['markdown_content'])
-            obsidian_data = process_obsidian_content(data['markdown_content'])
-            obsidian_tags = obsidian_data.get('all_tags', [])
+            obsidian_tags = []
+            if obsidian_data:
+                obsidian_tags = obsidian_data.get('all_tags', [])
             
             # Get existing tag names
             existing_tag_names = [tag.name for tag in document.tags]

@@ -52,8 +52,11 @@ class ObsidianParser:
                 frontmatter_data = yaml.safe_load(yaml_content) or {}
                 clean_content = content[match.end():]
                 logger.info(f"Extracted frontmatter: {frontmatter_data}")
-            except yaml.YAMLError as e:
+            except (yaml.YAMLError, ImportError, AttributeError) as e:
                 logger.warning(f"Failed to parse YAML frontmatter: {e}")
+                frontmatter_data = {}
+            except Exception as e:
+                logger.error(f"Unexpected error parsing frontmatter: {e}")
                 frontmatter_data = {}
         
         return frontmatter_data, clean_content
