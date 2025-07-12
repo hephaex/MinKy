@@ -1,4 +1,7 @@
 // 옵시디언 스타일 마크다운 렌더링 유틸리티
+import React from 'react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 export const processInternalLinks = (content, navigate, documentLookup = {}) => {
   // [[link|display]] 또는 [[link]] 패턴 처리
