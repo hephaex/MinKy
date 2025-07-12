@@ -117,3 +117,21 @@
   margin: 1em 0 !important;
   padding: 0.5em 1em !important;
 }
+
+.w-md-editor-preview table {
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  margin: 1em 0 !important;
+  width: 100% !important;
+}
+
+.w-md-editor-preview th,
+.w-md-editor-preview td {
+  border: 1px solid #dfe2e5 !important;
+  padding: 6px 13px !important;
+}
+
+.w-md-editor-preview th {
+  background-color: #f6f8fa !important;
+  font-weight: 600 !important;
+}
