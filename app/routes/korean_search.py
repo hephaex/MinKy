@@ -221,12 +221,12 @@ def suggest_korean_tags():
             # 한국어 태그 검색 (부분 매칭)
             tags = Tag.query.filter(
                 Tag.name.ilike(f"%{query}%")
-            ).order_by(Tag.usage_count.desc()).limit(limit).all()
+            ).order_by(Tag.name).limit(limit).all()
         else:
             # 영어/숫자 태그 검색
             tags = Tag.query.filter(
                 Tag.name.ilike(f"{query}%")
-            ).order_by(Tag.usage_count.desc()).limit(limit).all()
+            ).order_by(Tag.name).limit(limit).all()
         
         suggestions = [tag.name for tag in tags]
         
@@ -348,7 +348,8 @@ def get_korean_search_statistics():
         ).count()
         
         # 인기 태그
-        popular_tags = Tag.query.order_by(Tag.usage_count.desc()).limit(10).all()
+        popular_tags_data = Tag.get_popular_tags(limit=10)
+        popular_tags = [tag for tag, count in popular_tags_data]
         
         # 월별 생성 분포
         monthly_stats = Document.query.with_entities(
@@ -361,7 +362,7 @@ def get_korean_search_statistics():
             'public_documents': public_docs,
             'user_documents': user_docs,
             'estimated_korean_documents': korean_docs,
-            'popular_tags': [(tag.name, tag.usage_count) for tag in popular_tags],
+            'popular_tags': [(tag.name, tag.get_document_count()) for tag in popular_tags],
             'monthly_distribution': [(str(month), count) for month, count in monthly_stats],
             'source': 'postgresql'
         }

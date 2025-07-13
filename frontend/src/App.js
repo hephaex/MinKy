@@ -5,6 +5,11 @@ import DocumentList from './pages/DocumentList';
 import DocumentView from './pages/DocumentView';
 import DocumentCreate from './pages/DocumentCreate';
 import DocumentEdit from './pages/DocumentEdit';
+import TagList from './pages/TagList';
+import TagDetail from './pages/TagDetail';
+import DateExplorer from './pages/DateExplorer';
+import DateExplorerByDate from './pages/DateExplorerByDate';
+import Settings from './pages/Settings';
 import './App.css';
 
 function App() {
@@ -18,6 +23,11 @@ function App() {
             <Route path="/documents/new" element={<DocumentCreate />} />
             <Route path="/documents/:id" element={<DocumentView />} />
             <Route path="/documents/:id/edit" element={<DocumentEdit />} />
+            <Route path="/tags" element={<TagList />} />
+            <Route path="/tags/:slug" element={<TagDetail />} />
+            <Route path="/explore" element={<DateExplorer />} />
+            <Route path="/explore-date" element={<DateExplorerByDate />} />
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
       </div>
