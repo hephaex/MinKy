@@ -101,6 +101,16 @@ const DocumentView = () => {
         
         <div className="document-title-section">
           <h1 className="document-title">{document.title}</h1>
+          {/* Tags display in 8pt font below title */}
+          {document.tags && document.tags.length > 0 && (
+            <div className="document-tags">
+              {document.tags.map((tag, index) => (
+                <span key={index} className="document-tag">
+                  {tag.name || tag}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="document-meta">
             {document.author && (
               <span className="document-author">By {document.author}</span>

@@ -11,9 +11,36 @@ import re
 from datetime import datetime
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 from app.utils.obsidian_parser import ObsidianParser
-from app.utils.backup_manager import create_document_backup, update_document_backup, upload_document_backup
+from app.utils.backup_manager import create_document_backup, update_document_backup, upload_document_backup, export_all_documents
 
 documents_bp = Blueprint('documents', __name__)
+
+def process_obsidian_content(markdown_content):
+    """Process Obsidian-style content and extract metadata"""
+    parser = ObsidianParser()
+    parsed = parser.parse_markdown(markdown_content)
+    
+    # Extract all tags (frontmatter + hashtags)
+    all_tags = set()
+    
+    # Tags from frontmatter
+    if 'tags' in parsed.get('frontmatter', {}):
+        frontmatter_tags = parsed['frontmatter']['tags']
+        if isinstance(frontmatter_tags, list):
+            all_tags.update(frontmatter_tags)
+        elif isinstance(frontmatter_tags, str):
+            all_tags.update(tag.strip() for tag in frontmatter_tags.split(','))
+    
+    # Tags from hashtags
+    for hashtag in parsed.get('hashtags', []):
+        all_tags.add(hashtag.get('tag', ''))
+    
+    return {
+        'frontmatter': parsed.get('frontmatter', {}),
+        'internal_links': parsed.get('internal_links', []),
+        'hashtags': parsed.get('hashtags', []),
+        'all_tags': list(filter(None, all_tags))
+    }
 
 def get_current_user_id():
     try:
@@ -138,6 +165,102 @@ def list_documents():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@documents_bp.route('/documents/sync', methods=['POST'])
+@jwt_required(optional=True)
+def sync_backup_files():
+    """백업 파일과 DB 동기화"""
+    try:
+        from app.utils.backup_sync import sync_manager
+        
+        current_user_id = get_current_user_id()
+        
+        data = request.get_json() or {}
+        dry_run = data.get('dry_run', False)
+        
+        # 전체 동기화 수행
+        sync_results = sync_manager.perform_full_sync(
+            user_id=current_user_id,
+            dry_run=dry_run
+        )
+        
+        return jsonify({
+            'message': 'Sync completed' if not dry_run else 'Sync preview completed',
+            'dry_run': dry_run,
+            'results': sync_results
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@documents_bp.route('/documents/sync/preview', methods=['GET'])
+@jwt_required(optional=True)
+def preview_backup_sync():
+    """백업 파일 동기화 미리보기"""
+    try:
+        from app.utils.backup_sync import sync_manager
+        
+        current_user_id = get_current_user_id()
+        
+        # 드라이런으로 동기화 미리보기
+        sync_results = sync_manager.perform_full_sync(
+            user_id=current_user_id,
+            dry_run=True
+        )
+        
+        return jsonify({
+            'message': 'Sync preview completed',
+            'preview': True,
+            'results': sync_results
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@documents_bp.route('/documents/sync/files', methods=['GET'])
+@jwt_required(optional=True)
+def list_backup_files_for_sync():
+    """동기화 가능한 백업 파일 목록"""
+    try:
+        from app.utils.backup_sync import sync_manager
+        
+        current_user_id = get_current_user_id()
+        
+        backup_files = sync_manager.scan_backup_files()
+        
+        # 각 파일에 대한 동기화 상태 정보 추가
+        file_info = []
+        for backup_info in backup_files:
+            existing_doc = sync_manager.find_matching_document(backup_info)
+            
+            if existing_doc:
+                comparison = sync_manager.compare_document_versions(existing_doc, backup_info)
+                status_info = {
+                    'has_matching_document': True,
+                    'document_id': existing_doc.id,
+                    'comparison': comparison
+                }
+            else:
+                status_info = {
+                    'has_matching_document': False,
+                    'will_create_new': True
+                }
+            
+            file_info.append({
+                'filename': backup_info['filename'],
+                'title': backup_info['title'],
+                'file_mtime': backup_info['file_mtime'].isoformat(),
+                'tags': backup_info['tags'],
+                'status': status_info
+            })
+        
+        return jsonify({
+            'backup_files': file_info,
+            'total_files': len(file_info)
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @documents_bp.route('/documents/<int:document_id>', methods=['GET'])
 @jwt_required(optional=True)
 def get_document(document_id):
@@ -164,89 +287,67 @@ def update_document(document_id):
             return jsonify({'error': 'Access denied'}), 403
         
         data = request.get_json()
-        
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
-        # Sanitize input
-        title = bleach.clean(data.get('title', '').strip()) if data.get('title') else None
-        author = bleach.clean(data.get('author', '').strip()) if data.get('author') else None
+        # Update fields if provided
+        if 'title' in data:
+            title = bleach.clean(data['title'].strip())
+            if not title:
+                return jsonify({'error': 'Title cannot be empty'}), 400
+            document.title = title
         
-        document.update_content(
-            title=title,
-            markdown_content=data.get('markdown_content'),
-            author=author,
-            change_summary=data.get('change_summary'),
-            updated_by=current_user_id
-        )
-        
-        # Update visibility if provided and user owns the document
-        if 'is_public' in data and document.user_id == current_user_id:
-            document.is_public = bool(data['is_public'])
-        
-        # 옵시디언 스타일 콘텐츠 처리 및 메타데이터 업데이트
-        obsidian_data = None
-        if data.get('markdown_content'):
+        if 'markdown_content' in data:
+            document.markdown_content = data['markdown_content']
+            
+            # Process Obsidian content for updated content
             try:
                 obsidian_data = process_obsidian_content(data['markdown_content'])
-                
-                # 문서 메타데이터 업데이트
                 document.document_metadata = {
                     'frontmatter': obsidian_data['frontmatter'],
                     'internal_links': obsidian_data['internal_links'],
                     'hashtags': obsidian_data['hashtags']
                 }
-            except Exception as e:
-                print(f"Error processing Obsidian content: {e}")
-                # 옵시디언 처리 실패시 기본값 설정
-                obsidian_data = {
-                    'frontmatter': {},
-                    'internal_links': [],
-                    'hashtags': [],
-                    'all_tags': []
-                }
-        
-        # Update tags if provided
-        if 'tags' in data:
-            # 옵시디언 태그 + 자동 감지 태그 + 사용자 제공 태그 결합
-            auto_tags = []
-            obsidian_tags = []
-            if data.get('markdown_content'):
+                
+                # Update tags if content changed
                 auto_tags = detect_auto_tags(data['markdown_content'])
-                if obsidian_data:
-                    obsidian_tags = obsidian_data.get('all_tags', [])
-            
-            all_tags = merge_tags(merge_tags(data['tags'], auto_tags), obsidian_tags)
-            
-            # Clear existing tags and add new ones
-            document.tags.clear()
-            if all_tags:
-                document.add_tags(all_tags)
-        elif data.get('markdown_content'):
-            # If content is updated but tags aren't specified, still process obsidian tags
-            auto_tags = detect_auto_tags(data['markdown_content'])
-            obsidian_tags = []
-            if obsidian_data:
                 obsidian_tags = obsidian_data.get('all_tags', [])
-            
-            # Get existing tag names
-            existing_tag_names = [tag.name for tag in document.tags]
-            all_tags = merge_tags(merge_tags(existing_tag_names, auto_tags), obsidian_tags)
-            document.tags.clear()
-            document.add_tags(all_tags)
+                existing_user_tags = [tag.name for tag in document.tags if not tag.is_auto_tag]
+                all_tags = merge_tags(merge_tags(existing_user_tags, auto_tags), obsidian_tags)
+                
+                # Clear existing tags and add updated ones
+                for tag in document.tags.all():
+                    document.tags.remove(tag)
+                if all_tags:
+                    document.add_tags(all_tags)
+                    
+            except Exception as e:
+                print(f"Error processing Obsidian content during update: {e}")
         
+        if 'author' in data:
+            author = bleach.clean(data['author'].strip()) if data['author'] else None
+            document.author = author
+        
+        if 'is_public' in data:
+            document.is_public = data['is_public']
+        
+        if 'tags' in data:
+            # Handle manual tag updates
+            for tag in document.tags.all():
+                document.tags.remove(tag)
+            if data['tags']:
+                document.add_tags(data['tags'])
+        
+        document.updated_at = datetime.utcnow()
         db.session.commit()
         
-        # 문서 업데이트 백업 생성
+        # Create backup for updated document
         try:
             backup_path = update_document_backup(document)
             if backup_path:
-                print(f"Document update backup created: {backup_path}")
-            else:
-                print(f"Failed to create update backup for document {document.id}")
+                print(f"Document backup updated: {backup_path}")
         except Exception as backup_error:
-            print(f"Update backup creation error for document {document.id}: {backup_error}")
-            # 백업 실패가 문서 업데이트를 막지 않도록 함
+            print(f"Backup update error for document {document.id}: {backup_error}")
         
         return jsonify(document.to_dict())
     
@@ -264,307 +365,168 @@ def delete_document(document_id):
         if not document.can_edit(current_user_id):
             return jsonify({'error': 'Access denied'}), 403
         
+        # Clear tags relationship before deletion
+        # Since tags is a dynamic relationship, we need to handle it properly
+        from app.models.document import document_tags
+        db.session.execute(
+            document_tags.delete().where(document_tags.c.document_id == document.id)
+        )
+        
         db.session.delete(document)
         db.session.commit()
         
-        return jsonify({'message': 'Document deleted successfully'})
+        return jsonify({'message': 'Document deleted successfully'}), 200
     
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-def extract_markdown_metadata(content):
-    """Extract metadata from markdown frontmatter (legacy function)"""
-    frontmatter_pattern = r'^---\s*\n(.*?)\n---\s*\n'
-    match = re.match(frontmatter_pattern, content, re.DOTALL)
-    
-    if match:
-        yaml_content = match.group(1)
-        # Remove frontmatter from content
-        content = re.sub(frontmatter_pattern, '', content, flags=re.DOTALL)
-        
-        # Parse simple YAML-like metadata
-        metadata = {}
-        for line in yaml_content.split('\n'):
-            if ':' in line:
-                key, value = line.split(':', 1)
-                metadata[key.strip()] = value.strip().strip('"\'')
-        
-        return metadata, content
-    
-    return {}, content
-
-def process_obsidian_content(content, document=None):
-    """옵시디언 스타일 콘텐츠 처리"""
-    parser = ObsidianParser()
-    parsed = parser.parse_markdown(content)
-    
-    result = {
-        'frontmatter': parsed['frontmatter'],
-        'internal_links': parsed['internal_links'],
-        'hashtags': parsed['hashtags'],
-        'clean_content': parsed['clean_content']
-    }
-    
-    # 프론트매터에서 태그 추출
-    frontmatter_tags = []
-    if 'tags' in parsed['frontmatter']:
-        tags_value = parsed['frontmatter']['tags']
-        if isinstance(tags_value, list):
-            frontmatter_tags = tags_value
-        elif isinstance(tags_value, str):
-            frontmatter_tags = [tag.strip() for tag in tags_value.split(',')]
-    
-    # 해시태그와 프론트매터 태그 결합
-    all_tag_names = set()
-    all_tag_names.update(tag['tag'] for tag in parsed['hashtags'])
-    all_tag_names.update(frontmatter_tags)
-    
-    result['all_tags'] = list(all_tag_names)
-    
-    return result
-
-def document_title_lookup(title):
-    """문서 제목으로 문서 ID 조회 (내부 링크용)"""
+@documents_bp.route('/documents/upload', methods=['POST'])
+@jwt_required(optional=True)
+def upload_markdown_file():
+    """Upload a markdown file and create a document"""
     try:
-        doc = Document.query.filter_by(title=title).first()
-        return doc.id if doc else None
-    except:
-        return None
-
-def validate_markdown_file(file):
-    """Validate uploaded markdown file"""
-    if not file or not file.filename:
-        return False, "No file provided"
-    
-    # Check file extension
-    if not file.filename.lower().endswith('.md'):
-        return False, "File must be a markdown (.md) file"
-    
-    # Check file size (max 10MB)
-    file.seek(0, os.SEEK_END)
-    file_size = file.tell()
-    file.seek(0)
-    
-    if file_size > 10 * 1024 * 1024:  # 10MB
-        return False, "File size must be less than 10MB"
-    
-    if file_size == 0:
-        return False, "File cannot be empty"
-    
-    return True, None
-
-@documents_bp.route('/documents/timeline', methods=['GET'])
-def get_documents_timeline():
-    """Get documents grouped by date hierarchy (year/month/week/day)"""
-    try:
-        from sqlalchemy import func, extract, text
-        from datetime import datetime, timedelta
+        current_user_id = get_current_user_id()
         
-        user_id = get_current_user_id()
-        group_by = request.args.get('group_by', 'month')  # year, month, week, day
-        include_private = request.args.get('include_private', 'false').lower() == 'true'
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
         
-        # Base query
-        query = Document.query
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
         
-        # Filter by access permissions
-        if user_id and include_private:
-            query = query.filter(
-                (Document.is_public == True) | (Document.user_id == user_id)
-            )
-        else:
-            query = query.filter(Document.is_public == True)
+        if not file.filename.lower().endswith('.md'):
+            return jsonify({'error': 'Only markdown files (.md) are allowed'}), 400
         
-        timeline = {}
+        # Read file content
+        content = file.read().decode('utf-8')
         
-        if group_by == 'year':
-            # Group by year
-            results = query.with_entities(
-                extract('year', Document.created_at).label('year'),
-                func.count(Document.id).label('count')
-            ).group_by('year').order_by('year').all()
-            
-            for year, count in results:
-                timeline[str(int(year))] = {
-                    'count': count,
-                    'type': 'year',
-                    'label': f"{int(year)}년",
-                    'key': str(int(year))
-                }
+        # Extract title from filename (remove .md extension)
+        title = file.filename[:-3] if file.filename.endswith('.md') else file.filename
         
-        elif group_by == 'month':
-            # Group by year and month
-            results = query.with_entities(
-                extract('year', Document.created_at).label('year'),
-                extract('month', Document.created_at).label('month'),
-                func.count(Document.id).label('count')
-            ).group_by('year', 'month').order_by('year', 'month').all()
-            
-            for year, month, count in results:
-                year_key = str(int(year))
-                month_key = f"{int(year)}-{int(month):02d}"
-                
-                if year_key not in timeline:
-                    timeline[year_key] = {
-                        'count': 0,
-                        'type': 'year',
-                        'label': f"{int(year)}년",
-                        'key': year_key,
-                        'children': {}
-                    }
-                
-                timeline[year_key]['count'] += count
-                timeline[year_key]['children'][month_key] = {
-                    'count': count,
-                    'type': 'month',
-                    'label': f"{int(month)}월",
-                    'key': month_key
-                }
+        # Process Obsidian content
+        try:
+            obsidian_data = process_obsidian_content(content)
+        except Exception as e:
+            print(f"Error processing Obsidian content during upload: {e}")
+            obsidian_data = {
+                'frontmatter': {},
+                'internal_links': [],
+                'hashtags': [],
+                'all_tags': []
+            }
         
-        elif group_by == 'week':
-            # Group by year, month and week
-            results = query.with_entities(
-                extract('year', Document.created_at).label('year'),
-                extract('month', Document.created_at).label('month'),
-                extract('week', Document.created_at).label('week'),
-                func.count(Document.id).label('count')
-            ).group_by('year', 'month', 'week').order_by('year', 'month', 'week').all()
-            
-            for year, month, week, count in results:
-                year_key = str(int(year))
-                month_key = f"{int(year)}-{int(month):02d}"
-                week_key = f"{int(year)}-W{int(week):02d}"
-                
-                if year_key not in timeline:
-                    timeline[year_key] = {
-                        'count': 0, 'type': 'year', 'label': f"{int(year)}년",
-                        'key': year_key, 'children': {}
-                    }
-                
-                if month_key not in timeline[year_key]['children']:
-                    timeline[year_key]['children'][month_key] = {
-                        'count': 0, 'type': 'month', 'label': f"{int(month)}월",
-                        'key': month_key, 'children': {}
-                    }
-                
-                timeline[year_key]['count'] += count
-                timeline[year_key]['children'][month_key]['count'] += count
-                timeline[year_key]['children'][month_key]['children'][week_key] = {
-                    'count': count,
-                    'type': 'week',
-                    'label': f"주 {int(week)}",
-                    'key': week_key
-                }
+        # Override title if specified in frontmatter
+        if 'title' in obsidian_data['frontmatter']:
+            title = obsidian_data['frontmatter']['title']
         
-        elif group_by == 'day':
-            # Group by date
-            results = query.with_entities(
-                func.date(Document.created_at).label('date'),
-                func.count(Document.id).label('count')
-            ).group_by('date').order_by('date').all()
-            
-            for date, count in results:
-                date_str = date.strftime('%Y-%m-%d')
-                year = date.year
-                month = date.month
-                day = date.day
-                
-                year_key = str(year)
-                month_key = f"{year}-{month:02d}"
-                day_key = date_str
-                
-                if year_key not in timeline:
-                    timeline[year_key] = {
-                        'count': 0, 'type': 'year', 'label': f"{year}년",
-                        'key': year_key, 'children': {}
-                    }
-                
-                if month_key not in timeline[year_key]['children']:
-                    timeline[year_key]['children'][month_key] = {
-                        'count': 0, 'type': 'month', 'label': f"{month}월",
-                        'key': month_key, 'children': {}
-                    }
-                
-                timeline[year_key]['count'] += count
-                timeline[year_key]['children'][month_key]['count'] += count
-                timeline[year_key]['children'][month_key]['children'][day_key] = {
-                    'count': count,
-                    'type': 'day',
-                    'label': f"{day}일",
-                    'key': day_key
-                }
+        # Create document
+        document = Document(
+            title=title,
+            markdown_content=content,
+            author=obsidian_data['frontmatter'].get('author'),
+            user_id=current_user_id,
+            is_public=obsidian_data['frontmatter'].get('public', True),
+            document_metadata={
+                'frontmatter': obsidian_data['frontmatter'],
+                'internal_links': obsidian_data['internal_links'],
+                'hashtags': obsidian_data['hashtags']
+            }
+        )
+        
+        # Add tags
+        auto_tags = detect_auto_tags(content)
+        obsidian_tags = obsidian_data.get('all_tags', [])
+        all_tags = merge_tags(auto_tags, obsidian_tags)
+        
+        if all_tags:
+            document.add_tags(all_tags)
+        
+        db.session.add(document)
+        db.session.commit()
+        
+        # Create backup
+        try:
+            backup_path = upload_document_backup(document)
+            if backup_path:
+                print(f"Document backup created: {backup_path}")
+        except Exception as backup_error:
+            print(f"Backup creation error for uploaded document {document.id}: {backup_error}")
         
         return jsonify({
-            'timeline': timeline,
-            'group_by': group_by
+            'message': 'File uploaded successfully',
+            'document': document.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@documents_bp.route('/documents/export', methods=['POST'])
+@jwt_required(optional=True)
+def export_all_documents_to_backup():
+    """모든 문서를 백업 폴더로 내보내기"""
+    try:
+        data = request.get_json() or {}
+        use_short_filename = data.get('short_filename', False)
+        
+        # 전체 문서 내보내기 실행
+        results = export_all_documents(use_short_filename=use_short_filename)
+        
+        return jsonify({
+            'message': f'Export completed: {results["exported"]} documents exported',
+            'results': results
         })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @documents_bp.route('/documents/by-date', methods=['GET'])
+@jwt_required(optional=True)
 def get_documents_by_date():
-    """Get documents for a specific date/period"""
+    """날짜별 문서 조회"""
     try:
-        user_id = get_current_user_id()
-        date_key = request.args.get('date_key')  # e.g., "2025", "2025-07", "2025-07-12"
+        current_user_id = get_current_user_id()
+        date_key = request.args.get('date_key')
         page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
-        include_private = request.args.get('include_private', 'false').lower() == 'true'
+        per_page = request.args.get('per_page', 50, type=int)
         
         if not date_key:
-            return jsonify({'error': 'date_key parameter required'}), 400
+            return jsonify({'error': 'date_key parameter is required'}), 400
         
-        # Base query
-        query = Document.query
-        
-        # Filter by access permissions
-        if user_id and include_private:
-            query = query.filter(
-                (Document.is_public == True) | (Document.user_id == user_id)
-            )
-        else:
-            query = query.filter(Document.is_public == True)
-        
-        # Parse date_key and apply date filters
-        from datetime import datetime, timedelta
-        
-        if len(date_key) == 4:  # Year: "2025"
-            year = int(date_key)
-            start_date = datetime(year, 1, 1)
-            end_date = datetime(year + 1, 1, 1)
-            
-        elif len(date_key) == 7:  # Month: "2025-07"
-            year, month = map(int, date_key.split('-'))
-            start_date = datetime(year, month, 1)
-            if month == 12:
-                end_date = datetime(year + 1, 1, 1)
-            else:
-                end_date = datetime(year, month + 1, 1)
-                
-        elif len(date_key) == 10:  # Day: "2025-07-12"
-            date_obj = datetime.strptime(date_key, '%Y-%m-%d')
-            start_date = date_obj
-            end_date = date_obj + timedelta(days=1)
-            
-        elif 'W' in date_key:  # Week: "2025-W28"
-            year, week = date_key.split('-W')
-            year = int(year)
-            week = int(week)
-            # Calculate week start date
-            start_date = datetime.strptime(f'{year}-W{week:02d}-1', "%Y-W%W-%w")
-            end_date = start_date + timedelta(days=7)
-        else:
+        # date_key 파싱 (YYYY, YYYY-MM, YYYY-MM-DD 형식 지원)
+        date_parts = date_key.split('-')
+        if len(date_parts) < 1:
             return jsonify({'error': 'Invalid date_key format'}), 400
         
-        # Apply date filter
-        query = query.filter(
-            Document.created_at >= start_date,
-            Document.created_at < end_date
-        )
+        try:
+            year = int(date_parts[0])
+            month = int(date_parts[1]) if len(date_parts) > 1 else None
+            day = int(date_parts[2]) if len(date_parts) > 2 else None
+        except ValueError:
+            return jsonify({'error': 'Invalid date_key format'}), 400
         
-        # Paginate results
+        # 쿼리 조건 구성
+        if current_user_id:
+            base_query = Document.query.filter(
+                or_(Document.user_id == current_user_id, Document.is_public == True)
+            )
+        else:
+            base_query = Document.query.filter_by(is_public=True)
+        
+        # 날짜 필터링
+        from sqlalchemy import extract, and_
+        filters = [extract('year', Document.created_at) == year]
+        
+        if month is not None:
+            filters.append(extract('month', Document.created_at) == month)
+        
+        if day is not None:
+            filters.append(extract('day', Document.created_at) == day)
+        
+        query = base_query.filter(and_(*filters))
+        
+        # 페이지네이션 적용
         pagination = query.order_by(Document.created_at.desc()).paginate(
             page=page, per_page=per_page, error_out=False
         )
@@ -581,286 +543,130 @@ def get_documents_by_date():
                 'has_next': pagination.has_next,
                 'has_prev': pagination.has_prev
             },
-            'date_range': {
-                'start': start_date.isoformat(),
-                'end': end_date.isoformat(),
-                'key': date_key
-            }
+            'date_key': date_key
         })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@documents_bp.route('/documents/upload', methods=['POST'])
+@documents_bp.route('/documents/timeline', methods=['GET'])
 @jwt_required(optional=True)
-def upload_markdown_file():
-    """Upload a markdown file and create a document"""
-    try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-        
-        file = request.files['file']
-        current_user_id = get_current_user_id()
-        
-        # Validate file
-        is_valid, error_message = validate_markdown_file(file)
-        if not is_valid:
-            return jsonify({'error': error_message}), 400
-        
-        # Read file content
-        try:
-            content = file.read().decode('utf-8')
-        except UnicodeDecodeError:
-            return jsonify({'error': 'File must be UTF-8 encoded'}), 400
-        
-        # Extract metadata from frontmatter
-        metadata, markdown_content = extract_markdown_metadata(content)
-        
-        # Get title from metadata or filename
-        title = metadata.get('title', '')
-        if not title:
-            # Use filename without extension as title
-            title = os.path.splitext(file.filename)[0]
-        
-        # Clean and validate title
-        title = bleach.clean(title.strip())
-        if not title:
-            return jsonify({'error': 'Document title cannot be empty'}), 400
-        
-        # Get other metadata
-        author = metadata.get('author', '')
-        if author:
-            author = bleach.clean(author.strip())
-        
-        # Get tags from metadata
-        tags = []
-        if 'tags' in metadata:
-            tags_str = metadata['tags']
-            if tags_str:
-                # Parse tags (assume comma-separated or array-like format)
-                tags_str = tags_str.strip('[]')
-                tags = [tag.strip().strip('"\',') for tag in tags_str.split(',') if tag.strip()]
-        
-        # Get visibility setting
-        is_public = True
-        if 'public' in metadata:
-            is_public = metadata['public'].lower() in ['true', 'yes', '1']
-        elif 'private' in metadata:
-            is_public = metadata['private'].lower() not in ['true', 'yes', '1']
-        
-        # Create document
-        document = Document(
-            title=title,
-            markdown_content=markdown_content,
-            author=author if author else None,
-            user_id=current_user_id,
-            is_public=is_public
-        )
-        
-        # Detect automatic tags from content
-        auto_tags = detect_auto_tags(markdown_content)
-        
-        # Merge provided tags with auto-detected tags
-        all_tags = merge_tags(tags, auto_tags)
-        
-        # Add tags if any exist
-        if all_tags:
-            document.add_tags(all_tags)
-        
-        # Store additional metadata
-        if metadata:
-            # Remove processed metadata
-            stored_metadata = {k: v for k, v in metadata.items() 
-                             if k not in ['title', 'author', 'tags', 'public', 'private']}
-            if stored_metadata:
-                document.document_metadata = stored_metadata
-        
-        db.session.add(document)
-        db.session.commit()
-        
-        # 업로드된 문서 백업 생성
-        try:
-            backup_path = upload_document_backup(document)
-            if backup_path:
-                print(f"Uploaded document backup created: {backup_path}")
-            else:
-                print(f"Backup skipped or failed for uploaded document {document.id}")
-        except Exception as backup_error:
-            print(f"Upload backup creation error for document {document.id}: {backup_error}")
-            # 백업 실패가 업로드를 막지 않도록 함
-        
-        return jsonify({
-            'message': 'File uploaded successfully',
-            'document': document.to_dict(),
-            'metadata_found': bool(metadata)
-        }), 201
-    
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
-
-@documents_bp.route('/documents/backups', methods=['GET'])
-@jwt_required(optional=True)
-def list_document_backups():
-    """백업 파일 목록 조회"""
-    try:
-        from app.utils.backup_manager import backup_manager
-        
-        current_user_id = get_current_user_id()
-        if not current_user_id:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        backups = backup_manager.list_backups()
-        
-        return jsonify({
-            'backups': backups,
-            'count': len(backups)
-        })
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@documents_bp.route('/documents/backups/cleanup', methods=['POST'])
-@jwt_required(optional=True)
-def cleanup_old_backups():
-    """오래된 백업 파일 정리"""
-    try:
-        from app.utils.backup_manager import backup_manager
-        
-        current_user_id = get_current_user_id()
-        if not current_user_id:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        data = request.get_json() or {}
-        days_to_keep = data.get('days_to_keep', 30)
-        
-        deleted_count = backup_manager.cleanup_old_backups(days_to_keep)
-        
-        return jsonify({
-            'message': f'Cleanup completed',
-            'deleted_count': deleted_count,
-            'days_to_keep': days_to_keep
-        })
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@documents_bp.route('/documents/<int:document_id>/backup', methods=['POST'])
-@jwt_required(optional=True)
-def create_manual_backup(document_id):
-    """특정 문서의 수동 백업 생성"""
+def get_documents_timeline():
+    """문서 타임라인 데이터 가져오기"""
     try:
         current_user_id = get_current_user_id()
+        group_by = request.args.get('group_by', 'month')  # 'month', 'year', 'day'
         
-        document = Document.query.get_or_404(document_id)
-        
-        # 문서 접근 권한 확인
-        if not document.can_view(current_user_id):
-            return jsonify({'error': 'Access denied'}), 403
-        
-        # 백업 생성
-        backup_path = create_document_backup(document)
-        
-        if backup_path:
-            return jsonify({
-                'message': 'Backup created successfully',
-                'backup_path': backup_path,
-                'document_id': document_id
-            })
+        # 사용자가 볼 수 있는 문서들 가져오기
+        if current_user_id:
+            # 로그인한 사용자: 자신의 문서 + 공개 문서
+            documents = Document.query.filter(
+                or_(Document.user_id == current_user_id, Document.is_public == True)
+            ).order_by(Document.created_at.desc()).all()
         else:
-            return jsonify({'error': 'Failed to create backup'}), 500
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@documents_bp.route('/documents/backup-config', methods=['GET'])
-@jwt_required(optional=True)
-def get_backup_config():
-    """백업 설정 조회"""
-    try:
-        from app.utils.backup_config import backup_config
+            # 비로그인 사용자: 공개 문서만
+            documents = Document.query.filter_by(is_public=True).order_by(Document.created_at.desc()).all()
         
-        current_user_id = get_current_user_id()
-        if not current_user_id:
-            return jsonify({'error': 'Authentication required'}), 401
+        # 타임라인 데이터 구성
+        timeline = {}
+        
+        for doc in documents:
+            created_at = doc.created_at
+            if not created_at:
+                continue
+                
+            if group_by == 'month':
+                # 연도 레벨
+                year_key = str(created_at.year)
+                year_label = f"{created_at.year}년"
+                
+                # 월 레벨
+                month_key = f"{created_at.year}-{created_at.month:02d}"
+                month_label = f"{created_at.month}월"
+                
+                # 연도 항목 초기화
+                if year_key not in timeline:
+                    timeline[year_key] = {
+                        'key': year_key,
+                        'label': year_label,
+                        'count': 0,
+                        'children': {}
+                    }
+                
+                # 월 항목 초기화
+                if month_key not in timeline[year_key]['children']:
+                    timeline[year_key]['children'][month_key] = {
+                        'key': month_key,
+                        'label': month_label,
+                        'count': 0
+                    }
+                
+                # 카운트 증가
+                timeline[year_key]['count'] += 1
+                timeline[year_key]['children'][month_key]['count'] += 1
+                
+            elif group_by == 'year':
+                # 연도별만
+                year_key = str(created_at.year)
+                year_label = f"{created_at.year}년"
+                
+                if year_key not in timeline:
+                    timeline[year_key] = {
+                        'key': year_key,
+                        'label': year_label,
+                        'count': 0
+                    }
+                
+                timeline[year_key]['count'] += 1
+                
+            elif group_by == 'day':
+                # 연도 > 월 > 일
+                year_key = str(created_at.year)
+                year_label = f"{created_at.year}년"
+                
+                month_key = f"{created_at.year}-{created_at.month:02d}"
+                month_label = f"{created_at.month}월"
+                
+                day_key = f"{created_at.year}-{created_at.month:02d}-{created_at.day:02d}"
+                day_label = f"{created_at.day}일"
+                
+                # 연도 초기화
+                if year_key not in timeline:
+                    timeline[year_key] = {
+                        'key': year_key,
+                        'label': year_label,
+                        'count': 0,
+                        'children': {}
+                    }
+                
+                # 월 초기화
+                if month_key not in timeline[year_key]['children']:
+                    timeline[year_key]['children'][month_key] = {
+                        'key': month_key,
+                        'label': month_label,
+                        'count': 0,
+                        'children': {}
+                    }
+                
+                # 일 초기화
+                if day_key not in timeline[year_key]['children'][month_key]['children']:
+                    timeline[year_key]['children'][month_key]['children'][day_key] = {
+                        'key': day_key,
+                        'label': day_label,
+                        'count': 0
+                    }
+                
+                # 카운트 증가
+                timeline[year_key]['count'] += 1
+                timeline[year_key]['children'][month_key]['count'] += 1
+                timeline[year_key]['children'][month_key]['children'][day_key]['count'] += 1
         
         return jsonify({
-            'config': backup_config.to_dict(),
-            'status': {
-                'backup_enabled': backup_config.is_backup_enabled(),
-                'auto_cleanup_enabled': backup_config.is_auto_cleanup_enabled(),
-                'backup_on_create': backup_config.should_backup_on_create(),
-                'backup_on_update': backup_config.should_backup_on_update(),
-                'backup_on_upload': backup_config.should_backup_on_upload()
-            }
+            'timeline': timeline,
+            'group_by': group_by,
+            'total_documents': len(documents)
         })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@documents_bp.route('/documents/backup-config', methods=['PUT'])
-@jwt_required(optional=True)
-def update_backup_config():
-    """백업 설정 업데이트"""
-    try:
-        from app.utils.backup_config import backup_config
-        
-        current_user_id = get_current_user_id()
-        if not current_user_id:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No configuration data provided'}), 400
-        
-        # 허용된 설정 키들
-        allowed_keys = {
-            'auto_cleanup_enabled', 'auto_cleanup_days', 'backup_enabled',
-            'backup_on_create', 'backup_on_update', 'backup_on_upload',
-            'max_backup_size_mb', 'max_total_backups', 'compression_enabled'
-        }
-        
-        # 유효한 설정만 필터링
-        valid_updates = {k: v for k, v in data.items() if k in allowed_keys}
-        
-        if not valid_updates:
-            return jsonify({'error': 'No valid configuration keys provided'}), 400
-        
-        # 설정 업데이트
-        success = backup_config.update(valid_updates)
-        
-        if success:
-            return jsonify({
-                'message': 'Backup configuration updated successfully',
-                'updated_keys': list(valid_updates.keys()),
-                'config': backup_config.to_dict()
-            })
-        else:
-            return jsonify({'error': 'Failed to update configuration'}), 500
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@documents_bp.route('/documents/backup-config/reset', methods=['POST'])
-@jwt_required(optional=True)
-def reset_backup_config():
-    """백업 설정 초기화"""
-    try:
-        from app.utils.backup_config import backup_config
-        
-        current_user_id = get_current_user_id()
-        if not current_user_id:
-            return jsonify({'error': 'Authentication required'}), 401
-        
-        success = backup_config.reset_to_defaults()
-        
-        if success:
-            return jsonify({
-                'message': 'Backup configuration reset to defaults',
-                'config': backup_config.to_dict()
-            })
-        else:
-            return jsonify({'error': 'Failed to reset configuration'}), 500
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
