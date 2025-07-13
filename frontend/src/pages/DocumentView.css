@@ -33,6 +33,30 @@
   line-height: 1.2;
 }
 
+.document-tags {
+  margin-bottom: 15px;
+}
+
+.document-tag {
+  display: inline-block;
+  background-color: #e3f2fd;
+  color: #1976d2;
+  font-size: 8pt;
+  font-weight: 500;
+  padding: 3px 8px;
+  margin: 2px 4px 2px 0;
+  border-radius: 12px;
+  border: 1px solid #bbdefb;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.document-tag:hover {
+  background-color: #bbdefb;
+  color: #0d47a1;
+  text-decoration: none;
+}
+
 .document-meta {
   display: flex;
   flex-direction: column;
