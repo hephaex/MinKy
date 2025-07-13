@@ -15,6 +15,7 @@ lib64/
 parts/
 sdist/
 var/
+postgresdata/
 wheels/
 *.egg-info/
 .installed.cfg
