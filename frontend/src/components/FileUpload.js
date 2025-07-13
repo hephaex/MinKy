@@ -5,38 +5,90 @@ import './FileUpload.css';
 const FileUpload = ({ onUploadSuccess, onUploadError }) => {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
 
   const handleFileUpload = async (file) => {
     if (!file) return;
 
     // Validate file type
     if (!file.name.toLowerCase().endsWith('.md')) {
-      onUploadError?.('Please select a markdown (.md) file');
-      return;
+      onUploadError?.(`File "${file.name}" is not a markdown file`);
+      return false;
     }
 
     // Validate file size (10MB max)
     if (file.size > 10 * 1024 * 1024) {
-      onUploadError?.('File size must be less than 10MB');
-      return;
+      onUploadError?.(`File "${file.name}" is too large (max 10MB)`);
+      return false;
     }
 
-    setUploading(true);
     try {
       const response = await documentService.uploadDocument(file);
       onUploadSuccess?.(response);
+      return true;
     } catch (error) {
       const errorMessage = error.response?.data?.error || 'Upload failed. Please try again.';
-      onUploadError?.(errorMessage);
-    } finally {
-      setUploading(false);
+      onUploadError?.(`${file.name}: ${errorMessage}`);
+      return false;
+    }
+  };
+
+  const handleMultipleFileUpload = async (files) => {
+    if (!files || files.length === 0) return;
+
+    const fileArray = Array.from(files);
+    const mdFiles = fileArray.filter(file => file.name.toLowerCase().endsWith('.md'));
+    
+    if (mdFiles.length === 0) {
+      onUploadError?.('No markdown files found');
+      return;
+    }
+
+    if (mdFiles.length !== fileArray.length) {
+      onUploadError?.(`Only ${mdFiles.length} of ${fileArray.length} files are markdown files`);
+    }
+
+    setUploading(true);
+    setUploadProgress({ current: 0, total: mdFiles.length });
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < mdFiles.length; i++) {
+      setUploadProgress({ current: i + 1, total: mdFiles.length });
+      
+      const success = await handleFileUpload(mdFiles[i]);
+      if (success) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+      
+      // Small delay between uploads to prevent overwhelming the server
+      if (i < mdFiles.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    setUploading(false);
+    setUploadProgress({ current: 0, total: 0 });
+
+    if (successCount > 0) {
+      onUploadSuccess?.({ 
+        message: `Successfully uploaded ${successCount} files${failCount > 0 ? `, ${failCount} failed` : ''}`,
+        count: successCount
+      });
     }
   };
 
   const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      handleFileUpload(file);
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      if (files.length === 1) {
+        handleFileUpload(files[0]);
+      } else {
+        handleMultipleFileUpload(files);
+      }
     }
   };
 
@@ -55,8 +107,12 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
     setDragOver(false);
     
     const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      handleFileUpload(files[0]);
+    if (files && files.length > 0) {
+      if (files.length === 1) {
+        handleFileUpload(files[0]);
+      } else {
+        handleMultipleFileUpload(files);
+      }
     }
   };
 
@@ -71,6 +127,7 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
         <input
           type="file"
           accept=".md"
+          multiple
           onChange={handleFileSelect}
           disabled={uploading}
           id="file-upload-input"
@@ -80,16 +137,21 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
           {uploading ? (
             <div className="upload-progress">
               <div className="spinner"></div>
-              <span>Uploading...</span>
+              <span>
+                {uploadProgress.total > 1 
+                  ? `Uploading ${uploadProgress.current}/${uploadProgress.total} files...`
+                  : 'Uploading...'
+                }
+              </span>
             </div>
           ) : (
             <div className="upload-prompt">
               <div className="upload-icon">📄</div>
               <div className="upload-text">
-                <strong>Click to select</strong> or drag and drop your markdown file here
+                <strong>Click to select</strong> or drag and drop your markdown files here
               </div>
               <div className="upload-hint">
-                .md files only, max 10MB
+                .md files only, max 10MB each, multiple files supported
               </div>
             </div>
           )}

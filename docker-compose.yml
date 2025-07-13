@@ -4,7 +4,7 @@ services:
   app:
     build: .
     ports:
-      - "5000:5000"
+      - "5001:5000"
     environment:
       - DATABASE_URL=postgresql://minky_user:minky_password@db:5432/minky_db
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
@@ -16,6 +16,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./migrations:/app/migrations
+      - ./backup:/app/backup
     restart: unless-stopped
 
   db:
@@ -25,7 +26,7 @@ services:
       - POSTGRES_USER=minky_user
       - POSTGRES_PASSWORD=minky_password
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./postgresdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
@@ -45,5 +46,3 @@ services:
       - app
     restart: unless-stopped
 
-volumes:
-  postgres_data:

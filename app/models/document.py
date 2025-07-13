@@ -24,12 +24,13 @@ class Document(db.Model):
     # Relationships
     tags = db.relationship('Tag', secondary=document_tags, backref='documents', lazy='dynamic')
     
-    def __init__(self, title, markdown_content, author=None, user_id=None, is_public=True):
+    def __init__(self, title, markdown_content, author=None, user_id=None, is_public=True, document_metadata=None):
         self.title = title
         self.markdown_content = markdown_content
         self.author = author
         self.user_id = user_id
         self.is_public = is_public
+        self.document_metadata = document_metadata
         self.html_content = self.convert_markdown_to_html()
     
     def convert_markdown_to_html(self):

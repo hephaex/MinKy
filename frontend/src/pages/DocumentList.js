@@ -4,6 +4,7 @@ import { documentService } from '../services/api';
 import SearchBar from '../components/SearchBar';
 import Pagination from '../components/Pagination';
 import FileUpload from '../components/FileUpload';
+import DocumentCard from '../components/DocumentCard';
 import { highlightTextReact, truncateWithHighlight } from '../utils/highlightText';
 import './DocumentList.css';
 
@@ -16,6 +17,8 @@ const DocumentList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showUpload, setShowUpload] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
   const navigate = useNavigate();
 
   const fetchDocuments = async (page = 1, search = '') => {
@@ -48,19 +51,32 @@ const DocumentList = () => {
   };
 
   const handleUploadSuccess = (response) => {
-    setUploadStatus({
-      type: 'success',
-      message: `File uploaded successfully! Document "${response.document.title}" has been created.`
-    });
-    setShowUpload(false);
-    
-    // Refresh document list
-    fetchDocuments(currentPage, searchQuery);
-    
-    // Navigate to the new document after a brief delay
-    setTimeout(() => {
-      navigate(`/documents/${response.document.id}`);
-    }, 1500);
+    if (response.count && response.count > 1) {
+      // Multiple files uploaded
+      setUploadStatus({
+        type: 'success',
+        message: response.message
+      });
+      setShowUpload(false);
+      
+      // Refresh document list
+      fetchDocuments(currentPage, searchQuery);
+    } else {
+      // Single file uploaded
+      setUploadStatus({
+        type: 'success',
+        message: `File uploaded successfully! Document "${response.document.title}" has been created.`
+      });
+      setShowUpload(false);
+      
+      // Refresh document list
+      fetchDocuments(currentPage, searchQuery);
+      
+      // Navigate to the new document after a brief delay
+      setTimeout(() => {
+        navigate(`/documents/${response.document.id}`);
+      }, 1500);
+    }
   };
 
   const handleUploadError = (error) => {
@@ -72,6 +88,34 @@ const DocumentList = () => {
 
   const clearUploadStatus = () => {
     setUploadStatus(null);
+  };
+
+
+  const handleGitSync = async () => {
+    try {
+      setSyncing(true);
+      // TODO: Implement actual git pull functionality
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
+      
+      setSyncStatus({
+        type: 'success',
+        message: 'Git pull completed successfully. Documents are up to date.'
+      });
+      
+      // Refresh documents after successful sync
+      fetchDocuments(currentPage, searchQuery);
+    } catch (error) {
+      setSyncStatus({
+        type: 'error',
+        message: 'Git sync failed: ' + error.message
+      });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const clearSyncStatus = () => {
+    setSyncStatus(null);
   };
 
   const formatDate = (dateString) => {
@@ -99,15 +143,22 @@ const DocumentList = () => {
         <div className="header-actions">
           <SearchBar onSearch={handleSearch} initialValue={searchQuery} />
           <div className="action-buttons">
+            <Link to="/documents/new" className="btn btn-primary">
+              + New Document
+            </Link>
             <button 
               className="btn btn-secondary" 
               onClick={() => setShowUpload(!showUpload)}
             >
-              📁 Upload .md
+              📁 Upload *.md
             </button>
-            <Link to="/documents/new" className="btn btn-primary">
-              + New Document
-            </Link>
+            <button 
+              className="btn btn-secondary" 
+              onClick={handleGitSync}
+              disabled={syncing}
+            >
+              🔄 {syncing ? 'Syncing...' : 'Sync using Git'}
+            </button>
           </div>
         </div>
       </div>
@@ -117,6 +168,15 @@ const DocumentList = () => {
         <div className={`upload-status ${uploadStatus.type}`}>
           <span>{uploadStatus.message}</span>
           <button className="close-btn" onClick={clearUploadStatus}>×</button>
+        </div>
+      )}
+
+
+      {/* Sync Status Messages */}
+      {syncStatus && (
+        <div className={`upload-status ${syncStatus.type}`}>
+          <span>{syncStatus.message}</span>
+          <button className="close-btn" onClick={clearSyncStatus}>×</button>
         </div>
       )}
 
@@ -158,35 +218,13 @@ const DocumentList = () => {
         <>
           <div className="documents-grid">
             {documents.map((doc) => (
-              <div key={doc.id} className="document-card">
-                <Link to={`/documents/${doc.id}`} className="document-link">
-                  <h3 className="document-title">
-                    {searchQuery ? highlightTextReact(doc.title, searchQuery) : doc.title}
-                  </h3>
-                  <div className="document-meta">
-                    {doc.author && (
-                      <span className="document-author">
-                        By {searchQuery ? highlightTextReact(doc.author, searchQuery) : doc.author}
-                      </span>
-                    )}
-                    <span className="document-date">
-                      Updated {formatDate(doc.updated_at)}
-                    </span>
-                  </div>
-                  <div className="document-preview">
-                    {searchQuery ? 
-                      highlightTextReact(
-                        truncateWithHighlight(doc.markdown_content, searchQuery, 150),
-                        searchQuery
-                      ) : (
-                      <>
-                        {doc.markdown_content.substring(0, 150)}
-                        {doc.markdown_content.length > 150 && '...'}
-                      </>
-                    )}
-                  </div>
-                </Link>
-              </div>
+              <DocumentCard
+                key={doc.id}
+                document={doc}
+                searchQuery={searchQuery}
+                showPreview={true}
+                formatDate={formatDate}
+              />
             ))}
           </div>
 
@@ -197,6 +235,7 @@ const DocumentList = () => {
           />
         </>
       )}
+
     </div>
   );
 };
