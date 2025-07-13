@@ -63,3 +63,9 @@ frontend/dist/
 
 # Cache
 .cache/
+
+# Session History
+.history/
+
+# PostgreSQL Data
+postgresdata/
