@@ -386,9 +386,15 @@ def delete_document(document_id):
 def upload_markdown_file():
     """Upload a markdown file and create a document"""
     try:
+        print(f"[UPLOAD] Starting upload request from {request.remote_addr}")
+        print(f"[UPLOAD] Request headers: {dict(request.headers)}")
+        print(f"[UPLOAD] Request files: {list(request.files.keys())}")
+        
         current_user_id = get_current_user_id()
+        print(f"[UPLOAD] Current user ID: {current_user_id}")
         
         if 'file' not in request.files:
+            print("[UPLOAD] ERROR: No file provided")
             return jsonify({'error': 'No file provided'}), 400
         
         file = request.files['file']
@@ -453,12 +459,17 @@ def upload_markdown_file():
         except Exception as backup_error:
             print(f"Backup creation error for uploaded document {document.id}: {backup_error}")
         
+        print(f"[UPLOAD] SUCCESS: Document created with ID {document.id}")
         return jsonify({
             'message': 'File uploaded successfully',
             'document': document.to_dict()
         }), 201
         
     except Exception as e:
+        print(f"[UPLOAD] ERROR: Exception occurred: {str(e)}")
+        print(f"[UPLOAD] ERROR: Exception type: {type(e)}")
+        import traceback
+        print(f"[UPLOAD] ERROR: Traceback: {traceback.format_exc()}")
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 

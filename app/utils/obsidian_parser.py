@@ -51,6 +51,10 @@ class ObsidianParser:
                 yaml_content = match.group(1)
                 frontmatter_data = yaml.safe_load(yaml_content) or {}
                 clean_content = content[match.end():]
+                
+                # Convert date objects to ISO format strings for JSON serialization
+                frontmatter_data = self._convert_dates_to_strings(frontmatter_data)
+                
                 logger.info(f"Extracted frontmatter: {frontmatter_data}")
             except (yaml.YAMLError, ImportError, AttributeError) as e:
                 logger.warning(f"Failed to parse YAML frontmatter: {e}")
@@ -60,6 +64,38 @@ class ObsidianParser:
                 frontmatter_data = {}
         
         return frontmatter_data, clean_content
+    
+    def _convert_dates_to_strings(self, data: Dict) -> Dict:
+        """Convert date/datetime objects to ISO format strings for JSON serialization"""
+        from datetime import date, datetime
+        
+        if not isinstance(data, dict):
+            return data
+        
+        converted_data = {}
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                # Convert datetime to ISO format string
+                converted_data[key] = value.isoformat()
+            elif isinstance(value, date):
+                # Convert date to ISO format string
+                converted_data[key] = value.isoformat()
+            elif isinstance(value, dict):
+                # Recursively convert nested dictionaries
+                converted_data[key] = self._convert_dates_to_strings(value)
+            elif isinstance(value, list):
+                # Convert dates in lists
+                converted_data[key] = [
+                    item.isoformat() if isinstance(item, (date, datetime)) else
+                    self._convert_dates_to_strings(item) if isinstance(item, dict) else
+                    item
+                    for item in value
+                ]
+            else:
+                # Keep other types as-is
+                converted_data[key] = value
+        
+        return converted_data
     
     def _extract_internal_links(self, content: str) -> List[Dict]:
         """내부 링크 추출"""
