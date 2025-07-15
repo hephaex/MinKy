@@ -113,20 +113,12 @@ class DocumentBackupManager:
             return sanitized[:max_length]
     
     def generate_backup_filename(self, document_title: str, created_at: Optional[datetime] = None) -> str:
-        """백업 파일명 생성: YYYYMMDD_제목.md"""
-        if created_at is None:
-            created_at = datetime.now()
-        
-        # 날짜 부분 생성
-        date_str = created_at.strftime("%Y%m%d")
-        
+        """백업 파일명 생성: 제목.md"""
         # 제목 부분 생성
         sanitized_title = self.sanitize_filename(document_title)
         
-        # 시간 부분 추가 (동일 날짜에 같은 제목인 경우를 위해)
-        time_str = created_at.strftime("%H%M%S")
-        
-        filename = f"{date_str}_{sanitized_title}_{time_str}.md"
+        # 단순히 제목만 사용
+        filename = f"{sanitized_title}.md"
         return filename
     
     def create_backup(self, document) -> Optional[str]:

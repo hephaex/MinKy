@@ -24,10 +24,56 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
 
     try {
       const response = await documentService.uploadDocument(file);
-      onUploadSuccess?.(response);
-      return true;
+      if (response && response.document) {
+        onUploadSuccess?.(response);
+        return true;
+      } else {
+        onUploadError?.(`${file.name}: Invalid response format`);
+        return false;
+      }
     } catch (error) {
-      const errorMessage = error.response?.data?.error || 'Upload failed. Please try again.';
+      console.error('Upload error:', error);
+      
+      // Check if it's a successful response that threw an error due to response format
+      if (error.response?.status === 201 && error.response?.data?.document) {
+        onUploadSuccess?.(error.response.data);
+        return true;
+      }
+      
+      // Log detailed error info for debugging
+      console.error('Upload error details:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        headers: error.response?.headers,
+        config: error.config
+      });
+      
+      // Log the actual error data content
+      console.error('Error data:', error.response?.data);
+      console.error('Error message from backend:', error.response?.data?.error);
+      
+      // Show detailed error for debugging
+      const errorData = error.response?.data;
+      if (errorData) {
+        console.error('Full error object:', JSON.stringify(errorData, null, 2));
+        console.error('=== UPLOAD ERROR MESSAGE ===');
+        console.error('Status:', error.response?.status);
+        console.error('Error:', errorData.error || 'No error message');
+        console.error('Full data:', errorData);
+        console.error('=== END ERROR MESSAGE ===');
+        
+        // Create a visible error div
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: red; color: white; padding: 20px; z-index: 9999; border-radius: 5px; max-width: 80%; word-wrap: break-word;';
+        errorDiv.innerHTML = `<strong>Upload Error ${error.response?.status}:</strong><br>${JSON.stringify(errorData, null, 2)}`;
+        document.body.appendChild(errorDiv);
+        
+        setTimeout(() => {
+          document.body.removeChild(errorDiv);
+        }, 10000);
+      }
+      
+      const errorMessage = error.response?.data?.error || error.message || 'Upload failed. Please try again.';
       onUploadError?.(`${file.name}: ${errorMessage}`);
       return false;
     }

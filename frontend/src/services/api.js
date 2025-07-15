@@ -43,12 +43,17 @@ export const documentService = {
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await api.post('/documents/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
+    console.log('Uploading file:', file.name, 'size:', file.size);
+    console.log('FormData contents:', formData.get('file'));
+    
+    // Try direct backend connection (bypassing nginx proxy)
+    const directResponse = await axios.post('http://localhost:5001/api/documents/upload', formData, {
+      timeout: 120000,
+      validateStatus: function (status) {
+        return status >= 200 && status < 300;
       },
     });
-    return response.data;
+    return directResponse.data;
   },
 
   previewBackupSync: async () => {
