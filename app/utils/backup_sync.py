@@ -12,6 +12,35 @@ from app import db
 
 logger = logging.getLogger(__name__)
 
+def extract_author_from_frontmatter(frontmatter):
+    """Extract author from frontmatter, handling various formats"""
+    if not frontmatter:
+        return None
+    
+    author = frontmatter.get('author')
+    if not author:
+        return None
+    
+    # Handle different author formats
+    if isinstance(author, list):
+        # If author is a list, take the first item
+        if len(author) > 0:
+            author = author[0]
+        else:
+            return None
+    
+    # If it's a string, clean it up
+    if isinstance(author, str):
+        # Remove Obsidian-style wiki links: [[name]] -> name
+        author = author.strip()
+        if author.startswith('[[') and author.endswith(']]'):
+            author = author[2:-2]
+        # Remove quotes if present
+        author = author.strip('"\'')
+        return author if author else None
+    
+    return None
+
 class BackupSyncManager:
     """백업 파일과 DB 동기화 관리 클래스"""
     
@@ -121,6 +150,11 @@ class BackupSyncManager:
             # 파일 수정 시간
             file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
             
+            # Extract author from header or frontmatter
+            author = header_info.get('author')
+            if not author:
+                author = extract_author_from_frontmatter(parsed_content.get('frontmatter', {}))
+            
             return {
                 'file_path': str(file_path),
                 'file_mtime': file_mtime,
@@ -128,7 +162,7 @@ class BackupSyncManager:
                 'markdown_content': markdown_content,
                 'parsed_content': parsed_content,
                 'title': header_info.get('title') or parsed_content.get('frontmatter', {}).get('title') or 'Untitled',
-                'author': header_info.get('author'),
+                'author': author,
                 'original_doc_id': header_info.get('document_id'),
                 'tags': self._extract_all_tags(parsed_content)
             }
@@ -216,7 +250,10 @@ class BackupSyncManager:
             auto_tags = detect_auto_tags(content)
             all_tags.update(auto_tags)
         
-        return list(filter(None, all_tags))
+        # Filter out unwanted automatic tags
+        filtered_tags = [tag for tag in all_tags if tag and tag.lower() != 'clippings']
+        
+        return filtered_tags
     
     def find_matching_document(self, backup_info: Dict) -> Optional[Document]:
         """백업 파일과 매칭되는 DB 문서 찾기"""
@@ -422,7 +459,8 @@ class BackupSyncManager:
                 logger.warning("Backup directory does not exist")
                 return backup_files
             
-            for file_path in self.backup_dir.glob("*.md"):
+            # Use recursive glob to scan all subdirectories
+            for file_path in self.backup_dir.rglob("*.md"):
                 filename_info = self.parse_backup_filename(file_path.name)
                 if filename_info:
                     backup_info = self.extract_document_info_from_backup(file_path)

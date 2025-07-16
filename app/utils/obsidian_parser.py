@@ -2,6 +2,10 @@ import re
 import yaml
 from typing import List, Dict, Optional, Tuple
 import logging
+import requests
+import os
+from urllib.parse import urlparse
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +22,7 @@ class ObsidianParser:
         # 프론트매터 패턴
         self.frontmatter_pattern = re.compile(r'^---\s*\n(.*?)\n---\s*\n', re.DOTALL)
     
-    def parse_markdown(self, content: str) -> Dict:
+    def parse_markdown(self, content: str, backup_dir: str = None) -> Dict:
         """마크다운 파싱 메인 함수"""
         result = {
             'frontmatter': {},
@@ -32,11 +36,15 @@ class ObsidianParser:
         result['frontmatter'] = frontmatter_data
         result['clean_content'] = clean_content
         
+        # 이미지 다운로드 및 경로 변환
+        if backup_dir:
+            result['clean_content'] = self._process_images(result['clean_content'], backup_dir)
+        
         # 내부 링크 추출
-        result['internal_links'] = self._extract_internal_links(clean_content)
+        result['internal_links'] = self._extract_internal_links(result['clean_content'])
         
         # 해시태그 추출
-        result['hashtags'] = self._extract_hashtags(clean_content)
+        result['hashtags'] = self._extract_hashtags(result['clean_content'])
         
         return result
     
@@ -96,6 +104,93 @@ class ObsidianParser:
                 converted_data[key] = value
         
         return converted_data
+    
+    def _process_images(self, content: str, backup_dir: str) -> str:
+        """이미지 URL을 찾아서 다운로드하고 로컬 경로로 변환"""
+        # 링크된 이미지 패턴: [![image.png](url)](url)
+        linked_image_pattern = re.compile(r'\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)')
+        # 일반 이미지 패턴: ![image.png](url)
+        image_pattern = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
+        
+        # img 폴더 생성
+        img_dir = os.path.join(backup_dir, 'img')
+        os.makedirs(img_dir, exist_ok=True)
+        
+        processed_content = content
+        
+        # 링크된 이미지 처리
+        for match in linked_image_pattern.finditer(content):
+            alt_text = match.group(1)
+            image_url = match.group(2)
+            original_match = match.group(0)
+            
+            if self._is_external_url(image_url):
+                local_filename = self._download_image(image_url, img_dir, alt_text)
+                if local_filename:
+                    # 프록시를 통한 백엔드 이미지 경로로 변환
+                    new_image_markdown = f'![{alt_text}](/img/{local_filename})'
+                    processed_content = processed_content.replace(original_match, new_image_markdown)
+                    logger.info(f"Converted linked image: {image_url} -> {local_filename}")
+        
+        # 일반 이미지 처리 (링크된 이미지로 이미 처리되지 않은 것만)
+        for match in image_pattern.finditer(processed_content):
+            alt_text = match.group(1)
+            image_url = match.group(2)
+            original_match = match.group(0)
+            
+            if self._is_external_url(image_url):
+                local_filename = self._download_image(image_url, img_dir, alt_text)
+                if local_filename:
+                    # 프록시를 통한 백엔드 이미지 경로로 변환
+                    new_image_markdown = f'![{alt_text}](/img/{local_filename})'
+                    processed_content = processed_content.replace(original_match, new_image_markdown)
+                    logger.info(f"Converted image: {image_url} -> {local_filename}")
+        
+        return processed_content
+    
+    def _is_external_url(self, url: str) -> bool:
+        """외부 URL인지 확인"""
+        return url.startswith(('http://', 'https://'))
+    
+    def _download_image(self, url: str, img_dir: str, alt_text: str = '') -> str:
+        """이미지를 다운로드하고 로컬 파일명 반환"""
+        try:
+            response = requests.get(url, stream=True, timeout=30)
+            response.raise_for_status()
+            
+            # 파일 확장자 추출
+            parsed_url = urlparse(url)
+            url_path = parsed_url.path
+            file_extension = os.path.splitext(url_path)[1] or '.png'
+            
+            # 파일명 생성 (alt_text가 있으면 사용, 없으면 URL 해시 사용)
+            if alt_text and alt_text.strip():
+                # alt_text에서 파일명으로 사용할 수 없는 문자 제거
+                safe_filename = re.sub(r'[^\w\-_.]', '_', alt_text.strip())
+                filename = f"{safe_filename}{file_extension}"
+            else:
+                # URL 해시로 고유 파일명 생성
+                url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+                filename = f"image_{url_hash}{file_extension}"
+            
+            file_path = os.path.join(img_dir, filename)
+            
+            # 이미 존재하는 파일이면 다운로드 건너뛰기
+            if os.path.exists(file_path):
+                logger.info(f"Image already exists: {filename}")
+                return filename
+            
+            # 이미지 다운로드
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            logger.info(f"Downloaded image: {url} -> {filename}")
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Failed to download image {url}: {e}")
+            return None
     
     def _extract_internal_links(self, content: str) -> List[Dict]:
         """내부 링크 추출"""
