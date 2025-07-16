@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
@@ -68,5 +68,12 @@ def create_app():
     app.register_blueprint(workflows_bp, url_prefix='/api')
     app.register_blueprint(korean_search_bp, url_prefix='/api')
     # app.register_blueprint(org_roam_bp, url_prefix='/api')  # Temporarily disabled due to decorator conflicts
+    
+    # Add static route for serving images from backup/img directory
+    @app.route('/img/<path:filename>')
+    def serve_image(filename):
+        """Serve images from backup/img directory"""
+        backup_img_dir = os.path.join(os.getcwd(), 'backup', 'img')
+        return send_from_directory(backup_img_dir, filename)
     
     return app

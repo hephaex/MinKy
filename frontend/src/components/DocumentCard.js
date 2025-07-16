@@ -21,6 +21,43 @@ const DocumentCard = ({
 
   const dateFormatter = formatDate || formatDateDefault;
   
+  const formatAuthor = (author) => {
+    if (!author) return '';
+    
+    // Handle case where author might be a JSON string/array
+    if (typeof author === 'string') {
+      try {
+        // Try to parse as JSON in case it's serialized
+        const parsed = JSON.parse(author);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          author = parsed[0];
+        } else if (typeof parsed === 'string') {
+          author = parsed;
+        }
+      } catch (e) {
+        // If parsing fails, use the string as-is
+      }
+    }
+    
+    // Handle array case
+    if (Array.isArray(author) && author.length > 0) {
+      author = author[0];
+    }
+    
+    // Clean up the author string
+    if (typeof author === 'string') {
+      author = author.trim();
+      // Remove Obsidian-style wiki links: [[name]] -> name
+      if (author.startsWith('[[') && author.endsWith(']]')) {
+        author = author.slice(2, -2);
+      }
+      // Remove quotes
+      author = author.replace(/^["']|["']$/g, '');
+    }
+    
+    return author;
+  };
+  
   // Show max 3 tags, with overflow indicator
   const maxVisibleTags = 3;
   const visibleTags = document.tags ? document.tags.slice(0, maxVisibleTags) : [];
@@ -47,7 +84,7 @@ const DocumentCard = ({
             <>
               <span className="meta-separator">•</span>
               <span className="document-author">
-                {searchQuery ? highlightTextReact(document.author, searchQuery) : document.author}
+                {searchQuery ? highlightTextReact(formatAuthor(document.author), searchQuery) : formatAuthor(document.author)}
               </span>
             </>
           )}

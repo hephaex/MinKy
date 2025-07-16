@@ -93,7 +93,10 @@ def detect_auto_tags(content: str) -> List[str]:
         detected_tags.add('Python')
         print(f"[AUTO_TAG] Found Python code block")
     
-    result = list(detected_tags)
+    # Filter out unwanted automatic tags
+    filtered_tags = [tag for tag in detected_tags if tag and tag.lower() != 'clippings']
+    
+    result = list(filtered_tags)
     print(f"[AUTO_TAG] Final detected tags: {result}")
     return result
 

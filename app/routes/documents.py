@@ -15,10 +15,10 @@ from app.utils.backup_manager import create_document_backup, update_document_bac
 
 documents_bp = Blueprint('documents', __name__)
 
-def process_obsidian_content(markdown_content):
+def process_obsidian_content(markdown_content, backup_dir=None):
     """Process Obsidian-style content and extract metadata"""
     parser = ObsidianParser()
-    parsed = parser.parse_markdown(markdown_content)
+    parsed = parser.parse_markdown(markdown_content, backup_dir=backup_dir)
     
     # Extract all tags (frontmatter + hashtags)
     all_tags = set()
@@ -35,11 +35,15 @@ def process_obsidian_content(markdown_content):
     for hashtag in parsed.get('hashtags', []):
         all_tags.add(hashtag.get('tag', ''))
     
+    # Filter out unwanted automatic tags
+    filtered_tags = [tag for tag in all_tags if tag and tag.lower() != 'clippings']
+    
     return {
         'frontmatter': parsed.get('frontmatter', {}),
         'internal_links': parsed.get('internal_links', []),
         'hashtags': parsed.get('hashtags', []),
-        'all_tags': list(filter(None, all_tags))
+        'all_tags': filtered_tags,
+        'processed_content': parsed.get('clean_content', markdown_content)  # Include processed content with converted images
     }
 
 def get_current_user_id():
@@ -47,6 +51,35 @@ def get_current_user_id():
         return get_jwt_identity()
     except:
         return None
+
+def extract_author_from_frontmatter(frontmatter):
+    """Extract author from frontmatter, handling various formats"""
+    if not frontmatter:
+        return None
+    
+    author = frontmatter.get('author')
+    if not author:
+        return None
+    
+    # Handle different author formats
+    if isinstance(author, list):
+        # If author is a list, take the first item
+        if len(author) > 0:
+            author = author[0]
+        else:
+            return None
+    
+    # If it's a string, clean it up
+    if isinstance(author, str):
+        # Remove Obsidian-style wiki links: [[name]] -> name
+        author = author.strip()
+        if author.startswith('[[') and author.endswith(']]'):
+            author = author[2:-2]
+        # Remove quotes if present
+        author = author.strip('"\'')
+        return author if author else None
+    
+    return None
 
 @documents_bp.route('/documents', methods=['POST'])
 @jwt_required(optional=True)
@@ -70,7 +103,7 @@ def create_document():
         
         # 옵시디언 스타일 콘텐츠 처리
         try:
-            obsidian_data = process_obsidian_content(data['markdown_content'])
+            obsidian_data = process_obsidian_content(data['markdown_content'], backup_dir="backup")
         except Exception as e:
             print(f"Error processing Obsidian content during creation: {e}")
             # 옵시디언 처리 실패시 기본값 설정
@@ -78,16 +111,21 @@ def create_document():
                 'frontmatter': {},
                 'internal_links': [],
                 'hashtags': [],
-                'all_tags': []
+                'all_tags': [],
+                'processed_content': data['markdown_content']
             }
         
         # 프론트매터에서 제목 오버라이드 (옵션)
         if 'title' in obsidian_data['frontmatter'] and not title:
             title = obsidian_data['frontmatter']['title']
         
+        # 프론트매터에서 작성자 추출 (author 필드가 없으면 frontmatter에서 추출)
+        if not author:
+            author = extract_author_from_frontmatter(obsidian_data['frontmatter'])
+        
         document = Document(
             title=title,
-            markdown_content=data['markdown_content'],  # 원본 마크다운 유지
+            markdown_content=obsidian_data.get('processed_content', data['markdown_content']),  # Use processed content with converted images
             author=author,
             user_id=current_user_id,
             is_public=is_public,
@@ -410,16 +448,17 @@ def upload_markdown_file():
         # Extract title from filename (remove .md extension)
         title = file.filename[:-3] if file.filename.endswith('.md') else file.filename
         
-        # Process Obsidian content
+        # Process Obsidian content with backup directory for image processing
         try:
-            obsidian_data = process_obsidian_content(content)
+            obsidian_data = process_obsidian_content(content, backup_dir="backup")
         except Exception as e:
             print(f"Error processing Obsidian content during upload: {e}")
             obsidian_data = {
                 'frontmatter': {},
                 'internal_links': [],
                 'hashtags': [],
-                'all_tags': []
+                'all_tags': [],
+                'processed_content': content
             }
         
         # Override title if specified in frontmatter
@@ -429,8 +468,8 @@ def upload_markdown_file():
         # Create document
         document = Document(
             title=title,
-            markdown_content=content,
-            author=obsidian_data['frontmatter'].get('author'),
+            markdown_content=obsidian_data.get('processed_content', content),  # Use processed content with converted images
+            author=extract_author_from_frontmatter(obsidian_data['frontmatter']),
             user_id=current_user_id,
             is_public=obsidian_data['frontmatter'].get('public', True),
             document_metadata={
