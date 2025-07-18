@@ -53,6 +53,9 @@ def create_app():
     from app.routes.security import security_bp
     from app.routes.workflows import workflows_bp
     from app.routes.korean_search import korean_search_bp
+    from app.routes.analytics import analytics_bp
+    from app.routes.admin import admin_bp
+    from app.routes.categories import categories_bp
     # from app.routes.org_roam import org_roam_bp
     app.register_blueprint(documents_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -67,6 +70,9 @@ def create_app():
     app.register_blueprint(security_bp, url_prefix='/api')
     app.register_blueprint(workflows_bp, url_prefix='/api')
     app.register_blueprint(korean_search_bp, url_prefix='/api')
+    app.register_blueprint(analytics_bp, url_prefix='/api')
+    app.register_blueprint(admin_bp, url_prefix='/api')
+    app.register_blueprint(categories_bp, url_prefix='/api')
     # app.register_blueprint(org_roam_bp, url_prefix='/api')  # Temporarily disabled due to decorator conflicts
     
     # Add static route for serving images from backup/img directory

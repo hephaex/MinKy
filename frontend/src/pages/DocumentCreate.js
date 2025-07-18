@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
+import api from '../services/api';
 import MarkdownEditor from '../components/MarkdownEditor';
 import './DocumentForm.css';
 
@@ -9,10 +10,25 @@ const DocumentCreate = () => {
   const [formData, setFormData] = useState({
     title: '',
     author: '',
-    markdown_content: ''
+    markdown_content: '',
+    category_id: null
   });
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await api.get('/categories?format=flat');
+      setCategories(response.data.categories);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -44,7 +60,8 @@ const DocumentCreate = () => {
       const document = await documentService.createDocument({
         title: formData.title.trim(),
         author: formData.author.trim() || null,
-        markdown_content: formData.markdown_content.trim()
+        markdown_content: formData.markdown_content.trim(),
+        category_id: formData.category_id || null
       });
       
       navigate(`/documents/${document.id}`);
@@ -113,6 +130,24 @@ const DocumentCreate = () => {
               onChange={handleInputChange}
               placeholder="Enter author name (optional)"
             />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="category_id">Category</label>
+            <select
+              id="category_id"
+              name="category_id"
+              className="form-control"
+              value={formData.category_id || ''}
+              onChange={handleInputChange}
+            >
+              <option value="">Select a category (optional)</option>
+              {categories.map(category => (
+                <option key={category.id} value={category.id}>
+                  {category.path}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

@@ -20,6 +20,15 @@
   flex-wrap: wrap;
 }
 
+.category-filter {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  font-size: 14px;
+  min-width: 150px;
+}
+
 .action-buttons {
   display: flex;
   gap: 0.5rem;

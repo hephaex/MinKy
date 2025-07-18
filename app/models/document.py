@@ -20,17 +20,20 @@ class Document(db.Model):
     is_published = db.Column(db.Boolean, default=False)
     published_at = db.Column(db.DateTime, nullable=True)
     document_metadata = db.Column(db.JSON, nullable=True)  # 확장 가능한 메타데이터 저장
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
     
     # Relationships
     tags = db.relationship('Tag', secondary=document_tags, backref='documents', lazy='dynamic')
+    category = db.relationship('Category', backref='documents')
     
-    def __init__(self, title, markdown_content, author=None, user_id=None, is_public=True, document_metadata=None):
+    def __init__(self, title, markdown_content, author=None, user_id=None, is_public=True, document_metadata=None, category_id=None):
         self.title = title
         self.markdown_content = markdown_content
         self.author = author
         self.user_id = user_id
         self.is_public = is_public
         self.document_metadata = document_metadata
+        self.category_id = category_id
         self.html_content = self.convert_markdown_to_html()
     
     def convert_markdown_to_html(self):
@@ -88,7 +91,7 @@ class Document(db.Model):
         return latest.version_number if latest else 0
     
     @classmethod
-    def search_documents(cls, query_text, page=1, per_page=10, user_id=None, include_private=False, tags=None):
+    def search_documents(cls, query_text, page=1, per_page=10, user_id=None, include_private=False, tags=None, category_id=None):
         base_query = cls.query
         
         # Filter by visibility
@@ -99,6 +102,16 @@ class Document(db.Model):
             base_query = base_query.filter(
                 db.or_(cls.is_public == True, cls.user_id == user_id)
             )
+        
+        # Filter by category if provided
+        if category_id:
+            from app.models.category import Category
+            category = Category.query.get(category_id)
+            if category:
+                # Include documents from this category and all its descendants
+                descendant_ids = [cat.id for cat in category.get_all_descendants()]
+                descendant_ids.append(category_id)
+                base_query = base_query.filter(cls.category_id.in_(descendant_ids))
         
         # Filter by tags if provided
         if tags:
@@ -179,6 +192,8 @@ class Document(db.Model):
             'is_published': self.is_published,
             'published_at': self.published_at.isoformat() if self.published_at else None,
             'metadata': self.document_metadata,
+            'category_id': self.category_id,
+            'category': self.category.to_dict() if self.category else None,
             'owner': self.owner.to_dict() if self.owner else None,
             'tags': [tag.to_dict() for tag in self.tags],
             'tag_names': self.get_tag_names(),
