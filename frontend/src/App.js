@@ -10,6 +10,9 @@ import TagDetail from './pages/TagDetail';
 import DateExplorer from './pages/DateExplorer';
 import DateExplorerByDate from './pages/DateExplorerByDate';
 import Settings from './pages/Settings';
+import AnalyticsDashboard from './pages/AnalyticsDashboard';
+import AdminPanel from './pages/AdminPanel';
+import CategoryManager from './pages/CategoryManager';
 import './App.css';
 
 function App() {
@@ -25,9 +28,12 @@ function App() {
             <Route path="/documents/:id/edit" element={<DocumentEdit />} />
             <Route path="/tags" element={<TagList />} />
             <Route path="/tags/:slug" element={<TagDetail />} />
+            <Route path="/categories" element={<CategoryManager />} />
             <Route path="/explore" element={<DateExplorer />} />
             <Route path="/explore-date" element={<DateExplorerByDate />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/analytics" element={<AnalyticsDashboard />} />
+            <Route path="/admin" element={<AdminPanel />} />
           </Routes>
         </main>
       </div>

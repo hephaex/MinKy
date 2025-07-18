@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
+import api from '../services/api';
 import SearchBar from '../components/SearchBar';
 import Pagination from '../components/Pagination';
 import FileUpload from '../components/FileUpload';
@@ -19,14 +20,22 @@ const DocumentList = () => {
   const [uploadStatus, setUploadStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
   const navigate = useNavigate();
 
-  const fetchDocuments = async (page = 1, search = '') => {
+  const fetchDocuments = async (page = 1, search = '', categoryId = null) => {
     try {
       setLoading(true);
-      const data = await documentService.getDocuments(page, 10, search);
-      setDocuments(data.documents);
-      setPagination(data.pagination);
+      const params = new URLSearchParams();
+      params.append('page', page);
+      params.append('per_page', 10);
+      if (search) params.append('search', search);
+      if (categoryId) params.append('category_id', categoryId);
+      
+      const response = await api.get(`/documents?${params.toString()}`);
+      setDocuments(response.data.documents);
+      setPagination(response.data.pagination);
       setCurrentPage(page);
       setError(null);
     } catch (err) {
@@ -37,9 +46,22 @@ const DocumentList = () => {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const response = await api.get('/categories?format=flat');
+      setCategories(response.data.categories);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+    }
+  };
+
   useEffect(() => {
-    fetchDocuments(1, searchQuery);
-  }, [searchQuery]);
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    fetchDocuments(1, searchQuery, selectedCategory);
+  }, [searchQuery, selectedCategory]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -47,7 +69,12 @@ const DocumentList = () => {
   };
 
   const handlePageChange = (page) => {
-    fetchDocuments(page, searchQuery);
+    fetchDocuments(page, searchQuery, selectedCategory);
+  };
+
+  const handleCategoryChange = (categoryId) => {
+    setSelectedCategory(categoryId);
+    setCurrentPage(1);
   };
 
   const handleUploadSuccess = (response) => {
@@ -142,6 +169,18 @@ const DocumentList = () => {
         <h2>Documents</h2>
         <div className="header-actions">
           <SearchBar onSearch={handleSearch} initialValue={searchQuery} />
+          <select 
+            className="category-filter"
+            value={selectedCategory} 
+            onChange={(e) => handleCategoryChange(e.target.value)}
+          >
+            <option value="">All Categories</option>
+            {categories.map(category => (
+              <option key={category.id} value={category.id}>
+                {category.path}
+              </option>
+            ))}
+          </select>
           <div className="action-buttons">
             <Link to="/documents/new" className="btn btn-primary">
               + New Document
