@@ -14,13 +14,13 @@ const Header = () => {
           <span>{t('common.app_description')}</span>
         </Link>
         <nav className="main-nav">
-          <Link to="/documents" className="nav-link">
+          <Link to="/" className="nav-link">
             {t('navigation.documents')}
           </Link>
-          <Link to="/explore" className="nav-link">
+          <Link to="/analytics" className="nav-link">
             {t('navigation.explore')}
           </Link>
-          <Link to="/config" className="nav-link">
+          <Link to="/settings" className="nav-link">
             {t('navigation.config')}
           </Link>
         </nav>
