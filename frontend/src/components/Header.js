@@ -34,15 +34,22 @@ const Header = () => {
             </button>
             {openDropdown === 'documents' && (
               <div className="dropdown-menu">
-                <Link to="/" className="dropdown-link" onClick={closeDropdown}>
-                  {t('navigation.document_list')}
-                </Link>
-                <Link to="/documents/new" className="dropdown-link" onClick={closeDropdown}>
-                  {t('navigation.create_document')}
-                </Link>
-                <Link to="/ocr" className="dropdown-link" onClick={closeDropdown}>
-                  {t('navigation.ocr')}
-                </Link>
+                <div className="dropdown-section">
+                  <Link to="/" className="dropdown-link main-item" onClick={closeDropdown}>
+                    {t('navigation.document_list')}
+                  </Link>
+                  <div className="submenu">
+                    <Link to="/documents/new" className="dropdown-link sub-item" onClick={closeDropdown}>
+                      {t('navigation.new_document')}
+                    </Link>
+                    <Link to="/" className="dropdown-link sub-item" onClick={closeDropdown}>
+                      {t('navigation.upload_md')}
+                    </Link>
+                    <Link to="/ocr" className="dropdown-link sub-item" onClick={closeDropdown}>
+                      {t('navigation.ocr')}
+                    </Link>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -90,6 +97,9 @@ const Header = () => {
                 </Link>
                 <Link to="/settings" className="dropdown-link" onClick={closeDropdown}>
                   {t('navigation.settings')}
+                </Link>
+                <Link to="/sync" className="dropdown-link" onClick={closeDropdown}>
+                  {t('navigation.sync_git')}
                 </Link>
               </div>
             )}

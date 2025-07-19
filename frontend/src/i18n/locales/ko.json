@@ -53,6 +53,8 @@
   "navigation": {
     "documents": "문서",
     "document_list": "문서 목록",
+    "new_document": "새 문서",
+    "upload_md": "*.md 업로드",
     "create_document": "문서 생성",
     "tags": "태그",
     "categories": "카테고리",
@@ -62,7 +64,8 @@
     "analytics": "분석",
     "admin": "관리",
     "config": "설정",
-    "settings": "환경설정"
+    "settings": "환경설정",
+    "sync_git": "Git으로 동기화"
   },
   "document": {
     "title": "제목",
