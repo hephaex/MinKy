@@ -53,6 +53,8 @@
   "navigation": {
     "documents": "Documents",
     "document_list": "Document List",
+    "new_document": "New Document",
+    "upload_md": "Upload *.md",
     "create_document": "Create Document",
     "tags": "Tags",
     "categories": "Categories",
@@ -62,7 +64,8 @@
     "analytics": "Analytics",
     "admin": "Admin",
     "config": "Config",
-    "settings": "Settings"
+    "settings": "Settings",
+    "sync_git": "Sync using Git"
   },
   "document": {
     "title": "Title",
