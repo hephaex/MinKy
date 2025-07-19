@@ -291,6 +291,28 @@
     "webhooks": "Webhooks",
     "integrations": "Integrations"
   },
+  "documents": {
+    "section_description": "Manage your markdown documents - create, edit, upload, and extract text from images",
+    "document_list_desc": "View and manage all your documents",
+    "new_document_desc": "Create a new markdown document",
+    "upload_md_desc": "Upload existing markdown files",
+    "ocr_desc": "Extract text from images and PDFs using OCR"
+  },
+  "explore": {
+    "section_description": "Discover and analyze your content through tags, categories, and advanced analytics",
+    "tags_desc": "Browse and manage document tags",
+    "categories_desc": "Organize documents by categories",
+    "analytics_desc": "View document insights and statistics",
+    "date_explorer_desc": "Explore documents by creation date"
+  },
+  "config": {
+    "section_description": "Configure system settings, manage users, and maintain your Minky installation",
+    "settings_desc": "Configure application preferences",
+    "user_management_desc": "Manage user accounts and permissions",
+    "system_overview_desc": "View system statistics and health",
+    "maintenance_desc": "System maintenance and cleanup tools",
+    "sync_git_desc": "Synchronize documents with Git repository"
+  },
   "settings": {
     "general": "General",
     "appearance": "Appearance",
