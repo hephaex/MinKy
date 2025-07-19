@@ -15,6 +15,9 @@ import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import AdminPanel from './pages/AdminPanel';
 import CategoryManager from './pages/CategoryManager';
 import OCRPage from './pages/OCRPage';
+import DocumentsPage from './pages/DocumentsPage';
+import ExplorePage from './pages/ExplorePage';
+import ConfigPage from './pages/ConfigPage';
 import './App.css';
 
 function App() {
@@ -26,16 +29,18 @@ function App() {
           <main className="main-content">
             <Routes>
               <Route path="/" element={<DocumentList />} />
+              <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/documents/new" element={<DocumentCreate />} />
               <Route path="/documents/:id" element={<DocumentView />} />
               <Route path="/documents/:id/edit" element={<DocumentEdit />} />
+              <Route path="/explore" element={<ExplorePage />} />
               <Route path="/tags" element={<TagList />} />
               <Route path="/tags/:slug" element={<TagDetail />} />
               <Route path="/categories" element={<CategoryManager />} />
-              <Route path="/explore" element={<DateExplorer />} />
               <Route path="/explore-date" element={<DateExplorerByDate />} />
-              <Route path="/settings" element={<Settings />} />
               <Route path="/analytics" element={<AnalyticsDashboard />} />
+              <Route path="/config" element={<ConfigPage />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/ocr" element={<OCRPage />} />
             </Routes>
