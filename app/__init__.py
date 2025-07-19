@@ -6,6 +6,7 @@ from flask_jwt_extended import JWTManager
 from flask_bcrypt import Bcrypt
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_socketio import SocketIO
 from dotenv import load_dotenv
 import os
 from datetime import timedelta
@@ -17,6 +18,7 @@ migrate = Migrate()
 jwt = JWTManager()
 bcrypt = Bcrypt()
 limiter = Limiter(key_func=get_remote_address)
+socketio = SocketIO()
 
 def create_app():
     app = Flask(__name__)
@@ -33,12 +35,13 @@ def create_app():
     app.config['RATELIMIT_DEFAULT'] = os.getenv('RATE_LIMIT_DEFAULT', '1000 per hour')
     app.config['RATELIMIT_HEADERS_ENABLED'] = True
     
-    CORS(app)
+    CORS(app, origins=["http://localhost:3000"])
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
     bcrypt.init_app(app)
     limiter.init_app(app)
+    socketio.init_app(app, cors_allowed_origins=["http://localhost:3000"])
     
     from app.routes.documents import documents_bp
     from app.routes.auth import auth_bp
@@ -56,6 +59,7 @@ def create_app():
     from app.routes.analytics import analytics_bp
     from app.routes.admin import admin_bp
     from app.routes.categories import categories_bp
+    from app.routes.ai_suggestions import ai_suggestions_bp
     # from app.routes.org_roam import org_roam_bp
     app.register_blueprint(documents_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -73,7 +77,15 @@ def create_app():
     app.register_blueprint(analytics_bp, url_prefix='/api')
     app.register_blueprint(admin_bp, url_prefix='/api')
     app.register_blueprint(categories_bp, url_prefix='/api')
+    app.register_blueprint(ai_suggestions_bp, url_prefix='/api')
     # app.register_blueprint(org_roam_bp, url_prefix='/api')  # Temporarily disabled due to decorator conflicts
+    
+    # Initialize collaboration service and register WebSocket events
+    from app.services.collaboration_service import init_collaboration_service
+    from app.routes.websocket_events import register_websocket_events
+    
+    init_collaboration_service(socketio)
+    register_websocket_events(socketio)
     
     # Add static route for serving images from backup/img directory
     @app.route('/img/<path:filename>')

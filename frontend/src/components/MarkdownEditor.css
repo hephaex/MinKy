@@ -44,6 +44,22 @@
   background: white;
 }
 
+.editor-with-ai {
+  display: flex;
+  gap: 16px;
+  padding: 0;
+}
+
+.editor-with-ai .w-md-editor {
+  flex: 1;
+}
+
+@media (max-width: 1024px) {
+  .editor-with-ai {
+    flex-direction: column;
+  }
+}
+
 /* Override MDEditor styles */
 .w-md-editor {
   background: white !important;
