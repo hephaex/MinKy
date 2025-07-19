@@ -65,6 +65,9 @@
     "admin": "Admin",
     "config": "Config",
     "settings": "Settings",
+    "user_management": "User Management",
+    "system_overview": "System Overview",
+    "maintenance": "Maintenance",
     "sync_git": "Sync using Git"
   },
   "document": {

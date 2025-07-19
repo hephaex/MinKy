@@ -92,15 +92,25 @@ const Header = () => {
             </button>
             {openDropdown === 'config' && (
               <div className="dropdown-menu">
-                <Link to="/admin" className="dropdown-link" onClick={closeDropdown}>
-                  {t('navigation.admin')}
-                </Link>
-                <Link to="/settings" className="dropdown-link" onClick={closeDropdown}>
-                  {t('navigation.settings')}
-                </Link>
-                <Link to="/sync" className="dropdown-link" onClick={closeDropdown}>
-                  {t('navigation.sync_git')}
-                </Link>
+                <div className="dropdown-section">
+                  <Link to="/settings" className="dropdown-link main-item" onClick={closeDropdown}>
+                    {t('navigation.settings')}
+                  </Link>
+                  <div className="submenu">
+                    <Link to="/admin" className="dropdown-link sub-item" onClick={closeDropdown}>
+                      {t('navigation.user_management')}
+                    </Link>
+                    <Link to="/admin" className="dropdown-link sub-item" onClick={closeDropdown}>
+                      {t('navigation.system_overview')}
+                    </Link>
+                    <Link to="/admin" className="dropdown-link sub-item" onClick={closeDropdown}>
+                      {t('navigation.maintenance')}
+                    </Link>
+                    <Link to="/sync" className="dropdown-link sub-item" onClick={closeDropdown}>
+                      {t('navigation.sync_git')}
+                    </Link>
+                  </div>
+                </div>
               </div>
             )}
           </div>
