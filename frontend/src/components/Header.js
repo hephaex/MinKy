@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { useI18n, LanguageSelector } from '../i18n/i18n';
+import { useI18n } from '../i18n/i18n';
 import './Header.css';
 
 const Header = () => {
@@ -24,9 +24,6 @@ const Header = () => {
             {t('navigation.config')}
           </Link>
         </nav>
-        <div className="header-actions">
-          <LanguageSelector className="header-language-selector" />
-        </div>
       </div>
     </header>
   );
