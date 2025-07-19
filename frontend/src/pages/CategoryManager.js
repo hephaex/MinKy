@@ -22,7 +22,7 @@ const CategoryManager = () => {
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/categories?format=tree');
+      const response = await api.get('/categories/?format=tree');
       setCategories(response.data.tree);
       setError(null);
     } catch (err) {
@@ -39,7 +39,7 @@ const CategoryManager = () => {
       if (editingCategory) {
         await api.put(`/categories/${editingCategory.id}`, formData);
       } else {
-        await api.post('/categories', formData);
+        await api.post('/categories/', formData);
       }
       
       setFormData({ name: '', description: '', parent_id: null, color: '#007bff' });

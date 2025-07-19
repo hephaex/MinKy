@@ -79,7 +79,7 @@ def create_app():
     app.register_blueprint(korean_search_bp, url_prefix='/api')
     app.register_blueprint(analytics_bp, url_prefix='/api')
     app.register_blueprint(admin_bp, url_prefix='/api')
-    app.register_blueprint(categories_bp, url_prefix='/api')
+    app.register_blueprint(categories_bp, url_prefix='/api/categories')
     app.register_blueprint(ai_suggestions_bp, url_prefix='/api')
     app.register_blueprint(ocr_bp, url_prefix='/api')
     app.register_blueprint(ml_analytics_bp, url_prefix='/api')

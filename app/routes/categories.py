@@ -5,7 +5,7 @@ from app.models.document import Document
 from app.utils.auth import require_auth, admin_required
 from sqlalchemy import func
 
-categories_bp = Blueprint('categories', __name__, url_prefix='/categories')
+categories_bp = Blueprint('categories', __name__)
 
 
 @categories_bp.route('/', methods=['GET'])
