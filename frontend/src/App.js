@@ -15,6 +15,7 @@ import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import AdminPanel from './pages/AdminPanel';
 import CategoryManager from './pages/CategoryManager';
 import OCRPage from './pages/OCRPage';
+import ImportPage from './pages/ImportPage';
 import DocumentsPage from './pages/DocumentsPage';
 import ExplorePage from './pages/ExplorePage';
 import ConfigPage from './pages/ConfigPage';
@@ -40,6 +41,7 @@ function App() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/ocr" element={<OCRPage />} />
+              <Route path="/import" element={<ImportPage />} />
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/explore" element={<ExplorePage />} />
               <Route path="/config" element={<ConfigPage />} />
