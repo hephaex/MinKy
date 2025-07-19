@@ -17,10 +17,10 @@ class WorkflowActionSchema(Schema):
 class WorkflowTemplateSchema(Schema):
     name = fields.Str(required=True, validate=lambda x: len(x) >= 3)
     description = fields.Str(allow_none=True)
-    requires_approval = fields.Bool(missing=True)
-    review_days = fields.Int(missing=7, validate=lambda x: 1 <= x <= 30)
-    auto_publish = fields.Bool(missing=False)
-    reviewer_ids = fields.List(fields.Int(), missing=[])
+    requires_approval = fields.Bool(load_default=True)
+    review_days = fields.Int(load_default=7, validate=lambda x: 1 <= x <= 30)
+    auto_publish = fields.Bool(load_default=False)
+    reviewer_ids = fields.List(fields.Int(), load_default=[])
 
 @workflows_bp.route('/documents/<int:document_id>/workflow', methods=['GET'])
 @jwt_required()
