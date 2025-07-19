@@ -13,7 +13,7 @@ from app.models.document import Document
 from app.models.tag import Tag
 from app.models.comment import Comment
 from app.models.attachment import Attachment
-from app.models.workflow import Workflow
+from app.models.workflow import DocumentWorkflow
 import logging
 
 logger = logging.getLogger(__name__)
