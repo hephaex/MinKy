@@ -195,3 +195,25 @@
 - [x] OpenSearch 기반 확장 가능한 검색 아키텍처
 - [x] 한국어 형태소 분석을 통한 정밀 검색 (KoNLPy/Mecab)
 - [x] 문서 간 관계 시각화 시스템 (백링크/아웃바운드 링크)
+
+## Sprint 9 (UI/UX 재구성 및 네비게이션 개선) - 1 week
+
+### Goals
+- 메인 네비게이션 메뉴 재구성으로 사용성 개선
+- 기능별 논리적 그룹핑으로 직관적인 인터페이스 제공
+- OCR 기능의 접근성 향상
+- 관리 기능의 명확한 분리
+
+### Sprint 9 Tasks
+- [x] 메인 네비게이션을 Documents, Explore, Config 3개 섹션으로 재구성
+- [x] Documents 섹션에 OCR 기능 추가
+- [x] Tags, Categories, Analytics를 Explore 섹션으로 이동
+- [x] Admin 기능을 Config 섹션으로 변경
+- [x] 네비게이션 라우팅 및 컴포넌트 구조 업데이트
+
+### Deliverables
+- [x] 개선된 3-tier 네비게이션 시스템 (Documents/Explore/Config)
+- [x] Documents 섹션: 문서 목록, 생성, 편집, OCR 기능 통합
+- [x] Explore 섹션: Tags, Categories, Analytics 기능 집약
+- [x] Config 섹션: 시스템 관리 및 설정 기능 통합
+- [x] 향상된 사용자 경험 및 기능 접근성

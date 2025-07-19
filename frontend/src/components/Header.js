@@ -1,10 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n, LanguageSelector } from '../i18n/i18n';
 import './Header.css';
 
 const Header = () => {
   const { t } = useI18n();
+  const [openDropdown, setOpenDropdown] = useState(null);
+
+  const toggleDropdown = (dropdown) => {
+    setOpenDropdown(openDropdown === dropdown ? null : dropdown);
+  };
+
+  const closeDropdown = () => {
+    setOpenDropdown(null);
+  };
 
   return (
     <header className="header">
@@ -13,14 +22,78 @@ const Header = () => {
           <h1>{t('common.app_name')}</h1>
           <span>{t('common.app_description')}</span>
         </Link>
-        <nav>
-          <Link to="/" className="nav-link">{t('navigation.documents')}</Link>
-          <Link to="/tags" className="nav-link">{t('navigation.tags')}</Link>
-          <Link to="/categories" className="nav-link">{t('navigation.categories')}</Link>
-          <Link to="/ocr" className="nav-link">{t('navigation.ocr')}</Link>
-          <Link to="/explore" className="nav-link">{t('navigation.explore')}</Link>
-          <Link to="/analytics" className="nav-link">{t('navigation.analytics')}</Link>
-          <Link to="/admin" className="nav-link">{t('navigation.admin')}</Link>
+        <nav className="main-nav">
+          {/* Documents Section */}
+          <div className="nav-dropdown">
+            <button 
+              className="nav-button"
+              onClick={() => toggleDropdown('documents')}
+              onBlur={() => setTimeout(closeDropdown, 150)}
+            >
+              {t('navigation.documents')} ▼
+            </button>
+            {openDropdown === 'documents' && (
+              <div className="dropdown-menu">
+                <Link to="/" className="dropdown-link" onClick={closeDropdown}>
+                  {t('navigation.document_list')}
+                </Link>
+                <Link to="/documents/new" className="dropdown-link" onClick={closeDropdown}>
+                  {t('navigation.create_document')}
+                </Link>
+                <Link to="/ocr" className="dropdown-link" onClick={closeDropdown}>
+                  {t('navigation.ocr')}
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Explore Section */}
+          <div className="nav-dropdown">
+            <button 
+              className="nav-button"
+              onClick={() => toggleDropdown('explore')}
+              onBlur={() => setTimeout(closeDropdown, 150)}
+            >
+              {t('navigation.explore')} ▼
+            </button>
+            {openDropdown === 'explore' && (
+              <div className="dropdown-menu">
+                <Link to="/tags" className="dropdown-link" onClick={closeDropdown}>
+                  {t('navigation.tags')}
+                </Link>
+                <Link to="/categories" className="dropdown-link" onClick={closeDropdown}>
+                  {t('navigation.categories')}
+                </Link>
+                <Link to="/analytics" className="dropdown-link" onClick={closeDropdown}>
+                  {t('navigation.analytics')}
+                </Link>
+                <Link to="/explore" className="dropdown-link" onClick={closeDropdown}>
+                  {t('navigation.date_explorer')}
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Config Section */}
+          <div className="nav-dropdown">
+            <button 
+              className="nav-button"
+              onClick={() => toggleDropdown('config')}
+              onBlur={() => setTimeout(closeDropdown, 150)}
+            >
+              {t('navigation.config')} ▼
+            </button>
+            {openDropdown === 'config' && (
+              <div className="dropdown-menu">
+                <Link to="/admin" className="dropdown-link" onClick={closeDropdown}>
+                  {t('navigation.admin')}
+                </Link>
+                <Link to="/settings" className="dropdown-link" onClick={closeDropdown}>
+                  {t('navigation.settings')}
+                </Link>
+              </div>
+            )}
+          </div>
         </nav>
         <div className="header-actions">
           <LanguageSelector className="header-language-selector" />

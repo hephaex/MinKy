@@ -52,12 +52,16 @@
   },
   "navigation": {
     "documents": "Documents",
+    "document_list": "Document List",
+    "create_document": "Create Document",
     "tags": "Tags",
     "categories": "Categories",
     "ocr": "OCR",
     "explore": "Explore",
+    "date_explorer": "Date Explorer",
     "analytics": "Analytics",
     "admin": "Admin",
+    "config": "Config",
     "settings": "Settings"
   },
   "document": {
