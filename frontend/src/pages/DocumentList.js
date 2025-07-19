@@ -191,13 +191,9 @@ const DocumentList = () => {
             >
               📁 Upload *.md
             </button>
-            <button 
-              className="btn btn-secondary" 
-              onClick={handleGitSync}
-              disabled={syncing}
-            >
-              🔄 {syncing ? 'Syncing...' : 'Sync using Git'}
-            </button>
+            <Link to="/ocr" className="btn btn-secondary">
+              📷 OCR
+            </Link>
           </div>
         </div>
       </div>
