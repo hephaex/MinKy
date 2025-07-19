@@ -52,13 +52,17 @@
   },
   "navigation": {
     "documents": "문서",
+    "document_list": "문서 목록",
+    "create_document": "문서 생성",
     "tags": "태그",
     "categories": "카테고리",
     "ocr": "OCR",
     "explore": "탐색",
+    "date_explorer": "날짜 탐색",
     "analytics": "분석",
     "admin": "관리",
-    "settings": "설정"
+    "config": "설정",
+    "settings": "환경설정"
   },
   "document": {
     "title": "제목",
