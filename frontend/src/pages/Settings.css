@@ -36,6 +36,22 @@
   line-height: 1.5;
 }
 
+/* Language Settings */
+.language-setting {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.language-setting label {
+  font-weight: 500;
+  color: #333;
+  min-width: 140px;
+}
+
 /* Git Configuration */
 .git-config {
   background: #f8f9fa;

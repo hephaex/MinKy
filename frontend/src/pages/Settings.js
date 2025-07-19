@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { documentService } from '../services/api';
+import { LanguageSelector } from '../i18n/i18n';
 import './Settings.css';
 
 const Settings = () => {
@@ -101,6 +102,16 @@ const Settings = () => {
     <div className="settings">
       <div className="settings-header">
         <h2>Settings</h2>
+      </div>
+
+      {/* Language Settings Section */}
+      <div className="settings-section">
+        <h3>Language Settings</h3>
+        <p>Select your preferred language for the interface</p>
+        <div className="language-setting">
+          <label>Interface Language:</label>
+          <LanguageSelector />
+        </div>
       </div>
 
       {/* Git Configuration Section */}
