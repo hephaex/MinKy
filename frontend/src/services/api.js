@@ -9,6 +9,15 @@ const api = axios.create({
   },
 });
 
+// Add token to requests if available
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export const documentService = {
   getDocuments: async (page = 1, perPage = 10, search = '') => {
     const params = { page, per_page: perPage };
@@ -70,6 +79,35 @@ export const documentService = {
     const response = await api.post('/documents/export', { short_filename: shortFilename });
     return response.data;
   },
+};
+
+export const authService = {
+  login: async (credentials) => {
+    const response = await api.post('/auth/login', credentials);
+    if (response.data.access_token) {
+      localStorage.setItem('token', response.data.access_token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+    }
+    return response.data;
+  },
+
+  logout: async () => {
+    localStorage.removeItem('token');
+    delete api.defaults.headers.common['Authorization'];
+  },
+
+  getCurrentUser: async () => {
+    const response = await api.get('/auth/me');
+    return response.data;
+  },
+
+  isAuthenticated: () => {
+    return !!localStorage.getItem('token');
+  },
+
+  getToken: () => {
+    return localStorage.getItem('token');
+  }
 };
 
 export const tagService = {
