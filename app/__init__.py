@@ -60,6 +60,9 @@ def create_app():
     from app.routes.admin import admin_bp
     from app.routes.categories import categories_bp
     from app.routes.ai_suggestions import ai_suggestions_bp
+    from app.routes.ocr import ocr_bp
+    from app.routes.ml_analytics import ml_analytics_bp
+    from app.routes.document_clustering import clustering_bp
     # from app.routes.org_roam import org_roam_bp
     app.register_blueprint(documents_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -78,6 +81,9 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix='/api')
     app.register_blueprint(categories_bp, url_prefix='/api')
     app.register_blueprint(ai_suggestions_bp, url_prefix='/api')
+    app.register_blueprint(ocr_bp, url_prefix='/api')
+    app.register_blueprint(ml_analytics_bp, url_prefix='/api')
+    app.register_blueprint(clustering_bp, url_prefix='/api')
     # app.register_blueprint(org_roam_bp, url_prefix='/api')  # Temporarily disabled due to decorator conflicts
     
     # Initialize collaboration service and register WebSocket events

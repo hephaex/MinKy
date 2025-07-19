@@ -97,6 +97,38 @@
   border-color: #545b62;
 }
 
+.btn-outline-primary {
+  background-color: transparent;
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.btn-outline-primary:hover:not(:disabled) {
+  background-color: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+
+.btn-outline-secondary {
+  background-color: transparent;
+  border-color: #6c757d;
+  color: #6c757d;
+}
+
+.btn-outline-secondary:hover:not(:disabled) {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: white;
+}
+
+.ocr-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 30px;
+  border: 1px solid #dee2e6;
+}
+
 .error {
   background-color: #fee;
   color: #c33;
