@@ -133,3 +133,26 @@ def merge_tags(existing_tags: List[str], auto_tags: List[str]) -> List[str]:
     result = list(merged_tags.values())
     print(f"[MERGE_TAGS] Final merged tags: {result}")
     return result
+
+
+def generate_tags_from_content(content: str, title: str = '') -> List[str]:
+    """
+    Generate tags from content and title.
+    This is an alias for detect_auto_tags with additional title analysis.
+    
+    Args:
+        content (str): The content to analyze
+        title (str): The title to analyze (optional)
+        
+    Returns:
+        List[str]: List of generated tags
+    """
+    # Start with auto-detected tags from content
+    tags = detect_auto_tags(content)
+    
+    # Add title-based tags if title is provided
+    if title:
+        title_tags = detect_auto_tags(title)
+        tags = merge_tags(tags, title_tags)
+    
+    return tags
