@@ -191,8 +191,8 @@ const DocumentList = () => {
             >
               📁 Upload *.md
             </button>
-            <Link to="/ocr" className="btn btn-secondary">
-              📷 OCR
+            <Link to="/import" className="btn btn-secondary">
+              📥 Import
             </Link>
           </div>
         </div>

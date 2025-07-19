@@ -12,6 +12,7 @@ from datetime import datetime
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 from app.utils.obsidian_parser import ObsidianParser
 from app.utils.backup_manager import create_document_backup, update_document_backup, upload_document_backup, export_all_documents
+from app.services.document_import_service import document_import_service
 
 documents_bp = Blueprint('documents', __name__)
 
@@ -728,4 +729,51 @@ def get_documents_timeline():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@documents_bp.route('/documents/import', methods=['POST'])
+@jwt_required(optional=True)
+def import_document():
+    """Import various document formats and convert to Markdown"""
+    try:
+        # Check if file is present
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Check if file type is supported
+        if not document_import_service.is_supported_file(file):
+            return jsonify({
+                'error': f'Unsupported file type: {file.mimetype}',
+                'supported_types': list(document_import_service.supported_types.keys())
+            }), 400
+        
+        # Get auto_tag option (default True)
+        auto_tag = request.form.get('auto_tag', 'true').lower() == 'true'
+        
+        # Import the file
+        result = document_import_service.import_file(file, auto_tag=auto_tag)
+        
+        if result['success']:
+            return jsonify(result), 201
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': 'Import failed due to an unexpected error'
+        }), 500
+
+@documents_bp.route('/documents/import/supported-types', methods=['GET'])
+def get_supported_import_types():
+    """Get list of supported file types for import"""
+    return jsonify({
+        'supported_types': document_import_service.supported_types,
+        'extensions': ['.docx', '.pptx', '.xlsx', '.pdf', '.html', '.htm', '.txt', 
+                      '.csv', '.json', '.xml', '.png', '.jpg', '.jpeg', '.zip']
+    })
 
