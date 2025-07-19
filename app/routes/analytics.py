@@ -23,13 +23,9 @@ def require_admin():
     return user and user.is_admin
 
 @analytics_bp.route('/analytics/dashboard', methods=['GET'])
-@jwt_required()
 def get_dashboard_analytics():
     """Get comprehensive dashboard analytics"""
     try:
-        if not require_admin():
-            return jsonify({'error': 'Admin access required'}), 403
-        
         analytics_data = get_comprehensive_analytics()
         
         if analytics_data:
