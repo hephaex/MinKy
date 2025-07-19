@@ -45,6 +45,21 @@ const DocumentCreate = () => {
     }));
   };
 
+  const handleTitleSuggestion = (suggestedTitle) => {
+    if (suggestedTitle && !formData.title.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        title: suggestedTitle
+      }));
+    }
+  };
+
+  const handleTagSuggestions = (suggestedTags) => {
+    // For now, we'll just log the suggestions
+    // In a real implementation, you might want to show them in a UI
+    console.log('Suggested tags:', suggestedTags);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -156,7 +171,10 @@ const DocumentCreate = () => {
           <MarkdownEditor
             value={formData.markdown_content}
             onChange={handleMarkdownChange}
+            onTitleSuggestion={handleTitleSuggestion}
+            onTagSuggestions={handleTagSuggestions}
             placeholder="Start writing your markdown content..."
+            showAISuggestions={true}
           />
         </div>
       </form>

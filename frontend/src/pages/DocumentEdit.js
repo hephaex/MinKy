@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
-import MarkdownEditor from '../components/MarkdownEditor';
+import CollaborativeEditor from '../components/CollaborativeEditor';
 import './DocumentForm.css';
 
 const DocumentEdit = () => {
@@ -10,7 +10,8 @@ const DocumentEdit = () => {
   const [formData, setFormData] = useState({
     title: '',
     author: '',
-    markdown_content: ''
+    markdown_content: '',
+    category_id: null
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,7 +27,8 @@ const DocumentEdit = () => {
         setFormData({
           title: document.title,
           author: document.author || '',
-          markdown_content: document.markdown_content
+          markdown_content: document.markdown_content,
+          category_id: document.category_id || null
         });
         setError(null);
       } catch (err) {
@@ -53,6 +55,19 @@ const DocumentEdit = () => {
       ...prev,
       markdown_content: value || ''
     }));
+  };
+
+  const handleTitleSuggestion = (suggestedTitle) => {
+    if (suggestedTitle && window.confirm(`Replace title with: "${suggestedTitle}"?`)) {
+      setFormData(prev => ({
+        ...prev,
+        title: suggestedTitle
+      }));
+    }
+  };
+
+  const handleTagSuggestions = (suggestedTags) => {
+    console.log('Suggested tags:', suggestedTags);
   };
 
   const hasChanges = () => {
@@ -174,10 +189,14 @@ const DocumentEdit = () => {
 
         <div className="form-group">
           <label>Content *</label>
-          <MarkdownEditor
-            value={formData.markdown_content}
+          <CollaborativeEditor
+            documentId={id}
+            initialValue={formData.markdown_content}
             onChange={handleMarkdownChange}
+            onTitleSuggestion={handleTitleSuggestion}
+            onTagSuggestions={handleTagSuggestions}
             placeholder="Start writing your markdown content..."
+            showAISuggestions={true}
           />
         </div>
       </form>
