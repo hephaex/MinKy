@@ -156,9 +156,9 @@
 - [x] Create comprehensive notification system for document activities
 - [x] Add API rate limiting and advanced security features
 - [x] Implement document workflows and approval processes
-- [ ] Add OCR capabilities for uploaded images and PDFs
-- [ ] Create advanced analytics with machine learning insights
-- [ ] Implement document clustering and similarity detection
+- [x] Add OCR capabilities for uploaded images and PDFs
+- [x] Create advanced analytics with machine learning insights
+- [x] Implement document clustering and similarity detection
 - [x] Add webhook integrations for external services
 
 ### Deliverables
@@ -166,10 +166,10 @@
 - [x] Comprehensive notification and activity tracking system
 - [x] Advanced API security with rate limiting and monitoring
 - [x] Document workflow management with approval chains and templates
-- [ ] AI-powered writing assistance and content suggestions
-- [ ] Real-time collaborative editing with conflict resolution
-- [ ] OCR integration for text extraction from images
-- [ ] ML-powered document insights and recommendations
+- [x] AI-powered writing assistance and content suggestions
+- [x] Real-time collaborative editing with conflict resolution
+- [x] OCR integration for text extraction from images
+- [x] ML-powered document insights and recommendations
 
 ## Sprint 8 (한국어 지원 및 Org-roam 연동) - 2 weeks
 
@@ -187,7 +187,7 @@
 - [x] 한국어 형태소 분석기 통합 (KoNLPy)
 - [x] Org-roam 링크 및 백링크 처리
 - [x] 한국어 문서 태깅 및 분류 시스템
-- [ ] 다국어 UI 지원 (i18n)
+- [x] 다국어 UI 지원 (i18n)
 
 ### Deliverables
 - [x] 한국어 전문 검색 시스템 (형태소 분석기 통합)

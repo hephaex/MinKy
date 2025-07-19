@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { documentService } from '../services/api';
 import api from '../services/api';
 import MarkdownEditor from '../components/MarkdownEditor';
+import OCRUpload from '../components/OCRUpload';
 import './DocumentForm.css';
 
 const DocumentCreate = () => {
@@ -16,6 +17,7 @@ const DocumentCreate = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showOCR, setShowOCR] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -92,11 +94,37 @@ const DocumentCreate = () => {
     navigate('/');
   };
 
+  const handleOCRTextExtracted = (result) => {
+    // Pre-fill form with OCR results
+    setFormData(prev => ({
+      ...prev,
+      markdown_content: result.text || '',
+      title: prev.title || `OCR Extract from ${result.filename}`,
+    }));
+    setShowOCR(false);
+  };
+
   return (
     <div className="document-form">
       <div className="document-form-header">
         <h2>Create New Document</h2>
         <div className="form-actions">
+          <button 
+            type="button" 
+            className="btn btn-outline-primary" 
+            onClick={() => setShowOCR(!showOCR)}
+            disabled={loading}
+            title="Extract text from images or PDFs"
+          >
+            📄 OCR
+          </button>
+          <Link 
+            to="/ocr" 
+            className="btn btn-outline-secondary"
+            title="Full OCR page with document creation"
+          >
+            🔍 Advanced OCR
+          </Link>
           <button 
             type="button" 
             className="btn btn-secondary" 
@@ -117,6 +145,15 @@ const DocumentCreate = () => {
       </div>
 
       {error && <div className="error">{error}</div>}
+
+      {showOCR && (
+        <div className="ocr-section">
+          <OCRUpload 
+            mode="extract"
+            onTextExtracted={handleOCRTextExtracted}
+          />
+        </div>
+      )}
 
       <form id="document-form" onSubmit={handleSubmit} className="document-form-content">
         <div className="form-row">

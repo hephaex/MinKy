@@ -1,0 +1,129 @@
+/* Language Selector Component Styles */
+.language-selector {
+  position: relative;
+  display: inline-block;
+}
+
+.language-select {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  padding-right: 32px;
+}
+
+.language-select:hover {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.language-select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.language-select option {
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+
+/* Header-specific styles */
+.header-language-selector .language-select {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #333;
+  font-weight: 500;
+}
+
+.header-language-selector .language-select:hover {
+  background: white;
+  border-color: #007bff;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .language-select {
+    background: #2d3748;
+    border-color: #4a5568;
+    color: #e2e8f0;
+  }
+
+  .language-select:hover {
+    border-color: #4299e1;
+    box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.1);
+  }
+
+  .language-select:focus {
+    border-color: #4299e1;
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+  }
+
+  .header-language-selector .language-select {
+    background: rgba(45, 55, 72, 0.95);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #e2e8f0;
+  }
+
+  .header-language-selector .language-select:hover {
+    background: #2d3748;
+    border-color: #4299e1;
+  }
+}
+
+/* Language-specific styles */
+.lang-ko .language-selector {
+  font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+}
+
+.lang-ja .language-selector {
+  font-family: 'Noto Sans JP', 'Hiragino Sans', sans-serif;
+}
+
+.lang-zh .language-selector {
+  font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .language-select {
+    min-width: 100px;
+    font-size: 0.85rem;
+    padding: 6px 10px;
+    padding-right: 28px;
+  }
+
+  .header-actions {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .language-select {
+    min-width: 80px;
+    font-size: 0.8rem;
+    padding: 5px 8px;
+    padding-right: 24px;
+  }
+
+  .language-select {
+    background-size: 14px;
+    background-position: right 6px center;
+  }
+}
