@@ -1,12 +1,22 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import OCRUpload from '../components/OCRUpload';
 import DocumentImport from '../components/DocumentImport';
+import FileUpload from '../components/FileUpload';
 import './ImportPage.css';
 
 const ImportPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('ocr');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState('upload-md');
+  const [uploadStatus, setUploadStatus] = useState(null);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'convert' || tabParam === 'ocr') {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
 
   const handleDocumentCreated = (document) => {
     // Navigate to the newly created document
@@ -28,6 +38,44 @@ const ImportPage = () => {
     }
   };
 
+  // Handle upload success for .md files (same as DocumentList)
+  const handleUploadSuccess = (response) => {
+    if (response.count && response.count > 1) {
+      // Multiple files uploaded
+      setUploadStatus({
+        type: 'success',
+        message: response.message
+      });
+      
+      // Navigate to documents page after successful upload
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+    } else {
+      // Single file uploaded
+      setUploadStatus({
+        type: 'success',
+        message: `File uploaded successfully! Document "${response.document.title}" has been created.`
+      });
+      
+      // Navigate to the new document after a brief delay
+      setTimeout(() => {
+        navigate(`/documents/${response.document.id}`);
+      }, 1500);
+    }
+  };
+
+  const handleUploadError = (error) => {
+    setUploadStatus({
+      type: 'error',
+      message: error
+    });
+  };
+
+  const clearUploadStatus = () => {
+    setUploadStatus(null);
+  };
+
   return (
     <div className="import-page">
       <div className="page-header">
@@ -47,13 +95,21 @@ const ImportPage = () => {
       </div>
 
       <div className="import-content">
+        {/* Upload Status Messages */}
+        {uploadStatus && (
+          <div className={`upload-status ${uploadStatus.type}`}>
+            <span>{uploadStatus.message}</span>
+            <button className="close-btn" onClick={clearUploadStatus}>×</button>
+          </div>
+        )}
+
         <div className="import-modes">
           <div className="mode-tabs">
             <div 
-              className={`tab ${activeTab === 'ocr' ? 'active' : ''}`}
-              onClick={() => setActiveTab('ocr')}
+              className={`tab ${activeTab === 'upload-md' ? 'active' : ''}`}
+              onClick={() => setActiveTab('upload-md')}
             >
-              📷 OCR Text Extraction
+              📄 Upload *.md
             </div>
             <div 
               className={`tab ${activeTab === 'convert' ? 'active' : ''}`}
@@ -61,9 +117,32 @@ const ImportPage = () => {
             >
               📄 Document Conversion
             </div>
+            <div 
+              className={`tab ${activeTab === 'ocr' ? 'active' : ''}`}
+              onClick={() => setActiveTab('ocr')}
+            >
+              📷 OCR Text Extraction
+            </div>
           </div>
 
           <div className="tab-content">
+            {activeTab === 'upload-md' && (
+              <div className="upload-md-section">
+                <div className="upload-header">
+                  <h3>Upload Markdown Files</h3>
+                  <p>Upload your .md files directly to your document library</p>
+                </div>
+                <FileUpload 
+                  onUploadSuccess={handleUploadSuccess}
+                  onUploadError={handleUploadError}
+                />
+              </div>
+            )}
+            {activeTab === 'convert' && (
+              <DocumentImport 
+                onDocumentImported={handleDocumentImported}
+              />
+            )}
             {activeTab === 'ocr' && (
               <OCRUpload 
                 mode="create"
@@ -71,15 +150,36 @@ const ImportPage = () => {
                 onTextExtracted={handleTextExtracted}
               />
             )}
-            {activeTab === 'convert' && (
-              <DocumentImport 
-                onDocumentImported={handleDocumentImported}
-              />
-            )}
           </div>
         </div>
 
         <div className="import-info">
+          {activeTab === 'upload-md' && (
+            <>
+              <div className="info-section">
+                <h3>Upload Markdown Files</h3>
+                <ol>
+                  <li>Select or drag and drop your .md files</li>
+                  <li>Files are automatically validated for markdown format</li>
+                  <li>Content is processed and imported as documents</li>
+                  <li>Automatic tags are generated based on content analysis</li>
+                  <li>Documents are added to your library and ready to use</li>
+                </ol>
+              </div>
+
+              <div className="info-section">
+                <h3>Markdown Features</h3>
+                <ul>
+                  <li>Preserve original formatting and structure</li>
+                  <li>Support for standard Markdown syntax</li>
+                  <li>Automatic metadata extraction from frontmatter</li>
+                  <li>Content-based intelligent tagging</li>
+                  <li>Fast processing for immediate availability</li>
+                </ul>
+              </div>
+            </>
+          )}
+
           {activeTab === 'ocr' && (
             <>
               <div className="info-section">
@@ -134,9 +234,9 @@ const ImportPage = () => {
                   <li><strong>PDF Documents:</strong> .pdf (text extraction and conversion)</li>
                   <li><strong>Web Formats:</strong> .html, .htm</li>
                   <li><strong>Text Formats:</strong> .txt, .csv, .json, .xml</li>
-                  <li><strong>Images:</strong> .png, .jpg, .jpeg (with OCR processing)</li>
                   <li><strong>Archives:</strong> .zip (extracts and processes contents)</li>
                 </ul>
+                <p><em>Note: Image files (.png, .jpg, .jpeg) should use the "OCR Text Extraction" tab for better results.</em></p>
               </div>
 
               <div className="info-section">

@@ -24,6 +24,7 @@ class DocumentImportService:
         self.ai_service = AIService()
         
         # Supported file types and their descriptions
+        # Note: Images are excluded from document conversion - they should use OCR instead
         self.supported_types = {
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word Document',
             'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PowerPoint Presentation',
@@ -36,19 +37,20 @@ class DocumentImportService:
             'application/json': 'JSON File',
             'application/xml': 'XML File',
             'text/xml': 'XML File',
-            'image/png': 'PNG Image',
-            'image/jpeg': 'JPEG Image',
-            'image/jpg': 'JPEG Image',
             'application/zip': 'ZIP Archive',
             'application/octet-stream': 'Binary File'
         }
 
     def is_supported_file(self, file: FileStorage) -> bool:
         """Check if the file type is supported for import"""
+        # Exclude image files - they should use OCR instead
+        if file.mimetype and file.mimetype.startswith('image/'):
+            return False
+        
         return (file.mimetype in self.supported_types or 
                 any(file.filename.lower().endswith(ext) for ext in 
                     ['.docx', '.pptx', '.xlsx', '.pdf', '.html', '.htm', '.txt', '.md',
-                     '.csv', '.json', '.xml', '.png', '.jpg', '.jpeg', '.zip']))
+                     '.csv', '.json', '.xml', '.zip']))
 
     def get_file_type_description(self, file: FileStorage) -> str:
         """Get a human-readable description of the file type"""
@@ -92,8 +94,15 @@ class DocumentImportService:
                 # Convert using markitdown
                 result = self.markitdown.convert(temp_file.name)
                 
-                if not result or not result.text_content:
-                    raise ValueError("Failed to extract content from file")
+                if not result:
+                    raise ValueError(f"MarkItDown failed to process file '{file.filename}' (type: {file.mimetype}). This file type may not be supported or the file may be corrupted.")
+                
+                if not result.text_content or result.text_content.strip() == '':
+                    # Special handling for images - they might not have extractable text
+                    if file.mimetype and file.mimetype.startswith('image/'):
+                        raise ValueError(f"No text content found in image '{file.filename}'. For image files with text, consider using the OCR feature instead of document conversion.")
+                    else:
+                        raise ValueError(f"No text content could be extracted from '{file.filename}'. The file may be empty, corrupted, or in an unsupported format.")
                 
                 markdown_content = result.text_content
                 

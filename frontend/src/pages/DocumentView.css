@@ -200,6 +200,29 @@
   font-weight: 600;
 }
 
+.markdown-rendered img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1em auto;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.markdown-rendered img[title] {
+  margin-bottom: 0.5em;
+}
+
+.markdown-rendered img + em {
+  display: block;
+  text-align: center;
+  font-style: italic;
+  color: #666;
+  font-size: 0.9em;
+  margin-top: 0.5em;
+  margin-bottom: 1em;
+}
+
 /* 옵시디언 스타일 기능 */
 .frontmatter-display {
   background: #f8f9fa;
@@ -321,5 +344,11 @@
   
   .markdown-rendered {
     padding: 20px;
+  }
+  
+  .markdown-rendered img {
+    margin: 0.5em auto;
+    max-width: calc(100% - 20px);
+    border-radius: 2px;
   }
 }
