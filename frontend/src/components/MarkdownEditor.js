@@ -73,7 +73,7 @@ const MarkdownEditor = ({
             hideToolbar={false}
             visibleDragBar={false}
             data-color-mode="light"
-            height={400}
+            height={500}
             textareaProps={{
               placeholder,
               style: {

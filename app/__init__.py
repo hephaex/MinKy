@@ -17,7 +17,12 @@ db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
 bcrypt = Bcrypt()
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(
+    app=None,
+    key_func=get_remote_address,
+    storage_uri=os.getenv('REDIS_URL', 'memory://'),
+    default_limits=["1000 per hour"]
+)
 socketio = SocketIO()
 
 def create_app():
@@ -31,7 +36,6 @@ def create_app():
     app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
     
     # Rate limiting configuration
-    app.config['RATELIMIT_STORAGE_URL'] = os.getenv('REDIS_URL', 'memory://')
     app.config['RATELIMIT_DEFAULT'] = os.getenv('RATE_LIMIT_DEFAULT', '1000 per hour')
     app.config['RATELIMIT_HEADERS_ENABLED'] = True
     
@@ -63,6 +67,7 @@ def create_app():
     from app.routes.ocr import ocr_bp
     from app.routes.ml_analytics import ml_analytics_bp
     from app.routes.document_clustering import clustering_bp
+    from app.routes.git import git_bp
     # from app.routes.org_roam import org_roam_bp
     app.register_blueprint(documents_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
@@ -84,6 +89,7 @@ def create_app():
     app.register_blueprint(ocr_bp, url_prefix='/api')
     app.register_blueprint(ml_analytics_bp, url_prefix='/api')
     app.register_blueprint(clustering_bp, url_prefix='/api')
+    app.register_blueprint(git_bp, url_prefix='/api')
     # app.register_blueprint(org_roam_bp, url_prefix='/api')  # Temporarily disabled due to decorator conflicts
     
     # Initialize collaboration service and register WebSocket events

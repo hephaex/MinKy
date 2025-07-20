@@ -16,7 +16,7 @@ class CollaborationService {
       return;
     }
 
-    this.socket = io('http://localhost:5000', {
+    this.socket = io('http://localhost:5001', {
       transports: ['websocket'],
       autoConnect: true
     });
