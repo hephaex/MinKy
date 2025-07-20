@@ -1,0 +1,119 @@
+.documents-page {
+  display: flex;
+  height: 100vh;
+  background-color: #f8f9fa;
+}
+
+.documents-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.3s ease;
+  min-height: 100vh;
+}
+
+.documents-main.with-sidebar {
+  margin-left: 320px;
+}
+
+.documents-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.sidebar-toggle-btn:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.documents-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.documents-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  background-color: #f8f9fa;
+}
+
+/* Sidebar overlay for mobile */
+.sidebar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  display: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .documents-main.with-sidebar {
+    margin-left: 0;
+  }
+  
+  .sidebar-overlay {
+    display: block;
+  }
+  
+  .documents-header {
+    padding: 12px 16px;
+  }
+  
+  .documents-header h1 {
+    font-size: 24px;
+  }
+  
+  .documents-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .documents-header {
+    padding: 8px 12px;
+  }
+  
+  .documents-header h1 {
+    font-size: 20px;
+  }
+  
+  .documents-content {
+    padding: 12px;
+  }
+}
+
+/* Fix for DocumentList styling within the new layout */
+.documents-content .document-list {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure proper spacing for the sidebar */
+@media (min-width: 769px) {
+  .documents-main:not(.with-sidebar) {
+    margin-left: 0;
+  }
+}

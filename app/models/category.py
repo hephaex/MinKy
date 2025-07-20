@@ -76,7 +76,8 @@ class Category(db.Model):
     
     def get_document_count(self, include_descendants=True):
         """Get number of documents in this category"""
-        count = self.documents.count()
+        from app.models.document import Document
+        count = Document.query.filter_by(category_id=self.id).count()
         
         if include_descendants:
             for child in self.children:

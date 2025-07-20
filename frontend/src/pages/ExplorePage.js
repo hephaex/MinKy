@@ -8,24 +8,6 @@ const ExplorePage = () => {
 
   const exploreFeatures = [
     {
-      title: t('navigation.tags'),
-      description: t('explore.tags_desc'),
-      path: '/tags',
-      icon: '🏷️'
-    },
-    {
-      title: t('navigation.categories'),
-      description: t('explore.categories_desc'),
-      path: '/categories',
-      icon: '📂'
-    },
-    {
-      title: t('navigation.analytics'),
-      description: t('explore.analytics_desc'),
-      path: '/analytics',
-      icon: '📊'
-    },
-    {
       title: t('navigation.date_explorer'),
       description: t('explore.date_explorer_desc'),
       path: '/explore-date',

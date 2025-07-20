@@ -1,53 +1,55 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { useI18n } from '../i18n/i18n';
-import './SectionPage.css';
+import React, { useState, useEffect } from 'react';
+import DocumentsSidebar from '../components/DocumentsSidebar';
+import DocumentList from './DocumentList';
+import './DocumentsPage.css';
 
 const DocumentsPage = () => {
-  const { t } = useI18n();
+  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
-  const documentFeatures = [
-    {
-      title: t('navigation.document_list'),
-      description: t('documents.document_list_desc'),
-      path: '/',
-      icon: '📄'
-    },
-    {
-      title: t('navigation.new_document'),
-      description: t('documents.new_document_desc'),
-      path: '/documents/new',
-      icon: '✏️'
-    },
-    {
-      title: t('navigation.upload_md'),
-      description: t('documents.upload_md_desc'),
-      path: '/',
-      icon: '📁'
-    },
-    {
-      title: t('navigation.ocr'),
-      description: t('documents.ocr_desc'),
-      path: '/ocr',
-      icon: '🔍'
-    }
-  ];
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  const toggleSidebar = () => {
+    console.log('DocumentsPage: toggleSidebar called, current state:', sidebarVisible);
+    setSidebarVisible(!sidebarVisible);
+  };
+
+  console.log('DocumentsPage: Rendering with sidebarVisible =', sidebarVisible);
 
   return (
-    <div className="section-page">
-      <div className="section-header">
-        <h1>{t('navigation.documents')}</h1>
-        <p>{t('documents.section_description')}</p>
-      </div>
-
-      <div className="features-grid">
-        {documentFeatures.map((feature, index) => (
-          <Link to={feature.path} key={index} className="feature-card">
-            <div className="feature-icon">{feature.icon}</div>
-            <h3>{feature.title}</h3>
-            <p>{feature.description}</p>
-          </Link>
-        ))}
+    <div className="documents-page">
+      <DocumentsSidebar 
+        isVisible={sidebarVisible} 
+        onToggle={toggleSidebar} 
+      />
+      
+      {sidebarVisible && isMobile && (
+        <div className="sidebar-overlay" onClick={toggleSidebar} />
+      )}
+      
+      <div className={`documents-main ${sidebarVisible ? 'with-sidebar' : ''}`}>
+        <div className="documents-header">
+          {!sidebarVisible && (
+            <button className="sidebar-toggle-btn" onClick={toggleSidebar}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+              </svg>
+            </button>
+          )}
+          <h1>Documents</h1>
+        </div>
+        
+        <div className="documents-content">
+          <DocumentList />
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 import '../styles/AnalyticsDashboard.css';
 
@@ -98,6 +99,26 @@ const AnalyticsDashboard = () => {
           <button onClick={fetchAnalytics} className="refresh-btn">
             Refresh
           </button>
+        </div>
+      </div>
+
+      {/* Analytics Navigation */}
+      <div className="analytics-navigation">
+        <div className="nav-section">
+          <Link to="/tags" className="nav-card">
+            <div className="nav-icon">🏷️</div>
+            <div className="nav-content">
+              <h3>Tags</h3>
+              <p>Manage and explore document tags</p>
+            </div>
+          </Link>
+          <Link to="/categories" className="nav-card">
+            <div className="nav-icon">📂</div>
+            <div className="nav-content">
+              <h3>Categories</h3>
+              <p>Organize documents by categories</p>
+            </div>
+          </Link>
         </div>
       </div>
 

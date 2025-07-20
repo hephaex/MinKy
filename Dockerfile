@@ -1,13 +1,60 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     postgresql-client \
+    postgresql-server-dev-all \
     build-essential \
+    libpq-dev \
+    curl \
+    wget \
+    autoconf \
+    automake \
+    libtool \
+    libmecab-dev \
+    mecab \
+    mecab-ipadic-utf8 \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-kor \
+    tesseract-ocr-jpn \
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-chi-tra \
+    libtesseract-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Install MeCab Korean
+WORKDIR /tmp
+RUN wget https://bitbucket.org/eunjeon/mecab-ko/downloads/mecab-0.996-ko-0.9.2.tar.gz && \
+    tar xvfz mecab-0.996-ko-0.9.2.tar.gz && \
+    cd mecab-0.996-ko-0.9.2 && \
+    # Update config files for ARM64 support
+    wget -O config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' && \
+    wget -O config.sub 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD' && \
+    chmod +x config.guess config.sub && \
+    ./configure && \
+    make && \
+    make check && \
+    make install && \
+    ldconfig && \
+    cd /tmp && \
+    wget https://bitbucket.org/eunjeon/mecab-ko-dic/downloads/mecab-ko-dic-2.1.1-20180720.tar.gz && \
+    tar xvfz mecab-ko-dic-2.1.1-20180720.tar.gz && \
+    cd mecab-ko-dic-2.1.1-20180720 && \
+    # Update config files for ARM64 support  
+    wget -O config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD' && \
+    wget -O config.sub 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD' && \
+    chmod +x config.guess config.sub && \
+    ./autogen.sh && \
+    ./configure && \
+    make && \
+    make install && \
+    cd / && \
+    rm -rf /tmp/*
+
+WORKDIR /app
 # Copy requirements first for better caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

@@ -16,12 +16,35 @@ def get_categories():
         include_inactive = request.args.get('include_inactive', 'false').lower() == 'true'
         
         if tree_format == 'flat':
-            categories = Category.get_flat_list(include_inactive=include_inactive)
-            return jsonify({
-                'success': True,
-                'categories': categories,
-                'count': len(categories)
-            })
+            try:
+                categories = Category.get_flat_list(include_inactive=include_inactive)
+                return jsonify({
+                    'success': True,
+                    'categories': categories,
+                    'count': len(categories)
+                })
+            except Exception as e:
+                # Fallback to simple list if get_flat_list fails
+                query = Category.query
+                if not include_inactive:
+                    query = query.filter_by(is_active=True)
+                categories = query.order_by(Category.name).all()
+                
+                simple_categories = []
+                for category in categories:
+                    simple_categories.append({
+                        'id': category.id,
+                        'name': category.name,
+                        'path': category.name,  # Simple fallback
+                        'level': 0,  # Simple fallback
+                        'document_count': 0  # Simple fallback
+                    })
+                
+                return jsonify({
+                    'success': True,
+                    'categories': simple_categories,
+                    'count': len(simple_categories)
+                })
         else:
             tree = Category.get_tree(include_inactive=include_inactive)
             return jsonify({
