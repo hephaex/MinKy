@@ -179,7 +179,7 @@ def get_ocr_status():
         }), 500
 
 @ocr_bp.route('/ocr/extract-and-create', methods=['POST'])
-@jwt_required()
+@jwt_required(optional=True)
 def extract_and_create_document():
     """
     Extract text from file and create a new document

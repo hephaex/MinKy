@@ -31,6 +31,7 @@ class DocumentImportService:
             'application/pdf': 'PDF Document',
             'text/html': 'HTML Document',
             'text/plain': 'Text File',
+            'text/markdown': 'Markdown File',
             'text/csv': 'CSV File',
             'application/json': 'JSON File',
             'application/xml': 'XML File',
@@ -38,14 +39,15 @@ class DocumentImportService:
             'image/png': 'PNG Image',
             'image/jpeg': 'JPEG Image',
             'image/jpg': 'JPEG Image',
-            'application/zip': 'ZIP Archive'
+            'application/zip': 'ZIP Archive',
+            'application/octet-stream': 'Binary File'
         }
 
     def is_supported_file(self, file: FileStorage) -> bool:
         """Check if the file type is supported for import"""
         return (file.mimetype in self.supported_types or 
                 any(file.filename.lower().endswith(ext) for ext in 
-                    ['.docx', '.pptx', '.xlsx', '.pdf', '.html', '.htm', '.txt', 
+                    ['.docx', '.pptx', '.xlsx', '.pdf', '.html', '.htm', '.txt', '.md',
                      '.csv', '.json', '.xml', '.png', '.jpg', '.jpeg', '.zip']))
 
     def get_file_type_description(self, file: FileStorage) -> str:
@@ -197,9 +199,9 @@ class DocumentImportService:
             
             document = Document(
                 title=title,
-                content=markdown_content,
-                source='import',
-                source_metadata={
+                markdown_content=markdown_content,
+                document_metadata={
+                    'source': 'import',
                     'original_filename': metadata.get('original_filename'),
                     'file_type': metadata.get('file_type'),
                     'import_method': 'markitdown'
@@ -220,7 +222,7 @@ class DocumentImportService:
                         # Find or create tag
                         tag = Tag.query.filter_by(name=tag_name).first()
                         if not tag:
-                            tag = Tag(name=tag_name, slug=Tag.generate_slug(tag_name))
+                            tag = Tag(name=tag_name)
                             db.session.add(tag)
                             db.session.flush()
                         
@@ -262,7 +264,7 @@ class DocumentImportService:
                 'document': {
                     'id': document.id,
                     'title': document.title,
-                    'content_preview': document.content[:200] + '...' if len(document.content) > 200 else document.content,
+                    'content_preview': document.markdown_content[:200] + '...' if len(document.markdown_content) > 200 else document.markdown_content,
                     'created_at': document.created_at.isoformat() if document.created_at else None
                 },
                 'metadata': metadata,

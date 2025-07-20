@@ -23,18 +23,19 @@ class KoreanTextProcessor:
     def _initialize_analyzer(self):
         """형태소 분석기 초기화"""
         try:
-            # Temporarily disable Mecab due to dictionary issues
-            logger.warning("Korean text analysis disabled due to MeCab dictionary issues")
-            self.analyzer = None
-            # if self.analyzer_name == 'mecab':
-            #     self.analyzer = Mecab()
-            # elif self.analyzer_name == 'kkma':
-            #     self.analyzer = Kkma()
-            # elif self.analyzer_name == 'komoran':
-            #     self.analyzer = Komoran()
-            # else:
-            #     logger.warning(f"Unknown analyzer: {self.analyzer_name}, using Mecab")
-            #     self.analyzer = Mecab()
+            if self.analyzer_name == 'mecab':
+                self.analyzer = Mecab()
+                logger.info("MeCab Korean analyzer initialized successfully")
+            elif self.analyzer_name == 'kkma':
+                self.analyzer = Kkma()
+                logger.info("Kkma Korean analyzer initialized successfully")
+            elif self.analyzer_name == 'komoran':
+                self.analyzer = Komoran()
+                logger.info("Komoran Korean analyzer initialized successfully")
+            else:
+                logger.warning(f"Unknown analyzer: {self.analyzer_name}, using Mecab")
+                self.analyzer = Mecab()
+                logger.info("MeCab Korean analyzer initialized successfully (fallback)")
         except Exception as e:
             logger.error(f"Failed to initialize {self.analyzer_name}: {e}")
             # Fallback to simple text processing

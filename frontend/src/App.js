@@ -29,7 +29,7 @@ function App() {
           <Header />
           <main className="main-content">
             <Routes>
-              <Route path="/" element={<DocumentList />} />
+              <Route path="/" element={<DocumentsPage />} />
               <Route path="/documents/new" element={<DocumentCreate />} />
               <Route path="/documents/:id" element={<DocumentView />} />
               <Route path="/documents/:id/edit" element={<DocumentEdit />} />

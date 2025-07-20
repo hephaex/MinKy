@@ -95,7 +95,7 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
 
       const token = authService.getToken();
       const headers = {};
-      if (token) {
+      if (token && token !== 'null' && token !== 'undefined') {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
@@ -113,10 +113,21 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
           onTextExtracted(data);
         }
       } else {
-        setError(data.error || 'OCR extraction failed');
+        const errorMessage = data.error || 'OCR extraction failed';
+        if (errorMessage.toLowerCase().includes('service unavailable') || 
+            errorMessage.toLowerCase().includes('not available') ||
+            errorMessage.toLowerCase().includes('unavailable')) {
+          setError('OCR Service is currently unavailable. Please check that Tesseract is installed or cloud OCR services are configured.');
+        } else {
+          setError(errorMessage);
+        }
       }
     } catch (err) {
-      setError('Error during OCR processing: ' + err.message);
+      if (err.message.includes('Failed to fetch') || err.message.includes('Network Error')) {
+        setError('Unable to connect to OCR service. Please ensure the server is running and try again.');
+      } else {
+        setError('Error during OCR processing: ' + err.message);
+      }
       console.error('OCR error:', err);
     } finally {
       setProcessing(false);
@@ -142,11 +153,14 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
       formDataObj.append('is_public', formData.is_public.toString());
 
       const token = authService.getToken();
+      const headers = {};
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
       const response = await fetch('/api/ocr/extract-and-create', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: formDataObj
       });
 

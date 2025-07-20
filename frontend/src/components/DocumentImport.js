@@ -67,16 +67,17 @@ const DocumentImport = ({ onDocumentImported }) => {
       }
 
       try {
+        console.log('DocumentImport: Starting upload for file:', file.name, 'size:', file.size);
         const formData = new FormData();
         formData.append('file', file);
         formData.append('auto_tag', 'true');
 
+        console.log('DocumentImport: FormData prepared, making API call to /documents/import');
         const response = await api.post('/documents/import', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
           timeout: 120000, // 2 minutes timeout for large files
         });
+        
+        console.log('DocumentImport: API response received:', response.status, response.data);
 
         if (response.data.success) {
           newResults.push({
@@ -89,7 +90,17 @@ const DocumentImport = ({ onDocumentImported }) => {
           newErrors.push(`${file.name}: ${response.data.error || 'Import failed'}`);
         }
       } catch (error) {
-        console.error('Import error:', error);
+        console.error('Import error details:', {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          config: {
+            url: error.config?.url,
+            method: error.config?.method,
+            baseURL: error.config?.baseURL
+          }
+        });
         newErrors.push(`${file.name}: ${error.response?.data?.error || error.message || 'Import failed'}`);
       }
     }

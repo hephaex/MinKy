@@ -58,7 +58,7 @@ docker-compose ps
 echo ""
 echo "🌐 Application URLs:"
 echo "   Frontend: http://localhost:3000"
-echo "   Backend API: http://localhost:5000"
+echo "   Backend API: http://localhost:5001"
 echo "   Database: localhost:5432"
 echo ""
 echo "📝 Logs:"
