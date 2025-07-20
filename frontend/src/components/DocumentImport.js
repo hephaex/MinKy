@@ -2,7 +2,13 @@ import React, { useState, useRef } from 'react';
 import api from '../services/api';
 import './DocumentImport.css';
 
-const DocumentImport = ({ onDocumentImported }) => {
+const DocumentImport = ({ 
+  onDocumentImported, 
+  acceptedFileTypes = null, 
+  fileExtensions = null,
+  title = "Document Import",
+  description = "Upload documents to convert them to Markdown format"
+}) => {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [results, setResults] = useState([]);
@@ -16,13 +22,11 @@ const DocumentImport = ({ onDocumentImported }) => {
     'application/pdf': '.pdf',
     'text/html': '.html',
     'text/plain': '.txt',
+    'text/markdown': '.md',
     'text/csv': '.csv',
     'application/json': '.json',
     'application/xml': '.xml',
     'text/xml': '.xml',
-    'image/png': '.png',
-    'image/jpeg': '.jpg',
-    'image/jpg': '.jpg',
     'application/zip': '.zip'
   };
 
@@ -46,6 +50,20 @@ const DocumentImport = ({ onDocumentImported }) => {
   };
 
   const isFileSupported = (file) => {
+    // If specific file types are provided, use those for validation
+    if (acceptedFileTypes || fileExtensions) {
+      const typeMatches = acceptedFileTypes ? acceptedFileTypes.includes(file.type) : true;
+      const extensionMatches = fileExtensions ? 
+        fileExtensions.some(ext => file.name.toLowerCase().endsWith(ext.toLowerCase())) : true;
+      return typeMatches && extensionMatches;
+    }
+    
+    // Exclude image files - they should use OCR instead
+    if (file.type && file.type.startsWith('image/')) {
+      return false;
+    }
+    
+    // Otherwise, use the default supported types
     return Object.keys(supportedTypes).includes(file.type) || 
            Object.values(supportedTypes).some(ext => file.name.toLowerCase().endsWith(ext));
   };
@@ -62,7 +80,11 @@ const DocumentImport = ({ onDocumentImported }) => {
 
     for (const file of files) {
       if (!isFileSupported(file)) {
-        newErrors.push(`${file.name}: Unsupported file type`);
+        if (file.type && file.type.startsWith('image/')) {
+          newErrors.push(`${file.name}: Image files should use the OCR Text Extraction tab instead of Document Conversion`);
+        } else {
+          newErrors.push(`${file.name}: Unsupported file type (${file.type || 'unknown'})`);
+        }
         continue;
       }
 
@@ -150,9 +172,9 @@ const DocumentImport = ({ onDocumentImported }) => {
           >
             <div className="drop-zone-content">
               <div className="upload-icon">📁</div>
-              <h3>Drop files here or click to browse</h3>
+              <h3>{title}</h3>
               <p>
-                Supports Office documents, PDFs, HTML, text files, images, and more
+                {description}
               </p>
               <div className="supported-formats">
                 <span>.docx</span>

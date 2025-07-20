@@ -211,6 +211,25 @@ const DocumentView = () => {
                   }
                   return children;
                 },
+                // 이미지 컴포넌트 - 반응형 스타일링 보장
+                img({ node, src, alt, title, ...props }) {
+                  return (
+                    <img 
+                      src={src} 
+                      alt={alt} 
+                      title={title}
+                      style={{
+                        maxWidth: '100%',
+                        height: 'auto',
+                        display: 'block',
+                        margin: '1em auto',
+                        borderRadius: '4px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                      }}
+                      {...props}
+                    />
+                  );
+                },
                 code({ node, inline, className, children, ...props }) {
                   const match = /language-(\w+)/.exec(className || '');
                   return !inline && match ? (
