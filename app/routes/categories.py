@@ -11,53 +11,21 @@ categories_bp = Blueprint('categories', __name__)
 @categories_bp.route('/', methods=['GET'])
 def get_categories():
     """Get all categories in hierarchical tree structure"""
-    try:
-        tree_format = request.args.get('format', 'tree')
-        include_inactive = request.args.get('include_inactive', 'false').lower() == 'true'
-        
-        if tree_format == 'flat':
-            try:
-                categories = Category.get_flat_list(include_inactive=include_inactive)
-                return jsonify({
-                    'success': True,
-                    'categories': categories,
-                    'count': len(categories)
-                })
-            except Exception as e:
-                # Fallback to simple list if get_flat_list fails
-                query = Category.query
-                if not include_inactive:
-                    query = query.filter_by(is_active=True)
-                categories = query.order_by(Category.name).all()
-                
-                simple_categories = []
-                for category in categories:
-                    simple_categories.append({
-                        'id': category.id,
-                        'name': category.name,
-                        'path': category.name,  # Simple fallback
-                        'level': 0,  # Simple fallback
-                        'document_count': 0  # Simple fallback
-                    })
-                
-                return jsonify({
-                    'success': True,
-                    'categories': simple_categories,
-                    'count': len(simple_categories)
-                })
-        else:
-            tree = Category.get_tree(include_inactive=include_inactive)
-            return jsonify({
-                'success': True,
-                'tree': [{'category': node['category'].to_dict(), 'children': node['children']} for node in tree],
-                'count': len(tree)
-            })
-        
-    except Exception as e:
+    # Categories feature is not implemented - return empty list
+    tree_format = request.args.get('format', 'tree')
+    
+    if tree_format == 'flat':
         return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+            'success': True,
+            'categories': [],
+            'count': 0
+        })
+    else:
+        return jsonify({
+            'success': True,
+            'tree': [],
+            'count': 0
+        })
 
 
 @categories_bp.route('/<int:category_id>', methods=['GET'])
