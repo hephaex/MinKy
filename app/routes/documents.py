@@ -98,7 +98,6 @@ def create_document():
         author = bleach.clean(data.get('author', '').strip()) if data.get('author') else None
         is_public = data.get('is_public', True)
         tags = data.get('tags', [])
-        category_id = data.get('category_id')
         
         if not title:
             return jsonify({'error': 'Title cannot be empty'}), 400
@@ -137,7 +136,6 @@ def create_document():
             author=author,
             user_id=current_user_id,
             is_public=is_public,
-            category_id=category_id,
             document_metadata={
                 'frontmatter': obsidian_data['frontmatter'],
                 'internal_links': obsidian_data['internal_links'],
@@ -187,14 +185,11 @@ def list_documents():
         
         tags_filter = request.args.getlist('tags')  # Support multiple tags
         
-        category_id = request.args.get('category_id', type=int)
-        
         pagination = Document.search_documents(
             search, page, per_page, 
             user_id=current_user_id, 
             include_private=include_private and current_user_id is not None,
-            tags=tags_filter if tags_filter else None,
-            category_id=category_id
+            tags=tags_filter if tags_filter else None
         )
         documents = [doc.to_dict() for doc in pagination.items]
         
@@ -381,8 +376,6 @@ def update_document(document_id):
         if 'is_public' in data:
             document.is_public = data['is_public']
         
-        if 'category_id' in data:
-            document.category_id = data['category_id']
         
         if 'tags' in data:
             # Handle manual tag updates
@@ -491,7 +484,6 @@ def upload_markdown_file():
             author=extract_author_from_frontmatter(obsidian_data['frontmatter']),
             user_id=current_user_id,
             is_public=obsidian_data['frontmatter'].get('public', True),
-            category_id=obsidian_data['frontmatter'].get('category_id'),
             document_metadata={
                 'frontmatter': obsidian_data['frontmatter'],
                 'internal_links': obsidian_data['internal_links'],
