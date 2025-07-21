@@ -31,13 +31,26 @@ class Tag(db.Model):
     
     @staticmethod
     def create_slug(name):
-        """Create a URL-friendly slug from tag name"""
+        """Create a URL-friendly slug from tag name that supports Unicode"""
         import re
-        slug = name.lower().strip()
-        slug = re.sub(r'[^a-z0-9\-_]', '-', slug)
+        import unicodedata
+        
+        slug = name.strip()
+        
+        # Replace spaces and some special characters with hyphens
+        slug = re.sub(r'[\s_/\\]+', '-', slug)
+        
+        # Remove characters that are problematic for URLs but preserve Unicode letters/numbers
+        slug = re.sub(r'[^\w\-가-힣]', '-', slug, flags=re.UNICODE)
+        
+        # Clean up multiple hyphens
         slug = re.sub(r'-+', '-', slug)
         slug = slug.strip('-')
-        return slug[:50]  # Limit length
+        
+        # Convert to lowercase
+        slug = slug.lower()
+        
+        return slug[:50] if slug else 'unnamed'  # Limit length with fallback
     
     @staticmethod
     def get_or_create(name, created_by=None):

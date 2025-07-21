@@ -13,6 +13,18 @@ const Settings = () => {
   const [gitStatus, setGitStatus] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  
+  // AI Settings State
+  const [aiConfig, setAiConfig] = useState({
+    ocrService: 'tesseract', // tesseract, google-vision, aws-textract
+    ocrApiKey: '',
+    llmProvider: 'openai', // openai, anthropic, google
+    llmApiKey: '',
+    llmModel: 'gpt-3.5-turbo',
+    enableAiTags: true,
+    enableAiSummary: false
+  });
+  const [aiStatus, setAiStatus] = useState(null);
 
   useEffect(() => {
     loadGitConfig();
@@ -183,6 +195,80 @@ const Settings = () => {
     setGitStatus(null);
   };
 
+  // AI Configuration Functions
+  const handleAiConfigChange = (field, value) => {
+    setAiConfig(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const saveAiConfig = async () => {
+    try {
+      const response = await fetch('/api/ai/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(aiConfig)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setAiStatus({
+          type: 'success',
+          message: 'AI configuration saved successfully'
+        });
+      } else {
+        setAiStatus({
+          type: 'error',
+          message: data.error || 'Failed to save AI configuration'
+        });
+      }
+    } catch (error) {
+      setAiStatus({
+        type: 'error',
+        message: 'Failed to save AI configuration: ' + error.message
+      });
+    }
+  };
+
+  const testAiConnection = async (service) => {
+    try {
+      const response = await fetch(`/api/ai/test/${service}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(aiConfig)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setAiStatus({
+          type: 'success',
+          message: `${service.toUpperCase()} connection test successful`
+        });
+      } else {
+        setAiStatus({
+          type: 'error',
+          message: data.error || `${service.toUpperCase()} connection test failed`
+        });
+      }
+    } catch (error) {
+      setAiStatus({
+        type: 'error',
+        message: `${service.toUpperCase()} connection test failed: ` + error.message
+      });
+    }
+  };
+
+  const clearAiStatus = () => {
+    setAiStatus(null);
+  };
+
   return (
     <div className="settings">
       <div className="settings-header">
@@ -196,6 +282,152 @@ const Settings = () => {
         <div className="language-setting">
           <label>Interface Language:</label>
           <LanguageSelector />
+        </div>
+      </div>
+
+      {/* AI Settings Section */}
+      <div className="settings-section">
+        <h3>AI Configuration</h3>
+        <p>Configure AI services for OCR and LLM features</p>
+        
+        {/* AI Status Messages */}
+        {aiStatus && (
+          <div className={`status-message ${aiStatus.type}`}>
+            <span>{aiStatus.message}</span>
+            <button className="close-btn" onClick={clearAiStatus}>×</button>
+          </div>
+        )}
+
+        {/* OCR Configuration */}
+        <div className="ai-config-group">
+          <h4>📷 OCR Service Configuration</h4>
+          <div className="config-item">
+            <label>OCR Provider:</label>
+            <select 
+              value={aiConfig.ocrService} 
+              onChange={(e) => handleAiConfigChange('ocrService', e.target.value)}
+            >
+              <option value="tesseract">Tesseract (Local)</option>
+              <option value="google-vision">Google Vision API</option>
+              <option value="aws-textract">AWS Textract</option>
+            </select>
+          </div>
+          
+          {aiConfig.ocrService !== 'tesseract' && (
+            <div className="config-item">
+              <label>OCR API Key:</label>
+              <input
+                type="password"
+                value={aiConfig.ocrApiKey}
+                onChange={(e) => handleAiConfigChange('ocrApiKey', e.target.value)}
+                placeholder="Enter API key for OCR service"
+              />
+            </div>
+          )}
+          
+          <button 
+            className="btn btn-secondary"
+            onClick={() => testAiConnection('ocr')}
+          >
+            Test OCR Connection
+          </button>
+        </div>
+
+        {/* LLM Configuration */}
+        <div className="ai-config-group">
+          <h4>🤖 LLM Service Configuration</h4>
+          <div className="config-item">
+            <label>LLM Provider:</label>
+            <select 
+              value={aiConfig.llmProvider} 
+              onChange={(e) => handleAiConfigChange('llmProvider', e.target.value)}
+            >
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+              <option value="google">Google (Gemini)</option>
+            </select>
+          </div>
+          
+          <div className="config-item">
+            <label>API Key:</label>
+            <input
+              type="password"
+              value={aiConfig.llmApiKey}
+              onChange={(e) => handleAiConfigChange('llmApiKey', e.target.value)}
+              placeholder="Enter API key for LLM service"
+            />
+          </div>
+          
+          <div className="config-item">
+            <label>Model:</label>
+            <select 
+              value={aiConfig.llmModel} 
+              onChange={(e) => handleAiConfigChange('llmModel', e.target.value)}
+            >
+              {aiConfig.llmProvider === 'openai' && (
+                <>
+                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                  <option value="gpt-4">GPT-4</option>
+                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                </>
+              )}
+              {aiConfig.llmProvider === 'anthropic' && (
+                <>
+                  <option value="claude-3-haiku">Claude 3 Haiku</option>
+                  <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                  <option value="claude-3-opus">Claude 3 Opus</option>
+                </>
+              )}
+              {aiConfig.llmProvider === 'google' && (
+                <>
+                  <option value="gemini-pro">Gemini Pro</option>
+                  <option value="gemini-pro-vision">Gemini Pro Vision</option>
+                </>
+              )}
+            </select>
+          </div>
+          
+          <button 
+            className="btn btn-secondary"
+            onClick={() => testAiConnection('llm')}
+          >
+            Test LLM Connection
+          </button>
+        </div>
+
+        {/* AI Features Configuration */}
+        <div className="ai-config-group">
+          <h4>🎯 AI Features</h4>
+          <div className="config-item checkbox-item">
+            <label>
+              <input
+                type="checkbox"
+                checked={aiConfig.enableAiTags}
+                onChange={(e) => handleAiConfigChange('enableAiTags', e.target.checked)}
+              />
+              Enable AI-powered automatic tagging
+            </label>
+          </div>
+          
+          <div className="config-item checkbox-item">
+            <label>
+              <input
+                type="checkbox"
+                checked={aiConfig.enableAiSummary}
+                onChange={(e) => handleAiConfigChange('enableAiSummary', e.target.checked)}
+              />
+              Enable AI-powered document summaries
+            </label>
+          </div>
+        </div>
+
+        <div className="ai-actions">
+          <button 
+            className="btn btn-primary"
+            onClick={saveAiConfig}
+          >
+            💾 Save AI Configuration
+          </button>
         </div>
       </div>
 

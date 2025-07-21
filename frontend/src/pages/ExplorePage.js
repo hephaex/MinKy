@@ -12,6 +12,36 @@ const ExplorePage = () => {
       description: t('explore.date_explorer_desc'),
       path: '/explore-date',
       icon: '📅'
+    },
+    {
+      title: 'Advanced Search',
+      description: 'Search documents with advanced filters and full-text search powered by OpenSearch',
+      path: '/search',
+      icon: '🔍'
+    },
+    {
+      title: 'Document Analytics',
+      description: 'Analyze document patterns, trends, and insights with OpenSearch analytics',
+      path: '/analytics',
+      icon: '📊'
+    },
+    {
+      title: 'Search Recommendations',
+      description: 'Get intelligent search suggestions and discover related content',
+      path: '/search/recommendations',
+      icon: '💡'
+    },
+    {
+      title: 'Full-Text Search',
+      description: 'Powerful semantic search across all your documents and content',
+      path: '/search/full-text',
+      icon: '📖'
+    },
+    {
+      title: 'Search Indices',
+      description: 'Manage and optimize OpenSearch indices for better search performance',
+      path: '/search/indices',
+      icon: '⚙️'
     }
   ];
 

@@ -117,13 +117,19 @@ def create_document():
                 'processed_content': data['markdown_content']
             }
         
-        # 프론트매터에서 제목 오버라이드 (옵션)
-        if 'title' in obsidian_data['frontmatter'] and not title:
-            title = obsidian_data['frontmatter']['title']
+        # 프론트매터에서 제목 오버라이드 (옵션) - only if title is empty and frontmatter has valid title
+        if not title and 'title' in obsidian_data['frontmatter']:
+            frontmatter_title = obsidian_data['frontmatter']['title']
+            if isinstance(frontmatter_title, str) and frontmatter_title.strip():
+                title = frontmatter_title.strip()
         
         # 프론트매터에서 작성자 추출 (author 필드가 없으면 frontmatter에서 추출)
         if not author:
             author = extract_author_from_frontmatter(obsidian_data['frontmatter'])
+        
+        # Ensure title is not None or empty
+        if not title or not title.strip():
+            title = "Untitled Document"
         
         document = Document(
             title=title,
@@ -433,15 +439,9 @@ def delete_document(document_id):
 def upload_markdown_file():
     """Upload a markdown file and create a document"""
     try:
-        print(f"[UPLOAD] Starting upload request from {request.remote_addr}")
-        print(f"[UPLOAD] Request headers: {dict(request.headers)}")
-        print(f"[UPLOAD] Request files: {list(request.files.keys())}")
-        
         current_user_id = get_current_user_id()
-        print(f"[UPLOAD] Current user ID: {current_user_id}")
         
         if 'file' not in request.files:
-            print("[UPLOAD] ERROR: No file provided")
             return jsonify({'error': 'No file provided'}), 400
         
         file = request.files['file']
@@ -470,9 +470,19 @@ def upload_markdown_file():
                 'processed_content': content
             }
         
-        # Override title if specified in frontmatter
+        # Override title if specified in frontmatter and is a valid string
         if 'title' in obsidian_data['frontmatter']:
-            title = obsidian_data['frontmatter']['title']
+            frontmatter_title = obsidian_data['frontmatter']['title']
+            if frontmatter_title and isinstance(frontmatter_title, str) and frontmatter_title.strip():
+                title = frontmatter_title.strip()
+        
+        # Ensure title is not None or empty - use fallback
+        if not title or not title.strip():
+            title = "Untitled Document"
+        
+        # Final safety check - ensure title is never None
+        if title is None:
+            title = "Untitled Document"
         
         # Create document
         document = Document(
@@ -508,17 +518,12 @@ def upload_markdown_file():
         except Exception as backup_error:
             print(f"Backup creation error for uploaded document {document.id}: {backup_error}")
         
-        print(f"[UPLOAD] SUCCESS: Document created with ID {document.id}")
         return jsonify({
             'message': 'File uploaded successfully',
             'document': document.to_dict()
         }), 201
         
     except Exception as e:
-        print(f"[UPLOAD] ERROR: Exception occurred: {str(e)}")
-        print(f"[UPLOAD] ERROR: Exception type: {type(e)}")
-        import traceback
-        print(f"[UPLOAD] ERROR: Traceback: {traceback.format_exc()}")
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
