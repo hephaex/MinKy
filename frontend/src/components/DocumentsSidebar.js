@@ -80,10 +80,6 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
         {/* Quick Actions */}
         <div className="sidebar-section">
           <div className="section-item">
-            <div className="item-icon">📄</div>
-            <Link to="/import" className="item-link">Upload *.md</Link>
-          </div>
-          <div className="section-item">
             <div className="item-icon">📥</div>
             <Link to="/import" className="item-link">Import</Link>
           </div>
