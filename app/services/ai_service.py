@@ -140,37 +140,9 @@ class AIService:
             # Detect the primary language of the content
             content_sample = (title + " " + content[:500]).strip()
             language = self._detect_language(content_sample)
-            
-            if language == 'korean':
-                prompt = f"""
-                당신은 옵시디언 노트를 정리하는 AI 어시스턴트입니다.
-                아래 마크다운 문서의 핵심 내용을 분석하고 가장 관련성 높은 태그 9개를 한글로 만드세요.
 
-                # 요구사항:
-                1. 정확히 9개의 태그를 만들어야 합니다.
-                2. 각 태그는 '#' 기호로 시작해야 합니다 (예: #인공지능).
-                3. 태그를 공백으로 구분한 한 줄 문자열로 반환하세요.
-                4. 태그 문자열만 출력하고, 다른 설명이나 줄바꿈은 없어야 합니다.
-                
-                문서 제목: {title}
-                문서 내용: {content[:1000]}...
-                """
-            elif language == 'japanese':
-                prompt = f"""
-                あなたはObsidianノートを整理するAIアシスタントです。
-                以下のマークダウン文書の核心内容を分析し、最も関連性の高いタグ9個を日本語で作成してください。
-
-                # 要件:
-                1. 正確に9個のタグを作成する必要があります。
-                2. 各タグは'#'記号で始まる必要があります（例：#人工知能）。
-                3. タグをスペースで区切った一行の文字列として返してください。
-                4. タグ文字列のみを出力し、他の説明や改行はありません。
-                
-                文書タイトル: {title}
-                文書内容: {content[:1000]}...
-                """
-            else:  # Default to English
-                prompt = f"""
+            # Default to English
+            prompt = f"""
                 You are an AI assistant helping to organize Obsidian notes.
                 Analyze the core content of the markdown document below and create the 9 most relevant tags in English.
 
@@ -181,7 +153,7 @@ class AIService:
                 4. output only the tag string, no other comments or newlines.
                 
                 Document Title: {title}
-                Document Content: {content[:1000]}...
+                Document Content: {content[:3000]}...
                 """
             
             response = openai.Completion.create(
@@ -215,12 +187,12 @@ class AIService:
         
         try:
             # Use first few paragraphs for title suggestion
-            content_preview = content[:500]
+            content_preview = content[:1000]
             
             prompt = f"""
             Document content: {content_preview}
             
-            Suggest a concise, descriptive title for this document (max 8 words).
+            Suggest a concise, descriptive title for this document (max 3 lines ).
             Return only the title, nothing else.
             """
             
@@ -255,7 +227,7 @@ class AIService:
             prompt = f"""
             Analyze this text and provide 2-3 brief writing improvement suggestions:
             
-            {content[:800]}
+            {content[:1200]}
             
             Focus on:
             - Clarity and readability
