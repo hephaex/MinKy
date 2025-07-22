@@ -219,6 +219,85 @@ def get_writing_suggestions():
             'error': 'Internal server error'
         }), 500
 
+@ai_suggestions_bp.route('/ai/config', methods=['POST'])
+def save_ai_config():
+    """
+    Save AI configuration settings
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No configuration data provided'
+            }), 400
+        
+        # Validate required fields
+        required_fields = ['ocrService', 'llmProvider', 'llmModel']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'success': False,
+                    'error': f'Missing required field: {field}'
+                }), 400
+        
+        # Save configuration to AI service
+        config_saved = ai_service.save_config(data)
+        
+        if config_saved:
+            return jsonify({
+                'success': True,
+                'message': 'AI configuration saved successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save AI configuration'
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Error saving AI configuration: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+@ai_suggestions_bp.route('/ai/test/<service>', methods=['POST'])
+def test_ai_service(service):
+    """
+    Test AI service connection
+    """
+    try:
+        data = request.get_json()
+        logger.info(f"AI test endpoint received data: {data}")
+        logger.info(f"Request headers: {dict(request.headers)}")
+        if not data:
+            return jsonify({
+                'success': False,
+                'error': 'No configuration data provided'
+            }), 400
+        
+        # Test the specific service connection
+        test_result = ai_service.test_connection(service, data)
+        
+        if test_result['success']:
+            return jsonify({
+                'success': True,
+                'message': f'{service.upper()} connection test successful'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': test_result.get('error', f'{service.upper()} connection test failed')
+            }), 400
+        
+    except Exception as e:
+        logger.error(f"Error testing {service} connection: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
 @ai_suggestions_bp.route('/ai/status', methods=['GET'])
 def get_ai_status():
     """

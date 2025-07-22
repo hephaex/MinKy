@@ -8,11 +8,14 @@ from sqlalchemy import or_
 import bleach
 import os
 import re
+import logging
 from datetime import datetime
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 from app.utils.obsidian_parser import ObsidianParser
 from app.utils.backup_manager import create_document_backup, update_document_backup, upload_document_backup, export_all_documents
 from app.services.document_import_service import document_import_service
+
+logger = logging.getLogger(__name__)
 
 documents_bp = Blueprint('documents', __name__)
 
@@ -491,10 +494,20 @@ def upload_markdown_file():
             }
         )
         
-        # Add tags
-        auto_tags = detect_auto_tags(content)
+        # Add tags from Obsidian content (hashtags, frontmatter tags)
         obsidian_tags = obsidian_data.get('all_tags', [])
-        all_tags = merge_tags(auto_tags, obsidian_tags)
+        
+        # Generate AI tags automatically
+        ai_tags = []
+        try:
+            from app.services.ai_service import ai_service
+            ai_tags = ai_service.suggest_tags(content, title)
+            logger.info(f"AI generated tags for uploaded document '{title}': {ai_tags}")
+        except Exception as e:
+            logger.warning(f"Failed to generate AI tags for uploaded document: {e}")
+        
+        # Combine all tags (Obsidian tags + AI tags)
+        all_tags = list(set(obsidian_tags + ai_tags))  # Remove duplicates
         
         if all_tags:
             document.add_tags(all_tags)

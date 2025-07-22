@@ -369,11 +369,27 @@ class BackupSyncManager:
                         'hashtags': backup_info['parsed_content'].get('hashtags', [])
                     }
                 
-                # 태그 업데이트
+                # 태그 업데이트 (기존 태그 + AI 생성 태그)
+                existing_tags = backup_info['tags'] or []
+                
+                # AI 태그 자동 생성
+                ai_tags = []
+                try:
+                    from app.services.ai_service import ai_service
+                    ai_tags = ai_service.suggest_tags(backup_info['markdown_content'], backup_info['title'])
+                    logger.info(f"AI generated tags for imported/updated document '{backup_info['title']}': {ai_tags}")
+                except Exception as e:
+                    logger.warning(f"Failed to generate AI tags for imported/updated document: {e}")
+                
+                # 기존 태그와 AI 태그 병합 (중복 제거)
+                all_tags = list(set(existing_tags + ai_tags))
+                
+                # 기존 태그 제거 후 새 태그 추가
                 for tag in document.tags.all():
                     document.tags.remove(tag)
-                if backup_info['tags']:
-                    document.add_tags(backup_info['tags'])
+                
+                if all_tags:
+                    document.add_tags(all_tags)
                 
                 db.session.commit()
                 result['success'] = True
@@ -426,9 +442,23 @@ class BackupSyncManager:
             db.session.add(document)
             db.session.flush()  # ID 할당을 위해
             
-            # 태그 추가
-            if backup_info['tags']:
-                document.add_tags(backup_info['tags'])
+            # 태그 추가 (기존 태그 + AI 생성 태그)
+            existing_tags = backup_info['tags'] or []
+            
+            # AI 태그 자동 생성
+            ai_tags = []
+            try:
+                from app.services.ai_service import ai_service
+                ai_tags = ai_service.suggest_tags(backup_info['markdown_content'], backup_info['title'])
+                logger.info(f"AI generated tags for imported document '{backup_info['title']}': {ai_tags}")
+            except Exception as e:
+                logger.warning(f"Failed to generate AI tags for imported document: {e}")
+            
+            # 기존 태그와 AI 태그 병합 (중복 제거)
+            all_tags = list(set(existing_tags + ai_tags))
+            
+            if all_tags:
+                document.add_tags(all_tags)
             
             db.session.commit()
             
