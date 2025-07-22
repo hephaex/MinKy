@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+opensearch_data/
 CLAUDE.md
 build/
 develop-eggs/
