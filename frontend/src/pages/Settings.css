@@ -193,6 +193,137 @@
   opacity: 0.7;
 }
 
+/* AI Configuration Styles */
+.ai-config-group {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.ai-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.ai-config-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.ai-actions {
+  margin-top: 20px;
+}
+
+/* Connection Status Styles */
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+.connection-status.connected {
+  background-color: #d4edda;
+  color: #155724;
+  border-color: #c3e6cb;
+}
+
+.connection-status.disconnected {
+  background-color: #f8d7da;
+  color: #721c24;
+  border-color: #f5c6cb;
+}
+
+.connection-status.testing {
+  background-color: #fff3cd;
+  color: #856404;
+  border-color: #ffeaa7;
+}
+
+.connection-status.unknown {
+  background-color: #e2e3e5;
+  color: #383d41;
+  border-color: #d6d8db;
+}
+
+.status-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* Spinning animation for testing status */
+.status-icon.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Form elements in AI config */
+.ai-config-group .config-item {
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  padding: 16px;
+}
+
+.ai-config-group .config-item label {
+  display: block;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.ai-config-group .config-item select,
+.ai-config-group .config-item input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+
+.ai-config-group .config-item select:focus,
+.ai-config-group .config-item input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.ai-config-group .checkbox-item {
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  padding: 16px;
+}
+
+.ai-config-group .checkbox-item label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.ai-config-group .checkbox-item input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  transform: scale(1.1);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .settings {
@@ -224,5 +355,15 @@
   
   .btn {
     justify-content: center;
+  }
+
+  .ai-config-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .connection-status {
+    align-self: flex-end;
   }
 }

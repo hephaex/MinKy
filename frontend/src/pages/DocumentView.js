@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { documentService } from '../services/api';
 import { extractFrontmatter, processInternalLinks, processHashtags } from '../utils/obsidianRenderer';
+import api from '../services/api';
 import './DocumentView.css';
 
 const DocumentView = () => {
@@ -17,6 +18,47 @@ const DocumentView = () => {
   const [showMarkdown, setShowMarkdown] = useState(false);
   const [frontmatter, setFrontmatter] = useState({});
   const [processedContent, setProcessedContent] = useState('');
+  const [autoTaggingInProgress, setAutoTaggingInProgress] = useState(false);
+  const [suggestedTags, setSuggestedTags] = useState([]);
+
+  const generateAndApplyTags = async (documentData) => {
+    try {
+      setAutoTaggingInProgress(true);
+      console.log('Auto-generating tags for document:', documentData.title);
+      
+      // Get AI tag suggestions
+      const response = await api.post('/ai/suggest-tags', {
+        title: documentData.title,
+        content: documentData.markdown_content
+      });
+      
+      if (response.data.success && response.data.suggested_tags?.length > 0) {
+        const suggestedTags = response.data.suggested_tags;
+        console.log('AI suggested tags:', suggestedTags);
+        setSuggestedTags(suggestedTags);
+        
+        // Automatically apply the suggested tags to the document
+        const updateResponse = await documentService.updateDocument(documentData.id, {
+          title: documentData.title,
+          author: documentData.author,
+          markdown_content: documentData.markdown_content,
+          tags: suggestedTags
+        });
+        
+        // Update the document state with the new tags
+        setDocument(prevDoc => ({
+          ...prevDoc,
+          tags: updateResponse.tags || suggestedTags.map(tagName => ({ name: tagName }))
+        }));
+        
+        console.log('Tags automatically applied:', suggestedTags);
+      }
+    } catch (error) {
+      console.error('Error generating and applying tags:', error);
+    } finally {
+      setAutoTaggingInProgress(false);
+    }
+  };
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -34,6 +76,11 @@ const DocumentView = () => {
           let processed = processInternalLinks(content, navigate);
           processed = processHashtags(processed);
           setProcessedContent(processed);
+        }
+        
+        // Auto-generate tags if document has no tags
+        if (data && (!data.tags || data.tags.length === 0) && data.markdown_content) {
+          await generateAndApplyTags(data);
         }
         
         setError(null);
@@ -138,6 +185,13 @@ const DocumentView = () => {
         
         <div className="document-title-section">
           <h1 className="document-title">{document.title}</h1>
+          {/* Auto-tagging status indicator */}
+          {autoTaggingInProgress && (
+            <div className="auto-tagging-status">
+              🤖 Analyzing content and generating tags...
+            </div>
+          )}
+          
           {/* Tags display in 8pt font below title */}
           {document.tags && document.tags.length > 0 && (
             <div className="document-tags">
@@ -146,6 +200,13 @@ const DocumentView = () => {
                   {tag.name || tag}
                 </span>
               ))}
+            </div>
+          )}
+          
+          {/* Show recently applied AI tags */}
+          {suggestedTags.length > 0 && !autoTaggingInProgress && (
+            <div className="ai-tags-applied">
+              ✨ AI automatically added tags: {suggestedTags.join(', ')}
             </div>
           )}
           <div className="document-meta">

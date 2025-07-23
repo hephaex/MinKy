@@ -37,6 +37,9 @@ class Tag(db.Model):
         
         slug = name.strip()
         
+        # Remove leading # symbol for URL compatibility (but keep in name)
+        slug = slug.lstrip('#')
+        
         # Replace spaces and some special characters with hyphens
         slug = re.sub(r'[\s_/\\]+', '-', slug)
         

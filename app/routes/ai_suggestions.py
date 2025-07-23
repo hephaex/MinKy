@@ -219,6 +219,25 @@ def get_writing_suggestions():
             'error': 'Internal server error'
         }), 500
 
+@ai_suggestions_bp.route('/ai/config', methods=['GET'])
+def get_ai_config():
+    """
+    Get current AI configuration settings
+    """
+    try:
+        config = ai_service.get_config()
+        return jsonify({
+            'success': True,
+            'config': config
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting AI configuration: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
 @ai_suggestions_bp.route('/ai/config', methods=['POST'])
 def save_ai_config():
     """
@@ -293,6 +312,42 @@ def test_ai_service(service):
         
     except Exception as e:
         logger.error(f"Error testing {service} connection: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+@ai_suggestions_bp.route('/ai/health', methods=['GET'])
+def ai_health_check():
+    """
+    Perform health check on AI services
+    """
+    try:
+        config = ai_service.get_config()
+        health_status = {
+            'ocr': None,
+            'llm': None
+        }
+        
+        # Test OCR service
+        ocr_result = ai_service.test_connection('ocr', config)
+        health_status['ocr'] = ocr_result['success']
+        
+        # Test LLM service
+        llm_result = ai_service.test_connection('llm', config)
+        health_status['llm'] = llm_result['success']
+        
+        return jsonify({
+            'success': True,
+            'health': health_status,
+            'details': {
+                'ocr': ocr_result.get('error') if not ocr_result['success'] else 'Connected',
+                'llm': llm_result.get('error') if not llm_result['success'] else 'Connected'
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error performing health check: {e}")
         return jsonify({
             'success': False,
             'error': 'Internal server error'

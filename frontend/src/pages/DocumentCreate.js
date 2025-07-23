@@ -4,6 +4,7 @@ import { documentService } from '../services/api';
 import api from '../services/api';
 import MarkdownEditor from '../components/MarkdownEditor';
 import OCRUpload from '../components/OCRUpload';
+import TagInput from '../components/TagInput';
 import './DocumentForm.css';
 
 const DocumentCreate = () => {
@@ -12,12 +13,14 @@ const DocumentCreate = () => {
     title: '',
     author: '',
     markdown_content: '',
-    category_id: null
+    category_id: null,
+    tags: []
   });
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showOCR, setShowOCR] = useState(false);
+  const [suggestedTags, setSuggestedTags] = useState([]);
 
   useEffect(() => {
     fetchCategories();
@@ -56,10 +59,43 @@ const DocumentCreate = () => {
     }
   };
 
-  const handleTagSuggestions = (suggestedTags) => {
-    // For now, we'll just log the suggestions
-    // In a real implementation, you might want to show them in a UI
-    console.log('Suggested tags:', suggestedTags);
+  const handleTagSuggestions = (suggestedTagsList) => {
+    console.log('Suggested tags:', suggestedTagsList);
+    
+    // Auto-apply AI suggested tags by merging with existing tags
+    if (suggestedTagsList && suggestedTagsList.length > 0) {
+      setFormData(prev => {
+        const currentTags = prev.tags || [];
+        const newTags = [...currentTags];
+        
+        // Add suggested tags that aren't already present
+        suggestedTagsList.forEach(suggestedTag => {
+          const normalizedSuggested = suggestedTag.toLowerCase().trim();
+          const exists = newTags.some(existingTag => 
+            existingTag.toLowerCase().trim() === normalizedSuggested
+          );
+          
+          if (!exists) {
+            newTags.push(suggestedTag);
+          }
+        });
+        
+        return {
+          ...prev,
+          tags: newTags
+        };
+      });
+      
+      // Also set suggested tags for display (user can still see what was added)
+      setSuggestedTags(suggestedTagsList);
+    }
+  };
+
+  const handleTagsChange = (newTags) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: newTags
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -78,7 +114,8 @@ const DocumentCreate = () => {
         title: formData.title.trim(),
         author: formData.author.trim() || null,
         markdown_content: formData.markdown_content.trim(),
-        category_id: formData.category_id || null
+        category_id: formData.category_id || null,
+        tags: formData.tags
       });
       
       navigate(`/documents/${document.id}`);
@@ -201,6 +238,16 @@ const DocumentCreate = () => {
               ))}
             </select>
           </div>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="tags">Tags</label>
+          <TagInput
+            tags={formData.tags}
+            onChange={handleTagsChange}
+            suggestedTags={suggestedTags}
+            onSuggestionApply={() => setSuggestedTags([])}
+          />
         </div>
 
         <div className="form-group">
