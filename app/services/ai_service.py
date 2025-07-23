@@ -5,10 +5,13 @@ Provides AI-powered writing assistance capabilities
 
 import openai
 import os
+import json
 from typing import List, Dict, Optional
 from flask import current_app
 from app.models.document import Document
 from app.models.tag import Tag
+from app.models.ai_config import AIConfig
+from app import db
 import re
 import logging
 
@@ -16,11 +19,39 @@ logger = logging.getLogger(__name__)
 
 class AIService:
     def __init__(self):
+        # Store config file in the app directory
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.config_file = os.path.join(app_dir, 'ai_config.json')
         self.api_key = os.getenv('OPENAI_API_KEY')
-        if self.api_key:
+        
+        logger.info(f"Initializing AIService, config file: {self.config_file}")
+        
+        # Load configuration from file or use defaults
+        self.config = self._load_config()
+        
+        # Update API key and enabled status based on current config
+        llm_provider = self.config.get('llmProvider', 'openai')
+        llm_api_key = self.config.get('llmApiKey', '')
+        
+        if llm_provider == 'openai' and llm_api_key:
+            self.api_key = llm_api_key
             openai.api_key = self.api_key
-        self.enabled = bool(self.api_key)
-        self.config = {
+            self.enabled = True
+        elif llm_api_key:  # Other providers (Anthropic, Google)
+            self.api_key = llm_api_key
+            self.enabled = True
+        elif self.api_key:
+            # Fallback to environment variable if no saved config
+            if llm_provider == 'openai':
+                openai.api_key = self.api_key
+            self.enabled = True
+            self.config['llmApiKey'] = self.api_key
+        else:
+            self.enabled = False
+    
+    def _load_config(self) -> Dict:
+        """Load configuration from database or return defaults"""
+        default_config = {
             'ocrService': 'tesseract',
             'ocrApiKey': '',
             'llmProvider': 'openai',
@@ -29,6 +60,88 @@ class AIService:
             'enableAiTags': True,
             'enableAiSummary': False
         }
+        
+        try:
+            logger.info("Attempting to load AI config from database")
+            
+            # Ensure the table exists
+            self._ensure_table_exists()
+            
+            # Load each configuration value from database
+            config = {}
+            for key in default_config.keys():
+                value = AIConfig.get_value(key)
+                if value is not None:
+                    # Convert string values back to appropriate types
+                    if key in ['enableAiTags', 'enableAiSummary']:
+                        config[key] = value.lower() == 'true'
+                    else:
+                        config[key] = value
+            
+            if config:
+                logger.info(f"Successfully loaded config from database: {config}")
+                # Merge with defaults to ensure all keys exist
+                default_config.update(config)
+                logger.info(f"Merged config: {default_config}")
+            else:
+                logger.info("No AI configuration found in database, using defaults")
+                
+        except Exception as e:
+            logger.error(f"Error loading AI configuration from database: {e}, using defaults")
+        
+        return default_config
+    
+    def _ensure_table_exists(self):
+        """Ensure the AI config table exists"""
+        try:
+            from sqlalchemy import text
+            # Try to create the table if it doesn't exist
+            with db.engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS ai_config (
+                        id SERIAL PRIMARY KEY,
+                        key VARCHAR(50) UNIQUE NOT NULL,
+                        value TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.commit()
+            logger.info("AI config table ensured to exist")
+        except Exception as e:
+            logger.error(f"Error ensuring AI config table exists: {e}")
+    
+    def _save_config(self) -> bool:
+        """Save current configuration to database"""
+        try:
+            logger.info("Attempting to save AI config to database")
+            logger.info(f"Config to save: {self.config}")
+            
+            # Ensure the table exists
+            self._ensure_table_exists()
+            
+            # Save each configuration value to database
+            success = True
+            for key, value in self.config.items():
+                # Convert boolean values to strings for storage
+                if isinstance(value, bool):
+                    str_value = str(value).lower()
+                else:
+                    str_value = str(value) if value is not None else ''
+                
+                if not AIConfig.set_value(key, str_value):
+                    logger.error(f"Failed to save config key: {key}")
+                    success = False
+            
+            if success:
+                logger.info("Successfully saved AI configuration to database")
+            else:
+                logger.error("Some configuration values failed to save")
+                
+            return success
+        except Exception as e:
+            logger.error(f"Error saving AI configuration to database: {e}")
+            return False
     
     def is_enabled(self) -> bool:
         """Check if AI service is enabled"""
@@ -651,20 +764,43 @@ class AIService:
             True if configuration was saved successfully
         """
         try:
+            # Don't update API keys if they're masked (contains *)
+            config_data = config_data.copy()
+            
+            # Handle LLM API key masking
+            llm_api_key = config_data.get('llmApiKey', '')
+            if llm_api_key and '*' in llm_api_key:
+                # Keep existing API key if the incoming one is masked
+                config_data['llmApiKey'] = self.config.get('llmApiKey', '')
+                llm_api_key = config_data['llmApiKey']
+            
+            # Handle OCR API key masking
+            ocr_api_key = config_data.get('ocrApiKey', '')
+            if ocr_api_key and '*' in ocr_api_key:
+                # Keep existing API key if the incoming one is masked
+                config_data['ocrApiKey'] = self.config.get('ocrApiKey', '')
+            
             # Update internal config
             self.config.update(config_data)
             
-            # Update OpenAI API key if changed
-            if 'llmApiKey' in config_data and config_data['llmProvider'] == 'openai':
-                self.api_key = config_data['llmApiKey']
-                if self.api_key:
-                    openai.api_key = self.api_key
-                    self.enabled = True
-                else:
-                    self.enabled = False
+            # Update API key and enabled status based on provider
+            llm_provider = config_data.get('llmProvider', 'openai')
             
-            logger.info(f"AI configuration saved: {config_data.get('llmProvider', 'unknown')} provider")
-            return True
+            if llm_provider == 'openai' and llm_api_key:
+                self.api_key = llm_api_key
+                openai.api_key = self.api_key
+                self.enabled = True
+            elif llm_api_key:  # Other providers (Anthropic, Google)
+                self.api_key = llm_api_key
+                self.enabled = True
+            else:
+                self.enabled = False
+            
+            # Persist configuration to file
+            file_saved = self._save_config()
+            
+            logger.info(f"AI configuration saved: {llm_provider} provider, file_saved: {file_saved}")
+            return file_saved
             
         except Exception as e:
             logger.error(f"Error saving AI configuration: {e}")

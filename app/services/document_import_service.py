@@ -11,7 +11,7 @@ from markitdown import MarkItDown
 from werkzeug.datastructures import FileStorage
 from app.models.document import Document
 from app.models.tag import Tag
-from app.services.ai_service import AIService
+from app.services.ai_service import ai_service
 from app.utils.auto_tag import generate_tags_from_content
 from app import db
 import re
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class DocumentImportService:
     def __init__(self):
         self.markitdown = MarkItDown()
-        self.ai_service = AIService()
+        self.ai_service = ai_service
         
         # Supported file types and their descriptions
         # Note: Images are excluded from document conversion - they should use OCR instead
