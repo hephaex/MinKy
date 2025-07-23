@@ -8,7 +8,7 @@ from sqlalchemy import func, desc, and_
 from app import db
 from app.models.document import Document
 from app.models.user import User
-from app.models.tag import Tag
+from app.models.tag import Tag, document_tags
 from app.models.comment import Comment
 from app.models.version import DocumentVersion
 from app.models.attachment import Attachment
@@ -46,8 +46,8 @@ class AnalyticsService:
             # Top tags
             top_tags = db.session.query(
                 Tag.name,
-                func.count(Tag.document_tags.c.document_id).label('usage_count')
-            ).join(Tag.document_tags).group_by(Tag.id, Tag.name)\
+                func.count(document_tags.c.document_id).label('usage_count')
+            ).join(document_tags).group_by(Tag.id, Tag.name)\
              .order_by(desc('usage_count')).limit(10).all()
             
             # Most active users
@@ -137,8 +137,8 @@ class AnalyticsService:
             # Documents by tag distribution
             tag_distribution = db.session.query(
                 Tag.name,
-                func.count(Tag.document_tags.c.document_id).label('document_count')
-            ).join(Tag.document_tags)\
+                func.count(document_tags.c.document_id).label('document_count')
+            ).join(document_tags)\
              .group_by(Tag.id, Tag.name)\
              .order_by(desc('document_count')).all()
             

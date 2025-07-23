@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
 import CollaborativeEditor from '../components/CollaborativeEditor';
+import TagInput from '../components/TagInput';
 import './DocumentForm.css';
 
 const DocumentEdit = () => {
@@ -11,12 +12,14 @@ const DocumentEdit = () => {
     title: '',
     author: '',
     markdown_content: '',
-    category_id: null
+    category_id: null,
+    tags: []
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [originalDocument, setOriginalDocument] = useState(null);
+  const [suggestedTags, setSuggestedTags] = useState([]);
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -28,7 +31,8 @@ const DocumentEdit = () => {
           title: document.title,
           author: document.author || '',
           markdown_content: document.markdown_content,
-          category_id: document.category_id || null
+          category_id: document.category_id || null,
+          tags: document.tags ? document.tags.map(tag => tag.name) : []
         });
         setError(null);
       } catch (err) {
@@ -66,16 +70,57 @@ const DocumentEdit = () => {
     }
   };
 
-  const handleTagSuggestions = (suggestedTags) => {
-    console.log('Suggested tags:', suggestedTags);
+  const handleTagSuggestions = (suggestedTagsList) => {
+    console.log('Suggested tags:', suggestedTagsList);
+    
+    // Auto-apply AI suggested tags by merging with existing tags
+    if (suggestedTagsList && suggestedTagsList.length > 0) {
+      setFormData(prev => {
+        const currentTags = prev.tags || [];
+        const newTags = [...currentTags];
+        
+        // Add suggested tags that aren't already present
+        suggestedTagsList.forEach(suggestedTag => {
+          const normalizedSuggested = suggestedTag.toLowerCase().trim();
+          const exists = newTags.some(existingTag => 
+            existingTag.toLowerCase().trim() === normalizedSuggested
+          );
+          
+          if (!exists) {
+            newTags.push(suggestedTag);
+          }
+        });
+        
+        return {
+          ...prev,
+          tags: newTags
+        };
+      });
+      
+      // Also set suggested tags for display (user can still see what was added)
+      setSuggestedTags(suggestedTagsList);
+    }
+  };
+
+  const handleTagsChange = (newTags) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: newTags
+    }));
   };
 
   const hasChanges = () => {
     if (!originalDocument) return false;
+    const originalTags = originalDocument.tags ? originalDocument.tags.map(tag => tag.name) : [];
+    const currentTags = formData.tags;
+    const tagsChanged = originalTags.length !== currentTags.length || 
+                       !originalTags.every(tag => currentTags.includes(tag));
+    
     return (
       formData.title !== originalDocument.title ||
       formData.author !== (originalDocument.author || '') ||
-      formData.markdown_content !== originalDocument.markdown_content
+      formData.markdown_content !== originalDocument.markdown_content ||
+      tagsChanged
     );
   };
 
@@ -94,7 +139,8 @@ const DocumentEdit = () => {
       const updatedDocument = await documentService.updateDocument(id, {
         title: formData.title.trim(),
         author: formData.author.trim() || null,
-        markdown_content: formData.markdown_content.trim()
+        markdown_content: formData.markdown_content.trim(),
+        tags: formData.tags
       });
       
       navigate(`/documents/${updatedDocument.id}`);
@@ -185,6 +231,16 @@ const DocumentEdit = () => {
               placeholder="Enter author name (optional)"
             />
           </div>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="tags">Tags</label>
+          <TagInput
+            tags={formData.tags}
+            onChange={handleTagsChange}
+            suggestedTags={suggestedTags}
+            onSuggestionApply={() => setSuggestedTags([])}
+          />
         </div>
 
         <div className="form-group">

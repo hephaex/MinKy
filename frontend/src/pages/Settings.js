@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { documentService } from '../services/api';
 import { LanguageSelector } from '../i18n/i18n';
+import api from '../services/api';
 import './Settings.css';
 
 const Settings = () => {
@@ -25,9 +26,17 @@ const Settings = () => {
     enableAiSummary: false
   });
   const [aiStatus, setAiStatus] = useState(null);
+  
+  // Connection status for AI services
+  const [connectionStatus, setConnectionStatus] = useState({
+    ocr: null, // null = unknown, true = connected, false = disconnected, 'testing' = testing
+    llm: null
+  });
 
   useEffect(() => {
     loadGitConfig();
+    loadAiConfig();
+    performHealthCheck();
   }, []);
 
   const loadGitConfig = async () => {
@@ -57,6 +66,34 @@ const Settings = () => {
         email: 'hephaex@example.com',
         repository: 'https://github.com/hephaex/mark'
       });
+    }
+  };
+
+  const loadAiConfig = async () => {
+    try {
+      const response = await api.get('/ai/config');
+      
+      if (response.data.success) {
+        setAiConfig(response.data.config);
+      } else {
+        console.error('Failed to load AI config:', response.data.error);
+      }
+    } catch (error) {
+      console.error('Error loading AI config:', error);
+    }
+  };
+
+  const performHealthCheck = async () => {
+    try {
+      const response = await api.get('/ai/health');
+      
+      if (response.data.success) {
+        setConnectionStatus(response.data.health);
+      } else {
+        console.error('Health check failed:', response.data.error);
+      }
+    } catch (error) {
+      console.error('Error performing health check:', error);
     }
   };
 
@@ -205,68 +242,118 @@ const Settings = () => {
 
   const saveAiConfig = async () => {
     try {
-      const response = await fetch('/api/ai/config', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(aiConfig)
-      });
+      const response = await api.post('/ai/config', aiConfig);
       
-      const data = await response.json();
-      
-      if (data.success) {
+      if (response.data.success) {
         setAiStatus({
           type: 'success',
           message: 'AI configuration saved successfully'
         });
+        // Reload configuration and perform health check after saving
+        await loadAiConfig();
+        await performHealthCheck();
       } else {
         setAiStatus({
           type: 'error',
-          message: data.error || 'Failed to save AI configuration'
+          message: response.data.error || 'Failed to save AI configuration'
         });
       }
     } catch (error) {
       setAiStatus({
         type: 'error',
-        message: 'Failed to save AI configuration: ' + error.message
+        message: 'Failed to save AI configuration: ' + (error.response?.data?.error || error.message)
       });
     }
   };
 
   const testAiConnection = async (service) => {
     try {
-      const response = await fetch(`/api/ai/test/${service}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(aiConfig)
-      });
+      // Set testing status
+      setConnectionStatus(prev => ({
+        ...prev,
+        [service]: 'testing'
+      }));
       
-      const data = await response.json();
+      const response = await api.post(`/ai/test/${service}`, aiConfig);
       
-      if (data.success) {
+      if (response.data.success) {
+        setConnectionStatus(prev => ({
+          ...prev,
+          [service]: true
+        }));
         setAiStatus({
           type: 'success',
-          message: `${service.toUpperCase()} connection test successful`
+          message: response.data.message || `${service.toUpperCase()} connection test successful`
         });
       } else {
+        setConnectionStatus(prev => ({
+          ...prev,
+          [service]: false
+        }));
         setAiStatus({
           type: 'error',
-          message: data.error || `${service.toUpperCase()} connection test failed`
+          message: response.data.error || `${service.toUpperCase()} connection test failed`
         });
       }
     } catch (error) {
+      setConnectionStatus(prev => ({
+        ...prev,
+        [service]: false
+      }));
       setAiStatus({
         type: 'error',
-        message: `${service.toUpperCase()} connection test failed: ` + error.message
+        message: `${service.toUpperCase()} connection test failed: ` + (error.response?.data?.error || error.message)
       });
     }
   };
 
   const clearAiStatus = () => {
     setAiStatus(null);
+  };
+
+  // Helper function to render connection status icon
+  const renderConnectionStatus = (service) => {
+    const status = connectionStatus[service];
+    
+    switch (status) {
+      case true:
+        return (
+          <span className="connection-status connected" title="Connected">
+            <svg viewBox="0 0 16 16" fill="currentColor" className="status-icon">
+              <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.061L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+            </svg>
+            Connected
+          </span>
+        );
+      case false:
+        return (
+          <span className="connection-status disconnected" title="Connection Failed">
+            <svg viewBox="0 0 16 16" fill="currentColor" className="status-icon">
+              <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/>
+            </svg>
+            Disconnected
+          </span>
+        );
+      case 'testing':
+        return (
+          <span className="connection-status testing" title="Testing Connection">
+            <svg viewBox="0 0 16 16" fill="currentColor" className="status-icon spinning">
+              <path d="M8 0a8 8 0 0 1 7.74 6h-1.26A7 7 0 1 0 8 15v1a8 8 0 0 1 0-16z"/>
+            </svg>
+            Testing...
+          </span>
+        );
+      default:
+        return (
+          <span className="connection-status unknown" title="Connection Status Unknown">
+            <svg viewBox="0 0 16 16" fill="currentColor" className="status-icon">
+              <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+              <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"/>
+            </svg>
+            Unknown
+          </span>
+        );
+    }
   };
 
   return (
@@ -300,7 +387,10 @@ const Settings = () => {
 
         {/* OCR Configuration */}
         <div className="ai-config-group">
-          <h4>📷 OCR Service Configuration</h4>
+          <div className="ai-config-header">
+            <h4>📷 OCR Service Configuration</h4>
+            {renderConnectionStatus('ocr')}
+          </div>
           <div className="config-item">
             <label>OCR Provider:</label>
             <select 
@@ -328,14 +418,18 @@ const Settings = () => {
           <button 
             className="btn btn-secondary"
             onClick={() => testAiConnection('ocr')}
+            disabled={connectionStatus.ocr === 'testing'}
           >
-            Test OCR Connection
+            {connectionStatus.ocr === 'testing' ? 'Testing...' : 'Test OCR Connection'}
           </button>
         </div>
 
         {/* LLM Configuration */}
         <div className="ai-config-group">
-          <h4>🤖 LLM Service Configuration</h4>
+          <div className="ai-config-header">
+            <h4>🤖 LLM Service Configuration</h4>
+            {renderConnectionStatus('llm')}
+          </div>
           <div className="config-item">
             <label>LLM Provider:</label>
             <select 
@@ -390,8 +484,9 @@ const Settings = () => {
           <button 
             className="btn btn-secondary"
             onClick={() => testAiConnection('llm')}
+            disabled={connectionStatus.llm === 'testing'}
           >
-            Test LLM Connection
+            {connectionStatus.llm === 'testing' ? 'Testing...' : 'Test LLM Connection'}
           </button>
         </div>
 

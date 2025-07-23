@@ -613,6 +613,33 @@ class AIService:
         
         return None
     
+    def get_config(self) -> Dict:
+        """
+        Get current AI configuration settings
+        
+        Returns:
+            Dictionary containing current AI configuration
+        """
+        # Don't expose sensitive API keys
+        safe_config = self.config.copy()
+        if 'llmApiKey' in safe_config and safe_config['llmApiKey']:
+            # Mask the API key for security
+            api_key = safe_config['llmApiKey']
+            if len(api_key) > 8:
+                safe_config['llmApiKey'] = api_key[:4] + '*' * (len(api_key) - 8) + api_key[-4:]
+            else:
+                safe_config['llmApiKey'] = '*' * len(api_key)
+        
+        if 'ocrApiKey' in safe_config and safe_config['ocrApiKey']:
+            # Mask the OCR API key for security
+            api_key = safe_config['ocrApiKey']
+            if len(api_key) > 8:
+                safe_config['ocrApiKey'] = api_key[:4] + '*' * (len(api_key) - 8) + api_key[-4:]
+            else:
+                safe_config['ocrApiKey'] = '*' * len(api_key)
+        
+        return safe_config
+    
     def save_config(self, config_data: Dict) -> bool:
         """
         Save AI configuration settings
