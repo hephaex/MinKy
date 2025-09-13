@@ -72,5 +72,15 @@ frontend/dist/
 # Session History
 .history/
 
+# Claude AI Related Files (Private)
+CLAUDE.md
+.claude/
+*claude*
+*CLAUDE*
+*Claude*
+claude_*
+CLAUDE_*
+Claude_*
+
 # PostgreSQL Data
 postgresdata/
