@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+ENV
+.env
+.gitignore
 .Python
 opensearch_data/
 CLAUDE.md

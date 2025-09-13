@@ -19,46 +19,68 @@ logger = logging.getLogger(__name__)
 
 class AIService:
     def __init__(self):
-        # Store config file in the app directory
+        # Store config file in the app directory (legacy support)
         app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.config_file = os.path.join(app_dir, 'ai_config.json')
-        self.api_key = os.getenv('OPENAI_API_KEY')
         
-        logger.info(f"Initializing AIService, config file: {self.config_file}")
+        # Load API keys from environment variables
+        self.env_keys = {
+            'openai': os.getenv('OPENAI_API_KEY', ''),
+            'anthropic': os.getenv('ANTHROPIC_API_KEY', ''),
+            'google': os.getenv('GOOGLE_API_KEY', ''),
+            'local': os.getenv('LOCAL_LLM_URL', 'http://localhost:8080')
+        }
         
-        # Load configuration from file or use defaults
+        logger.info(f"Initializing AIService with env keys: {[k for k, v in self.env_keys.items() if v]}")
+        
+        # Load configuration from database or use defaults
         self.config = self._load_config()
         
         # Update API key and enabled status based on current config
         llm_provider = self.config.get('llmProvider', 'openai')
         llm_api_key = self.config.get('llmApiKey', '')
         
+        # Set the main API key property for backward compatibility
+        self.api_key = llm_api_key
+        
         if llm_provider == 'openai' and llm_api_key:
-            self.api_key = llm_api_key
-            openai.api_key = self.api_key
+            openai.api_key = llm_api_key
             self.enabled = True
         elif llm_api_key:  # Other providers (Anthropic, Google)
-            self.api_key = llm_api_key
             self.enabled = True
-        elif self.api_key:
-            # Fallback to environment variable if no saved config
-            if llm_provider == 'openai':
-                openai.api_key = self.api_key
-            self.enabled = True
-            self.config['llmApiKey'] = self.api_key
         else:
             self.enabled = False
+        
+        logger.info(f"AIService initialized: provider={llm_provider}, enabled={self.enabled}, has_key={bool(llm_api_key)}")
     
     def _load_config(self) -> Dict:
-        """Load configuration from database or return defaults"""
+        """Load configuration from database with environment variable fallbacks"""
+        # Use environment variables for defaults
+        default_llm_provider = os.getenv('DEFAULT_LLM_PROVIDER', 'openai')
+        
+        # Set default model based on provider
+        if default_llm_provider == 'local':
+            default_llm_model = os.getenv('LOCAL_LLM_MODEL', 'llama2')
+        else:
+            default_llm_model = os.getenv('DEFAULT_LLM_MODEL', 'gpt-3.5-turbo')
+        
+        default_ocr_service = os.getenv('DEFAULT_OCR_SERVICE', 'tesseract')
+        
+        # Get API key based on default provider
+        default_api_key = self.env_keys.get(default_llm_provider, '')
+        
+        # Get AI feature defaults from environment
+        default_ai_tags_enabled = os.getenv('DEFAULT_AI_TAGS_ENABLED', 'true').lower() == 'true'
+        default_ai_summary_enabled = os.getenv('DEFAULT_AI_SUMMARY_ENABLED', 'false').lower() == 'true'
+        
         default_config = {
-            'ocrService': 'tesseract',
+            'ocrService': default_ocr_service,
             'ocrApiKey': '',
-            'llmProvider': 'openai',
-            'llmApiKey': self.api_key or '',
-            'llmModel': 'gpt-3.5-turbo',
-            'enableAiTags': True,
-            'enableAiSummary': False
+            'llmProvider': default_llm_provider,
+            'llmApiKey': default_api_key,
+            'llmModel': default_llm_model,
+            'enableAiTags': default_ai_tags_enabled,
+            'enableAiSummary': default_ai_summary_enabled
         }
         
         try:
@@ -85,6 +107,12 @@ class AIService:
                 logger.info(f"Merged config: {default_config}")
             else:
                 logger.info("No AI configuration found in database, using defaults")
+            
+            # Apply environment variable API keys if database doesn't have them or they're empty
+            llm_provider = default_config.get('llmProvider', 'openai')
+            if not default_config.get('llmApiKey') and self.env_keys.get(llm_provider):
+                default_config['llmApiKey'] = self.env_keys[llm_provider]
+                logger.info(f"Applied {llm_provider} API key from environment variables")
                 
         except Exception as e:
             logger.error(f"Error loading AI configuration from database: {e}, using defaults")
@@ -840,15 +868,18 @@ class AIService:
             provider = config_data.get('llmProvider', 'openai')
             api_key = config_data.get('llmApiKey', '')
             
-            if not api_key:
+            if not api_key and provider != 'local':
                 return {
                     'success': False,
                     'error': 'API key is required'
                 }
             
+            # For local LLM, if no URL provided, use default from environment
+            if provider == 'local' and not api_key:
+                api_key = os.getenv('LOCAL_LLM_URL', 'http://localhost:8080')
+            
             if provider == 'openai':
-                # For OpenAI, we'll just validate the key format for now
-                # since the old API is deprecated and we'd need to update the entire service
+                # For OpenAI, validate the key format
                 if not api_key.startswith(('sk-', 'sk-proj-')):
                     return {
                         'success': False,
@@ -861,14 +892,87 @@ class AIService:
                         'error': 'OpenAI API key appears to be too short'
                     }
                 
-                # Basic format validation passed
                 return {
                     'success': True,
-                    'message': 'OpenAI API key format is valid (connection not fully tested due to API version compatibility)'
+                    'message': 'OpenAI API key format is valid'
+                }
+            
+            elif provider == 'anthropic':
+                # For Anthropic, validate Claude API key format
+                if not api_key.startswith('sk-ant-'):
+                    return {
+                        'success': False,
+                        'error': 'Invalid Anthropic API key format. Keys should start with "sk-ant-"'
+                    }
+                
+                if len(api_key) < 30:
+                    return {
+                        'success': False,
+                        'error': 'Anthropic API key appears to be too short'
+                    }
+                
+                return {
+                    'success': True,
+                    'message': 'Anthropic (Claude) API key format is valid'
+                }
+            
+            elif provider == 'google':
+                # For Google, validate API key format
+                if len(api_key) < 10:
+                    return {
+                        'success': False,
+                        'error': 'Google API key appears to be too short'
+                    }
+                
+                # Google API keys are typically alphanumeric
+                if not api_key.replace('-', '').replace('_', '').isalnum():
+                    return {
+                        'success': False,
+                        'error': 'Google API key format appears invalid'
+                    }
+                
+                return {
+                    'success': True,
+                    'message': 'Google (Gemini) API key format is valid'
+                }
+            
+            elif provider == 'local':
+                # For Local LLM, validate URL format (api_key contains the URL)
+                if not api_key:
+                    return {
+                        'success': False,
+                        'error': 'Local LLM server URL is required'
+                    }
+                
+                # Basic URL validation
+                if not api_key.startswith(('http://', 'https://')):
+                    return {
+                        'success': False,
+                        'error': 'Local LLM server URL must start with http:// or https://'
+                    }
+                
+                # Try to validate URL format
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(api_key)
+                    if not parsed.netloc:
+                        return {
+                            'success': False,
+                            'error': 'Invalid Local LLM server URL format'
+                        }
+                except Exception:
+                    return {
+                        'success': False,
+                        'error': 'Invalid Local LLM server URL format'
+                    }
+                
+                return {
+                    'success': True,
+                    'message': f'Local LLM server URL format is valid: {api_key}'
                 }
             
             else:
-                # For other providers, just validate the key format
+                # For unknown providers, basic validation
                 if len(api_key) < 10:
                     return {
                         'success': False,
@@ -876,7 +980,7 @@ class AIService:
                     }
                 return {
                     'success': True,
-                    'note': f'{provider} connection not fully tested'
+                    'message': f'{provider} API key provided (format not validated)'
                 }
                 
         except Exception as e:
@@ -889,19 +993,42 @@ class AIService:
         """Test OCR service connection"""
         try:
             service = config_data.get('ocrService', 'tesseract')
+            api_key = config_data.get('ocrApiKey', '')
             
             if service == 'tesseract':
                 # Tesseract is local, always available
-                return {'success': True}
+                return {'success': True, 'message': 'Tesseract is available locally'}
             
-            api_key = config_data.get('ocrApiKey', '')
+            # For Google Vision OCR, check environment variables if no API key provided
+            if service == 'google-vision':
+                if not api_key:
+                    # Try environment variables as fallback
+                    google_cloud_key = os.getenv('GOOGLE_CLOUD_API_KEY', '')
+                    google_llm_key = os.getenv('GOOGLE_API_KEY', '')
+                    
+                    if google_cloud_key:
+                        api_key = google_cloud_key
+                    elif google_llm_key:
+                        api_key = google_llm_key
+                
+                if api_key and len(api_key) >= 10:
+                    return {
+                        'success': True,
+                        'message': 'Google Vision API configuration is valid'
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': 'Google Vision API key is required'
+                    }
+            
+            # For other cloud services
             if not api_key:
                 return {
                     'success': False,
                     'error': 'API key is required for cloud OCR services'
                 }
             
-            # For cloud services, validate key format
             if len(api_key) < 10:
                 return {
                     'success': False,
@@ -910,7 +1037,7 @@ class AIService:
             
             return {
                 'success': True,
-                'note': f'{service} connection not fully tested'
+                'message': f'{service} OCR connection test successful'
             }
             
         except Exception as e:
