@@ -439,16 +439,17 @@ const Settings = () => {
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="google">Google (Gemini)</option>
+              <option value="local">Local LLM</option>
             </select>
           </div>
           
           <div className="config-item">
-            <label>API Key:</label>
+            <label>{aiConfig.llmProvider === 'local' ? 'Server URL:' : 'API Key:'}</label>
             <input
-              type="password"
+              type={aiConfig.llmProvider === 'local' ? 'text' : 'password'}
               value={aiConfig.llmApiKey}
               onChange={(e) => handleAiConfigChange('llmApiKey', e.target.value)}
-              placeholder="Enter API key for LLM service"
+              placeholder={aiConfig.llmProvider === 'local' ? 'http://localhost:8080' : 'Enter API key for LLM service'}
             />
           </div>
           
@@ -476,6 +477,15 @@ const Settings = () => {
                 <>
                   <option value="gemini-pro">Gemini Pro</option>
                   <option value="gemini-pro-vision">Gemini Pro Vision</option>
+                </>
+              )}
+              {aiConfig.llmProvider === 'local' && (
+                <>
+                  <option value="llama2">Llama 2</option>
+                  <option value="llama3">Llama 3</option>
+                  <option value="mistral">Mistral</option>
+                  <option value="codellama">Code Llama</option>
+                  <option value="custom">Custom Model</option>
                 </>
               )}
             </select>

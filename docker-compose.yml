@@ -8,6 +8,37 @@ services:
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-jwt-secret-key}
       - FLASK_ENV=production
+      # AI Service Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GOOGLE_CLOUD_API_KEY=${GOOGLE_CLOUD_API_KEY:-}
+      # Local LLM Configuration
+      - LOCAL_LLM_ENABLED=${LOCAL_LLM_ENABLED:-false}
+      - LOCAL_LLM_URL=${LOCAL_LLM_URL:-http://localhost:8080}
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-llama2}
+      - LOCAL_LLM_API_KEY=${LOCAL_LLM_API_KEY:-}
+      # Default AI Configuration
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-google}
+      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-gemini-1.5-flash}
+      - DEFAULT_OCR_SERVICE=${DEFAULT_OCR_SERVICE:-google-vision}
+      - DEFAULT_AI_TAGS_ENABLED=${DEFAULT_AI_TAGS_ENABLED:-true}
+      - DEFAULT_AI_SUMMARY_ENABLED=${DEFAULT_AI_SUMMARY_ENABLED:-true}
+      # Git Integration Configuration
+      - GIT_ENABLED=${GIT_ENABLED:-true}
+      - GIT_REPOSITORY_URL=${GIT_REPOSITORY_URL:-}
+      - GIT_BRANCH=${GIT_BRANCH:-main}
+      - GIT_USERNAME=${GIT_USERNAME:-}
+      - GIT_TOKEN=${GIT_TOKEN:-}
+      - GIT_AUTO_COMMIT=${GIT_AUTO_COMMIT:-false}
+      - GIT_COMMIT_MESSAGE_PREFIX=${GIT_COMMIT_MESSAGE_PREFIX:-[minky]}
+      # Document Export Configuration
+      - EXPORT_ENABLED=${EXPORT_ENABLED:-true}
+      - DEFAULT_EXPORT_FORMAT=${DEFAULT_EXPORT_FORMAT:-markdown}
+      - DEFAULT_EXPORT_BUNDLE=${DEFAULT_EXPORT_BUNDLE:-false}
+      - DEFAULT_EXPORT_SHORT_FILENAME=${DEFAULT_EXPORT_SHORT_FILENAME:-false}
+      - EXPORT_INCLUDE_METADATA=${EXPORT_INCLUDE_METADATA:-true}
+      - EXPORT_INCLUDE_TAGS=${EXPORT_INCLUDE_TAGS:-true}
     depends_on:
       db:
         condition: service_healthy

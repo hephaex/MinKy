@@ -323,7 +323,8 @@ def ai_health_check():
     Perform health check on AI services
     """
     try:
-        config = ai_service.get_config()
+        # Use internal config (with real API keys) instead of masked config
+        config = ai_service.config
         health_status = {
             'ocr': None,
             'llm': None
