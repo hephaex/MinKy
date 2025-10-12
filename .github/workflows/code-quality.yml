@@ -1,0 +1,104 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Python code quality tools
+      run: |
+        pip install black isort pylint mypy
+
+    - name: Check Python formatting with Black
+      run: |
+        black --check app/ tests/ || echo "Black formatting issues found"
+      continue-on-error: true
+
+    - name: Check import order with isort
+      run: |
+        isort --check-only app/ tests/ || echo "Import order issues found"
+      continue-on-error: true
+
+    - name: Run pylint
+      run: |
+        pip install -r requirements.txt
+        pylint app/ --exit-zero --output-format=text
+      continue-on-error: true
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20.x'
+
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: npm ci
+
+    - name: Run ESLint
+      working-directory: ./frontend
+      run: |
+        npm run lint || echo "ESLint issues found"
+      continue-on-error: true
+
+    - name: Check code formatting with Prettier
+      working-directory: ./frontend
+      run: |
+        npx prettier --check "src/**/*.{js,jsx,ts,tsx,json,css,scss,md}" || echo "Prettier formatting issues found"
+      continue-on-error: true
+
+  dependency-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v3
+      with:
+        fail-on-severity: moderate
+
+  codeql-analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'python', 'javascript' ]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:${{ matrix.language }}"
