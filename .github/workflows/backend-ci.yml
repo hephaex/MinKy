@@ -16,10 +16,12 @@ on:
       - 'tests/**'
       - 'requirements.txt'
       - 'run.py'
+  workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     services:
       postgres:
