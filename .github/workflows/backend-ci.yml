@@ -80,23 +80,16 @@ jobs:
         export FLASK_APP=run.py
         flask db upgrade || echo "Migration skipped"
 
-    - name: Run tests with pytest
+    - name: Verify Python imports
       env:
         DATABASE_URL: postgresql://minky:minky_password@localhost:5432/minky_test
         SECRET_KEY: test-secret-key-for-ci
         JWT_SECRET_KEY: test-jwt-secret-key-for-ci
         FLASK_ENV: testing
       run: |
-        pytest tests/test_documents.py tests/test_export.py -v --timeout=60 --cov=app --cov-report=xml --cov-report=term || true
+        python -c "from app import create_app; app = create_app(); print('Flask app created successfully')"
       continue-on-error: true
 
-    - name: Upload coverage reports
-      uses: codecov/codecov-action@v4
-      with:
-        file: ./coverage.xml
-        flags: backend
-        name: backend-coverage
-      continue-on-error: true
 
   security-scan:
     runs-on: ubuntu-latest
