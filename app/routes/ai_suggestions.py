@@ -220,9 +220,10 @@ def get_writing_suggestions():
         }), 500
 
 @ai_suggestions_bp.route('/ai/config', methods=['GET'])
+@jwt_required()
 def get_ai_config():
     """
-    Get current AI configuration settings
+    Get current AI configuration settings (requires authentication)
     """
     try:
         config = ai_service.get_config()
@@ -230,7 +231,7 @@ def get_ai_config():
             'success': True,
             'config': config
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting AI configuration: {e}")
         return jsonify({
@@ -239,9 +240,10 @@ def get_ai_config():
         }), 500
 
 @ai_suggestions_bp.route('/ai/config', methods=['POST'])
+@jwt_required()
 def save_ai_config():
     """
-    Save AI configuration settings
+    Save AI configuration settings (requires authentication)
     """
     try:
         data = request.get_json()
@@ -250,7 +252,7 @@ def save_ai_config():
                 'success': False,
                 'error': 'No configuration data provided'
             }), 400
-        
+
         # Validate required fields
         required_fields = ['ocrService', 'llmProvider', 'llmModel']
         for field in required_fields:
@@ -259,11 +261,12 @@ def save_ai_config():
                     'success': False,
                     'error': f'Missing required field: {field}'
                 }), 400
-        
+
         # Save configuration to AI service
         config_saved = ai_service.save_config(data)
-        
+
         if config_saved:
+            logger.info(f"AI configuration updated by user {get_jwt_identity()}")
             return jsonify({
                 'success': True,
                 'message': 'AI configuration saved successfully'
@@ -273,7 +276,7 @@ def save_ai_config():
                 'success': False,
                 'error': 'Failed to save AI configuration'
             }), 500
-        
+
     except Exception as e:
         logger.error(f"Error saving AI configuration: {e}")
         return jsonify({
@@ -282,14 +285,14 @@ def save_ai_config():
         }), 500
 
 @ai_suggestions_bp.route('/ai/test/<service>', methods=['POST'])
+@jwt_required()
 def test_ai_service(service):
     """
-    Test AI service connection
+    Test AI service connection (requires authentication)
     """
     try:
         data = request.get_json()
-        logger.info(f"AI test endpoint received data: {data}")
-        logger.info(f"Request headers: {dict(request.headers)}")
+        # Removed debug logging that exposed sensitive data
         if not data:
             return jsonify({
                 'success': False,

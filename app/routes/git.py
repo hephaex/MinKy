@@ -4,6 +4,7 @@ Provides API endpoints for Git operations like pull, push, and sync
 """
 
 import os
+import re
 import subprocess
 import logging
 from flask import Blueprint, jsonify, request, current_app
@@ -13,25 +14,72 @@ logger = logging.getLogger(__name__)
 
 git_bp = Blueprint('git', __name__)
 
+# Maximum length for commit messages to prevent abuse
+MAX_COMMIT_MESSAGE_LENGTH = 500
+
+# Pattern to detect potentially dangerous characters in commit messages
+DANGEROUS_PATTERNS = [
+    r'[`$]',           # Shell substitution
+    r'[\x00-\x1f]',    # Control characters (except allowed ones)
+    r'\\x[0-9a-fA-F]', # Hex escape sequences
+]
+
+
+def sanitize_commit_message(message):
+    """
+    Sanitize commit message to prevent command injection.
+    Returns sanitized message or None if message is invalid.
+    """
+    if not message or not isinstance(message, str):
+        return None
+
+    # Truncate to max length
+    message = message[:MAX_COMMIT_MESSAGE_LENGTH]
+
+    # Check for dangerous patterns
+    for pattern in DANGEROUS_PATTERNS:
+        if re.search(pattern, message):
+            logger.warning(f"Potentially dangerous pattern detected in commit message")
+            # Remove the dangerous characters instead of rejecting entirely
+            message = re.sub(pattern, '', message)
+
+    # Strip leading/trailing whitespace
+    message = message.strip()
+
+    # Ensure message is not empty after sanitization
+    if not message:
+        return None
+
+    return message
+
 
 def run_git_command(command, cwd=None):
     """Execute a git command and return the result"""
     try:
         if cwd is None:
             cwd = current_app.config.get('BACKUP_DIR', './backup')
-        
+
         # Ensure the directory exists
         os.makedirs(cwd, exist_ok=True)
-        
+
+        # Validate that all command parts are strings (prevent injection)
+        if not all(isinstance(part, str) for part in command):
+            return {
+                'success': False,
+                'stdout': '',
+                'stderr': 'Invalid command format',
+                'returncode': -1
+            }
+
         result = subprocess.run(
             command,
             cwd=cwd,
             capture_output=True,
             text=True,
             timeout=30,
-            shell=False
+            shell=False  # Important: Never use shell=True
         )
-        
+
         return {
             'success': result.returncode == 0,
             'stdout': result.stdout.strip(),
@@ -46,10 +94,11 @@ def run_git_command(command, cwd=None):
             'returncode': -1
         }
     except Exception as e:
+        logger.error(f"Git command error: {e}")
         return {
             'success': False,
             'stdout': '',
-            'stderr': str(e),
+            'stderr': 'Git command failed',
             'returncode': -1
         }
 
@@ -95,9 +144,9 @@ def git_status():
 
 
 @git_bp.route('/git/pull', methods=['POST'])
-@jwt_required(optional=True)
+@jwt_required()
 def git_pull():
-    """Pull changes from remote repository"""
+    """Pull changes from remote repository (requires authentication)"""
     try:
         backup_dir = current_app.config.get('BACKUP_DIR', './backup')
         
@@ -137,9 +186,9 @@ def git_pull():
 
 
 @git_bp.route('/git/push', methods=['POST'])
-@jwt_required(optional=True)
+@jwt_required()
 def git_push():
-    """Push changes to remote repository"""
+    """Push changes to remote repository (requires authentication)"""
     try:
         backup_dir = current_app.config.get('BACKUP_DIR', './backup')
         
@@ -170,8 +219,12 @@ def git_push():
                 'output': 'Working tree clean'
             })
         
-        # Commit changes
-        commit_message = request.json.get('message', 'Auto-commit from minky application') if request.is_json else 'Auto-commit from minky application'
+        # Commit changes with sanitized message
+        raw_message = request.json.get('message', 'Auto-commit from minky application') if request.is_json else 'Auto-commit from minky application'
+        commit_message = sanitize_commit_message(raw_message)
+        if not commit_message:
+            commit_message = 'Auto-commit from minky application'
+
         commit_result = run_git_command(['git', 'commit', '-m', commit_message], backup_dir)
         
         if not commit_result['success'] and 'nothing to commit' not in commit_result['stdout']:
@@ -209,9 +262,9 @@ def git_push():
 
 
 @git_bp.route('/git/sync', methods=['POST'])
-@jwt_required(optional=True)
+@jwt_required()
 def git_sync():
-    """Sync with remote repository (pull then push)"""
+    """Sync with remote repository - pull then push (requires authentication)"""
     try:
         backup_dir = current_app.config.get('BACKUP_DIR', './backup')
         
@@ -270,8 +323,12 @@ def git_sync():
                 'results': results
             })
         
-        # Step 4: Commit changes
-        commit_message = request.json.get('message', 'Auto-sync from minky application') if request.is_json else 'Auto-sync from minky application'
+        # Step 4: Commit changes with sanitized message
+        raw_message = request.json.get('message', 'Auto-sync from minky application') if request.is_json else 'Auto-sync from minky application'
+        commit_message = sanitize_commit_message(raw_message)
+        if not commit_message:
+            commit_message = 'Auto-sync from minky application'
+
         commit_result = run_git_command(['git', 'commit', '-m', commit_message], backup_dir)
         results.append({
             'operation': 'commit',
