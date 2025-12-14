@@ -308,15 +308,18 @@ def list_backup_files_for_sync():
 @documents_bp.route('/documents/<int:document_id>', methods=['GET'])
 @jwt_required(optional=True)
 def get_document(document_id):
+    from werkzeug.exceptions import HTTPException
     try:
         document = Document.query.get_or_404(document_id)
         current_user_id = get_current_user_id()
-        
+
         if not document.can_view(current_user_id):
             return jsonify({'error': 'Access denied'}), 403
-        
+
         return jsonify(document.to_dict())
-    
+
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions (404, etc.)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

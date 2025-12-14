@@ -24,9 +24,9 @@ def export_document(document_id, format_type):
     document = Document.query.get_or_404(document_id)
     
     # Check if user has access to this document
-    if document.is_private and document.author_id != current_user_id:
+    if not document.is_public and document.user_id != current_user_id:
         return jsonify({'error': 'Access denied'}), 403
-    
+
     # Validate format type
     valid_formats = ['html', 'pdf', 'docx', 'markdown', 'json']
     if format_type not in valid_formats:
@@ -50,12 +50,13 @@ def export_document(document_id, format_type):
             return response
             
         elif format_type == 'json':
-            content = exporter.export_to_json()
-            exporter.cleanup()
-            
-            with open(content, 'r', encoding='utf-8') as f:
+            file_path = exporter.export_to_json()
+
+            with open(file_path, 'r', encoding='utf-8') as f:
                 json_content = f.read()
-            
+
+            exporter.cleanup()
+
             response = current_app.response_class(
                 json_content,
                 mimetype='application/json',
@@ -139,7 +140,7 @@ def bulk_export_documents():
     accessible_documents = []
     for doc_id in document_ids:
         document = Document.query.get(doc_id)
-        if document and (not document.is_private or document.author_id == current_user_id):
+        if document and (document.is_public or document.user_id == current_user_id):
             accessible_documents.append(document)
     
     if not accessible_documents:
@@ -224,11 +225,11 @@ def export_document_bundle(document_id):
         return jsonify({'error': 'User not found'}), 404
     
     document = Document.query.get_or_404(document_id)
-    
+
     # Check if user has access to this document
-    if document.is_private and document.author_id != current_user_id:
+    if not document.is_public and document.user_id != current_user_id:
         return jsonify({'error': 'Access denied'}), 403
-    
+
     # Get formats from query parameters
     formats_param = request.args.get('formats', 'html,pdf,docx,markdown,json')
     formats = [fmt.strip() for fmt in formats_param.split(',')]
