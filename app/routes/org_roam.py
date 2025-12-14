@@ -17,10 +17,10 @@ from app import db
 org_roam_bp = Blueprint('org_roam', __name__)
 
 class OrgRoamImportSchema(Schema):
-    import_as_private = fields.Bool(missing=True)
-    preserve_links = fields.Bool(missing=True)
-    auto_tag = fields.Bool(missing=True)
-    overwrite_existing = fields.Bool(missing=False)
+    import_as_private = fields.Bool(load_default=True)
+    preserve_links = fields.Bool(load_default=True)
+    auto_tag = fields.Bool(load_default=True)
+    overwrite_existing = fields.Bool(load_default=False)
 
 @org_roam_bp.route('/org-roam/upload', methods=['POST'])
 @jwt_required
