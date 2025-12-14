@@ -3,7 +3,8 @@ Response utility functions for Minky API
 Provides standardized response building patterns to reduce code duplication.
 """
 
-from flask import jsonify, url_for
+from flask import jsonify, url_for, abort
+from app import db
 
 
 def build_pagination_response(query, page, per_page, serializer_func,
@@ -165,3 +166,31 @@ def list_response(items, total=None, serializer_func=None):
         'items': items,
         'total': total if total is not None else len(items)
     }
+
+
+def get_or_404(model, id, description=None):
+    """
+    Get a model instance by ID or abort with 404.
+
+    This is a drop-in replacement for Flask-SQLAlchemy's Query.get_or_404()
+    that uses the modern db.session.get() method to avoid deprecation warnings.
+
+    Args:
+        model: SQLAlchemy model class
+        id: Primary key value
+        description: Optional description for the 404 error
+
+    Returns:
+        Model instance
+
+    Raises:
+        404: If the instance is not found
+
+    Example:
+        from app.utils.responses import get_or_404
+        document = get_or_404(Document, document_id)
+    """
+    instance = db.session.get(model, id)
+    if instance is None:
+        abort(404, description=description or f'{model.__name__} not found')
+    return instance

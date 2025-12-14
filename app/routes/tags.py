@@ -4,7 +4,7 @@ from app import db
 from app.models.tag import Tag
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
-from app.utils.responses import paginate_query, build_pagination_response
+from app.utils.responses import paginate_query, build_pagination_response, get_or_404
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 import bleach
 
@@ -297,7 +297,7 @@ def generate_auto_tags():
         
         if document_id:
             # Process single document
-            document = Document.query.get(document_id)
+            document = db.session.get(Document, document_id)
             if not document:
                 return jsonify({'error': 'Document not found'}), 404
             
@@ -440,7 +440,7 @@ def preview_auto_tags(document_id):
     try:
         current_user_id = get_current_user_id()
         
-        document = Document.query.get_or_404(document_id)
+        document = get_or_404(Document, document_id)
         
         # Check access permissions
         if not document.can_view(current_user_id):

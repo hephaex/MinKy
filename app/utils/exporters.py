@@ -1,6 +1,6 @@
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 import markdown
 # from weasyprint import HTML, CSS  # Commented out due to system dependencies
 from docx import Document as DocxDocument
@@ -115,7 +115,7 @@ class DocumentExporter:
         
         export_info = f"""
         <div class="export-info">
-            <p>Exported from Minky Document Management System on {datetime.utcnow().strftime('%B %d, %Y at %I:%M %p UTC')}</p>
+            <p>Exported from Minky Document Management System on {datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')}</p>
         </div>
         """
         
@@ -239,7 +239,7 @@ class DocumentExporter:
         # Add footer
         doc.add_page_break()
         footer_para = doc.add_paragraph()
-        footer_para.add_run(f"Exported from Minky on {datetime.utcnow().strftime('%B %d, %Y')}")
+        footer_para.add_run(f"Exported from Minky on {datetime.now(timezone.utc).strftime('%B %d, %Y')}")
         footer_para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         
         docx_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}.docx")
@@ -255,7 +255,7 @@ author: {self.document.author or 'Unknown'}
 created: {self.document.created_at.isoformat()}
 updated: {self.document.updated_at.isoformat()}
 tags: [{', '.join(f'"{tag}"' for tag in self.document.get_tag_names())}]
-exported: {datetime.utcnow().isoformat()}
+exported: {datetime.now(timezone.utc).isoformat()}
 ---
 
 """
@@ -273,7 +273,7 @@ exported: {datetime.utcnow().isoformat()}
         data = {
             'document': self.document.to_dict(),
             'export_info': {
-                'exported_at': datetime.utcnow().isoformat(),
+                'exported_at': datetime.now(timezone.utc).isoformat(),
                 'format': 'json',
                 'version': '1.0'
             }

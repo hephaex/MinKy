@@ -1,10 +1,16 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from flask_bcrypt import generate_password_hash, check_password_hash
 from app import db
 
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
+
 class User(db.Model):
     __tablename__ = 'users'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
@@ -12,8 +18,8 @@ class User(db.Model):
     full_name = db.Column(db.String(200))
     is_active = db.Column(db.Boolean, default=True)
     is_admin = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
     
     # Relationship with documents
     documents = db.relationship('Document', backref='owner', lazy=True, foreign_keys='Document.user_id')

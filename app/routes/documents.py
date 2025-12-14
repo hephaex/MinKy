@@ -5,13 +5,13 @@ from app.models.document import Document
 from app.models.user import User
 from app.models.tag import Tag
 from app.utils.auth import get_current_user_id
-from app.utils.responses import paginate_query, error_response
+from app.utils.responses import paginate_query, error_response, get_or_404
 from sqlalchemy import or_
 import bleach
 import os
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 from app.utils.obsidian_parser import ObsidianParser
 from app.utils.backup_manager import create_document_backup, update_document_backup, upload_document_backup, export_all_documents
@@ -310,7 +310,7 @@ def list_backup_files_for_sync():
 def get_document(document_id):
     from werkzeug.exceptions import HTTPException
     try:
-        document = Document.query.get_or_404(document_id)
+        document = get_or_404(Document, document_id)
         current_user_id = get_current_user_id()
 
         if not document.can_view(current_user_id):
@@ -327,7 +327,7 @@ def get_document(document_id):
 @jwt_required(optional=True)
 def update_document(document_id):
     try:
-        document = Document.query.get_or_404(document_id)
+        document = get_or_404(Document, document_id)
         current_user_id = get_current_user_id()
         
         if not document.can_edit(current_user_id):
@@ -386,7 +386,7 @@ def update_document(document_id):
             if data['tags']:
                 document.add_tags(data['tags'])
         
-        document.updated_at = datetime.utcnow()
+        document.updated_at = datetime.now(timezone.utc)
         db.session.commit()
         
         # Create backup for updated document
@@ -407,7 +407,7 @@ def update_document(document_id):
 @jwt_required(optional=True)
 def delete_document(document_id):
     try:
-        document = Document.query.get_or_404(document_id)
+        document = get_or_404(Document, document_id)
         current_user_id = get_current_user_id()
         
         if not document.can_edit(current_user_id):

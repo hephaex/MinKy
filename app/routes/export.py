@@ -1,13 +1,15 @@
 from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_jwt_extended import jwt_required
+from app import db
 from app.models.document import Document
 from app.models.user import User
 from app.utils.auth import get_current_user_id, get_current_user
+from app.utils.responses import get_or_404
 from app.utils.exporters import DocumentExporter
 from app.services.notification_service import NotificationService
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 
 export_bp = Blueprint('export', __name__)
 
@@ -21,7 +23,7 @@ def export_document(document_id, format_type):
     if not user:
         return jsonify({'error': 'User not found'}), 404
     
-    document = Document.query.get_or_404(document_id)
+    document = get_or_404(Document, document_id)
     
     # Check if user has access to this document
     if not document.is_public and document.user_id != current_user_id:
@@ -139,7 +141,7 @@ def bulk_export_documents():
     # Get documents user has access to
     accessible_documents = []
     for doc_id in document_ids:
-        document = Document.query.get(doc_id)
+        document = db.session.get(Document, doc_id)
         if document and (document.is_public or document.user_id == current_user_id):
             accessible_documents.append(document)
     
@@ -186,7 +188,7 @@ def bulk_export_documents():
         
         # Create ZIP file with all exports
         import zipfile
-        zip_path = os.path.join(temp_dir, f"bulk_export_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.zip")
+        zip_path = os.path.join(temp_dir, f"bulk_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.zip")
         
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             for file_path in export_files:
@@ -224,7 +226,7 @@ def export_document_bundle(document_id):
     if not user:
         return jsonify({'error': 'User not found'}), 404
     
-    document = Document.query.get_or_404(document_id)
+    document = get_or_404(Document, document_id)
 
     # Check if user has access to this document
     if not document.is_public and document.user_id != current_user_id:

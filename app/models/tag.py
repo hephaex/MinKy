@@ -1,22 +1,29 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
+
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
 
 # Association table for many-to-many relationship between documents and tags
 document_tags = db.Table('document_tags',
     db.Column('document_id', db.Integer, db.ForeignKey('documents.id'), primary_key=True),
     db.Column('tag_id', db.Integer, db.ForeignKey('tags.id'), primary_key=True),
-    db.Column('created_at', db.DateTime, default=datetime.utcnow)
+    db.Column('created_at', db.DateTime, default=utc_now)
 )
+
 
 class Tag(db.Model):
     __tablename__ = 'tags'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
     slug = db.Column(db.String(50), unique=True, nullable=False)
     description = db.Column(db.Text)
     color = db.Column(db.String(7), default='#007bff')  # Hex color code
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     
     # Relationships

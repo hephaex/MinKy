@@ -1,17 +1,23 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 import markdown
 from sqlalchemy import func
 from app.models.tag import document_tags
 
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
+
 class Document(db.Model):
     __tablename__ = 'documents'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
     author = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
     markdown_content = db.Column(db.Text, nullable=False)
     html_content = db.Column(db.Text)
     search_vector = db.Column(db.Text)
@@ -59,7 +65,7 @@ class Document(db.Model):
             self.html_content = self.convert_markdown_to_html()
         if author:
             self.author = author
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
     
     def create_version(self, change_summary=None, created_by=None):
         """Create a version of current document state"""

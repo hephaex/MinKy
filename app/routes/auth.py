@@ -125,7 +125,7 @@ def login():
 def refresh():
     try:
         current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = db.session.get(User, current_user_id)
         
         if not user or not user.is_active:
             return jsonify({'error': 'User not found or inactive'}), 401
@@ -145,7 +145,7 @@ def refresh():
 def get_current_user():
     try:
         current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = db.session.get(User, current_user_id)
         
         if not user:
             return jsonify({'error': 'User not found'}), 404
@@ -162,7 +162,7 @@ def get_current_user():
 def update_profile():
     try:
         current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
+        user = db.session.get(User, current_user_id)
         
         if not user:
             return jsonify({'error': 'User not found'}), 404

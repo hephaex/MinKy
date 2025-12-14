@@ -5,6 +5,7 @@ Authentication utility functions for Minky
 from functools import wraps
 from flask import jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from app import db
 from app.models.user import User
 
 
@@ -35,7 +36,7 @@ def get_current_user():
     user_id = get_current_user_id()
     if user_id is None:
         return None
-    return User.query.get(user_id)
+    return db.session.get(User, user_id)
 
 
 def require_auth(f):
@@ -44,7 +45,7 @@ def require_auth(f):
     @jwt_required()
     def decorated_function(*args, **kwargs):
         user_id = get_current_user_id()
-        user = User.query.get(user_id) if user_id else None
+        user = db.session.get(User, user_id) if user_id else None
 
         if not user or not user.is_active:
             return jsonify({'error': 'User not found or inactive'}), 404
@@ -59,7 +60,7 @@ def admin_required(f):
     @jwt_required()
     def decorated_function(*args, **kwargs):
         user_id = get_current_user_id()
-        user = User.query.get(user_id) if user_id else None
+        user = db.session.get(User, user_id) if user_id else None
 
         if not user or not user.is_active:
             return jsonify({'error': 'User not found or inactive'}), 404
