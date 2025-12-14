@@ -15,6 +15,7 @@ from app.models.comment import Comment
 from app.models.attachment import Attachment
 from app.models.workflow import DocumentWorkflow
 from app.utils.auth import get_current_user
+from app.utils.responses import paginate_query
 import logging
 
 logger = logging.getLogger(__name__)
@@ -47,34 +48,19 @@ def list_users():
                 User.full_name.ilike(f'%{search}%')
             )
         
-        pagination = query.order_by(desc(User.created_at)).paginate(
-            page=page,
-            per_page=per_page,
-            error_out=False
-        )
-        
-        users = []
-        for user in pagination.items:
+        def serialize_user_with_stats(user):
             user_data = user.to_dict(include_sensitive=True)
-            # Add stats
-            doc_count = Document.query.filter_by(user_id=user.id).count()
-            comment_count = Comment.query.filter_by(user_id=user.id).count()
-            user_data['document_count'] = doc_count
-            user_data['comment_count'] = comment_count
-            users.append(user_data)
-        
-        return jsonify({
-            'success': True,
-            'users': users,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': pagination.total,
-                'pages': pagination.pages,
-                'has_next': pagination.has_next,
-                'has_prev': pagination.has_prev
-            }
-        })
+            user_data['document_count'] = Document.query.filter_by(user_id=user.id).count()
+            user_data['comment_count'] = Comment.query.filter_by(user_id=user.id).count()
+            return user_data
+
+        query = query.order_by(desc(User.created_at))
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=serialize_user_with_stats,
+            items_key='users',
+            extra_fields={'success': True}
+        )
         
     except Exception as e:
         logger.error(f"Error in list users: {e}")
@@ -179,36 +165,23 @@ def list_all_documents():
                 Document.markdown_content.ilike(f'%{search}%')
             )
         
-        pagination = query.order_by(desc(Document.created_at)).paginate(
-            page=page,
-            per_page=per_page,
-            error_out=False
-        )
-        
-        documents = []
-        for doc in pagination.items:
+        def serialize_doc_with_owner(doc):
             doc_data = doc.to_dict()
-            # Add owner info
             if doc.owner:
                 doc_data['owner'] = {
                     'id': doc.owner.id,
                     'username': doc.owner.username,
                     'full_name': doc.owner.full_name
                 }
-            documents.append(doc_data)
-        
-        return jsonify({
-            'success': True,
-            'documents': documents,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': pagination.total,
-                'pages': pagination.pages,
-                'has_next': pagination.has_next,
-                'has_prev': pagination.has_prev
-            }
-        })
+            return doc_data
+
+        query = query.order_by(desc(Document.created_at))
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=serialize_doc_with_owner,
+            items_key='documents',
+            extra_fields={'success': True}
+        )
         
     except Exception as e:
         logger.error(f"Error in list all documents: {e}")

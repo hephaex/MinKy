@@ -4,6 +4,7 @@ from app import db
 from app.models.document import Document
 from app.models.version import DocumentVersion, DocumentSnapshot
 from app.utils.auth import get_current_user_id
+from app.utils.responses import paginate_query
 
 versions_bp = Blueprint('versions', __name__)
 
@@ -22,28 +23,21 @@ def get_document_versions(document_id):
         per_page = request.args.get('per_page', 20, type=int)
         include_content = request.args.get('include_content', 'false').lower() == 'true'
         
-        pagination = DocumentVersion.query.filter_by(document_id=document_id)\
-            .order_by(DocumentVersion.version_number.desc())\
-            .paginate(page=page, per_page=per_page, error_out=False)
-        
-        versions = [version.to_dict(include_content=include_content) for version in pagination.items]
-        
-        return jsonify({
-            'versions': versions,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': pagination.total,
-                'pages': pagination.pages,
-                'has_next': pagination.has_next,
-                'has_prev': pagination.has_prev
-            },
-            'document': {
-                'id': document.id,
-                'title': document.title,
-                'current_version': document.get_latest_version_number()
+        query = DocumentVersion.query.filter_by(document_id=document_id)\
+            .order_by(DocumentVersion.version_number.desc())
+
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=lambda v: v.to_dict(include_content=include_content),
+            items_key='versions',
+            extra_fields={
+                'document': {
+                    'id': document.id,
+                    'title': document.title,
+                    'current_version': document.get_latest_version_number()
+                }
             }
-        })
+        )
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

@@ -5,6 +5,7 @@ from app import db
 from app.models.attachment import Attachment
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
+from app.utils.responses import paginate_query
 import os
 import mimetypes
 from PIL import Image
@@ -239,24 +240,13 @@ def list_attachments():
         
         if document_id:
             query = query.filter_by(document_id=document_id)
-        
-        pagination = query.order_by(Attachment.created_at.desc()).paginate(
-            page=page, per_page=per_page, error_out=False
+
+        query = query.order_by(Attachment.created_at.desc())
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=lambda a: a.to_dict(),
+            items_key='attachments'
         )
-        
-        attachments = [attachment.to_dict() for attachment in pagination.items]
-        
-        return jsonify({
-            'attachments': attachments,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': pagination.total,
-                'pages': pagination.pages,
-                'has_next': pagination.has_next,
-                'has_prev': pagination.has_prev
-            }
-        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

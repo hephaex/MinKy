@@ -3,6 +3,7 @@ from app import db
 from app.models.category import Category
 from app.models.document import Document
 from app.utils.auth import require_auth, admin_required
+from app.utils.responses import paginate_query
 from sqlalchemy import func
 
 categories_bp = Blueprint('categories', __name__)
@@ -235,36 +236,22 @@ def get_category_documents(category_id):
         include_descendants = request.args.get('include_descendants', 'true').lower() == 'true'
         
         if include_descendants:
-            # Get documents from this category and all its descendants
             descendant_ids = [cat.id for cat in category.get_all_descendants()]
             descendant_ids.append(category_id)
-            
-            documents = Document.query.filter(
+            query = Document.query.filter(
                 Document.category_id.in_(descendant_ids),
                 Document.is_public == True
-            ).order_by(Document.updated_at.desc()).paginate(
-                page=page, per_page=per_page, error_out=False
             )
         else:
-            # Get documents only from this category
-            documents = Document.query.filter_by(
-                category_id=category_id,
-                is_public=True
-            ).order_by(Document.updated_at.desc()).paginate(
-                page=page, per_page=per_page, error_out=False
-            )
-        
-        return jsonify({
-            'success': True,
-            'documents': [doc.to_dict() for doc in documents.items],
-            'pagination': {
-                'page': documents.page,
-                'pages': documents.pages,
-                'per_page': documents.per_page,
-                'total': documents.total
-            },
-            'category': category.to_dict()
-        })
+            query = Document.query.filter_by(category_id=category_id, is_public=True)
+
+        query = query.order_by(Document.updated_at.desc())
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=lambda d: d.to_dict(),
+            items_key='documents',
+            extra_fields={'success': True, 'category': category.to_dict()}
+        )
         
     except Exception as e:
         return jsonify({

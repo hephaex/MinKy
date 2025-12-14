@@ -4,6 +4,7 @@ from app import db
 from app.models.comment import Comment, Rating
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
+from app.utils.responses import paginate_query
 import bleach
 
 comments_bp = Blueprint('comments', __name__)
@@ -22,28 +23,17 @@ def get_comments(document_id):
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
         
-        # Get top-level comments (no parent)
-        pagination = Comment.query.filter_by(
-            document_id=document_id, 
-            parent_id=None, 
+        query = Comment.query.filter_by(
+            document_id=document_id,
+            parent_id=None,
             is_deleted=False
-        ).order_by(Comment.created_at.desc()).paginate(
-            page=page, per_page=per_page, error_out=False
+        ).order_by(Comment.created_at.desc())
+
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=lambda c: c.to_dict(),
+            items_key='comments'
         )
-        
-        comments = [comment.to_dict() for comment in pagination.items]
-        
-        return jsonify({
-            'comments': comments,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': pagination.total,
-                'pages': pagination.pages,
-                'has_next': pagination.has_next,
-                'has_prev': pagination.has_prev
-            }
-        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

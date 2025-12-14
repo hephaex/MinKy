@@ -4,6 +4,7 @@ from app import db
 from app.models.template import DocumentTemplate
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
+from app.utils.responses import paginate_query
 import bleach
 
 templates_bp = Blueprint('templates', __name__)
@@ -48,25 +49,13 @@ def list_templates():
                 )
             )
         
-        pagination = query.order_by(DocumentTemplate.updated_at.desc()).paginate(
-            page=page, per_page=per_page, error_out=False
+        query = query.order_by(DocumentTemplate.updated_at.desc())
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=lambda t: t.to_dict(include_content=include_content),
+            items_key='templates',
+            extra_fields={'search_query': search, 'category': category}
         )
-        
-        templates = [t.to_dict(include_content=include_content) for t in pagination.items]
-        
-        return jsonify({
-            'templates': templates,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': pagination.total,
-                'pages': pagination.pages,
-                'has_next': pagination.has_next,
-                'has_prev': pagination.has_prev
-            },
-            'search_query': search,
-            'category': category
-        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -286,23 +275,14 @@ def get_my_templates():
         per_page = request.args.get('per_page', 20, type=int)
         include_content = request.args.get('include_content', 'false').lower() == 'true'
         
-        pagination = DocumentTemplate.query.filter_by(created_by=current_user_id)\
-            .order_by(DocumentTemplate.updated_at.desc())\
-            .paginate(page=page, per_page=per_page, error_out=False)
-        
-        templates = [t.to_dict(include_content=include_content) for t in pagination.items]
-        
-        return jsonify({
-            'templates': templates,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': pagination.total,
-                'pages': pagination.pages,
-                'has_next': pagination.has_next,
-                'has_prev': pagination.has_prev
-            }
-        })
+        query = DocumentTemplate.query.filter_by(created_by=current_user_id)\
+            .order_by(DocumentTemplate.updated_at.desc())
+
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=lambda t: t.to_dict(include_content=include_content),
+            items_key='templates'
+        )
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

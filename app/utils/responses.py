@@ -6,7 +6,9 @@ Provides standardized response building patterns to reduce code duplication.
 from flask import jsonify, url_for
 
 
-def build_pagination_response(query, page, per_page, serializer_func, endpoint=None, **endpoint_kwargs):
+def build_pagination_response(query, page, per_page, serializer_func,
+                               items_key='items', wrap_pagination=False,
+                               endpoint=None, extra_fields=None, **endpoint_kwargs):
     """
     Build a standardized pagination response from a SQLAlchemy query.
 
@@ -15,20 +17,30 @@ def build_pagination_response(query, page, per_page, serializer_func, endpoint=N
         page: Current page number (1-indexed)
         per_page: Number of items per page
         serializer_func: Function to serialize each item (item -> dict)
+        items_key: Key name for the items list (default 'items', can be 'documents', 'tags', etc.)
+        wrap_pagination: If True, wrap pagination metadata in 'pagination' object (for backward compat)
         endpoint: Optional Flask endpoint name for URL generation
+        extra_fields: Optional dict of additional fields to include in response
         endpoint_kwargs: Additional kwargs for url_for()
 
     Returns:
         dict: Standardized pagination response
 
     Example:
-        def get_documents():
-            query = Document.query.filter_by(is_deleted=False)
-            return build_pagination_response(
-                query, page=1, per_page=20,
-                serializer_func=lambda d: d.to_dict(),
-                endpoint='documents.list_documents'
-            )
+        # Simple usage
+        return build_pagination_response(
+            query, page=1, per_page=20,
+            serializer_func=lambda d: d.to_dict()
+        )
+
+        # With custom item key and wrapped pagination (backward compatible)
+        return build_pagination_response(
+            query, page=1, per_page=20,
+            serializer_func=lambda d: d.to_dict(),
+            items_key='documents',
+            wrap_pagination=True,
+            extra_fields={'search_query': search}
+        )
     """
     # Execute pagination
     paginated = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -36,13 +48,12 @@ def build_pagination_response(query, page, per_page, serializer_func, endpoint=N
     # Serialize items
     items = [serializer_func(item) for item in paginated.items]
 
-    # Build response
-    response = {
-        'items': items,
-        'total': paginated.total,
-        'pages': paginated.pages,
+    # Build pagination metadata
+    pagination_data = {
         'page': page,
         'per_page': per_page,
+        'total': paginated.total,
+        'pages': paginated.pages,
         'has_next': paginated.has_next,
         'has_prev': paginated.has_prev
     }
@@ -50,11 +61,47 @@ def build_pagination_response(query, page, per_page, serializer_func, endpoint=N
     # Add navigation URLs if endpoint provided
     if endpoint:
         if paginated.has_next:
-            response['next_url'] = url_for(endpoint, page=page + 1, per_page=per_page, **endpoint_kwargs)
+            pagination_data['next_url'] = url_for(endpoint, page=page + 1, per_page=per_page, **endpoint_kwargs)
         if paginated.has_prev:
-            response['prev_url'] = url_for(endpoint, page=page - 1, per_page=per_page, **endpoint_kwargs)
+            pagination_data['prev_url'] = url_for(endpoint, page=page - 1, per_page=per_page, **endpoint_kwargs)
+
+    # Build response based on structure preference
+    if wrap_pagination:
+        response = {
+            items_key: items,
+            'pagination': pagination_data
+        }
+    else:
+        response = {items_key: items, **pagination_data}
+
+    # Add extra fields if provided
+    if extra_fields:
+        response.update(extra_fields)
 
     return response
+
+
+def paginate_query(query, page, per_page, serializer_func, items_key='items', extra_fields=None):
+    """
+    Simplified pagination helper that returns a Flask response.
+
+    Args:
+        query: SQLAlchemy query object
+        page: Current page number
+        per_page: Items per page
+        serializer_func: Function to serialize each item
+        items_key: Key name for items list
+        extra_fields: Additional fields to include
+
+    Returns:
+        Flask JSON response
+    """
+    response = build_pagination_response(
+        query, page, per_page, serializer_func,
+        items_key=items_key, wrap_pagination=True,
+        extra_fields=extra_fields
+    )
+    return jsonify(response)
 
 
 def success_response(data=None, message=None, status_code=200):

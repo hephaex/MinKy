@@ -4,6 +4,7 @@ from app import db
 from app.models.tag import Tag
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
+from app.utils.responses import paginate_query, build_pagination_response
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 import bleach
 
@@ -415,34 +416,19 @@ def get_tagless_documents():
         else:
             query = query.filter(Document.is_public == True)
         
-        # Paginate results
-        pagination = query.order_by(Document.created_at.desc()).paginate(
-            page=page, per_page=per_page, error_out=False
-        )
-        
-        documents = []
-        for doc in pagination.items:
+        def serialize_with_preview(doc):
             doc_dict = doc.to_dict()
-            
-            # Preview what tags would be detected
             content = doc.markdown_content or doc.content or ''
-            preview_tags = detect_auto_tags(content)
-            doc_dict['preview_auto_tags'] = preview_tags
-            
-            documents.append(doc_dict)
-        
-        return jsonify({
-            'documents': documents,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': pagination.total,
-                'pages': pagination.pages,
-                'has_next': pagination.has_next,
-                'has_prev': pagination.has_prev
-            },
-            'include_private': include_private and current_user_id is not None
-        })
+            doc_dict['preview_auto_tags'] = detect_auto_tags(content)
+            return doc_dict
+
+        query = query.order_by(Document.created_at.desc())
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=serialize_with_preview,
+            items_key='documents',
+            extra_fields={'include_private': include_private and current_user_id is not None}
+        )
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

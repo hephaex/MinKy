@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required
 from app.models.document import Document
 from app.models.user import User
 from app.utils.auth import get_current_user_id
+from app.utils.responses import paginate_query
 from app.utils.org_roam_parser import OrgRoamParser, OrgRoamImporter
 from app.middleware.security import rate_limit_api, rate_limit_upload, validate_request_security, audit_log
 from marshmallow import Schema, fields, ValidationError
@@ -341,15 +342,8 @@ def get_org_roam_documents():
             Document.document_metadata.has_key('org_roam_id')  # org-roam ID가 있는 문서
         )
         
-        paginated_results = base_query.order_by(
-            Document.updated_at.desc()
-        ).paginate(page=page, per_page=per_page, error_out=False)
-        
-        documents = []
-        for doc in paginated_results.items:
+        def serialize_org_roam_doc(doc):
             doc_dict = doc.to_dict()
-            
-            # org-roam 특별 정보 추가
             metadata = doc.document_metadata or {}
             doc_dict['org_roam_info'] = {
                 'org_roam_id': metadata.get('org_roam_id'),
@@ -361,18 +355,14 @@ def get_org_roam_documents():
                 'backlinks_count': len(metadata.get('backlinks', [])),
                 'outbound_links_count': len(metadata.get('outbound_links', []))
             }
-            
-            documents.append(doc_dict)
-        
-        return jsonify({
-            'documents': documents,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': paginated_results.total,
-                'pages': paginated_results.pages
-            }
-        })
+            return doc_dict
+
+        query = base_query.order_by(Document.updated_at.desc())
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=serialize_org_roam_doc,
+            items_key='documents'
+        )
         
     except Exception as e:
         current_app.logger.error(f"Failed to get org-roam documents: {str(e)}")

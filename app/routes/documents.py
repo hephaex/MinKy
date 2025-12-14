@@ -5,6 +5,7 @@ from app.models.document import Document
 from app.models.user import User
 from app.models.tag import Tag
 from app.utils.auth import get_current_user_id
+from app.utils.responses import paginate_query, error_response
 from sqlalchemy import or_
 import bleach
 import os
@@ -589,27 +590,14 @@ def get_documents_by_date():
         if day is not None:
             filters.append(extract('day', Document.created_at) == day)
         
-        query = base_query.filter(and_(*filters))
-        
-        # 페이지네이션 적용
-        pagination = query.order_by(Document.created_at.desc()).paginate(
-            page=page, per_page=per_page, error_out=False
+        query = base_query.filter(and_(*filters)).order_by(Document.created_at.desc())
+
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=lambda d: d.to_dict(),
+            items_key='documents',
+            extra_fields={'date_key': date_key}
         )
-        
-        documents = [doc.to_dict() for doc in pagination.items]
-        
-        return jsonify({
-            'documents': documents,
-            'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': pagination.total,
-                'pages': pagination.pages,
-                'has_next': pagination.has_next,
-                'has_prev': pagination.has_prev
-            },
-            'date_key': date_key
-        })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
