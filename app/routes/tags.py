@@ -3,16 +3,11 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models.tag import Tag
 from app.models.document import Document
+from app.utils.auth import get_current_user_id
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 import bleach
 
 tags_bp = Blueprint('tags', __name__)
-
-def get_current_user_id():
-    try:
-        return get_jwt_identity()
-    except:
-        return None
 
 @tags_bp.route('/tags', methods=['GET'])
 def list_tags():

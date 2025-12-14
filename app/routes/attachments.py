@@ -4,6 +4,7 @@ from werkzeug.utils import secure_filename
 from app import db
 from app.models.attachment import Attachment
 from app.models.document import Document
+from app.utils.auth import get_current_user_id
 import os
 import mimetypes
 from PIL import Image
@@ -14,16 +15,10 @@ attachments_bp = Blueprint('attachments', __name__)
 UPLOAD_FOLDER = 'uploads'
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 ALLOWED_EXTENSIONS = {
-    'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx', 
+    'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'doc', 'docx',
     'mp4', 'avi', 'mov', 'mp3', 'wav', 'ogg', 'svg', 'webp',
     'md', 'zip', 'tar', 'gz', 'json', 'xml', 'csv', 'xlsx'
 }
-
-def get_current_user_id():
-    try:
-        return get_jwt_identity()
-    except:
-        return None
 
 def allowed_file(filename):
     return '.' in filename and \

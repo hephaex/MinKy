@@ -3,14 +3,9 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models.document import Document
 from app.models.version import DocumentVersion, DocumentSnapshot
+from app.utils.auth import get_current_user_id
 
 versions_bp = Blueprint('versions', __name__)
-
-def get_current_user_id():
-    try:
-        return get_jwt_identity()
-    except:
-        return None
 
 @versions_bp.route('/documents/<int:document_id>/versions', methods=['GET'])
 def get_document_versions(document_id):

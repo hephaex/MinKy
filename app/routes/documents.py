@@ -1,9 +1,10 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity, jwt_required
+from flask_jwt_extended import jwt_required
 from app import db
 from app.models.document import Document
 from app.models.user import User
 from app.models.tag import Tag
+from app.utils.auth import get_current_user_id
 from sqlalchemy import or_
 import bleach
 import os
@@ -49,12 +50,6 @@ def process_obsidian_content(markdown_content, backup_dir=None):
         'all_tags': filtered_tags,
         'processed_content': parsed.get('clean_content', markdown_content)  # Include processed content with converted images
     }
-
-def get_current_user_id():
-    try:
-        return get_jwt_identity()
-    except:
-        return None
 
 def extract_author_from_frontmatter(frontmatter):
     """Extract author from frontmatter, handling various formats"""

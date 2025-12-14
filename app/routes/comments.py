@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models.comment import Comment, Rating
 from app.models.document import Document
+from app.utils.auth import get_current_user_id
 import bleach
 
 comments_bp = Blueprint('comments', __name__)
@@ -12,16 +13,12 @@ def get_comments(document_id):
     """Get comments for a document"""
     try:
         document = Document.query.get_or_404(document_id)
-        
+
         # Check if user can view document
-        try:
-            current_user_id = get_jwt_identity()
-        except:
-            current_user_id = None
-            
+        current_user_id = get_current_user_id()
         if not document.can_view(current_user_id):
             return jsonify({'error': 'Access denied'}), 403
-        
+
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
         
@@ -210,14 +207,10 @@ def get_document_rating(document_id):
         document = Document.query.get_or_404(document_id)
         
         # Check if user can view document
-        try:
-            current_user_id = get_jwt_identity()
-        except:
-            current_user_id = None
-            
+        current_user_id = get_current_user_id()
         if not document.can_view(current_user_id):
             return jsonify({'error': 'Access denied'}), 403
-        
+
         rating_stats = Rating.get_document_rating_stats(document_id)
         
         # Get current user's rating if authenticated

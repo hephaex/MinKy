@@ -3,15 +3,10 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models.template import DocumentTemplate
 from app.models.document import Document
+from app.utils.auth import get_current_user_id
 import bleach
 
 templates_bp = Blueprint('templates', __name__)
-
-def get_current_user_id():
-    try:
-        return get_jwt_identity()
-    except:
-        return None
 
 @templates_bp.route('/templates', methods=['GET'])
 def list_templates():
