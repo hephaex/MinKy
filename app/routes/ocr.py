@@ -13,7 +13,7 @@ from app.utils.auth import get_current_user_id
 from app import db
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +238,7 @@ def extract_and_create_document():
 *OCR Method: {ocr_result.get('method', 'unknown')}*  
 *Confidence: {ocr_result.get('confidence', 0)}%*  
 *Language: {language}*  
-*Extracted: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC*
+*Extracted: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC*
 
 ---
 
@@ -256,7 +256,7 @@ def extract_and_create_document():
             document_metadata={
                 'ocr_result': ocr_result,
                 'source_file': file.filename,
-                'extraction_date': datetime.utcnow().isoformat()
+                'extraction_date': datetime.now(timezone.utc).isoformat()
             }
         )
         

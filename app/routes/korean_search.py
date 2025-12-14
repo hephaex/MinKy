@@ -8,7 +8,7 @@ from app.services.opensearch_service import get_opensearch_service
 from app.middleware.security import rate_limit_api, rate_limit_search, validate_request_security, audit_log
 from marshmallow import Schema, fields, ValidationError
 from sqlalchemy import or_, and_
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 korean_search_bp = Blueprint('korean_search', __name__)
@@ -268,7 +268,7 @@ def analyze_korean_document(document_id):
             'document_id': document_id,
             'document_title': document.title,
             'document_language': analysis_result['language'],
-            'analysis_timestamp': datetime.utcnow().isoformat(),
+            'analysis_timestamp': datetime.now(timezone.utc).isoformat(),
             'word_count': len(analysis_result['content_tokens']),
             'unique_words': len(set(analysis_result['content_tokens'])),
             'keyword_density': len(analysis_result['keywords']) / max(len(analysis_result['content_tokens']), 1)
@@ -430,5 +430,5 @@ def get_search_health():
     return jsonify({
         'overall_status': overall_status,
         'components': health_info,
-        'timestamp': datetime.utcnow().isoformat()
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })

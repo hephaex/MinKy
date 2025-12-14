@@ -10,7 +10,7 @@ from app.models.user import User
 from app import db
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 import difflib
 import time
@@ -51,7 +51,7 @@ class CollaborationService:
             if document_id not in self.active_sessions:
                 self.active_sessions[document_id] = {
                     'users': {},
-                    'last_save': datetime.utcnow(),
+                    'last_save': datetime.now(timezone.utc),
                     'content': document.markdown_content,
                     'version': 1
                 }
@@ -66,7 +66,7 @@ class CollaborationService:
                 'user_id': user_id,
                 'username': user.username if user else 'Anonymous',
                 'sid': sid,
-                'joined_at': datetime.utcnow(),
+                'joined_at': datetime.now(timezone.utc),
                 'cursor_position': 0
             }
             
@@ -165,7 +165,7 @@ class CollaborationService:
             operation_record = {
                 'operation': operation,
                 'user_id': user_id,
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(timezone.utc),
                 'version': session['version']
             }
             self.operation_queue[document_id].append(operation_record)
@@ -207,7 +207,7 @@ class CollaborationService:
                 'position': cursor_data.get('position', 0),
                 'selection_start': cursor_data.get('selection_start'),
                 'selection_end': cursor_data.get('selection_end'),
-                'timestamp': datetime.utcnow()
+                'timestamp': datetime.now(timezone.utc)
             }
             
             # Broadcast to other users
@@ -235,16 +235,16 @@ class CollaborationService:
             
             # Update document content
             document.markdown_content = session['content']
-            document.updated_at = datetime.utcnow()
+            document.updated_at = datetime.now(timezone.utc)
             db.session.commit()
             
-            session['last_save'] = datetime.utcnow()
+            session['last_save'] = datetime.now(timezone.utc)
             
             # Notify all users
             room_name = f"document_{document_id}"
             emit('document_saved', {
                 'saved_by': user_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }, room=room_name)
             
             logger.info(f"Document {document_id} saved by user {user_id}")
@@ -327,7 +327,7 @@ class CollaborationService:
         session = self.active_sessions[document_id]
         
         # Save every 30 seconds of activity
-        time_since_save = datetime.utcnow() - session['last_save']
+        time_since_save = datetime.now(timezone.utc) - session['last_save']
         if time_since_save.total_seconds() > 30:
             # Find any user who can edit
             for user_info in session['users'].values():

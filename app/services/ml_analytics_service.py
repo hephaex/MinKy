@@ -7,7 +7,7 @@ import os
 import re
 import logging
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import Counter, defaultdict
 import json
 import numpy as np
@@ -124,7 +124,7 @@ class MLAnalyticsService:
                 'topic_analysis': self._get_document_topics(document),
                 'sentiment_analysis': self._get_sentiment_analysis(document),
                 'recommendations': self._get_document_recommendations(document),
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(timezone.utc).isoformat()
             }
             
             return insights
@@ -155,7 +155,7 @@ class MLAnalyticsService:
                 'collaboration_patterns': self._analyze_collaboration_patterns(documents),
                 'content_evolution': self._analyze_content_evolution(documents),
                 'performance_metrics': self._calculate_performance_metrics(documents),
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(timezone.utc).isoformat()
             }
             
             return insights
@@ -676,7 +676,7 @@ class MLAnalyticsService:
             date_counts = Counter(doc_dates)
             
             # Calculate trends
-            now = datetime.utcnow().date()
+            now = datetime.now(timezone.utc).date()
             last_week = now - timedelta(days=7)
             last_month = now - timedelta(days=30)
             

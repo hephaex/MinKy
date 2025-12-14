@@ -2,7 +2,7 @@ import re
 import os
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional, Tuple
 import orgparse
 from pathlib import Path
@@ -355,7 +355,7 @@ class OrgRoamImporter:
                         'backlinks': org_doc.get('backlinks', []),
                         'outbound_links': org_doc.get('outbound_links', []),
                         'language': org_doc['language'],
-                        'import_date': datetime.utcnow().isoformat()
+                        'import_date': datetime.now(timezone.utc).isoformat()
                     }
                     
                     self.db.add(document)

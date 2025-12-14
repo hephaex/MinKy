@@ -1,7 +1,7 @@
 from flask import request, jsonify, current_app, g
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from functools import wraps
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app import limiter, db
 import ipaddress
 import hashlib
@@ -94,7 +94,7 @@ class SecurityMiddleware:
     def log_security_event(event_type, details, severity='medium'):
         """Log security events for monitoring"""
         log_entry = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'event_type': event_type,
             'ip_address': request.remote_addr,
             'user_agent': request.headers.get('User-Agent', 'Unknown'),
@@ -243,7 +243,7 @@ def audit_log(action):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
             
             try:
                 result = f(*args, **kwargs)
@@ -263,7 +263,7 @@ def audit_log(action):
                     'method': request.method,
                     'ip_address': request.remote_addr,
                     'success': True,
-                    'duration_ms': (datetime.utcnow() - start_time).total_seconds() * 1000
+                    'duration_ms': (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
                 }
                 
                 current_app.logger.info(f"Audit: {audit_entry}")
@@ -279,7 +279,7 @@ def audit_log(action):
                     'ip_address': request.remote_addr,
                     'success': False,
                     'error': str(e),
-                    'duration_ms': (datetime.utcnow() - start_time).total_seconds() * 1000
+                    'duration_ms': (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
                 }
                 
                 current_app.logger.warning(f"Audit Failed: {audit_entry}")

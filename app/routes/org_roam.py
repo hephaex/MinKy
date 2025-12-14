@@ -12,7 +12,7 @@ import os
 import tempfile
 import zipfile
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 
 org_roam_bp = Blueprint('org_roam', __name__)
@@ -188,7 +188,7 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
                     # 기존 문서 업데이트
                     existing_doc.markdown_content = markdown_content
                     existing_doc.html_content = existing_doc.convert_markdown_to_html()
-                    existing_doc.updated_at = datetime.utcnow()
+                    existing_doc.updated_at = datetime.now(timezone.utc)
                     
                     # 메타데이터 업데이트
                     existing_doc.document_metadata.update({
@@ -197,7 +197,7 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
                         'roam_tags': org_doc.get('roam_tags', []),
                         'roam_aliases': org_doc.get('roam_aliases', []),
                         'language': org_doc['language'],
-                        'last_import_date': datetime.utcnow().isoformat()
+                        'last_import_date': datetime.now(timezone.utc).isoformat()
                     })
                     
                     results['updated'] += 1
@@ -220,7 +220,7 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
                         'roam_tags': org_doc.get('roam_tags', []),
                         'roam_aliases': org_doc.get('roam_aliases', []),
                         'language': org_doc['language'],
-                        'import_date': datetime.utcnow().isoformat(),
+                        'import_date': datetime.now(timezone.utc).isoformat(),
                         'preserve_links': preserve_links
                     }
                     

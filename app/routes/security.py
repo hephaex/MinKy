@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required
 from app.models.user import User
 from app.utils.auth import get_current_user
 from app.middleware.security import rate_limit_api, validate_request_security, audit_log
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import os
 
@@ -59,7 +59,7 @@ def get_security_status():
         
         return jsonify({
             'status': 'secure',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'rate_limiting': rate_limit_info,
             'security_config': security_config,
             'security_headers': security_headers,
@@ -90,7 +90,7 @@ def get_security_logs():
         # In practice, these would come from your logging system
         sample_logs = [
             {
-                'timestamp': (datetime.utcnow() - timedelta(hours=1)).isoformat(),
+                'timestamp': (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
                 'event_type': 'rate_limit_exceeded',
                 'severity': 'medium',
                 'ip_address': '192.168.1.100',
@@ -99,7 +99,7 @@ def get_security_logs():
                 'action_taken': 'request_blocked'
             },
             {
-                'timestamp': (datetime.utcnow() - timedelta(hours=2)).isoformat(),
+                'timestamp': (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
                 'event_type': 'suspicious_content',
                 'severity': 'high',
                 'ip_address': '10.0.0.50',
@@ -108,7 +108,7 @@ def get_security_logs():
                 'action_taken': 'request_blocked'
             },
             {
-                'timestamp': (datetime.utcnow() - timedelta(hours=3)).isoformat(),
+                'timestamp': (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat(),
                 'event_type': 'invalid_jwt',
                 'severity': 'low',
                 'ip_address': '172.16.0.25',
@@ -133,7 +133,7 @@ def get_security_logs():
                 'hours': hours,
                 'limit': limit
             },
-            'generated_at': datetime.utcnow().isoformat()
+            'generated_at': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -158,15 +158,15 @@ def get_threat_analysis():
                 {
                     'ip': '192.168.1.100',
                     'threat_count': 8,
-                    'first_seen': (datetime.utcnow() - timedelta(hours=6)).isoformat(),
-                    'last_seen': (datetime.utcnow() - timedelta(minutes=30)).isoformat(),
+                    'first_seen': (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat(),
+                    'last_seen': (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat(),
                     'threat_types': ['rate_limit_exceeded', 'suspicious_content']
                 },
                 {
                     'ip': '10.0.0.50',
                     'threat_count': 3,
-                    'first_seen': (datetime.utcnow() - timedelta(hours=2)).isoformat(),
-                    'last_seen': (datetime.utcnow() - timedelta(hours=1)).isoformat(),
+                    'first_seen': (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
+                    'last_seen': (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
                     'threat_types': ['xss_attempt', 'sql_injection_attempt']
                 }
             ],
@@ -186,7 +186,7 @@ def get_threat_analysis():
         return jsonify({
             'threat_analysis': threat_summary,
             'analysis_period_hours': hours,
-            'generated_at': datetime.utcnow().isoformat()
+            'generated_at': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -232,7 +232,7 @@ def get_security_config():
         
         return jsonify({
             'security_config': config,
-            'generated_at': datetime.utcnow().isoformat()
+            'generated_at': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -274,7 +274,7 @@ def update_security_config():
             'message': 'Security configuration updated',
             'updated_settings': updated_settings,
             'note': 'Changes may require application restart to take full effect',
-            'updated_at': datetime.utcnow().isoformat()
+            'updated_at': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:
@@ -315,7 +315,7 @@ def manage_ip_lists():
             'message': f'IP {ip_address} {action.replace("_", " ")}',
             'ip_address': ip_address,
             'action': action,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'note': 'Changes may require application restart to take effect'
         })
         
@@ -334,8 +334,8 @@ def run_security_scan():
     try:
         # This would run various security checks
         scan_results = {
-            'scan_id': f"scan_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
-            'started_at': datetime.utcnow().isoformat(),
+            'scan_id': f"scan_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
+            'started_at': datetime.now(timezone.utc).isoformat(),
             'checks': [
                 {
                     'name': 'Rate Limiting Configuration',
@@ -374,7 +374,7 @@ def run_security_scan():
         
         return jsonify({
             'security_scan': scan_results,
-            'completed_at': datetime.utcnow().isoformat()
+            'completed_at': datetime.now(timezone.utc).isoformat()
         })
         
     except Exception as e:

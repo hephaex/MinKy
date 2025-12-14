@@ -451,8 +451,8 @@ def get_document_trends():
         
         # Filter by date range if specified
         if days > 0:
-            from datetime import datetime, timedelta
-            start_date = datetime.utcnow() - timedelta(days=days)
+            from datetime import datetime, timedelta, timezone
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             query = query.filter(Document.created_at >= start_date)
         
         documents = query.all()

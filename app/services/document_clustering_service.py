@@ -6,7 +6,7 @@ Advanced document organization using machine learning clustering algorithms
 import os
 import logging
 from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import numpy as np
 from collections import defaultdict, Counter
@@ -144,7 +144,7 @@ class DocumentClusteringService:
                 'cluster_insights': cluster_insights,
                 'quality_metrics': quality_metrics,
                 'cluster_info': cluster_info,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(timezone.utc).isoformat()
             }
             
             # Cache results
@@ -251,7 +251,7 @@ class DocumentClusteringService:
                 'similarity_stats': similarity_stats,
                 'candidates_analyzed': len(candidate_documents),
                 'similarity_threshold': similarity_threshold,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(timezone.utc).isoformat()
             }
             
             return results
@@ -346,7 +346,7 @@ class DocumentClusteringService:
             return {
                 'duplicates': duplicates,
                 'duplicate_stats': duplicate_stats,
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(timezone.utc).isoformat()
             }
             
         except Exception as e:

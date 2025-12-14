@@ -3,7 +3,7 @@ from app.models.user import User
 from app.models.document import Document
 from app.models.comment import Comment
 from app import db
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import re
 
 class NotificationService:
@@ -263,7 +263,7 @@ class NotificationService:
         
         # Delete very old unread notifications (older than 90 days)
         from datetime import timedelta
-        cutoff_date = datetime.utcnow() - timedelta(days=90)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=90)
         Notification.query.filter(
             Notification.created_at < cutoff_date
         ).delete()

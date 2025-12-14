@@ -7,7 +7,7 @@ from app.utils.auth import get_current_user_id, get_current_user
 from app.middleware.security import rate_limit_api, validate_request_security, audit_log
 from marshmallow import Schema, fields, ValidationError
 from app import db
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 workflows_bp = Blueprint('workflows', __name__)
 
@@ -179,7 +179,7 @@ def get_pending_workflows():
             workflow_dict = workflow.to_dict()
             workflow_dict['document'] = workflow.document.to_dict()
             workflow_dict['available_actions'] = workflow.get_available_actions(current_user_id)
-            workflow_dict['priority'] = 'high' if workflow.due_date and workflow.due_date < datetime.utcnow() else 'normal'
+            workflow_dict['priority'] = 'high' if workflow.due_date and workflow.due_date < datetime.now(timezone.utc) else 'normal'
             workflows_data.append(workflow_dict)
         
         author_workflows_data = []
@@ -331,7 +331,7 @@ def update_workflow_template(template_id):
         for key, value in validated_data.items():
             setattr(template, key, value)
         
-        template.updated_at = datetime.utcnow()
+        template.updated_at = datetime.now(timezone.utc)
         db.session.commit()
         
         return jsonify({
@@ -430,7 +430,7 @@ def get_workflow_stats():
                 WorkflowStatus.PENDING_REVIEW,
                 WorkflowStatus.IN_REVIEW
             ]),
-            DocumentWorkflow.due_date < datetime.utcnow()
+            DocumentWorkflow.due_date < datetime.now(timezone.utc)
         ).count()
         
         # My documents in workflow

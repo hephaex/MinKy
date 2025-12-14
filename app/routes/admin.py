@@ -6,7 +6,7 @@ Provides comprehensive administrative functionality
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from sqlalchemy import func, desc, and_
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app import db
 from app.models.user import User
 from app.models.document import Document
@@ -85,7 +85,7 @@ def get_user_details(user_id):
         recent_docs = Document.query.filter(
             and_(
                 Document.user_id == user.id,
-                Document.created_at >= datetime.utcnow() - timedelta(days=30)
+                Document.created_at >= datetime.now(timezone.utc) - timedelta(days=30)
             )
         ).count()
         
@@ -131,7 +131,7 @@ def update_user(user_id):
         if 'full_name' in data:
             user.full_name = data['full_name']
         
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(timezone.utc)
         db.session.commit()
         
         return jsonify({
@@ -206,7 +206,7 @@ def get_system_stats():
         total_attachments = Attachment.query.count()
         
         # Recent activity (last 7 days)
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
         new_users_week = User.query.filter(User.created_at >= week_ago).count()
         new_docs_week = Document.query.filter(Document.created_at >= week_ago).count()
         new_comments_week = Comment.query.filter(Comment.created_at >= week_ago).count()
@@ -338,7 +338,7 @@ def activity_report():
             return jsonify({'error': 'Admin access required'}), 403
         
         days = request.args.get('days', 30, type=int)
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
         
         # Daily activity data
         daily_activity = db.session.query(

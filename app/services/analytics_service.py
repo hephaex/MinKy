@@ -3,7 +3,7 @@ Analytics Service for Minky Dashboard
 Provides comprehensive analytics and reporting functionality
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, desc, and_
 from app import db
 from app.models.document import Document
@@ -30,7 +30,7 @@ class AnalyticsService:
             total_comments = Comment.query.count()
             
             # Recent activity (last 30 days)
-            thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+            thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
             recent_documents = Document.query.filter(
                 Document.created_at >= thirty_days_ago
             ).count()
@@ -83,7 +83,7 @@ class AnalyticsService:
     def get_document_activity_timeline(days=30):
         """Get document creation timeline for the last N days"""
         try:
-            start_date = datetime.utcnow() - timedelta(days=days)
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
             
             # Get documents created each day
             daily_stats = db.session.query(
@@ -194,8 +194,8 @@ class AnalyticsService:
             user_table_size = db.session.query(func.count(User.id)).scalar()
             
             # Growth metrics (last 7 days vs previous 7 days)
-            seven_days_ago = datetime.utcnow() - timedelta(days=7)
-            fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
+            seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+            fourteen_days_ago = datetime.now(timezone.utc) - timedelta(days=14)
             
             recent_growth = Document.query.filter(
                 Document.created_at >= seven_days_ago
@@ -238,5 +238,5 @@ def get_comprehensive_analytics():
         'content_analytics': service.get_content_analytics(),
         'search_analytics': service.get_search_analytics(),
         'performance_metrics': service.get_performance_metrics(),
-        'generated_at': datetime.utcnow().isoformat()
+        'generated_at': datetime.now(timezone.utc).isoformat()
     }

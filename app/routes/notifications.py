@@ -181,8 +181,8 @@ def update_notification_preferences():
             setattr(preferences, key, value)
         
         from app import db
-        from datetime import datetime
-        preferences.updated_at = datetime.utcnow()
+        from datetime import datetime, timezone
+        preferences.updated_at = datetime.now(timezone.utc)
         db.session.commit()
         
         return jsonify({
