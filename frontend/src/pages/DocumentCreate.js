@@ -5,6 +5,7 @@ import api from '../services/api';
 import MarkdownEditor from '../components/MarkdownEditor';
 import OCRUpload from '../components/OCRUpload';
 import TagInput from '../components/TagInput';
+import useTagSuggestions from '../hooks/useTagSuggestions';
 import './DocumentForm.css';
 
 const DocumentCreate = () => {
@@ -13,14 +14,21 @@ const DocumentCreate = () => {
     title: '',
     author: '',
     markdown_content: '',
-    category_id: null,
-    tags: []
+    category_id: null
   });
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showOCR, setShowOCR] = useState(false);
-  const [suggestedTags, setSuggestedTags] = useState([]);
+
+  // Use the custom hook for tag handling
+  const {
+    tags,
+    suggestedTags,
+    handleTagSuggestions,
+    handleTagsChange,
+    clearSuggestedTags
+  } = useTagSuggestions();
 
   useEffect(() => {
     fetchCategories();
@@ -59,45 +67,6 @@ const DocumentCreate = () => {
     }
   };
 
-  const handleTagSuggestions = (suggestedTagsList) => {
-    console.log('Suggested tags:', suggestedTagsList);
-    
-    // Auto-apply AI suggested tags by merging with existing tags
-    if (suggestedTagsList && suggestedTagsList.length > 0) {
-      setFormData(prev => {
-        const currentTags = prev.tags || [];
-        const newTags = [...currentTags];
-        
-        // Add suggested tags that aren't already present
-        suggestedTagsList.forEach(suggestedTag => {
-          const normalizedSuggested = suggestedTag.toLowerCase().trim();
-          const exists = newTags.some(existingTag => 
-            existingTag.toLowerCase().trim() === normalizedSuggested
-          );
-          
-          if (!exists) {
-            newTags.push(suggestedTag);
-          }
-        });
-        
-        return {
-          ...prev,
-          tags: newTags
-        };
-      });
-      
-      // Also set suggested tags for display (user can still see what was added)
-      setSuggestedTags(suggestedTagsList);
-    }
-  };
-
-  const handleTagsChange = (newTags) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: newTags
-    }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -115,7 +84,7 @@ const DocumentCreate = () => {
         author: formData.author.trim() || null,
         markdown_content: formData.markdown_content.trim(),
         category_id: formData.category_id || null,
-        tags: formData.tags
+        tags: tags
       });
       
       navigate(`/documents/${document.id}`);
@@ -243,10 +212,10 @@ const DocumentCreate = () => {
         <div className="form-group">
           <label htmlFor="tags">Tags</label>
           <TagInput
-            tags={formData.tags}
+            tags={tags}
             onChange={handleTagsChange}
             suggestedTags={suggestedTags}
-            onSuggestionApply={() => setSuggestedTags([])}
+            onSuggestionApply={clearSuggestedTags}
           />
         </div>
 

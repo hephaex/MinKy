@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
 import CollaborativeEditor from '../components/CollaborativeEditor';
 import TagInput from '../components/TagInput';
+import useTagSuggestions from '../hooks/useTagSuggestions';
 import './DocumentForm.css';
 
 const DocumentEdit = () => {
@@ -12,14 +13,22 @@ const DocumentEdit = () => {
     title: '',
     author: '',
     markdown_content: '',
-    category_id: null,
-    tags: []
+    category_id: null
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [originalDocument, setOriginalDocument] = useState(null);
-  const [suggestedTags, setSuggestedTags] = useState([]);
+
+  // Use the custom hook for tag handling
+  const {
+    tags,
+    suggestedTags,
+    handleTagSuggestions,
+    handleTagsChange,
+    clearSuggestedTags,
+    setTags
+  } = useTagSuggestions();
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -31,9 +40,10 @@ const DocumentEdit = () => {
           title: document.title,
           author: document.author || '',
           markdown_content: document.markdown_content,
-          category_id: document.category_id || null,
-          tags: document.tags ? document.tags.map(tag => tag.name) : []
+          category_id: document.category_id || null
         });
+        // Set tags using the hook
+        setTags(document.tags ? document.tags.map(tag => tag.name) : []);
         setError(null);
       } catch (err) {
         setError('Failed to fetch document');
@@ -44,7 +54,7 @@ const DocumentEdit = () => {
     };
 
     fetchDocument();
-  }, [id]);
+  }, [id, setTags]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -70,51 +80,11 @@ const DocumentEdit = () => {
     }
   };
 
-  const handleTagSuggestions = (suggestedTagsList) => {
-    console.log('Suggested tags:', suggestedTagsList);
-    
-    // Auto-apply AI suggested tags by merging with existing tags
-    if (suggestedTagsList && suggestedTagsList.length > 0) {
-      setFormData(prev => {
-        const currentTags = prev.tags || [];
-        const newTags = [...currentTags];
-        
-        // Add suggested tags that aren't already present
-        suggestedTagsList.forEach(suggestedTag => {
-          const normalizedSuggested = suggestedTag.toLowerCase().trim();
-          const exists = newTags.some(existingTag => 
-            existingTag.toLowerCase().trim() === normalizedSuggested
-          );
-          
-          if (!exists) {
-            newTags.push(suggestedTag);
-          }
-        });
-        
-        return {
-          ...prev,
-          tags: newTags
-        };
-      });
-      
-      // Also set suggested tags for display (user can still see what was added)
-      setSuggestedTags(suggestedTagsList);
-    }
-  };
-
-  const handleTagsChange = (newTags) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: newTags
-    }));
-  };
-
   const hasChanges = () => {
     if (!originalDocument) return false;
     const originalTags = originalDocument.tags ? originalDocument.tags.map(tag => tag.name) : [];
-    const currentTags = formData.tags;
-    const tagsChanged = originalTags.length !== currentTags.length || 
-                       !originalTags.every(tag => currentTags.includes(tag));
+    const tagsChanged = originalTags.length !== tags.length ||
+                       !originalTags.every(tag => tags.includes(tag));
     
     return (
       formData.title !== originalDocument.title ||
@@ -140,7 +110,7 @@ const DocumentEdit = () => {
         title: formData.title.trim(),
         author: formData.author.trim() || null,
         markdown_content: formData.markdown_content.trim(),
-        tags: formData.tags
+        tags: tags
       });
       
       navigate(`/documents/${updatedDocument.id}`);
@@ -236,10 +206,10 @@ const DocumentEdit = () => {
         <div className="form-group">
           <label htmlFor="tags">Tags</label>
           <TagInput
-            tags={formData.tags}
+            tags={tags}
             onChange={handleTagsChange}
             suggestedTags={suggestedTags}
-            onSuggestionApply={() => setSuggestedTags([])}
+            onSuggestionApply={clearSuggestedTags}
           />
         </div>
 
