@@ -4,7 +4,13 @@ Stores AI service configuration settings in the database
 """
 
 from app import db
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
 
 class AIConfig(db.Model):
     __tablename__ = 'ai_config'
@@ -12,8 +18,8 @@ class AIConfig(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(50), unique=True, nullable=False)
     value = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
     
     def __repr__(self):
         return f'<AIConfig {self.key}: {self.value}>'
@@ -30,7 +36,7 @@ class AIConfig(db.Model):
         config = AIConfig.query.filter_by(key=key).first()
         if config:
             config.value = value
-            config.updated_at = datetime.utcnow()
+            config.updated_at = datetime.now(timezone.utc)
         else:
             config = AIConfig(key=key, value=value)
             db.session.add(config)

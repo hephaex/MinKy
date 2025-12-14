@@ -1,6 +1,12 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 import markdown
+
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
 
 class DocumentTemplate(db.Model):
     __tablename__ = 'document_templates'
@@ -14,8 +20,8 @@ class DocumentTemplate(db.Model):
     is_public = db.Column(db.Boolean, default=True)
     is_featured = db.Column(db.Boolean, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
     usage_count = db.Column(db.Integer, default=0)
     
     # Relationships

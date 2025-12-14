@@ -1,5 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
+
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
 
 class Comment(db.Model):
     __tablename__ = 'comments'
@@ -10,8 +16,8 @@ class Comment(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     parent_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)  # For nested comments
     is_deleted = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
     
     # Relationships
     author = db.relationship('User', backref='comments')
@@ -33,7 +39,7 @@ class Comment(db.Model):
     def soft_delete(self):
         self.is_deleted = True
         self.content = "[This comment has been deleted]"
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
     
     def get_replies(self):
         return Comment.query.filter_by(parent_id=self.id, is_deleted=False)\
@@ -67,8 +73,8 @@ class Rating(db.Model):
     document_id = db.Column(db.Integer, db.ForeignKey('documents.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     rating = db.Column(db.Integer, nullable=False)  # 1-5 stars
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
     
     # Relationships
     user = db.relationship('User', backref='ratings')

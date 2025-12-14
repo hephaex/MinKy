@@ -1,7 +1,13 @@
 from app import db
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from sqlalchemy import Index
+
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
 
 class WorkflowStatus(Enum):
     DRAFT = "draft"
@@ -39,8 +45,8 @@ class DocumentWorkflow(db.Model):
     due_date = db.Column(db.DateTime, nullable=True)
     
     # Metadata
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now, nullable=False)
     
     # Relationships
     document = db.relationship('Document', backref='workflow')
@@ -131,10 +137,10 @@ class DocumentWorkflow(db.Model):
                 next_reviewer = self.template.get_next_reviewer()
                 if next_reviewer:
                     self.assigned_reviewer_id = next_reviewer.id
-                    self.assigned_at = datetime.utcnow()
+                    self.assigned_at = datetime.now(timezone.utc)
                     if self.template.review_days:
                         from datetime import timedelta
-                        self.due_date = datetime.utcnow() + timedelta(days=self.template.review_days)
+                        self.due_date = datetime.now(timezone.utc) + timedelta(days=self.template.review_days)
         
         elif action == WorkflowAction.START_REVIEW:
             self.current_status = WorkflowStatus.IN_REVIEW
@@ -158,7 +164,7 @@ class DocumentWorkflow(db.Model):
             self.current_status = WorkflowStatus.PUBLISHED
             # Mark document as published
             self.document.is_published = True
-            self.document.published_at = datetime.utcnow()
+            self.document.published_at = datetime.now(timezone.utc)
         
         elif action == WorkflowAction.ARCHIVE:
             self.current_status = WorkflowStatus.ARCHIVED
@@ -170,7 +176,7 @@ class DocumentWorkflow(db.Model):
             self.due_date = None
         
         workflow_log.to_status = self.current_status
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         
         db.session.add(workflow_log)
         db.session.commit()
@@ -262,8 +268,8 @@ class WorkflowTemplate(db.Model):
     # Metadata
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now, nullable=False)
     
     # Relationships
     created_by = db.relationship('User', foreign_keys=[created_by_id])
@@ -313,7 +319,7 @@ class WorkflowLog(db.Model):
     comment = db.Column(db.Text)
     
     # Timestamp
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
     
     # Relationships
     workflow = db.relationship('DocumentWorkflow', backref='logs')

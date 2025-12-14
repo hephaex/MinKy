@@ -1,7 +1,13 @@
 from app import db
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from sqlalchemy import Index
+
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
 
 class NotificationType(Enum):
     DOCUMENT_COMMENTED = "document_commented"
@@ -41,7 +47,7 @@ class Notification(db.Model):
     is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     
     # Timestamps
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
     read_at = db.Column(db.DateTime, nullable=True)
     
     # Relationships
@@ -62,7 +68,7 @@ class Notification(db.Model):
         """Mark notification as read"""
         if not self.is_read:
             self.is_read = True
-            self.read_at = datetime.utcnow()
+            self.read_at = datetime.now(timezone.utc)
             db.session.commit()
     
     def soft_delete(self):
@@ -141,14 +147,14 @@ class Notification(db.Model):
             cls.is_deleted == False
         ).update({
             'is_read': True,
-            'read_at': datetime.utcnow()
+            'read_at': datetime.now(timezone.utc)
         })
         db.session.commit()
     
     @classmethod
     def cleanup_old_notifications(cls, days=30):
         """Clean up old read notifications"""
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
         cls.query.filter(
             cls.is_read == True,
             cls.created_at < cutoff_date
@@ -178,8 +184,8 @@ class NotificationPreference(db.Model):
     digest_frequency = db.Column(db.String(20), default='daily', nullable=False)  # none, daily, weekly
     
     # Timestamps
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now, nullable=False)
     
     # Relationships
     user = db.relationship('User', backref=db.backref('notification_preferences', uselist=False))

@@ -1,8 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 import os
 import hashlib
 from werkzeug.utils import secure_filename
+
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
 
 class Attachment(db.Model):
     __tablename__ = 'attachments'
@@ -17,7 +23,7 @@ class Attachment(db.Model):
     document_id = db.Column(db.Integer, db.ForeignKey('documents.id'), nullable=True)  # Can be null for orphaned files
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     is_public = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
     
     # Relationships
     document = db.relationship('Document', backref='attachments')
@@ -39,7 +45,7 @@ class Attachment(db.Model):
     def generate_filename(original_filename):
         """Generate a secure unique filename"""
         name, ext = os.path.splitext(original_filename)
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         random_suffix = hashlib.md5(f"{original_filename}{timestamp}".encode()).hexdigest()[:8]
         secure_name = secure_filename(name)[:50]  # Limit length
         return f"{secure_name}_{timestamp}_{random_suffix}{ext}"

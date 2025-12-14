@@ -1,7 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 import hashlib
 import difflib
+
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
 
 class DocumentVersion(db.Model):
     __tablename__ = 'document_versions'
@@ -16,7 +22,7 @@ class DocumentVersion(db.Model):
     content_hash = db.Column(db.String(64), nullable=False)  # SHA-256 hash
     change_summary = db.Column(db.Text)  # Optional summary of changes
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
     
     # Relationships
     document = db.relationship('Document', backref='versions')
@@ -102,7 +108,7 @@ class DocumentVersion(db.Model):
         self.document.markdown_content = self.markdown_content
         self.document.html_content = self.html_content
         self.document.author = self.author
-        self.document.updated_at = datetime.utcnow()
+        self.document.updated_at = datetime.now(timezone.utc)
     
     def to_dict(self, include_content=True):
         data = {
@@ -140,7 +146,7 @@ class DocumentSnapshot(db.Model):
     markdown_content = db.Column(db.Text, nullable=False)
     html_content = db.Column(db.Text)
     author = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
     
     # Relationships
     document = db.relationship('Document', backref='snapshots')

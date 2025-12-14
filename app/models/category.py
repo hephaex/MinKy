@@ -1,6 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from app import db
 from sqlalchemy import func
+
+
+def utc_now():
+    """Return current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
 
 class Category(db.Model):
@@ -11,8 +16,8 @@ class Category(db.Model):
     slug = db.Column(db.String(100), unique=True, nullable=False)
     description = db.Column(db.Text)
     parent_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utc_now)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     color = db.Column(db.String(7), default='#007bff')  # Hex color code
     sort_order = db.Column(db.Integer, default=0)
