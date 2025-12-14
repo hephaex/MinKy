@@ -4,9 +4,10 @@ Provides endpoints for dashboard analytics and reporting
 """
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from app.services.analytics_service import AnalyticsService, get_comprehensive_analytics
 from app.models.user import User
+from app.utils.auth import get_current_user
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,11 +16,7 @@ analytics_bp = Blueprint('analytics', __name__)
 
 def require_admin():
     """Check if current user is admin"""
-    current_user_id = get_jwt_identity()
-    if not current_user_id:
-        return False
-    
-    user = User.query.get(current_user_id)
+    user = get_current_user()
     return user and user.is_admin
 
 @analytics_bp.route('/analytics/dashboard', methods=['GET'])

@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended import jwt_required, verify_jwt_in_request
 from app.models.document import Document
 from app.models.user import User
+from app.utils.auth import get_current_user_id
 from app.utils.korean_text import korean_processor, search_korean_text, process_korean_document
 from app.services.opensearch_service import get_opensearch_service
 from app.middleware.security import rate_limit_api, rate_limit_search, validate_request_security, audit_log
@@ -30,7 +31,7 @@ class KoreanSearchSchema(Schema):
 def korean_text_search():
     """한국어 텍스트 전용 검색"""
     verify_jwt_in_request(optional=True)
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     
     data = request.get_json()
     if not data:
@@ -246,7 +247,7 @@ def suggest_korean_tags():
 @audit_log("analyze_korean_document")
 def analyze_korean_document(document_id):
     """문서의 한국어 분석 결과 반환"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     user = User.query.get(current_user_id)
     
     if not user:
@@ -319,7 +320,7 @@ def _generate_korean_recommendations(analysis: dict) -> dict:
 def get_korean_search_statistics():
     """한국어 검색 통계"""
     verify_jwt_in_request(optional=True)
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     
     try:
         # OpenSearch 통계 (사용 가능한 경우)

@@ -4,7 +4,7 @@ Provides comprehensive administrative functionality
 """
 
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from sqlalchemy import func, desc, and_
 from datetime import datetime, timedelta
 from app import db
@@ -14,6 +14,7 @@ from app.models.tag import Tag
 from app.models.comment import Comment
 from app.models.attachment import Attachment
 from app.models.workflow import DocumentWorkflow
+from app.utils.auth import get_current_user
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,11 +23,7 @@ admin_bp = Blueprint('admin', __name__)
 
 def require_admin():
     """Check if current user is admin"""
-    current_user_id = get_jwt_identity()
-    if not current_user_id:
-        return False
-    
-    user = User.query.get(current_user_id)
+    user = get_current_user()
     return user and user.is_admin
 
 @admin_bp.route('/admin/users', methods=['GET'])

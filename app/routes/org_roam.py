@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from app.models.document import Document
 from app.models.user import User
+from app.utils.auth import get_current_user_id
 from app.utils.org_roam_parser import OrgRoamParser, OrgRoamImporter
 from app.middleware.security import rate_limit_api, rate_limit_upload, validate_request_security, audit_log
 from marshmallow import Schema, fields, ValidationError
@@ -28,7 +29,7 @@ class OrgRoamImportSchema(Schema):
 @audit_log("org_roam_file_upload")
 def upload_org_roam_files():
     """org-roam 파일 업로드 (단일 파일 또는 ZIP)"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     user = User.query.get(current_user_id)
     
     if not user:
@@ -270,7 +271,7 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
 @audit_log("org_roam_directory_import")
 def import_org_roam_directory():
     """org-roam 디렉토리 경로를 통한 임포트 (서버 파일 시스템)"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     user = User.query.get(current_user_id)
     
     if not user:
@@ -324,7 +325,7 @@ def import_org_roam_directory():
 @validate_request_security
 def get_org_roam_documents():
     """org-roam에서 임포트된 문서 목록"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     user = User.query.get(current_user_id)
     
     if not user:
@@ -383,7 +384,7 @@ def get_org_roam_documents():
 @validate_request_security
 def get_document_links(document_id):
     """문서의 링크 관계 정보 (백링크 + 아웃바운드 링크)"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     user = User.query.get(current_user_id)
     
     if not user:
@@ -476,7 +477,7 @@ def get_document_links(document_id):
 @validate_request_security
 def get_org_roam_statistics():
     """org-roam 임포트 통계"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     user = User.query.get(current_user_id)
     
     if not user:

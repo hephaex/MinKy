@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from app.models.notification import Notification, NotificationPreference
 from app.models.user import User
+from app.utils.auth import get_current_user_id, get_current_user
 from app.services.notification_service import NotificationService
 from marshmallow import Schema, fields, ValidationError
 
@@ -23,9 +24,9 @@ class NotificationPreferenceSchema(Schema):
 @jwt_required()
 def get_notifications():
     """Get notifications for the current user"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
-    
+    current_user_id = get_current_user_id()
+    user = get_current_user()
+
     if not user:
         return jsonify({'error': 'User not found'}), 404
     
@@ -63,7 +64,7 @@ def get_notifications():
 @jwt_required()
 def mark_notification_read(notification_id):
     """Mark a specific notification as read"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     
     notification = Notification.query.filter(
         Notification.id == notification_id,
@@ -89,7 +90,7 @@ def mark_notification_read(notification_id):
 @jwt_required()
 def mark_all_notifications_read():
     """Mark all notifications as read for the current user"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     
     try:
         Notification.mark_all_read(current_user_id)
@@ -108,7 +109,7 @@ def mark_all_notifications_read():
 @jwt_required()
 def delete_notification(notification_id):
     """Delete a specific notification"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     
     notification = Notification.query.filter(
         Notification.id == notification_id,
@@ -131,7 +132,7 @@ def delete_notification(notification_id):
 @jwt_required()
 def get_notification_summary():
     """Get notification summary for the current user"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     
     try:
         summary = NotificationService.get_notification_summary(current_user_id)
@@ -145,7 +146,7 @@ def get_notification_summary():
 @jwt_required()
 def get_notification_preferences():
     """Get notification preferences for the current user"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     
     try:
         preferences = NotificationPreference.get_or_create_preferences(current_user_id)
@@ -159,7 +160,7 @@ def get_notification_preferences():
 @jwt_required()
 def update_notification_preferences():
     """Update notification preferences for the current user"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     
     data = request.get_json()
     if not data:
@@ -197,7 +198,7 @@ def update_notification_preferences():
 @jwt_required()
 def create_test_notification():
     """Create a test notification (for testing purposes)"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     
     # Only allow in development/testing environments
     if current_app.config.get('ENV') == 'production':
@@ -231,7 +232,7 @@ def create_test_notification():
 @jwt_required()
 def bulk_notification_actions():
     """Perform bulk actions on notifications"""
-    current_user_id = get_jwt_identity()
+    current_user_id = get_current_user_id()
     
     data = request.get_json()
     if not data:

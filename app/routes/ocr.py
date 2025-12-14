@@ -4,11 +4,12 @@ Provides endpoints for optical character recognition on uploaded files
 """
 
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from werkzeug.utils import secure_filename
 from app.services.ocr_service import ocr_service
 from app.models.document import Document
 from app.models.attachment import Attachment
+from app.utils.auth import get_current_user_id
 from app import db
 import logging
 import os
@@ -78,7 +79,7 @@ def extract_text():
         # Log OCR activity
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -245,7 +246,7 @@ def extract_and_create_document():
 """
         
         # Create document
-        user_id = get_jwt_identity()
+        user_id = get_current_user_id()
         document = Document(
             title=title,
             markdown_content=markdown_content,
@@ -297,7 +298,7 @@ def extract_from_attachment(attachment_id):
         attachment = Attachment.query.get_or_404(attachment_id)
         
         # Check permission
-        user_id = get_jwt_identity()
+        user_id = get_current_user_id()
         document = Document.query.get(attachment.document_id)
         if not document or not document.can_edit(user_id):
             return jsonify({

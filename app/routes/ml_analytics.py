@@ -4,9 +4,10 @@ Provides endpoints for machine learning-powered document analytics
 """
 
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from app.services.ml_analytics_service import ml_analytics_service
 from app.models.document import Document
+from app.utils.auth import get_current_user_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ def get_document_insights(document_id):
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -114,7 +115,7 @@ def get_corpus_insights():
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -171,7 +172,7 @@ def get_similar_documents(document_id):
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -216,7 +217,7 @@ def get_document_sentiment(document_id):
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -255,7 +256,7 @@ def get_document_recommendations(document_id):
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -297,7 +298,7 @@ def perform_document_clustering():
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -365,7 +366,7 @@ def perform_topic_modeling():
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -427,7 +428,7 @@ def get_document_trends():
     try:
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         

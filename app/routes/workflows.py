@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from app.models.document import Document
 from app.models.user import User
 from app.models.workflow import DocumentWorkflow, WorkflowTemplate, WorkflowAction, WorkflowStatus
+from app.utils.auth import get_current_user_id, get_current_user
 from app.middleware.security import rate_limit_api, validate_request_security, audit_log
 from marshmallow import Schema, fields, ValidationError
 from app import db
@@ -29,8 +30,8 @@ class WorkflowTemplateSchema(Schema):
 @audit_log("view_document_workflow")
 def get_document_workflow(document_id):
     """Get workflow information for a document"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -80,8 +81,8 @@ def get_document_workflow(document_id):
 @audit_log("perform_workflow_action")
 def perform_workflow_action(document_id):
     """Perform an action on a document workflow"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -147,8 +148,8 @@ def perform_workflow_action(document_id):
 @audit_log("view_pending_workflows")
 def get_pending_workflows():
     """Get workflows pending review for the current user"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -212,8 +213,8 @@ def get_pending_workflows():
 @audit_log("view_workflow_templates")
 def get_workflow_templates():
     """Get available workflow templates"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -238,8 +239,8 @@ def get_workflow_templates():
 @audit_log("create_workflow_template")
 def create_workflow_template():
     """Create a new workflow template (admin only)"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user or not user.is_admin:
         return jsonify({'error': 'Admin privileges required'}), 403
@@ -295,8 +296,8 @@ def create_workflow_template():
 @audit_log("update_workflow_template")
 def update_workflow_template(template_id):
     """Update a workflow template (admin only)"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user or not user.is_admin:
         return jsonify({'error': 'Admin privileges required'}), 403
@@ -349,8 +350,8 @@ def update_workflow_template(template_id):
 @audit_log("assign_workflow_template")
 def assign_workflow_template(document_id, template_id):
     """Assign a workflow template to a document"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -404,8 +405,8 @@ def assign_workflow_template(document_id, template_id):
 @audit_log("view_workflow_stats")
 def get_workflow_stats():
     """Get workflow statistics"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user:
         return jsonify({'error': 'User not found'}), 404

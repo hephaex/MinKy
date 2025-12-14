@@ -4,8 +4,9 @@ WebSocket Event Handlers for Real-time Collaboration
 
 from flask import request
 from flask_socketio import emit, disconnect
-from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+from flask_jwt_extended import verify_jwt_in_request
 from app.services.collaboration_service import collaboration_service
+from app.utils.auth import get_current_user_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,7 @@ def register_websocket_events(socketio):
             user_id = None
             try:
                 verify_jwt_in_request()
-                user_id = get_jwt_identity()
+                user_id = get_current_user_id()
             except:
                 pass  # Allow anonymous users
             
@@ -83,7 +84,7 @@ def register_websocket_events(socketio):
             user_id = None
             try:
                 verify_jwt_in_request()
-                user_id = get_jwt_identity()
+                user_id = get_current_user_id()
             except:
                 pass  # Allow anonymous users
             
@@ -112,7 +113,7 @@ def register_websocket_events(socketio):
             user_id = None
             try:
                 verify_jwt_in_request()
-                user_id = get_jwt_identity()
+                user_id = get_current_user_id()
             except:
                 pass  # Allow anonymous users
             
@@ -139,7 +140,7 @@ def register_websocket_events(socketio):
             user_id = None
             try:
                 verify_jwt_in_request()
-                user_id = get_jwt_identity()
+                user_id = get_current_user_id()
             except:
                 emit('error', {'message': 'Authentication required to save'})
                 return

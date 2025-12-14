@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from app.models.user import User
+from app.utils.auth import get_current_user
 from app.middleware.security import rate_limit_api, validate_request_security, audit_log
 from datetime import datetime, timedelta
 import json
@@ -11,15 +12,14 @@ security_bp = Blueprint('security', __name__)
 def require_admin(f):
     """Decorator to require admin privileges"""
     from functools import wraps
-    
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
-        
+        user = get_current_user()
+
         if not user or not user.is_admin:
             return jsonify({'error': 'Admin privileges required'}), 403
-        
+
         return f(*args, **kwargs)
     return decorated_function
 

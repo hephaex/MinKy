@@ -1,7 +1,8 @@
 from flask import Blueprint, request, jsonify, send_file, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from app.models.document import Document
 from app.models.user import User
+from app.utils.auth import get_current_user_id, get_current_user
 from app.utils.exporters import DocumentExporter
 from app.services.notification_service import NotificationService
 import os
@@ -14,8 +15,8 @@ export_bp = Blueprint('export', __name__)
 @jwt_required()
 def export_document(document_id, format_type):
     """Export a single document in the specified format"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -109,8 +110,8 @@ def export_document(document_id, format_type):
 @jwt_required()
 def bulk_export_documents():
     """Export multiple documents in specified formats"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -216,8 +217,8 @@ def bulk_export_documents():
 @jwt_required()
 def export_document_bundle(document_id):
     """Export a document in multiple formats as a ZIP bundle"""
-    current_user_id = get_jwt_identity()
-    user = User.query.get(current_user_id)
+    current_user_id = get_current_user_id()
+    user = get_current_user()
     
     if not user:
         return jsonify({'error': 'User not found'}), 404

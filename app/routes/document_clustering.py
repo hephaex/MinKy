@@ -4,9 +4,10 @@ Provides endpoints for document clustering and similarity detection
 """
 
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from app.services.document_clustering_service import document_clustering_service
 from app.models.document import Document
+from app.utils.auth import get_current_user_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,7 +59,7 @@ def cluster_documents():
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -148,7 +149,7 @@ def find_similar_documents(document_id):
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -220,7 +221,7 @@ def detect_duplicates():
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -292,7 +293,7 @@ def batch_similarity_analysis():
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         
@@ -409,7 +410,7 @@ def get_clustering_recommendations(document_id):
         
         user_id = None
         try:
-            user_id = get_jwt_identity()
+            user_id = get_current_user_id()
         except:
             pass
         

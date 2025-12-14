@@ -4,9 +4,9 @@ Provides endpoints for AI-powered content suggestions and auto-completion
 """
 
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from app.services.ai_service import ai_service
-from app.utils.auth import require_auth
+from app.utils.auth import require_auth, get_current_user_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -266,7 +266,7 @@ def save_ai_config():
         config_saved = ai_service.save_config(data)
 
         if config_saved:
-            logger.info(f"AI configuration updated by user {get_jwt_identity()}")
+            logger.info(f"AI configuration updated by user {get_current_user_id()}")
             return jsonify({
                 'success': True,
                 'message': 'AI configuration saved successfully'
