@@ -100,7 +100,7 @@ class DocumentClusteringService:
                         'author': doc.author,
                         'created_at': doc.created_at.isoformat(),
                         'word_count': len(content.split()),
-                        'tags': [tag.name for tag in doc.tags] if doc.tags else []
+                        'tags': [tag.name for tag in doc.tags] if doc.tags else []  # type: ignore[union-attr]
                     })
             
             if len(doc_texts) < 3:
@@ -157,8 +157,8 @@ class DocumentClusteringService:
             logger.error(f"Clustering error: {e}")
             return {'error': f'Clustering failed: {str(e)}'}
     
-    def find_similar_documents(self, target_document: Document, 
-                             candidate_documents: List[Document] = None,
+    def find_similar_documents(self, target_document: Document,
+                             candidate_documents: Optional[List[Document]] = None,
                              similarity_threshold: float = 0.1,
                              max_results: int = 10) -> Dict[str, Any]:
         """

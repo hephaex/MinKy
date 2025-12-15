@@ -1,6 +1,6 @@
 import re
 import yaml
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 import logging
 import requests
 import os
@@ -22,9 +22,9 @@ class ObsidianParser:
         # 프론트매터 패턴
         self.frontmatter_pattern = re.compile(r'^---\s*\n(.*?)\n---\s*\n', re.DOTALL)
     
-    def parse_markdown(self, content: str, backup_dir: Optional[str] = None) -> Dict:
+    def parse_markdown(self, content: str, backup_dir: Optional[str] = None) -> Dict[str, Any]:
         """마크다운 파싱 메인 함수"""
-        result = {
+        result: Dict[str, Any] = {
             'frontmatter': {},
             'internal_links': [],
             'hashtags': [],
@@ -48,9 +48,9 @@ class ObsidianParser:
         
         return result
     
-    def _extract_frontmatter(self, content: str) -> Tuple[Dict, str]:
+    def _extract_frontmatter(self, content: str) -> Tuple[Dict[str, Any], str]:
         """YAML 프론트매터 추출"""
-        frontmatter_data = {}
+        frontmatter_data: Dict[str, Any] = {}
         clean_content = content
         
         match = self.frontmatter_pattern.match(content)
@@ -73,14 +73,14 @@ class ObsidianParser:
         
         return frontmatter_data, clean_content
     
-    def _convert_dates_to_strings(self, data: Dict) -> Dict:
+    def _convert_dates_to_strings(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert date/datetime objects to ISO format strings for JSON serialization"""
         from datetime import date, datetime
-        
+
         if not isinstance(data, dict):
             return data
-        
-        converted_data = {}
+
+        converted_data: Dict[str, Any] = {}
         for key, value in data.items():
             if isinstance(value, datetime):
                 # Convert datetime to ISO format string
@@ -152,7 +152,7 @@ class ObsidianParser:
         """외부 URL인지 확인"""
         return url.startswith(('http://', 'https://'))
     
-    def _download_image(self, url: str, img_dir: str, alt_text: str = '') -> str:
+    def _download_image(self, url: str, img_dir: str, alt_text: str = '') -> Optional[str]:
         """이미지를 다운로드하고 로컬 파일명 반환"""
         try:
             response = requests.get(url, stream=True, timeout=30)
@@ -192,7 +192,7 @@ class ObsidianParser:
             logger.error(f"Failed to download image {url}: {e}")
             return None
     
-    def _extract_internal_links(self, content: str) -> List[Dict]:
+    def _extract_internal_links(self, content: str) -> List[Dict[str, Any]]:
         """내부 링크 추출"""
         links = []
         
@@ -209,7 +209,7 @@ class ObsidianParser:
         
         return links
     
-    def _extract_hashtags(self, content: str) -> List[Dict]:
+    def _extract_hashtags(self, content: str) -> List[Dict[str, Any]]:
         """해시태그 추출"""
         hashtags = []
         seen_tags = set()

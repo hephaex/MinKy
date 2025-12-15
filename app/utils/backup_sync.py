@@ -2,7 +2,7 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 import logging
 from app.models.document import Document
 from app.utils.backup_manager import backup_manager
@@ -171,9 +171,9 @@ class BackupSyncManager:
             logger.error(f"Failed to extract info from backup file {file_path}: {e}")
             return None
     
-    def _parse_backup_header(self, content: str) -> Dict:
+    def _parse_backup_header(self, content: str) -> Dict[str, Any]:
         """백업 파일 헤더에서 메타데이터 파싱"""
-        header_info = {}
+        header_info: Dict[str, Any] = {}
         
         try:
             # 헤더 부분 추출 (첫 번째 --- 블록)
@@ -480,9 +480,9 @@ class BackupSyncManager:
                 'message': f'Failed to create document: {str(e)}'
             }
     
-    def scan_backup_files(self) -> List[Dict]:
+    def scan_backup_files(self) -> List[Dict[str, Any]]:
         """백업 디렉토리 스캔하여 파일 정보 수집"""
-        backup_files = []
+        backup_files: List[Dict[str, Any]] = []
         
         try:
             if not self.backup_dir.exists():
@@ -506,11 +506,11 @@ class BackupSyncManager:
         
         return backup_files
     
-    def perform_full_sync(self, user_id: Optional[int] = None, dry_run: bool = False) -> Dict:
+    def perform_full_sync(self, user_id: Optional[int] = None, dry_run: bool = False) -> Dict[str, Any]:
         """전체 백업 파일 동기화 수행"""
         backup_files = self.scan_backup_files()
-        
-        results = {
+
+        results: Dict[str, Any] = {
             'total_files': len(backup_files),
             'processed': 0,
             'created': 0,

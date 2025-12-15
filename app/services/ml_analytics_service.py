@@ -270,7 +270,7 @@ class MLAnalyticsService:
         """Analyze the structural elements of the document"""
         headers = re.findall(r'^(#+)\s+(.+)$', content, re.MULTILINE)
         
-        structure = {
+        structure: Dict[str, Any] = {
             'header_hierarchy': {},
             'section_lengths': [],
             'toc_depth': 0,
@@ -699,7 +699,7 @@ class MLAnalyticsService:
                 'top_authors': dict(author_counts.most_common(5)),
                 'avg_word_count': int(avg_word_count),
                 'creation_pattern': dict(date_counts),
-                'peak_creation_day': max(date_counts, key=date_counts.get).isoformat() if date_counts else None
+                'peak_creation_day': max(date_counts, key=lambda x: date_counts[x]).isoformat() if date_counts else None
             }
             
         except Exception as e:
@@ -790,7 +790,7 @@ class MLAnalyticsService:
                 """),
                 {'doc_ids': doc_ids}
             )
-            comment_counts = dict(comment_query.fetchall())
+            comment_counts: Dict[int, int] = {row[0]: row[1] for row in comment_query.fetchall()}
             
             # Calculate metrics
             total_comments = sum(comment_counts.values())

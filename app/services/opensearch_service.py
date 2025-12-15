@@ -299,22 +299,25 @@ class OpenSearchService:
                         page: int = 1, per_page: int = 20,
                         user_id: Optional[int] = None) -> Dict:
         """문서 검색 (한국어 지원)"""
-        
+
         # 검색 쿼리 구성
-        search_body = {
+        must_clauses: List[Dict[str, Any]] = []
+        filter_clauses: List[Dict[str, Any]] = []
+
+        search_body: Dict[str, Any] = {
             "from": (page - 1) * per_page,
             "size": per_page,
             "query": {
                 "bool": {
-                    "must": [],
-                    "filter": []
+                    "must": must_clauses,
+                    "filter": filter_clauses
                 }
             },
             "highlight": {
                 "fields": {
                     "title": {"pre_tags": ["<mark>"], "post_tags": ["</mark>"]},
                     "content": {
-                        "pre_tags": ["<mark>"], 
+                        "pre_tags": ["<mark>"],
                         "post_tags": ["</mark>"],
                         "fragment_size": 150,
                         "number_of_fragments": 3
@@ -334,7 +337,7 @@ class OpenSearchService:
             
             if language == 'korean':
                 # 한국어 검색
-                search_body["query"]["bool"]["must"].append({
+                must_clauses.append({
                     "multi_match": {
                         "query": query,
                         "fields": [
@@ -348,7 +351,7 @@ class OpenSearchService:
                 })
             else:
                 # 영어/혼합 검색
-                search_body["query"]["bool"]["must"].append({
+                must_clauses.append({
                     "multi_match": {
                         "query": query,
                         "fields": [
@@ -363,11 +366,11 @@ class OpenSearchService:
                 })
         else:
             # 전체 검색
-            search_body["query"]["bool"]["must"].append({"match_all": {}})
+            must_clauses.append({"match_all": {}})
         
         # 접근 권한 필터
         if user_id:
-            search_body["query"]["bool"]["filter"].append({
+            filter_clauses.append({
                 "bool": {
                     "should": [
                         {"term": {"is_public": True}},
@@ -376,38 +379,38 @@ class OpenSearchService:
                 }
             })
         else:
-            search_body["query"]["bool"]["filter"].append({"term": {"is_public": True}})
+            filter_clauses.append({"term": {"is_public": True}})
         
         # 추가 필터 적용
         if filters:
             if filters.get('author'):
-                search_body["query"]["bool"]["filter"].append({
+                filter_clauses.append({
                     "term": {"author.keyword": filters['author']}
                 })
-            
+
             if filters.get('tags'):
                 if isinstance(filters['tags'], list):
-                    search_body["query"]["bool"]["filter"].append({
+                    filter_clauses.append({
                         "terms": {"tags": filters['tags']}
                     })
                 else:
-                    search_body["query"]["bool"]["filter"].append({
+                    filter_clauses.append({
                         "term": {"tags": filters['tags']}
                     })
-            
+
             if filters.get('language'):
-                search_body["query"]["bool"]["filter"].append({
+                filter_clauses.append({
                     "term": {"language": filters['language']}
                 })
-            
+
             if filters.get('date_from') or filters.get('date_to'):
-                date_range = {}
+                date_range: Dict[str, Any] = {}
                 if filters.get('date_from'):
                     date_range['gte'] = filters['date_from']
                 if filters.get('date_to'):
                     date_range['lte'] = filters['date_to']
-                
-                search_body["query"]["bool"]["filter"].append({
+
+                filter_clauses.append({
                     "range": {"updated_at": date_range}
                 })
         

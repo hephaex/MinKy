@@ -47,8 +47,9 @@ class DocumentImportService:
         if file.mimetype and file.mimetype.startswith('image/'):
             return False
         
-        return (file.mimetype in self.supported_types or 
-                any(file.filename.lower().endswith(ext) for ext in 
+        fname = file.filename or ''
+        return (file.mimetype in self.supported_types or
+                any(fname.lower().endswith(ext) for ext in
                     ['.docx', '.pptx', '.xlsx', '.pdf', '.html', '.htm', '.txt', '.md',
                      '.csv', '.json', '.xml', '.zip']))
 
@@ -56,9 +57,10 @@ class DocumentImportService:
         """Get a human-readable description of the file type"""
         if file.mimetype in self.supported_types:
             return self.supported_types[file.mimetype]
-        
+
         # Fallback to extension-based detection
-        ext = os.path.splitext(file.filename.lower())[1]
+        fname = file.filename or ''
+        ext = os.path.splitext(fname.lower())[1]
         ext_mapping = {
             '.docx': 'Word Document',
             '.pptx': 'PowerPoint Presentation', 
@@ -86,7 +88,8 @@ class DocumentImportService:
             raise ValueError(f"Unsupported file type: {file.mimetype}")
 
         # Create a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
+        filename = file.filename or ''
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as temp_file:
             try:
                 # Save uploaded file to temporary location
                 file.save(temp_file.name)
@@ -115,7 +118,7 @@ class DocumentImportService:
                 
                 # Try to extract title from content or use filename
                 title = self._extract_title_from_content(markdown_content) or \
-                       os.path.splitext(file.filename)[0]
+                       os.path.splitext(filename)[0]
                 
                 metadata['extracted_title'] = title
                 
@@ -236,8 +239,8 @@ class DocumentImportService:
                             db.session.flush()
                         
                         # Associate tag with document
-                        if tag not in document.tags:
-                            document.tags.append(tag)
+                        if tag not in document.tags:  # type: ignore
+                            document.tags.append(tag)  # type: ignore
                             
                 except Exception as e:
                     logger.error(f"Error applying auto tags: {e}")

@@ -93,8 +93,8 @@ class KoreanTextProcessor:
             normalized_text = self.normalize_text(text)
             pos_tags = self.analyzer.pos(normalized_text)
             
-            keywords = []
-            keyword_counts = {}
+            keywords: List[Dict[str, Any]] = []
+            keyword_counts: Dict[str, Dict[str, Any]] = {}
             
             for word, pos in pos_tags:
                 # 명사, 형용사, 동사 어간만 키워드로 추출

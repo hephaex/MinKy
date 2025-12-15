@@ -3,7 +3,7 @@ import os
 import sqlite3
 import json
 from datetime import datetime, timezone
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 import orgparse
 from pathlib import Path
 import logging
@@ -176,9 +176,9 @@ class OrgRoamParser:
         
         return '\n'.join(clean_lines).strip()
     
-    def _extract_structure(self, org_doc) -> Dict:
+    def _extract_structure(self, org_doc) -> Dict[str, Any]:
         """org 문서의 구조 정보 추출"""
-        structure = {
+        structure: Dict[str, Any] = {
             'headings': [],
             'sections': [],
             'todo_items': [],
@@ -217,9 +217,9 @@ class OrgRoamParser:
         from app.utils.korean_text import KoreanTextProcessor
         return KoreanTextProcessor.detect_language(content)
     
-    def parse_org_roam_directory(self, directory_path: str) -> List[Dict]:
+    def parse_org_roam_directory(self, directory_path: str) -> List[Dict[str, Any]]:
         """org-roam 디렉토리 전체 파싱"""
-        documents = []
+        documents: List[Dict[str, Any]] = []
         directory = Path(directory_path)
         
         if not directory.exists():
@@ -298,13 +298,13 @@ class OrgRoamImporter:
         self.db = db_session
         self.parser = OrgRoamParser()
     
-    def import_from_directory(self, directory_path: str, user_id: int, 
-                            import_as_private: bool = True) -> Dict:
+    def import_from_directory(self, directory_path: str, user_id: int,
+                            import_as_private: bool = True) -> Dict[str, Any]:
         """디렉토리에서 org-roam 문서들을 임포트"""
         from app.models.document import Document
         from app.utils.korean_text import process_korean_document
-        
-        results = {
+
+        results: Dict[str, Any] = {
             'imported': 0,
             'failed': 0,
             'skipped': 0,

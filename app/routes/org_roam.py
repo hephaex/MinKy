@@ -1,3 +1,4 @@
+from typing import Dict, Any
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from app.models.document import Document
@@ -134,10 +135,10 @@ def _extract_zip_file(zip_path: str, extract_dir: str) -> list:
     return org_files
 
 def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
-                     preserve_links: bool, auto_tag: bool, overwrite_existing: bool) -> dict:
+                     preserve_links: bool, auto_tag: bool, overwrite_existing: bool) -> Dict[str, Any]:
     """org 파일들을 데이터베이스로 임포트"""
     parser = OrgRoamParser()
-    results = {
+    results: Dict[str, Any] = {
         'imported': 0,
         'updated': 0,
         'skipped': 0,

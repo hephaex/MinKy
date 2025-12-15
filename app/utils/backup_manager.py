@@ -2,7 +2,7 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any
 import logging
 from .backup_config import backup_config
 
@@ -271,10 +271,10 @@ class DocumentBackupManager:
             logger.error(f"Failed to delete backup {backup_path}: {e}")
             return False
     
-    def list_backups(self) -> list:
+    def list_backups(self) -> List[Dict[str, Any]]:
         """백업 파일 목록 조회"""
         try:
-            backup_files = []
+            backup_files: List[Dict[str, Any]] = []
             for file_path in self.backup_root_dir.glob("*.md"):
                 backup_files.append({
                     'filename': file_path.name,
@@ -408,7 +408,7 @@ def export_all_documents(use_short_filename: bool = False) -> dict:
             except Exception as e:
                 logger.warning(f"Error reading existing file {file_path}: {e}")
         
-        results = {
+        results: Dict[str, Any] = {
             'total_documents': len(documents),
             'exported': 0,
             'skipped_filename': 0,

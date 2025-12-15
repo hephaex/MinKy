@@ -1,3 +1,4 @@
+from typing import Dict, Any, Optional
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, verify_jwt_in_request
 from app.models.document import Document
@@ -61,11 +62,13 @@ def korean_text_search():
         current_app.logger.error(f"Korean search failed: {str(e)}")
         return jsonify({'error': 'Search failed', 'details': str(e)}), 500
 
-def _search_with_opensearch(search_params: dict, user_id: int = None) -> dict:
+def _search_with_opensearch(search_params: dict, user_id: Optional[int] = None) -> Any:
     """OpenSearch를 사용한 검색"""
     opensearch_service = get_opensearch_service()
-    
-    filters = {}
+    if not opensearch_service:
+        return jsonify({'error': 'OpenSearch service not available'}), 503
+
+    filters: Dict[str, Any] = {}
     if search_params.get('tags'):
         filters['tags'] = search_params['tags']
     if search_params.get('author'):
@@ -76,7 +79,7 @@ def _search_with_opensearch(search_params: dict, user_id: int = None) -> dict:
         filters['date_to'] = search_params['date_to'].isoformat()
     if search_params.get('language') != 'auto':
         filters['language'] = search_params['language']
-    
+
     results = opensearch_service.search_documents(
         query=search_params['query'],
         filters=filters,
@@ -97,7 +100,7 @@ def _search_with_opensearch(search_params: dict, user_id: int = None) -> dict:
         'query_processed': True
     })
 
-def _search_with_postgresql(search_params: dict, user_id: int = None) -> dict:
+def _search_with_postgresql(search_params: dict, user_id: Optional[int] = None) -> Any:
     """PostgreSQL을 사용한 한국어 검색"""
     query = search_params['query']
     page = search_params['page']
@@ -283,9 +286,9 @@ def analyze_korean_document(document_id):
         current_app.logger.error(f"Korean analysis failed for document {document_id}: {str(e)}")
         return jsonify({'error': 'Analysis failed', 'details': str(e)}), 500
 
-def _generate_korean_recommendations(analysis: dict) -> dict:
+def _generate_korean_recommendations(analysis: dict) -> Dict[str, Any]:
     """한국어 분석 결과를 바탕으로 추천사항 생성"""
-    recommendations = {
+    recommendations: Dict[str, Any] = {
         'suggested_tags': [],
         'readability_score': 'good',  # 간단한 평가
         'improvements': []
