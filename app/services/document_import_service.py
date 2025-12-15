@@ -56,7 +56,7 @@ class DocumentImportService:
     def get_file_type_description(self, file: FileStorage) -> str:
         """Get a human-readable description of the file type"""
         if file.mimetype in self.supported_types:
-            return self.supported_types[file.mimetype]
+            return str(self.supported_types[file.mimetype])
 
         # Fallback to extension-based detection
         fname = file.filename or ''
@@ -239,8 +239,8 @@ class DocumentImportService:
                             db.session.flush()
                         
                         # Associate tag with document
-                        if tag not in document.tags:  # type: ignore
-                            document.tags.append(tag)  # type: ignore
+                        if tag not in list(document.tags):
+                            document.tags.append(tag)
                             
                 except Exception as e:
                     logger.error(f"Error applying auto tags: {e}")

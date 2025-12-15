@@ -106,7 +106,7 @@ class MLAnalyticsService:
     
     def is_available(self) -> bool:
         """Check if ML analytics service is available"""
-        return self.sklearn_available or self.nltk_available or self.textblob_available
+        return bool(self.sklearn_available or self.nltk_available or self.textblob_available)
     
     def get_document_insights(self, document_id: int) -> Dict[str, Any]:
         """Get comprehensive ML insights for a specific document"""

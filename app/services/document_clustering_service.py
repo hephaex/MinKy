@@ -64,7 +64,7 @@ class DocumentClusteringService:
     
     def is_available(self) -> bool:
         """Check if clustering service is available"""
-        return self.sklearn_available
+        return bool(self.sklearn_available)
     
     def cluster_documents(self, documents: List[Document], method: str = 'kmeans', 
                          n_clusters: Optional[int] = None) -> Dict[str, Any]:
@@ -100,7 +100,7 @@ class DocumentClusteringService:
                         'author': doc.author,
                         'created_at': doc.created_at.isoformat(),
                         'word_count': len(content.split()),
-                        'tags': [tag.name for tag in doc.tags] if doc.tags else []  # type: ignore[union-attr]
+                        'tags': [tag.name for tag in list(doc.tags)] if doc.tags else []
                     })
             
             if len(doc_texts) < 3:
@@ -206,7 +206,7 @@ class DocumentClusteringService:
                         'author': doc.author,
                         'created_at': doc.created_at.isoformat(),
                         'word_count': len(content.split()),
-                        'tags': [tag.name for tag in doc.tags] if doc.tags else []
+                        'tags': [tag.name for tag in list(doc.tags)] if doc.tags else []
                     })
             
             if len(all_texts) < 2:
@@ -260,7 +260,7 @@ class DocumentClusteringService:
             logger.error(f"Similarity detection error: {e}")
             return {'error': f'Similarity detection failed: {str(e)}'}
     
-    def detect_document_duplicates(self, documents: List[Document] = None,
+    def detect_document_duplicates(self, documents: Optional[List[Document]] = None,
                                  similarity_threshold: float = 0.8) -> Dict[str, Any]:
         """
         Detect potential duplicate documents
@@ -333,7 +333,7 @@ class DocumentClusteringService:
                             })
             
             # Sort by similarity score
-            duplicates.sort(key=lambda x: x['similarity_score'], reverse=True)
+            duplicates.sort(key=lambda x: x['similarity_score'], reverse=True)  # type: ignore[arg-type, return-value]
             
             # Generate duplicate statistics
             duplicate_stats = {
@@ -384,7 +384,7 @@ class DocumentClusteringService:
             
         except Exception as e:
             logger.error(f"Error determining optimal clusters: {e}")
-            return min(3, n_docs // 2)
+            return int(min(3, n_docs // 2))
     
     def _select_best_method(self, tfidf_matrix, n_clusters: int) -> str:
         """Select the best clustering method based on data characteristics"""
@@ -531,8 +531,8 @@ class DocumentClusteringService:
             from sklearn.metrics import silhouette_score, calinski_harabasz_score
             
             n_clusters = len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)
-            
-            metrics = {
+
+            metrics: Dict[str, Any] = {
                 'n_clusters': n_clusters,
                 'n_noise_points': int(np.sum(cluster_labels == -1)),
             }

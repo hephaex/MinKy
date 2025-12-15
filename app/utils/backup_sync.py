@@ -261,28 +261,29 @@ class BackupSyncManager:
             # 1. 원본 문서 ID로 찾기 (백업 헤더에 기록된 경우)
             original_doc_id = backup_info['header_info'].get('document_id')
             if original_doc_id:
-                doc = Document.query.get(original_doc_id)
+                doc: Optional[Document] = Document.query.get(original_doc_id)
                 if doc:
                     return doc
-            
+
             # 2. 제목으로 찾기
             title = backup_info['title']
-            docs = Document.query.filter_by(title=title).all()
+            docs: List[Document] = Document.query.filter_by(title=title).all()
             if len(docs) == 1:
                 return docs[0]
             elif len(docs) > 1:
                 # 여러 개 있으면 가장 최근 것
-                return max(docs, key=lambda d: d.updated_at or d.created_at)
-            
+                result: Document = max(docs, key=lambda d: d.updated_at or d.created_at)
+                return result
+
             # 3. 콘텐츠 유사성으로 찾기 (간단한 해시 비교)
             content_hash = hash(backup_info['markdown_content'][:500])  # 첫 500자로 해시
-            all_docs = Document.query.all()
+            all_docs: List[Document] = Document.query.all()
             for doc in all_docs:
                 if doc.markdown_content:
                     doc_hash = hash(doc.markdown_content[:500])
                     if doc_hash == content_hash:
                         return doc
-            
+
             return None
             
         except Exception as e:

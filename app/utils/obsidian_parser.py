@@ -242,7 +242,7 @@ class ObsidianParser:
             else:
                 return f'<span class="internal-link-placeholder" data-target="{target}">{display_text}</span>'
         
-        return self.internal_link_pattern.sub(replace_link, content)
+        return str(self.internal_link_pattern.sub(replace_link, content))
     
     def render_hashtags(self, content: str) -> str:
         """해시태그를 HTML 링크로 변환"""
@@ -253,7 +253,7 @@ class ObsidianParser:
             
             return f'{prefix}<a href="/tags/{tag}" class="hashtag">#{tag}</a>'
         
-        return self.hashtag_pattern.sub(replace_hashtag, content)
+        return str(self.hashtag_pattern.sub(replace_hashtag, content))
     
     def add_frontmatter(self, content: str, metadata: Dict) -> str:
         """기존 콘텐츠에 프론트매터 추가/업데이트"""

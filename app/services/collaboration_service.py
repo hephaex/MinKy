@@ -44,7 +44,7 @@ class CollaborationService:
             user = User.query.get(user_id) if user_id else None
             
             if not document.can_view(user_id):
-                emit('error', {'message': 'Access denied'}, room=sid)
+                emit('error', {'message': 'Access denied'}, room=sid)  # type: ignore[call-arg]
                 return
             
             # Initialize session if not exists
@@ -85,19 +85,19 @@ class CollaborationService:
                     }
                     for u in self.active_sessions[document_id]['users'].values()
                 ]
-            }, room=sid)
+            }, room=sid)  # type: ignore[call-arg]  # type: ignore[call-arg]
             
             # Notify other users
             emit('user_joined', {
                 'user_id': user_id,
                 'username': user.username if user else 'Anonymous'
-            }, room=room_name, include_self=False)
+            }, room=room_name, include_self=False)  # type: ignore[call-arg]
             
             logger.info(f"User {user_id} joined document {document_id}")
             
         except Exception as e:
             logger.error(f"Error joining document session: {e}")
-            emit('error', {'message': 'Failed to join document session'}, room=sid)
+            emit('error', {'message': 'Failed to join document session'}, room=sid)  # type: ignore[call-arg]
     
     def leave_document_session(self, document_id: str, sid: str):
         """Leave a collaborative editing session"""
@@ -123,7 +123,7 @@ class CollaborationService:
             emit('user_left', {
                 'user_id': user_info['user_id'],
                 'username': user_info['username']
-            }, room=room_name)
+            }, room=room_name)  # type: ignore[call-arg]
             
             # Clean up empty sessions
             if not session['users']:
@@ -138,23 +138,23 @@ class CollaborationService:
         """Handle text editing operation"""
         try:
             if document_id not in self.active_sessions:
-                emit('error', {'message': 'Not in document session'}, room=sid)
+                emit('error', {'message': 'Not in document session'}, room=sid)  # type: ignore[call-arg]
                 return
             
             session = self.active_sessions[document_id]
             if sid not in session['users']:
-                emit('error', {'message': 'Not in document session'}, room=sid)
+                emit('error', {'message': 'Not in document session'}, room=sid)  # type: ignore[call-arg]
                 return
             
             # Validate operation
             if not self._validate_operation(operation):
-                emit('error', {'message': 'Invalid operation'}, room=sid)
+                emit('error', {'message': 'Invalid operation'}, room=sid)  # type: ignore[call-arg]
                 return
             
             # Apply operation to session content
             new_content = self._apply_operation(session['content'], operation)
             if new_content is None:
-                emit('error', {'message': 'Failed to apply operation'}, room=sid)
+                emit('error', {'message': 'Failed to apply operation'}, room=sid)  # type: ignore[call-arg]
                 return
             
             # Update session
@@ -176,14 +176,14 @@ class CollaborationService:
                 'operation': operation,
                 'user_id': user_id,
                 'version': session['version']
-            }, room=room_name, include_self=False)
+            }, room=room_name, include_self=False)  # type: ignore[call-arg]
             
             # Auto-save periodically
             self._auto_save_if_needed(document_id)
             
         except Exception as e:
             logger.error(f"Error handling text operation: {e}")
-            emit('error', {'message': 'Failed to process operation'}, room=sid)
+            emit('error', {'message': 'Failed to process operation'}, room=sid)  # type: ignore[call-arg]
     
     def handle_cursor_update(self, document_id: str, cursor_data: Dict, user_id: int, sid: str):
         """Handle cursor position update"""
@@ -216,7 +216,7 @@ class CollaborationService:
                 'user_id': user_id,
                 'username': session['users'][sid]['username'],
                 'cursor_data': cursor_data
-            }, room=room_name, include_self=False)
+            }, room=room_name, include_self=False)  # type: ignore[call-arg]
             
         except Exception as e:
             logger.error(f"Error handling cursor update: {e}")
@@ -245,7 +245,7 @@ class CollaborationService:
             emit('document_saved', {
                 'saved_by': user_id,
                 'timestamp': datetime.now(timezone.utc).isoformat()
-            }, room=room_name)
+            }, room=room_name)  # type: ignore[call-arg]
             
             logger.info(f"Document {document_id} saved by user {user_id}")
             return True
@@ -300,7 +300,7 @@ class CollaborationService:
                 return None
             
             if operation_type == 'insert':
-                text = operation['text']
+                text = str(operation['text'])
                 return content[:position] + text + content[position:]
             
             elif operation_type == 'delete':
@@ -311,7 +311,7 @@ class CollaborationService:
             
             elif operation_type == 'replace':
                 length = operation['length']
-                text = operation['text']
+                text = str(operation['text'])
                 if position + length > len(content):
                     return None
                 return content[:position] + text + content[position + length:]

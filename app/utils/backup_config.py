@@ -92,15 +92,15 @@ class BackupConfig:
     
     def is_auto_cleanup_enabled(self) -> bool:
         """자동 정리 기능 활성화 여부"""
-        return self.get("auto_cleanup_enabled", False)
-    
+        return bool(self.get("auto_cleanup_enabled", False))
+
     def get_auto_cleanup_days(self) -> int:
         """자동 정리 보관 기간"""
-        return self.get("auto_cleanup_days", 30)
-    
+        return int(self.get("auto_cleanup_days", 30))
+
     def is_backup_enabled(self) -> bool:
         """백업 기능 활성화 여부"""
-        return self.get("backup_enabled", True)
+        return bool(self.get("backup_enabled", True))
     
     def should_backup_on_create(self) -> bool:
         """문서 생성시 백업 여부"""
@@ -116,11 +116,11 @@ class BackupConfig:
     
     def get_max_backup_size_mb(self) -> int:
         """개별 백업 파일 최대 크기 (MB)"""
-        return self.get("max_backup_size_mb", 10)
-    
+        return int(self.get("max_backup_size_mb", 10))
+
     def get_max_total_backups(self) -> int:
         """최대 백업 파일 개수"""
-        return self.get("max_total_backups", 1000)
+        return int(self.get("max_total_backups", 1000))
     
     def to_dict(self) -> Dict[str, Any]:
         """설정을 딕셔너리로 반환"""
