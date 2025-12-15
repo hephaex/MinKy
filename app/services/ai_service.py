@@ -3,10 +3,10 @@ AI Service for content suggestions and auto-completion
 Provides AI-powered writing assistance capabilities
 """
 
-import openai
+from openai import OpenAI
 import os
 import json
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from flask import current_app
 from app.models.document import Document
 from app.models.tag import Tag
@@ -42,9 +42,11 @@ class AIService:
         
         # Set the main API key property for backward compatibility
         self.api_key = llm_api_key
-        
+
+        # Initialize OpenAI client
+        self.openai_client: Optional[OpenAI] = None
         if llm_provider == 'openai' and llm_api_key:
-            openai.api_key = llm_api_key
+            self.openai_client = OpenAI(api_key=llm_api_key)
             self.enabled = True
         elif llm_api_key:  # Other providers (Anthropic, Google)
             self.enabled = True
@@ -173,9 +175,9 @@ class AIService:
     
     def is_enabled(self) -> bool:
         """Check if AI service is enabled"""
-        return self.enabled
+        return bool(self.enabled)
     
-    def get_content_suggestions(self, content: str, cursor_position: int = None, max_suggestions: int = 3) -> List[Dict]:
+    def get_content_suggestions(self, content: str, cursor_position: Optional[int] = None, max_suggestions: int = 3) -> List[Dict[str, Any]]:
         """
         Get AI-powered content suggestions based on current document content
         
@@ -240,20 +242,23 @@ class AIService:
             prompt = f"""
             Context: {context}
             Current line: {current_line}
-            
+
             Complete the current line with a short, relevant continuation (max 10 words).
             Only return the completion text, nothing else.
             """
-            
-            response = openai.Completion.create(
-                engine="text-davinci-003",
-                prompt=prompt,
+
+            if not self.openai_client:
+                return None
+
+            response = self.openai_client.chat.completions.create(
+                model=self.config.get('llmModel', 'gpt-3.5-turbo'),
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=20,
                 temperature=0.3,
                 stop=['\n', '.', '!', '?']
             )
-            
-            completion = response.choices[0].text.strip()
+
+            completion = (response.choices[0].message.content or '').strip()
             return completion if completion else None
             
         except Exception as e:
@@ -296,15 +301,18 @@ class AIService:
                 Document Title: {title}
                 Document Content: {content[:3000]}...
                 """
-            
-            response = openai.Completion.create(
-                engine="text-davinci-003",
-                prompt=prompt,
+
+            if not self.openai_client:
+                return self._fallback_tag_suggestions(content, title)
+
+            response = self.openai_client.chat.completions.create(
+                model=self.config.get('llmModel', 'gpt-3.5-turbo'),
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=50,
                 temperature=0.2
             )
-            
-            response_text = response.choices[0].text.strip()
+
+            response_text = (response.choices[0].message.content or '').strip()
             # Split by spaces and remove '#' symbols
             suggested_tags = [tag.strip().lstrip('#') for tag in response_text.split()]
             return [tag for tag in suggested_tags if tag and len(tag) < 50]
@@ -332,19 +340,22 @@ class AIService:
             
             prompt = f"""
             Document content: {content_preview}
-            
+
             Suggest a concise, descriptive title for this document (max 3 lines ).
             Return only the title, nothing else.
             """
-            
-            response = openai.Completion.create(
-                engine="text-davinci-003",
-                prompt=prompt,
+
+            if not self.openai_client:
+                return self._fallback_title_suggestion(content)
+
+            response = self.openai_client.chat.completions.create(
+                model=self.config.get('llmModel', 'gpt-3.5-turbo'),
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=20,
                 temperature=0.3
             )
-            
-            title = response.choices[0].text.strip()
+
+            title = (response.choices[0].message.content or '').strip()
             return title if title and len(title) < 100 else None
             
         except Exception as e:
@@ -367,25 +378,28 @@ class AIService:
         try:
             prompt = f"""
             Analyze this text and provide 2-3 brief writing improvement suggestions:
-            
+
             {content[:1200]}
-            
+
             Focus on:
             - Clarity and readability
             - Structure and organization
             - Grammar and style
-            
+
             Return suggestions as a numbered list.
             """
-            
-            response = openai.Completion.create(
-                engine="text-davinci-003",
-                prompt=prompt,
+
+            if not self.openai_client:
+                return []
+
+            response = self.openai_client.chat.completions.create(
+                model=self.config.get('llmModel', 'gpt-3.5-turbo'),
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=150,
                 temperature=0.2
             )
-            
-            suggestions_text = response.choices[0].text.strip()
+
+            suggestions_text = (response.choices[0].message.content or '').strip()
             suggestions = []
             
             for line in suggestions_text.split('\n'):
@@ -406,7 +420,7 @@ class AIService:
             logger.error(f"Error getting writing suggestions: {e}")
             return []
     
-    def _extract_context(self, content: str, cursor_position: int = None, context_size: int = 300) -> str:
+    def _extract_context(self, content: str, cursor_position: Optional[int] = None, context_size: int = 300) -> str:
         """Extract relevant context around cursor position"""
         if cursor_position is None:
             cursor_position = len(content)
@@ -416,26 +430,29 @@ class AIService:
         
         return content[start:end]
     
-    def _get_completion_suggestions(self, context: str, max_suggestions: int) -> List[Dict]:
+    def _get_completion_suggestions(self, context: str, max_suggestions: int) -> List[Dict[str, Any]]:
         """Get completion suggestions using AI"""
         try:
             prompt = f"""
             Context: {context}
-            
+
             Suggest {max_suggestions} possible ways to continue this text.
             Keep suggestions brief and relevant.
             Return each suggestion on a new line.
             """
-            
-            response = openai.Completion.create(
-                engine="text-davinci-003",
-                prompt=prompt,
+
+            if not self.openai_client:
+                return []
+
+            response = self.openai_client.chat.completions.create(
+                model=self.config.get('llmModel', 'gpt-3.5-turbo'),
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=100,
                 temperature=0.4
             )
-            
-            suggestions = []
-            for line in response.choices[0].text.strip().split('\n'):
+
+            suggestions: List[Dict[str, Any]] = []
+            for line in (response.choices[0].message.content or '').strip().split('\n'):
                 line = line.strip()
                 if line:
                     suggestions.append({
@@ -449,27 +466,30 @@ class AIService:
             logger.error(f"Error getting completion suggestions: {e}")
             return []
     
-    def _get_improvement_suggestions(self, context: str) -> List[Dict]:
+    def _get_improvement_suggestions(self, context: str) -> List[Dict[str, Any]]:
         """Get improvement suggestions for the current context"""
         try:
             if len(context.strip()) < 50:
                 return []
-            
+
             prompt = f"""
             Text: {context}
-            
+
             Suggest one brief improvement for clarity or style.
             Return only the suggestion, nothing else.
             """
-            
-            response = openai.Completion.create(
-                engine="text-davinci-003",
-                prompt=prompt,
+
+            if not self.openai_client:
+                return []
+
+            response = self.openai_client.chat.completions.create(
+                model=self.config.get('llmModel', 'gpt-3.5-turbo'),
+                messages=[{"role": "user", "content": prompt}],
                 max_tokens=50,
                 temperature=0.2
             )
-            
-            suggestion = response.choices[0].text.strip()
+
+            suggestion = (response.choices[0].message.content or '').strip()
             if suggestion:
                 return [{
                     'type': 'improvement',
@@ -754,15 +774,15 @@ class AIService:
         
         return None
     
-    def get_config(self) -> Dict:
+    def get_config(self) -> Dict[str, Any]:
         """
         Get current AI configuration settings
-        
+
         Returns:
             Dictionary containing current AI configuration
         """
         # Don't expose sensitive API keys
-        safe_config = self.config.copy()
+        safe_config: Dict[str, Any] = dict(self.config)
         if 'llmApiKey' in safe_config and safe_config['llmApiKey']:
             # Mask the API key for security
             api_key = safe_config['llmApiKey']
