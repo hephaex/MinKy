@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from konlpy.tag import Mecab, Kkma, Komoran
 import logging
 
@@ -84,7 +84,7 @@ class KoreanTextProcessor:
             # Fallback to simple tokenization
             return [token for token in normalized_text.split() if len(token) > 1]
     
-    def extract_keywords(self, text: str, min_length: int = 2, max_keywords: int = 50) -> List[Dict[str, any]]:
+    def extract_keywords(self, text: str, min_length: int = 2, max_keywords: int = 50) -> List[Dict[str, Any]]:
         """키워드 추출 (품사 태깅 포함)"""
         if not text or self.analyzer is None:
             return []
@@ -233,7 +233,7 @@ class KoreanTextProcessor:
 # 전역 인스턴스
 korean_processor = KoreanTextProcessor()
 
-def process_korean_document(title: str, content: str) -> Dict[str, any]:
+def process_korean_document(title: str, content: str) -> Dict[str, Any]:
     """한국어 문서 처리 통합 함수"""
     result = {
         'language': korean_processor.detect_language(content),

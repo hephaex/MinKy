@@ -22,7 +22,7 @@ class ObsidianParser:
         # 프론트매터 패턴
         self.frontmatter_pattern = re.compile(r'^---\s*\n(.*?)\n---\s*\n', re.DOTALL)
     
-    def parse_markdown(self, content: str, backup_dir: str = None) -> Dict:
+    def parse_markdown(self, content: str, backup_dir: Optional[str] = None) -> Dict:
         """마크다운 파싱 메인 함수"""
         result = {
             'frontmatter': {},

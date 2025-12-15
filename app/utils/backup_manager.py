@@ -300,7 +300,7 @@ class DocumentBackupManager:
         days_to_keep = backup_config.get_auto_cleanup_days()
         return self.cleanup_old_backups(days_to_keep)
     
-    def cleanup_old_backups(self, days_to_keep: int = None) -> int:
+    def cleanup_old_backups(self, days_to_keep: Optional[int] = None) -> int:
         """오래된 백업 파일 정리"""
         if days_to_keep is None:
             days_to_keep = backup_config.get_auto_cleanup_days()

@@ -295,9 +295,9 @@ class OpenSearchService:
             logger.error(f"Failed to index document {document_data.get('id')}: {e}")
             return False
     
-    def search_documents(self, query: str, filters: Dict = None, 
+    def search_documents(self, query: str, filters: Optional[Dict] = None,
                         page: int = 1, per_page: int = 20,
-                        user_id: int = None) -> Dict:
+                        user_id: Optional[int] = None) -> Dict:
         """문서 검색 (한국어 지원)"""
         
         # 검색 쿼리 구성
