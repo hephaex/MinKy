@@ -558,11 +558,9 @@ class DocumentClusteringService:
             # Simple explanation based on common terms
             words1 = set(text1.lower().split())
             words2 = set(text2.lower().split())
-            
+
             common_words = words1 & words2
-            unique_words1 = words1 - words2
-            unique_words2 = words2 - words1
-            
+
             return {
                 'similarity_score': float(similarity_score),
                 'common_words_count': len(common_words),

@@ -498,7 +498,6 @@ class MLAnalyticsService:
     def _get_document_recommendations(self, document: Document) -> List[Dict[str, Any]]:
         """Generate recommendations for improving the document"""
         recommendations = []
-        content = document.markdown_content or ''
         stats = self._get_basic_document_stats(document)
         
         # Content length recommendations
@@ -741,11 +740,7 @@ class MLAnalyticsService:
             
             if len(sorted_docs) < 2:
                 return {'error': 'Insufficient documents for evolution analysis'}
-            
-            # Analyze evolution metrics
-            word_counts = [len((doc.markdown_content or '').split()) for doc in sorted_docs]
-            complexity_scores = [self._calculate_complexity_score(doc.markdown_content or '') for doc in sorted_docs]
-            
+
             # Calculate trends
             early_period = sorted_docs[:len(sorted_docs)//3] if len(sorted_docs) > 3 else sorted_docs[:1]
             late_period = sorted_docs[-len(sorted_docs)//3:] if len(sorted_docs) > 3 else sorted_docs[-1:]

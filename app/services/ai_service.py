@@ -6,7 +6,6 @@ Provides AI-powered writing assistance capabilities
 from openai import OpenAI
 import os
 from typing import List, Dict, Optional, Any
-from app.models.tag import Tag
 from app.models.ai_config import AIConfig
 from app import db
 import re
@@ -277,14 +276,6 @@ class AIService:
             return self._fallback_tag_suggestions(content, title)
         
         try:
-            # Get existing tags for reference
-            existing_tags = [tag.name for tag in Tag.query.limit(50).all()]
-            
-            # Detect the primary language of the content
-            content_sample = (title + " " + content[:500]).strip()
-            language = self._detect_language(content_sample)
-
-            # Default to English
             prompt = f"""
                 You are an AI assistant helping to organize Obsidian notes.
                 Analyze the core content of the markdown document below and create the 9 most relevant tags in English.
@@ -747,8 +738,8 @@ class AIService:
         # Determine primary language (>40% threshold)
         korean_ratio = korean_chars / total_chars
         japanese_ratio = japanese_chars / total_chars
-        english_ratio = english_chars / total_chars
-        
+        _english_ratio = english_chars / total_chars  # noqa: F841 - kept for symmetry
+
         if korean_ratio > 0.4:
             return 'korean'
         elif japanese_ratio > 0.4:

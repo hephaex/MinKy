@@ -44,11 +44,8 @@ def korean_text_search():
     except ValidationError as e:
         return jsonify({'error': 'Invalid data', 'details': e.messages}), 400
     
-    query = validated_data['query']
-    page = validated_data['page']
-    per_page = validated_data['per_page']
     use_opensearch = validated_data['use_opensearch']
-    
+
     try:
         # OpenSearch 사용 여부 결정
         opensearch_service = get_opensearch_service()

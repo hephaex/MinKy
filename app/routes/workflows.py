@@ -86,9 +86,9 @@ def perform_workflow_action(document_id):
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
-    
-    document = Document.query.get_or_404(document_id)
-    
+
+    Document.query.get_or_404(document_id)  # Validate document exists
+
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Request body required'}), 400
@@ -213,7 +213,6 @@ def get_pending_workflows():
 @audit_log("view_workflow_templates")
 def get_workflow_templates():
     """Get available workflow templates"""
-    current_user_id = get_current_user_id()
     user = get_current_user()
     
     if not user:
@@ -296,7 +295,6 @@ def create_workflow_template():
 @audit_log("update_workflow_template")
 def update_workflow_template(template_id):
     """Update a workflow template (admin only)"""
-    current_user_id = get_current_user_id()
     user = get_current_user()
     
     if not user or not user.is_admin:

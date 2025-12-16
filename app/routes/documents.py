@@ -262,9 +262,7 @@ def list_backup_files_for_sync():
     """동기화 가능한 백업 파일 목록"""
     try:
         from app.utils.backup_sync import sync_manager
-        
-        current_user_id = get_current_user_id()
-        
+
         backup_files = sync_manager.scan_backup_files()
         
         # 각 파일에 대한 동기화 상태 정보 추가

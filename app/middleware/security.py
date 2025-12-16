@@ -213,17 +213,16 @@ def enhanced_jwt_required(f):
     def decorated_function(*args, **kwargs):
         try:
             verify_jwt_in_request()
-            current_user_id = get_jwt_identity()
-            
+            _current_user_id = get_jwt_identity()  # noqa: F841 - for future session tracking
+
             # Check for concurrent sessions (optional)
             session_limit = current_app.config.get('MAX_CONCURRENT_SESSIONS', 5)
             if session_limit:
                 # This would require tracking active sessions
                 pass
-            
-            # Check for token age
-            max_token_age = current_app.config.get('MAX_TOKEN_AGE_HOURS', 24)
-            # Could implement token age checking here
+
+            # Check for token age (placeholder for future implementation)
+            _max_token_age = current_app.config.get('MAX_TOKEN_AGE_HOURS', 24)  # noqa: F841
             
             return f(*args, **kwargs)
             
