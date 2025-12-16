@@ -1,0 +1,22 @@
+# Ruff configuration
+# https://docs.astral.sh/ruff/configuration/
+
+[lint]
+# Enable pyflakes (F) and pycodestyle errors (E)
+# Exclude whitespace warnings (W) to avoid noise
+select = ["E", "F"]
+
+# Ignore specific rules
+ignore = [
+    "E712",  # SQLAlchemy requires `== True/False` syntax in query filters
+    "E501",  # Line too long (handled by formatter)
+]
+
+[lint.per-file-ignores]
+# Ignore unused imports in __init__.py files (re-exports)
+"__init__.py" = ["F401"]
+
+# Ignore unused imports for availability checks
+"app/services/ocr_service.py" = ["F401"]
+"app/services/ml_analytics_service.py" = ["F401"]
+"app/services/document_clustering_service.py" = ["F401"]
