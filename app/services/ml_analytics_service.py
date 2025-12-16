@@ -3,18 +3,15 @@ ML Analytics Service for advanced document insights
 Provides machine learning-powered analytics and recommendations
 """
 
-import os
 import re
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta, timezone
 from collections import Counter, defaultdict
-import json
 import numpy as np
 from sqlalchemy import text
 from app import db
 from app.models.document import Document
-from app.models.tag import Tag
 from app.models.comment import Comment
 
 logger = logging.getLogger(__name__)
@@ -325,9 +322,7 @@ class MLAnalyticsService:
     def _nltk_content_analysis(self, content: str) -> Dict[str, Any]:
         """Perform NLTK-based content analysis"""
         try:
-            import nltk
             from nltk.tokenize import sent_tokenize, word_tokenize
-            from nltk.corpus import stopwords
             from nltk.tag import pos_tag
             
             sentences = sent_tokenize(content)
@@ -407,7 +402,6 @@ class MLAnalyticsService:
         
         try:
             from sklearn.feature_extraction.text import CountVectorizer
-            from sklearn.decomposition import LatentDirichletAllocation
             
             content = document.markdown_content or ''
             if not content.strip():

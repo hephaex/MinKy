@@ -1,5 +1,5 @@
 import re
-from typing import List, Set
+from typing import List
 
 
 def detect_auto_tags(content: str) -> List[str]:
@@ -91,7 +91,7 @@ def detect_auto_tags(content: str) -> List[str]:
     python_code_pattern = r'```python'
     if re.search(python_code_pattern, content_lower):
         detected_tags.add('Python')
-        print(f"[AUTO_TAG] Found Python code block")
+        print("[AUTO_TAG] Found Python code block")
     
     # Filter out unwanted automatic tags
     filtered_tags = [tag for tag in detected_tags if tag and tag.lower() != 'clippings']

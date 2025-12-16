@@ -13,7 +13,6 @@ from app.models.document import Document
 from app.models.tag import Tag
 from app.models.comment import Comment
 from app.models.attachment import Attachment
-from app.models.workflow import DocumentWorkflow
 from app.utils.auth import get_current_user
 from app.utils.responses import paginate_query
 import logging

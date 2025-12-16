@@ -8,7 +8,7 @@ import re
 import subprocess
 import logging
 from flask import Blueprint, jsonify, request, current_app
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def sanitize_commit_message(message):
     # Check for dangerous patterns
     for pattern in DANGEROUS_PATTERNS:
         if re.search(pattern, message):
-            logger.warning(f"Potentially dangerous pattern detected in commit message")
+            logger.warning("Potentially dangerous pattern detected in commit message")
             # Remove the dangerous characters instead of rejecting entirely
             message = re.sub(pattern, '', message)
 

@@ -6,7 +6,7 @@ Provides endpoints for AI-powered content suggestions and auto-completion
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.services.ai_service import ai_service
-from app.utils.auth import require_auth, get_current_user_id
+from app.utils.auth import get_current_user_id
 import logging
 
 logger = logging.getLogger(__name__)

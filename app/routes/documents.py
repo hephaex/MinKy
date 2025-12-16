@@ -2,14 +2,10 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app import db
 from app.models.document import Document
-from app.models.user import User
-from app.models.tag import Tag
 from app.utils.auth import get_current_user_id
-from app.utils.responses import paginate_query, error_response, get_or_404
+from app.utils.responses import paginate_query, get_or_404
 from sqlalchemy import or_
 import bleach
-import os
-import re
 import logging
 from datetime import datetime, timezone
 from app.utils.auto_tag import detect_auto_tags, merge_tags

@@ -2,7 +2,6 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from app.models.template import DocumentTemplate
-from app.models.document import Document
 from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query
 import bleach

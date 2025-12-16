@@ -1,9 +1,7 @@
-import json
 import logging
 from typing import Dict, List, Optional, Any
 from opensearchpy import OpenSearch, RequestsHttpConnection
-from opensearchpy.exceptions import NotFoundError, RequestError
-from datetime import datetime
+from opensearchpy.exceptions import NotFoundError
 from app.utils.korean_text import KoreanTextProcessor
 
 logger = logging.getLogger(__name__)

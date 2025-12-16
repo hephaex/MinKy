@@ -2,7 +2,6 @@ from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_jwt_extended import jwt_required
 from app import db
 from app.models.document import Document
-from app.models.user import User
 from app.utils.auth import get_current_user_id, get_current_user
 from app.utils.responses import get_or_404
 from app.utils.exporters import DocumentExporter

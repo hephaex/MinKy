@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 import markdown
 # from weasyprint import HTML, CSS  # Commented out due to system dependencies
 from docx import Document as DocxDocument
-from docx.shared import Inches
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 import zipfile
 import json

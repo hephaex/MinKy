@@ -4,7 +4,7 @@ from app import db
 from app.models.tag import Tag
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
-from app.utils.responses import paginate_query, build_pagination_response, get_or_404
+from app.utils.responses import paginate_query, get_or_404
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 import bleach
 
@@ -232,7 +232,6 @@ def suggest_tags():
 def get_tags_statistics():
     """Get comprehensive tag statistics"""
     try:
-        from sqlalchemy import func
         
         # Total tags
         total_tags = Tag.query.count()
@@ -376,7 +375,7 @@ def generate_auto_tags():
         
         if not dry_run:
             db.session.commit()
-            print(f"[AUTO_TAG_GENERATION] Committed changes to database")
+            print("[AUTO_TAG_GENERATION] Committed changes to database")
         
         return jsonify({
             'success': True,

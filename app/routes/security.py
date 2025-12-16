@@ -1,11 +1,8 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
-from app.models.user import User
 from app.utils.auth import get_current_user
 from app.middleware.security import rate_limit_api, validate_request_security, audit_log
 from datetime import datetime, timedelta, timezone
-import json
-import os
 
 security_bp = Blueprint('security', __name__)
 

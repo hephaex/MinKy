@@ -4,13 +4,12 @@ from flask_jwt_extended import jwt_required, verify_jwt_in_request
 from app.models.document import Document
 from app.models.user import User
 from app.utils.auth import get_current_user_id
-from app.utils.korean_text import korean_processor, search_korean_text, process_korean_document
+from app.utils.korean_text import korean_processor, process_korean_document
 from app.services.opensearch_service import get_opensearch_service
 from app.middleware.security import rate_limit_api, rate_limit_search, validate_request_security, audit_log
 from marshmallow import Schema, fields, ValidationError
-from sqlalchemy import or_, and_
+from sqlalchemy import or_
 from datetime import datetime, timezone
-import json
 
 korean_search_bp = Blueprint('korean_search', __name__)
 

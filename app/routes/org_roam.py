@@ -12,7 +12,6 @@ from werkzeug.utils import secure_filename
 import os
 import tempfile
 import zipfile
-from pathlib import Path
 from datetime import datetime, timezone
 from app import db
 

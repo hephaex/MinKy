@@ -6,7 +6,6 @@ Provides endpoints for dashboard analytics and reporting
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from app.services.analytics_service import AnalyticsService, get_comprehensive_analytics
-from app.models.user import User
 from app.utils.auth import get_current_user
 import logging
 

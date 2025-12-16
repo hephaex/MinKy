@@ -44,6 +44,6 @@ class AIConfig(db.Model):
         try:
             db.session.commit()
             return True
-        except Exception as e:
+        except Exception:
             db.session.rollback()
             return False

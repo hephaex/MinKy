@@ -3,16 +3,12 @@ Document Clustering and Similarity Detection Service
 Advanced document organization using machine learning clustering algorithms
 """
 
-import os
 import logging
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timezone
-import json
 import numpy as np
 from collections import defaultdict, Counter
-from app import db
 from app.models.document import Document
-from app.models.tag import Tag
 
 logger = logging.getLogger(__name__)
 

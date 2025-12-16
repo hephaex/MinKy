@@ -1,13 +1,12 @@
-import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Any
 import logging
 from app.models.document import Document
 from app.utils.backup_manager import backup_manager
 from app.utils.obsidian_parser import ObsidianParser
-from app.utils.auto_tag import detect_auto_tags, merge_tags
+from app.utils.auto_tag import detect_auto_tags
 from app import db
 
 logger = logging.getLogger(__name__)

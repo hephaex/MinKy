@@ -1,9 +1,7 @@
 import re
 import os
-import sqlite3
-import json
 from datetime import datetime, timezone
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Any
 import orgparse
 from pathlib import Path
 import logging

@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from app.models.notification import Notification, NotificationPreference
-from app.models.user import User
 from app.utils.auth import get_current_user_id, get_current_user
 from app.services.notification_service import NotificationService
 from marshmallow import Schema, fields, ValidationError

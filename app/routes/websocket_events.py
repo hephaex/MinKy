@@ -3,7 +3,7 @@ WebSocket Event Handlers for Real-time Collaboration
 """
 
 from flask import request
-from flask_socketio import emit, disconnect
+from flask_socketio import emit
 from flask_jwt_extended import verify_jwt_in_request
 from app.services.collaboration_service import collaboration_service
 from app.utils.auth import get_current_user_id

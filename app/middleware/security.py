@@ -1,10 +1,9 @@
-from flask import request, jsonify, current_app, g
+from flask import request, jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from functools import wraps
-from datetime import datetime, timedelta, timezone
-from app import limiter, db
+from datetime import datetime, timezone
+from app import limiter
 import ipaddress
-import hashlib
 import re
 
 class SecurityMiddleware:
@@ -182,7 +181,7 @@ def validate_request_security(f):
         if not SecurityMiddleware.validate_request_content(request_data):
             SecurityMiddleware.log_security_event(
                 'suspicious_content',
-                f'Suspicious patterns detected in request',
+                'Suspicious patterns detected in request',
                 'high'
             )
             return jsonify({'error': 'Invalid request content'}), 400
@@ -200,7 +199,7 @@ def require_api_key(f):
         if expected_key and api_key != expected_key:
             SecurityMiddleware.log_security_event(
                 'invalid_api_key',
-                f'Invalid or missing API key',
+                'Invalid or missing API key',
                 'medium'
             )
             return jsonify({'error': 'Invalid API key'}), 401

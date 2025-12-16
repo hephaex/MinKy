@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from app import db
 import markdown
-from sqlalchemy import func
 from app.models.tag import document_tags
 
 

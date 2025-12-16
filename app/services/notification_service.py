@@ -1,6 +1,5 @@
 from app.models.notification import Notification, NotificationType, NotificationPreference
 from app.models.user import User
-from app.models.document import Document
 from app.models.comment import Comment
 from app import db
 from datetime import datetime, timedelta, timezone
@@ -262,7 +261,6 @@ class NotificationService:
         Notification.cleanup_old_notifications(days=30)
         
         # Delete very old unread notifications (older than 90 days)
-        from datetime import timedelta
         cutoff_date = datetime.now(timezone.utc) - timedelta(days=90)
         Notification.query.filter(
             Notification.created_at < cutoff_date

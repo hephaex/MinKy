@@ -5,11 +5,8 @@ Provides optical character recognition capabilities
 
 import os
 import logging
-from typing import Dict, List, Optional, Tuple
-from PIL import Image
+from typing import Dict, List
 import io
-import base64
-import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)

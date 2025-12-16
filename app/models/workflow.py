@@ -112,7 +112,6 @@ class DocumentWorkflow(db.Model):
     def perform_action(self, action, user_id, comment=None):
         """Perform workflow action and update status"""
         from app.models.user import User
-        from app.services.notification_service import NotificationService
         
         if not self.can_perform_action(action, user_id):
             raise ValueError(f"User {user_id} cannot perform action {action.value}")

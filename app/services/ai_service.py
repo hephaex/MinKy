@@ -5,10 +5,7 @@ Provides AI-powered writing assistance capabilities
 
 from openai import OpenAI
 import os
-import json
 from typing import List, Dict, Optional, Any
-from flask import current_app
-from app.models.document import Document
 from app.models.tag import Tag
 from app.models.ai_config import AIConfig
 from app import db

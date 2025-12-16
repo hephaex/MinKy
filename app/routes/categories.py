@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models.category import Category
 from app.models.document import Document
-from app.utils.auth import require_auth, admin_required
+from app.utils.auth import require_auth
 from app.utils.responses import paginate_query
 from sqlalchemy import func
 

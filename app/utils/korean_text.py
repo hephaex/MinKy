@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Any
 from konlpy.tag import Mecab, Kkma, Komoran
 import logging
 

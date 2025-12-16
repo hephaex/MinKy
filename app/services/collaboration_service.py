@@ -3,17 +3,13 @@ Real-time Collaboration Service
 Manages WebSocket connections and document collaboration
 """
 
-from flask_socketio import SocketIO, emit, join_room, leave_room, rooms
-from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from app.models.document import Document
 from app.models.user import User
 from app import db
-import json
 import logging
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
-import difflib
-import time
 
 logger = logging.getLogger(__name__)
 

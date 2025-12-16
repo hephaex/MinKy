@@ -40,7 +40,6 @@ class Tag(db.Model):
     def create_slug(name):
         """Create a URL-friendly slug from tag name that supports Unicode"""
         import re
-        import unicodedata
         
         slug = name.strip()
         
