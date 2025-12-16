@@ -833,7 +833,7 @@ class AIService:
             
             if llm_provider == 'openai' and llm_api_key:
                 self.api_key = llm_api_key
-                openai.api_key = self.api_key
+                self.openai_client = OpenAI(api_key=llm_api_key)
                 self.enabled = True
             elif llm_api_key:  # Other providers (Anthropic, Google)
                 self.api_key = llm_api_key
