@@ -40,7 +40,7 @@ def register_websocket_events(socketio):
             try:
                 verify_jwt_in_request()
                 user_id = get_current_user_id()
-            except:
+            except Exception:
                 pass  # Allow anonymous users
             
             collaboration_service.join_document_session(
@@ -85,7 +85,7 @@ def register_websocket_events(socketio):
             try:
                 verify_jwt_in_request()
                 user_id = get_current_user_id()
-            except:
+            except Exception:
                 pass  # Allow anonymous users
             
             collaboration_service.handle_text_operation(
@@ -114,7 +114,7 @@ def register_websocket_events(socketio):
             try:
                 verify_jwt_in_request()
                 user_id = get_current_user_id()
-            except:
+            except Exception:
                 pass  # Allow anonymous users
             
             collaboration_service.handle_cursor_update(
@@ -141,7 +141,7 @@ def register_websocket_events(socketio):
             try:
                 verify_jwt_in_request()
                 user_id = get_current_user_id()
-            except:
+            except Exception:
                 emit('error', {'message': 'Authentication required to save'})
                 return
             

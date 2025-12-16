@@ -60,7 +60,7 @@ def cluster_documents():
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Get request parameters
@@ -150,7 +150,7 @@ def find_similar_documents(document_id):
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Check access permissions
@@ -222,7 +222,7 @@ def detect_duplicates():
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Get request parameters
@@ -294,7 +294,7 @@ def batch_similarity_analysis():
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Get request parameters
@@ -411,7 +411,7 @@ def get_clustering_recommendations(document_id):
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Check access permissions

@@ -251,7 +251,7 @@ def audit_log(action):
                 user_id = None
                 try:
                     user_id = get_jwt_identity()
-                except:
+                except Exception:
                     pass
                 
                 audit_entry = {

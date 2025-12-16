@@ -608,7 +608,7 @@ class MLAnalyticsService:
             from sklearn.metrics import silhouette_score
             if len(set(labels)) > 1:
                 return float(silhouette_score(X, labels))
-        except:
+        except Exception:
             pass
         return 0.0
     

@@ -80,7 +80,7 @@ def extract_text():
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         logger.info(f"OCR processing: user={user_id}, file={file.filename}, "

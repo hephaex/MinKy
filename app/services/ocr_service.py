@@ -398,7 +398,7 @@ class OCRService:
             count = len(doc)
             doc.close()
             return count
-        except:
+        except Exception:
             return 0
     
     def get_supported_languages(self) -> List[str]:
@@ -410,7 +410,7 @@ class OCRService:
                 import pytesseract
                 langs = pytesseract.get_languages()
                 supported.extend(langs)
-            except:
+            except Exception:
                 pass
         
         # Add common languages for cloud services

@@ -69,7 +69,7 @@ def get_document_insights(document_id):
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Check access permissions
@@ -116,7 +116,7 @@ def get_corpus_insights():
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Get query parameters
@@ -173,7 +173,7 @@ def get_similar_documents(document_id):
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Check access permissions
@@ -218,7 +218,7 @@ def get_document_sentiment(document_id):
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Check access permissions
@@ -257,7 +257,7 @@ def get_document_recommendations(document_id):
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Check access permissions
@@ -299,7 +299,7 @@ def perform_document_clustering():
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Get request parameters
@@ -367,7 +367,7 @@ def perform_topic_modeling():
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Get request parameters
@@ -429,7 +429,7 @@ def get_document_trends():
         user_id = None
         try:
             user_id = get_current_user_id()
-        except:
+        except Exception:
             pass
         
         # Get query parameters
