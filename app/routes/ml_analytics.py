@@ -8,6 +8,7 @@ from flask_jwt_extended import jwt_required
 from app.services.ml_analytics_service import ml_analytics_service
 from app.models.document import Document
 from app.utils.auth import get_current_user_id, get_optional_user_id
+from app import limiter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -97,6 +98,7 @@ def get_document_insights(document_id):
         }), 500
 
 @ml_analytics_bp.route('/ml-analytics/corpus/insights', methods=['GET'])
+@limiter.limit("10 per hour")
 @jwt_required(optional=True)
 def get_corpus_insights():
     """
@@ -264,6 +266,7 @@ def get_document_recommendations(document_id):
         }), 500
 
 @ml_analytics_bp.route('/ml-analytics/corpus/clustering', methods=['POST'])
+@limiter.limit("5 per hour")
 @jwt_required(optional=True)
 def perform_document_clustering():
     """
@@ -328,6 +331,7 @@ def perform_document_clustering():
         }), 500
 
 @ml_analytics_bp.route('/ml-analytics/corpus/topics', methods=['POST'])
+@limiter.limit("5 per hour")
 @jwt_required(optional=True)
 def perform_topic_modeling():
     """

@@ -10,7 +10,7 @@ from app.services.ocr_service import ocr_service
 from app.models.document import Document
 from app.models.attachment import Attachment
 from app.utils.auth import get_current_user_id, get_optional_user_id
-from app import db
+from app import db, limiter
 import logging
 import os
 from datetime import datetime, timezone
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 ocr_bp = Blueprint('ocr', __name__)
 
 @ocr_bp.route('/ocr/extract', methods=['POST'])
+@limiter.limit("20 per hour")
 @jwt_required(optional=True)
 def extract_text():
     """

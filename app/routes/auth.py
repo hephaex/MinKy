@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from email_validator import validate_email, EmailNotValidError
-from app import db
+from app import db, limiter
 from app.models.user import User
 import re
 
@@ -17,6 +17,7 @@ def validate_password(password):
     return True, ""
 
 @auth_bp.route('/register', methods=['POST'])
+@limiter.limit("20 per minute")
 def register():
     try:
         data = request.get_json()
@@ -82,6 +83,7 @@ def register():
         return jsonify({'error': str(e)}), 500
 
 @auth_bp.route('/login', methods=['POST'])
+@limiter.limit("10 per minute")
 def login():
     try:
         data = request.get_json()
@@ -121,6 +123,7 @@ def login():
         return jsonify({'error': str(e)}), 500
 
 @auth_bp.route('/refresh', methods=['POST'])
+@limiter.limit("30 per hour")
 @jwt_required(refresh=True)
 def refresh():
     try:

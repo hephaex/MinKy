@@ -8,6 +8,7 @@ from flask_jwt_extended import jwt_required
 from app.services.document_clustering_service import document_clustering_service
 from app.models.document import Document
 from app.utils.auth import get_current_user_id, get_optional_user_id
+from app import limiter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ def get_clustering_status():
         }), 500
 
 @clustering_bp.route('/clustering/cluster', methods=['POST'])
+@limiter.limit("5 per hour")
 @jwt_required(optional=True)
 def cluster_documents():
     """
@@ -199,6 +201,7 @@ def find_similar_documents(document_id):
         }), 500
 
 @clustering_bp.route('/clustering/duplicates', methods=['POST'])
+@limiter.limit("10 per hour")
 @jwt_required(optional=True)
 def detect_duplicates():
     """

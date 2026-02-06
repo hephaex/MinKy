@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, send_file, current_app
 from flask_jwt_extended import jwt_required
-from app import db
+from app import db, limiter
 from app.models.document import Document
 from app.utils.auth import get_current_user_id, get_current_user
 from app.utils.responses import get_or_404
@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 export_bp = Blueprint('export', __name__)
 
 @export_bp.route('/documents/<int:document_id>/export/<format_type>', methods=['GET'])
+@limiter.limit("30 per hour")
 @jwt_required()
 def export_document(document_id, format_type):
     """Export a single document in the specified format"""
@@ -112,6 +113,7 @@ def export_document(document_id, format_type):
         return jsonify({'error': 'Export failed', 'details': str(e)}), 500
 
 @export_bp.route('/documents/bulk-export', methods=['POST'])
+@limiter.limit("5 per hour")
 @jwt_required()
 def bulk_export_documents():
     """Export multiple documents in specified formats"""
@@ -219,6 +221,7 @@ def bulk_export_documents():
         return jsonify({'error': 'Bulk export failed', 'details': str(e)}), 500
 
 @export_bp.route('/documents/<int:document_id>/export/bundle', methods=['GET'])
+@limiter.limit("10 per hour")
 @jwt_required()
 def export_document_bundle(document_id):
     """Export a document in multiple formats as a ZIP bundle"""
