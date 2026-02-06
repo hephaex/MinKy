@@ -1,6 +1,7 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, current_app
 from flask_jwt_extended import jwt_required
 from app.utils.auth import get_current_user
+from app.utils.responses import success_response, error_response
 from app.middleware.security import rate_limit_api, validate_request_security, audit_log
 from datetime import datetime, timedelta, timezone
 
@@ -15,7 +16,7 @@ def require_admin(f):
         user = get_current_user()
 
         if not user or not user.is_admin:
-            return jsonify({'error': 'Admin privileges required'}), 403
+            return error_response('Admin privileges required', 403)
 
         return f(*args, **kwargs)
     return decorated_function
@@ -35,7 +36,7 @@ def get_security_status():
             'storage': current_app.config.get('RATELIMIT_STORAGE_URL', 'memory://'),
             'default_limit': current_app.config.get('RATELIMIT_DEFAULT', '1000 per hour')
         }
-        
+
         # Get security configuration
         security_config = {
             'ip_whitelist_enabled': bool(current_app.config.get('IP_WHITELIST')),
@@ -44,7 +45,7 @@ def get_security_status():
             'max_concurrent_sessions': current_app.config.get('MAX_CONCURRENT_SESSIONS', 5),
             'max_token_age_hours': current_app.config.get('MAX_TOKEN_AGE_HOURS', 24)
         }
-        
+
         # Security headers check
         security_headers = {
             'x_content_type_options': 'nosniff',
@@ -53,8 +54,8 @@ def get_security_status():
             'strict_transport_security': 'enabled',
             'content_security_policy': 'enabled'
         }
-        
-        return jsonify({
+
+        return success_response({
             'status': 'secure',
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'rate_limiting': rate_limit_info,
@@ -62,10 +63,10 @@ def get_security_status():
             'security_headers': security_headers,
             'version': '1.0'
         })
-        
+
     except Exception as e:
         current_app.logger.error(f"Error getting security status: {str(e)}")
-        return jsonify({'error': 'Failed to get security status'}), 500
+        return error_response('Failed to get security status', 500)
 
 @security_bp.route('/security/logs', methods=['GET'])
 @jwt_required()
@@ -121,8 +122,8 @@ def get_security_logs():
         
         # Limit results
         sample_logs = sample_logs[:limit]
-        
-        return jsonify({
+
+        return success_response({
             'logs': sample_logs,
             'total_count': len(sample_logs),
             'filters': {
@@ -132,10 +133,10 @@ def get_security_logs():
             },
             'generated_at': datetime.now(timezone.utc).isoformat()
         })
-        
+
     except Exception as e:
         current_app.logger.error(f"Error getting security logs: {str(e)}")
-        return jsonify({'error': 'Failed to get security logs'}), 500
+        return error_response('Failed to get security logs', 500)
 
 @security_bp.route('/security/threats', methods=['GET'])
 @jwt_required()
@@ -180,15 +181,15 @@ def get_threat_analysis():
             }
         }
         
-        return jsonify({
+        return success_response({
             'threat_analysis': threat_summary,
             'analysis_period_hours': hours,
             'generated_at': datetime.now(timezone.utc).isoformat()
         })
-        
+
     except Exception as e:
         current_app.logger.error(f"Error getting threat analysis: {str(e)}")
-        return jsonify({'error': 'Failed to get threat analysis'}), 500
+        return error_response('Failed to get threat analysis', 500)
 
 @security_bp.route('/security/config', methods=['GET'])
 @jwt_required()
@@ -227,14 +228,14 @@ def get_security_config():
             }
         }
         
-        return jsonify({
+        return success_response({
             'security_config': config,
             'generated_at': datetime.now(timezone.utc).isoformat()
         })
-        
+
     except Exception as e:
         current_app.logger.error(f"Error getting security config: {str(e)}")
-        return jsonify({'error': 'Failed to get security config'}), 500
+        return error_response('Failed to get security config', 500)
 
 @security_bp.route('/security/config', methods=['PUT'])
 @jwt_required()
@@ -247,36 +248,36 @@ def update_security_config():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({'error': 'Request body required'}), 400
-        
+            return error_response('Request body required', 400)
+
         updated_settings = []
-        
+
         # Only allow updating certain safe settings
         safe_updates = {
             'rate_limit_default': 'RATELIMIT_DEFAULT',
             'max_concurrent_sessions': 'MAX_CONCURRENT_SESSIONS'
         }
-        
+
         for key, config_key in safe_updates.items():
             if key in data:
                 # In a real application, you'd want to persist these changes
                 # to a configuration file or database
                 current_app.config[config_key] = data[key]
                 updated_settings.append(key)
-        
+
         if not updated_settings:
-            return jsonify({'message': 'No valid settings to update'}), 400
-        
-        return jsonify({
+            return error_response('No valid settings to update', 400)
+
+        return success_response({
             'message': 'Security configuration updated',
             'updated_settings': updated_settings,
             'note': 'Changes may require application restart to take full effect',
             'updated_at': datetime.now(timezone.utc).isoformat()
         })
-        
+
     except Exception as e:
         current_app.logger.error(f"Error updating security config: {str(e)}")
-        return jsonify({'error': 'Failed to update security config'}), 500
+        return error_response('Failed to update security config', 500)
 
 @security_bp.route('/security/ip-management', methods=['POST'])
 @jwt_required()
@@ -289,36 +290,36 @@ def manage_ip_lists():
     try:
         data = request.get_json()
         if not data:
-            return jsonify({'error': 'Request body required'}), 400
-        
+            return error_response('Request body required', 400)
+
         action = data.get('action')  # 'add_to_whitelist', 'remove_from_whitelist', 'add_to_blacklist', 'remove_from_blacklist'
         ip_address = data.get('ip_address')
-        
+
         if not action or not ip_address:
-            return jsonify({'error': 'action and ip_address required'}), 400
-        
+            return error_response('action and ip_address required', 400)
+
         # Validate IP address
         import ipaddress
         try:
             ipaddress.ip_address(ip_address)
         except ValueError:
-            return jsonify({'error': 'Invalid IP address format'}), 400
-        
+            return error_response('Invalid IP address format', 400)
+
         # In a real application, you'd update persistent storage
         # For demo purposes, we'll just log the action
         current_app.logger.info(f"IP Management: {action} for {ip_address}")
-        
-        return jsonify({
+
+        return success_response({
             'message': f'IP {ip_address} {action.replace("_", " ")}',
             'ip_address': ip_address,
             'action': action,
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'note': 'Changes may require application restart to take effect'
         })
-        
+
     except Exception as e:
         current_app.logger.error(f"Error managing IP lists: {str(e)}")
-        return jsonify({'error': 'Failed to manage IP lists'}), 500
+        return error_response('Failed to manage IP lists', 500)
 
 @security_bp.route('/security/scan', methods=['POST'])
 @jwt_required()
@@ -369,11 +370,11 @@ def run_security_scan():
             }
         }
         
-        return jsonify({
+        return success_response({
             'security_scan': scan_results,
             'completed_at': datetime.now(timezone.utc).isoformat()
         })
-        
+
     except Exception as e:
         current_app.logger.error(f"Error running security scan: {str(e)}")
-        return jsonify({'error': 'Failed to run security scan'}), 500
+        return error_response('Failed to run security scan', 500)

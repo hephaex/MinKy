@@ -1,11 +1,14 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from pydantic import ValidationError
 from sqlalchemy import func
 from app import db
 from app.models.tag import Tag
 from app.models.document import Document
+from app.schemas.tag import TagCreate, TagUpdate
 from app.utils.auth import get_current_user_id
-from app.utils.responses import paginate_query, get_or_404
+from app.utils.responses import paginate_query, get_or_404, success_response, error_response
+from app.utils.validation import format_validation_errors
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 import bleach
 import logging
@@ -15,7 +18,7 @@ logger = logging.getLogger(__name__)
 tags_bp = Blueprint('tags', __name__)
 
 @tags_bp.route('/tags', methods=['GET'])
-def list_tags():
+def list_tags() -> Response | tuple[Response, int]:
     """Get all tags with optional filtering"""
     try:
         page = request.args.get('page', 1, type=int)
@@ -27,8 +30,8 @@ def list_tags():
             # Get popular tags ordered by document count
             popular_tags = Tag.get_popular_tags(limit=per_page)
             tags = [{'tag': tag.to_dict(), 'document_count': count} for tag, count in popular_tags]
-            
-            return jsonify({
+
+            return success_response({
                 'tags': tags,
                 'total': len(tags),
                 'popular': True
@@ -53,8 +56,8 @@ def list_tags():
         
         # Sort by document count after loading
         tags.sort(key=lambda x: x['document_count'], reverse=True)
-        
-        return jsonify({
+
+        return success_response({
             'tags': tags,
             'pagination': {
                 'page': page,
@@ -66,66 +69,65 @@ def list_tags():
             },
             'search_query': search
         })
-        
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @tags_bp.route('/tags', methods=['POST'])
 @jwt_required()
-def create_tag():
+def create_tag() -> Response | tuple[Response, int]:
     """Create a new tag"""
     try:
         data = request.get_json()
         current_user_id = get_jwt_identity()
-        
-        if not data or 'name' not in data:
-            return jsonify({'error': 'Tag name is required'}), 400
-        
-        name = bleach.clean(data['name'].strip())
-        description = bleach.clean(data.get('description', '').strip()) if data.get('description') else None
-        color = data.get('color', '#007bff')
-        
-        if not name:
-            return jsonify({'error': 'Tag name cannot be empty'}), 400
-        
-        # Validate color format
-        import re
-        if not re.match(r'^#[0-9A-Fa-f]{6}$', color):
-            color = '#007bff'
-        
+
+        if not data:
+            return error_response('No data provided', 400)
+
+        # Validate with Pydantic schema
+        try:
+            validated = TagCreate.model_validate(data)
+        except ValidationError as e:
+            errors = format_validation_errors(e)
+            return error_response('Validation failed', 400, details={'validation_errors': errors})
+
+        name = bleach.clean(validated.name)
+        description = bleach.clean(validated.description) if validated.description else None
+        color = validated.color or '#007bff'
+
         # Check if tag already exists
         existing_slug = Tag.create_slug(name)
         existing_tag = Tag.query.filter_by(slug=existing_slug).first()
         if existing_tag:
-            return jsonify({'error': 'Tag already exists', 'tag': existing_tag.to_dict()}), 409
-        
+            return error_response('Tag already exists', 409, details={'tag': existing_tag.to_dict()})
+
         tag = Tag(
             name=name,
             description=description,
             color=color,
             created_by=current_user_id
         )
-        
+
         db.session.add(tag)
         db.session.commit()
-        
-        return jsonify(tag.to_dict()), 201
-        
+
+        return success_response({'tag': tag.to_dict()}, status_code=201)
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @tags_bp.route('/tags/<slug>', methods=['GET'])
-def get_tag(slug):
+def get_tag(slug: str) -> Response | tuple[Response, int]:
     """Get a specific tag and its documents"""
     try:
         tag = Tag.query.filter_by(slug=slug).first_or_404()
-        
+
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
         current_user_id = get_current_user_id()
         include_private = request.args.get('include_private', 'false').lower() == 'true'
-        
+
         # Get documents with this tag
         pagination = Document.search_documents(
             '', page, per_page,
@@ -133,10 +135,10 @@ def get_tag(slug):
             include_private=include_private and current_user_id is not None,
             tags=[slug]
         )
-        
+
         documents = [doc.to_dict() for doc in pagination.items]
-        
-        return jsonify({
+
+        return success_response({
             'tag': tag.to_dict(),
             'documents': documents,
             'pagination': {
@@ -148,92 +150,96 @@ def get_tag(slug):
                 'has_prev': pagination.has_prev
             }
         })
-        
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @tags_bp.route('/tags/<slug>', methods=['PUT'])
 @jwt_required()
-def update_tag(slug):
+def update_tag(slug: str) -> Response | tuple[Response, int]:
     """Update a tag"""
     try:
         tag = Tag.query.filter_by(slug=slug).first_or_404()
         current_user_id = get_jwt_identity()
-        
+
         # Only tag creator can update (or admin in future)
         if tag.created_by != current_user_id:
-            return jsonify({'error': 'Access denied'}), 403
-        
+            return error_response('Access denied', 403)
+
         data = request.get_json()
         if not data:
-            return jsonify({'error': 'No data provided'}), 400
-        
-        if 'description' in data:
-            tag.description = bleach.clean(data['description'].strip()) if data['description'] else None
-        
-        if 'color' in data:
-            color = data['color']
-            import re
-            if re.match(r'^#[0-9A-Fa-f]{6}$', color):
-                tag.color = color
-        
+            return error_response('No data provided', 400)
+
+        # Validate with Pydantic schema
+        try:
+            validated = TagUpdate.model_validate(data)
+        except ValidationError as e:
+            errors = format_validation_errors(e)
+            return error_response('Validation failed', 400, details={'validation_errors': errors})
+
+        if validated.description is not None:
+            tag.description = bleach.clean(validated.description) if validated.description else None
+
+        if validated.color is not None:
+            tag.color = validated.color
+
         db.session.commit()
-        
-        return jsonify(tag.to_dict())
-        
+
+        return success_response({'tag': tag.to_dict()})
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @tags_bp.route('/tags/<slug>', methods=['DELETE'])
 @jwt_required()
-def delete_tag(slug):
+def delete_tag(slug: str) -> Response | tuple[Response, int]:
     """Delete a tag"""
     try:
         tag = Tag.query.filter_by(slug=slug).first_or_404()
         current_user_id = get_jwt_identity()
-        
+
         # Only tag creator can delete (or admin in future)
         if tag.created_by != current_user_id:
-            return jsonify({'error': 'Access denied'}), 403
-        
+            return error_response('Access denied', 403)
+
         # Remove tag from all documents first
         for document in tag.documents:
             document.tags.remove(tag)
-        
+
         db.session.delete(tag)
         db.session.commit()
-        
-        return jsonify({'message': 'Tag deleted successfully'})
-        
+
+        return success_response({'message': 'Tag deleted successfully'})
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @tags_bp.route('/tags/suggest', methods=['GET'])
-def suggest_tags():
+def suggest_tags() -> Response | tuple[Response, int]:
     """Get tag suggestions based on query"""
     try:
         query = request.args.get('q', '').strip()
         limit = request.args.get('limit', 10, type=int)
-        
+
         if not query or len(query) < 2:
-            return jsonify({'suggestions': []})
-        
+            return success_response({'suggestions': []})
+
         tags = Tag.query.filter(Tag.name.ilike(f'%{query}%'))\
             .order_by(Tag.name)\
             .limit(limit)\
             .all()
-        
+
         suggestions = [{'name': tag.name, 'slug': tag.slug, 'color': tag.color} for tag in tags]
-        
-        return jsonify({'suggestions': suggestions})
-        
+
+        return success_response({'suggestions': suggestions})
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @tags_bp.route('/tags/statistics', methods=['GET'])
-def get_tags_statistics():
+def get_tags_statistics() -> Response | tuple[Response, int]:
     """Get comprehensive tag statistics"""
     try:
         
@@ -270,7 +276,7 @@ def get_tags_statistics():
         # Auto-generated tags (tags without description)
         auto_generated_count = Tag.query.filter(Tag.description.is_(None)).count()
         
-        return jsonify({
+        return success_response({
             'total_tags': total_tags,
             'auto_generated_tags': auto_generated_count,
             'manual_tags': total_tags - auto_generated_count,
@@ -278,13 +284,13 @@ def get_tags_statistics():
             'recent_tags': recent_list,
             'usage_distribution': usage_distribution
         })
-        
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @tags_bp.route('/tags/auto-generate', methods=['POST'])
 @jwt_required(optional=True)
-def generate_auto_tags():
+def generate_auto_tags() -> Response | tuple[Response, int]:
     """Generate automatic tags for documents without tags"""
     try:
         current_user_id = get_current_user_id()
@@ -306,11 +312,11 @@ def generate_auto_tags():
             # Process single document
             document = db.session.get(Document, document_id)
             if not document:
-                return jsonify({'error': 'Document not found'}), 404
-            
+                return error_response('Document not found', 404)
+
             # Check access permissions
             if not document.can_view(current_user_id):
-                return jsonify({'error': 'Access denied'}), 403
+                return error_response('Access denied', 403)
             
             documents = [document]
         else:
@@ -384,9 +390,8 @@ def generate_auto_tags():
         if not dry_run:
             db.session.commit()
             logger.info("AUTO_TAG_GENERATION: Committed changes to database")
-        
-        return jsonify({
-            'success': True,
+
+        return success_response({
             'dry_run': dry_run,
             'results': results,
             'summary': {
@@ -395,16 +400,16 @@ def generate_auto_tags():
                 'errors': results['errors']
             }
         })
-        
+
     except Exception as e:
         if not dry_run:
             db.session.rollback()
         logger.error("AUTO_TAG_GENERATION: Fatal error: %s", e)
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @tags_bp.route('/tags/tagless-documents', methods=['GET'])
 @jwt_required(optional=True)
-def get_tagless_documents():
+def get_tagless_documents() -> Response | tuple[Response, int]:
     """Get documents that don't have any tags"""
     try:
         current_user_id = get_current_user_id()
@@ -436,13 +441,13 @@ def get_tagless_documents():
             items_key='documents',
             extra_fields={'include_private': include_private and current_user_id is not None}
         )
-        
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)
 
 @tags_bp.route('/tags/preview-auto-tags/<int:document_id>', methods=['GET'])
 @jwt_required(optional=True)
-def preview_auto_tags(document_id):
+def preview_auto_tags(document_id: int) -> Response | tuple[Response, int]:
     """Preview what auto tags would be generated for a specific document"""
     try:
         current_user_id = get_current_user_id()
@@ -451,19 +456,19 @@ def preview_auto_tags(document_id):
         
         # Check access permissions
         if not document.can_view(current_user_id):
-            return jsonify({'error': 'Access denied'}), 403
-        
+            return error_response('Access denied', 403)
+
         # Detect auto tags
         content = document.markdown_content or document.content or ''
         auto_tags = detect_auto_tags(content)
-        
+
         # Get existing tags
         existing_tags = [tag.name for tag in document.tags]
-        
+
         # Merge tags to see final result
         merged_tags = merge_tags(existing_tags, auto_tags)
-        
-        return jsonify({
+
+        return success_response({
             'document': {
                 'id': document.id,
                 'title': document.title,
@@ -474,6 +479,6 @@ def preview_auto_tags(document_id):
             'merged_tags': merged_tags,
             'new_tags': [tag for tag in merged_tags if tag not in existing_tags]
         })
-        
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return error_response(str(e), 500)

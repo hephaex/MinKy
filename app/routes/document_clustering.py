@@ -3,11 +3,11 @@ Document Clustering API Routes
 Provides endpoints for document clustering and similarity detection
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required
 from app.services.document_clustering_service import document_clustering_service
 from app.models.document import Document
-from app.utils.auth import get_current_user_id, get_optional_user_id
+from app.utils.auth import get_optional_user_id
 from app import limiter
 import logging
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 clustering_bp = Blueprint('clustering', __name__)
 
 @clustering_bp.route('/clustering/status', methods=['GET'])
-def get_clustering_status():
+def get_clustering_status() -> Response | tuple[Response, int]:
     """
     Get document clustering service status and capabilities
     """
@@ -48,7 +48,7 @@ def get_clustering_status():
 @clustering_bp.route('/clustering/cluster', methods=['POST'])
 @limiter.limit("5 per hour")
 @jwt_required(optional=True)
-def cluster_documents():
+def cluster_documents() -> Response | tuple[Response, int]:
     """
     Cluster documents using machine learning algorithms
     """
@@ -131,7 +131,7 @@ def cluster_documents():
 
 @clustering_bp.route('/clustering/similar/<int:document_id>', methods=['GET'])
 @jwt_required(optional=True)
-def find_similar_documents(document_id):
+def find_similar_documents(document_id: int) -> Response | tuple[Response, int]:
     """
     Find documents similar to the specified document
     """
@@ -203,7 +203,7 @@ def find_similar_documents(document_id):
 @clustering_bp.route('/clustering/duplicates', methods=['POST'])
 @limiter.limit("10 per hour")
 @jwt_required(optional=True)
-def detect_duplicates():
+def detect_duplicates() -> Response | tuple[Response, int]:
     """
     Detect potential duplicate documents
     """
@@ -271,7 +271,7 @@ def detect_duplicates():
 
 @clustering_bp.route('/clustering/batch-similarity', methods=['POST'])
 @jwt_required(optional=True)
-def batch_similarity_analysis():
+def batch_similarity_analysis() -> Response | tuple[Response, int]:
     """
     Perform similarity analysis on a batch of documents
     """
@@ -381,7 +381,7 @@ def batch_similarity_analysis():
 
 @clustering_bp.route('/clustering/recommendations/<int:document_id>', methods=['GET'])
 @jwt_required(optional=True)
-def get_clustering_recommendations(document_id):
+def get_clustering_recommendations(document_id: int) -> Response | tuple[Response, int]:
     """
     Get clustering-based recommendations for a document
     """

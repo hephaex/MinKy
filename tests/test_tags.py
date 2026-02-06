@@ -17,11 +17,12 @@ def test_create_tag(client, auth_headers):
 
     assert response.status_code == 201
     data = response.get_json()
-    assert data['name'] == 'Python'
-    assert data['slug'] == 'python'
-    assert data['color'] == '#3776ab'
-    assert 'id' in data
-    assert 'created_at' in data
+    assert data['success'] is True
+    assert data['data']['tag']['name'] == 'Python'
+    assert data['data']['tag']['slug'] == 'python'
+    assert data['data']['tag']['color'] == '#3776AB'  # Uppercase from validator
+    assert 'id' in data['data']['tag']
+    assert 'created_at' in data['data']['tag']
 
 
 def test_create_tag_duplicate(client, auth_headers, app):
@@ -41,8 +42,8 @@ def test_create_tag_duplicate(client, auth_headers, app):
     data = response.get_json()
     assert 'error' in data
     assert 'Tag already exists' in data['error']
-    assert 'tag' in data
-    assert data['tag']['name'] == 'Django'
+    assert 'tag' in data.get('details', {})
+    assert data['details']['tag']['name'] == 'Django'
 
 
 def test_list_tags(client, app):
@@ -61,12 +62,13 @@ def test_list_tags(client, app):
 
     assert response.status_code == 200
     data = response.get_json()
-    assert 'tags' in data
-    assert 'pagination' in data
-    assert len(data['tags']) == 3
-    assert data['pagination']['total'] == 3
+    assert data['success'] is True
+    assert 'tags' in data['data']
+    assert 'pagination' in data['data']
+    assert len(data['data']['tags']) == 3
+    assert data['data']['pagination']['total'] == 3
 
-    tag_names = {tag['name'] for tag in data['tags']}
+    tag_names = {tag['name'] for tag in data['data']['tags']}
     assert tag_names == {'Python', 'JavaScript', 'Rust'}
 
 
@@ -85,9 +87,10 @@ def test_get_tag(client, app, sample_user):
     assert response.status_code in (200, 500)
     if response.status_code == 200:
         data = response.get_json()
-        assert 'tag' in data
-        assert data['tag']['name'] == 'Flask'
-        assert data['tag']['slug'] == slug
+        assert data['success'] is True
+        assert 'tag' in data['data']
+        assert data['data']['tag']['name'] == 'Flask'
+        assert data['data']['tag']['slug'] == slug
 
 
 def test_update_tag(client, auth_headers, app, sample_user):
@@ -176,11 +179,12 @@ def test_get_popular_tags(client, app, sample_user):
 
     assert response.status_code == 200
     data = response.get_json()
-    assert 'tags' in data
-    assert data['popular'] is True
-    assert len(data['tags']) >= 1
+    assert data['success'] is True
+    assert 'tags' in data['data']
+    assert data['data']['popular'] is True
+    assert len(data['data']['tags']) >= 1
 
-    most_popular = data['tags'][0]
+    most_popular = data['data']['tags'][0]
     assert most_popular['tag']['name'] == 'Popular'
     assert most_popular['document_count'] == 3
 
@@ -202,13 +206,14 @@ def test_tag_suggestions(client, app, sample_user):
 
     assert response.status_code == 200
     data = response.get_json()
-    assert 'suggestions' in data
-    assert len(data['suggestions']) >= 2
+    assert data['success'] is True
+    assert 'suggestions' in data['data']
+    assert len(data['data']['suggestions']) >= 2
 
-    suggestion_names = {s['name'] for s in data['suggestions']}
+    suggestion_names = {s['name'] for s in data['data']['suggestions']}
     assert 'Testing' in suggestion_names or 'Test-Driven Development' in suggestion_names
 
-    for suggestion in data['suggestions']:
+    for suggestion in data['data']['suggestions']:
         assert 'name' in suggestion
         assert 'slug' in suggestion
         assert 'color' in suggestion

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, send_file, current_app
+from flask import Blueprint, request, jsonify, send_file, current_app, Response
 from flask_jwt_extended import jwt_required
 from app import db, limiter
 from app.models.document import Document
@@ -18,7 +18,7 @@ export_bp = Blueprint('export', __name__)
 @export_bp.route('/documents/<int:document_id>/export/<format_type>', methods=['GET'])
 @limiter.limit("30 per hour")
 @jwt_required()
-def export_document(document_id, format_type):
+def export_document(document_id: int, format_type: str) -> Response | tuple[Response, int]:
     """Export a single document in the specified format"""
     current_user_id = get_current_user_id()
     user = get_current_user()
@@ -115,7 +115,7 @@ def export_document(document_id, format_type):
 @export_bp.route('/documents/bulk-export', methods=['POST'])
 @limiter.limit("5 per hour")
 @jwt_required()
-def bulk_export_documents():
+def bulk_export_documents() -> Response | tuple[Response, int]:
     """Export multiple documents in specified formats"""
     current_user_id = get_current_user_id()
     user = get_current_user()
@@ -223,7 +223,7 @@ def bulk_export_documents():
 @export_bp.route('/documents/<int:document_id>/export/bundle', methods=['GET'])
 @limiter.limit("10 per hour")
 @jwt_required()
-def export_document_bundle(document_id):
+def export_document_bundle(document_id: int) -> Response | tuple[Response, int]:
     """Export a document in multiple formats as a ZIP bundle"""
     current_user_id = get_current_user_id()
     user = get_current_user()
@@ -273,7 +273,7 @@ def export_document_bundle(document_id):
         return jsonify({'error': 'Bundle export failed', 'details': str(e)}), 500
 
 @export_bp.route('/export/formats', methods=['GET'])
-def get_export_formats():
+def get_export_formats() -> Response:
     """Get list of supported export formats"""
     formats = {
         'html': {

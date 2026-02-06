@@ -3,7 +3,7 @@ OCR API Routes
 Provides endpoints for optical character recognition on uploaded files
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required
 from werkzeug.utils import secure_filename
 from app.services.ocr_service import ocr_service
@@ -22,7 +22,7 @@ ocr_bp = Blueprint('ocr', __name__)
 @ocr_bp.route('/ocr/extract', methods=['POST'])
 @limiter.limit("20 per hour")
 @jwt_required(optional=True)
-def extract_text():
+def extract_text() -> Response | tuple[Response, int]:
     """
     Extract text from uploaded image or PDF file
     """
@@ -93,7 +93,7 @@ def extract_text():
         }), 500
 
 @ocr_bp.route('/ocr/languages', methods=['GET'])
-def get_supported_languages():
+def get_supported_languages() -> Response | tuple[Response, int]:
     """
     Get list of supported OCR languages
     """
@@ -144,7 +144,7 @@ def get_supported_languages():
         }), 500
 
 @ocr_bp.route('/ocr/status', methods=['GET'])
-def get_ocr_status():
+def get_ocr_status() -> Response | tuple[Response, int]:
     """
     Get OCR service status and capabilities
     """
@@ -178,7 +178,7 @@ def get_ocr_status():
 
 @ocr_bp.route('/ocr/extract-and-create', methods=['POST'])
 @jwt_required(optional=True)
-def extract_and_create_document():
+def extract_and_create_document() -> Response | tuple[Response, int]:
     """
     Extract text from file and create a new document
     """
@@ -280,7 +280,7 @@ def extract_and_create_document():
 
 @ocr_bp.route('/ocr/extract-attachment/<int:attachment_id>', methods=['POST'])
 @jwt_required()
-def extract_from_attachment(attachment_id):
+def extract_from_attachment(attachment_id: int) -> Response | tuple[Response, int]:
     """
     Extract text from an existing attachment
     """

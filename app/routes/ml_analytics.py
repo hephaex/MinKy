@@ -3,11 +3,11 @@ ML Analytics API Routes
 Provides endpoints for machine learning-powered document analytics
 """
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required
 from app.services.ml_analytics_service import ml_analytics_service
 from app.models.document import Document
-from app.utils.auth import get_current_user_id, get_optional_user_id
+from app.utils.auth import get_optional_user_id
 from app import limiter
 import logging
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 ml_analytics_bp = Blueprint('ml_analytics', __name__)
 
 @ml_analytics_bp.route('/ml-analytics/status', methods=['GET'])
-def get_ml_analytics_status():
+def get_ml_analytics_status() -> Response | tuple[Response, int]:
     """
     Get ML analytics service status and capabilities
     """
@@ -53,7 +53,7 @@ def get_ml_analytics_status():
 
 @ml_analytics_bp.route('/ml-analytics/document/<int:document_id>/insights', methods=['GET'])
 @jwt_required(optional=True)
-def get_document_insights(document_id):
+def get_document_insights(document_id: int) -> Response | tuple[Response, int]:
     """
     Get comprehensive ML insights for a specific document
     """
@@ -100,7 +100,7 @@ def get_document_insights(document_id):
 @ml_analytics_bp.route('/ml-analytics/corpus/insights', methods=['GET'])
 @limiter.limit("10 per hour")
 @jwt_required(optional=True)
-def get_corpus_insights():
+def get_corpus_insights() -> Response | tuple[Response, int]:
     """
     Get ML insights for the entire document corpus or user's documents
     """
@@ -150,7 +150,7 @@ def get_corpus_insights():
 
 @ml_analytics_bp.route('/ml-analytics/document/<int:document_id>/similar', methods=['GET'])
 @jwt_required(optional=True)
-def get_similar_documents(document_id):
+def get_similar_documents(document_id: int) -> Response | tuple[Response, int]:
     """
     Get documents similar to the specified document
     """
@@ -197,7 +197,7 @@ def get_similar_documents(document_id):
 
 @ml_analytics_bp.route('/ml-analytics/document/<int:document_id>/sentiment', methods=['GET'])
 @jwt_required(optional=True)
-def get_document_sentiment(document_id):
+def get_document_sentiment(document_id: int) -> Response | tuple[Response, int]:
     """
     Get sentiment analysis for a specific document
     """
@@ -232,7 +232,7 @@ def get_document_sentiment(document_id):
 
 @ml_analytics_bp.route('/ml-analytics/document/<int:document_id>/recommendations', methods=['GET'])
 @jwt_required(optional=True)
-def get_document_recommendations(document_id):
+def get_document_recommendations(document_id: int) -> Response | tuple[Response, int]:
     """
     Get improvement recommendations for a specific document
     """
@@ -268,7 +268,7 @@ def get_document_recommendations(document_id):
 @ml_analytics_bp.route('/ml-analytics/corpus/clustering', methods=['POST'])
 @limiter.limit("5 per hour")
 @jwt_required(optional=True)
-def perform_document_clustering():
+def perform_document_clustering() -> Response | tuple[Response, int]:
     """
     Perform clustering analysis on documents
     """
@@ -333,7 +333,7 @@ def perform_document_clustering():
 @ml_analytics_bp.route('/ml-analytics/corpus/topics', methods=['POST'])
 @limiter.limit("5 per hour")
 @jwt_required(optional=True)
-def perform_topic_modeling():
+def perform_topic_modeling() -> Response | tuple[Response, int]:
     """
     Perform topic modeling on documents
     """
@@ -397,7 +397,7 @@ def perform_topic_modeling():
 
 @ml_analytics_bp.route('/ml-analytics/trends', methods=['GET'])
 @jwt_required(optional=True)
-def get_document_trends():
+def get_document_trends() -> Response | tuple[Response, int]:
     """
     Get document creation and content trends
     """

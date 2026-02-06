@@ -1,9 +1,9 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request
 from app import db
 from app.models.category import Category
 from app.models.document import Document
 from app.utils.auth import require_auth
-from app.utils.responses import paginate_query
+from app.utils.responses import paginate_query, success_response, error_response
 from sqlalchemy import func
 import logging
 
@@ -20,22 +20,19 @@ def get_categories():
     try:
         if tree_format == 'flat':
             categories = Category.get_flat_list()
-            return jsonify({
-                'success': True,
+            return success_response({
                 'categories': categories,
                 'count': len(categories)
             })
         else:
             tree = Category.get_tree()
-            return jsonify({
-                'success': True,
+            return success_response({
                 'tree': tree,
                 'count': Category.query.count()
             })
     except Exception as e:
         logger.warning("Error loading categories, returning empty: %s", e)
-        return jsonify({
-            'success': True,
+        return success_response({
             'tree': [] if tree_format != 'flat' else None,
             'categories': [] if tree_format == 'flat' else None,
             'count': 0
@@ -49,17 +46,13 @@ def get_category(category_id):
         category = Category.query.get_or_404(category_id)
         include_children = request.args.get('include_children', 'false').lower() == 'true'
         include_documents = request.args.get('include_documents', 'false').lower() == 'true'
-        
-        return jsonify({
-            'success': True,
+
+        return success_response({
             'category': category.to_dict(include_children=include_children, include_documents=include_documents)
         })
-        
+
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return error_response(str(e), 500)
 
 
 @categories_bp.route('/', methods=['POST'])
@@ -68,38 +61,26 @@ def create_category():
     """Create a new category"""
     try:
         data = request.get_json()
-        
+
         if not data or 'name' not in data:
-            return jsonify({
-                'success': False,
-                'error': 'Category name is required'
-            }), 400
-        
+            return error_response('Category name is required', 400)
+
         name = data['name'].strip()
         if not name:
-            return jsonify({
-                'success': False,
-                'error': 'Category name cannot be empty'
-            }), 400
-        
+            return error_response('Category name cannot be empty', 400)
+
         # Check if category already exists
         slug = Category.create_slug(name)
         existing = Category.query.filter_by(slug=slug).first()
         if existing:
-            return jsonify({
-                'success': False,
-                'error': 'Category with this name already exists'
-            }), 409
-        
+            return error_response('Category with this name already exists', 409)
+
         parent_id = data.get('parent_id')
         if parent_id:
             parent = Category.query.get(parent_id)
             if not parent:
-                return jsonify({
-                    'success': False,
-                    'error': 'Parent category not found'
-                }), 404
-        
+                return error_response('Parent category not found', 404)
+
         category = Category(
             name=name,
             description=data.get('description'),
@@ -107,22 +88,18 @@ def create_category():
             created_by=request.user.id if hasattr(request, 'user') else None,
             color=data.get('color', '#007bff')
         )
-        
+
         db.session.add(category)
         db.session.commit()
-        
-        return jsonify({
-            'success': True,
+
+        return success_response({
             'category': category.to_dict(),
             'message': 'Category created successfully'
-        }), 201
-        
+        }, status_code=201)
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return error_response(str(e), 500)
 
 
 @categories_bp.route('/<int:category_id>', methods=['PUT'])
@@ -132,73 +109,57 @@ def update_category(category_id):
     try:
         category = Category.query.get_or_404(category_id)
         data = request.get_json()
-        
+
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'No data provided'
-            }), 400
-        
+            return error_response('No data provided', 400)
+
         # Update fields
         if 'name' in data:
             name = data['name'].strip()
             if not name:
-                return jsonify({
-                    'success': False,
-                    'error': 'Category name cannot be empty'
-                }), 400
-            
+                return error_response('Category name cannot be empty', 400)
+
             # Check if new name conflicts with existing category
             new_slug = Category.create_slug(name)
             existing = Category.query.filter_by(slug=new_slug).first()
             if existing and existing.id != category_id:
-                return jsonify({
-                    'success': False,
-                    'error': 'Category with this name already exists'
-                }), 409
-            
+                return error_response('Category with this name already exists', 409)
+
             category.name = name
             category.slug = new_slug
-        
+
         if 'description' in data:
             category.description = data['description']
-        
+
         if 'color' in data:
             category.color = data['color']
-        
+
         if 'sort_order' in data:
             category.sort_order = data['sort_order']
-        
+
         if 'is_active' in data:
             category.is_active = data['is_active']
-        
+
         # Handle parent change
         if 'parent_id' in data:
             parent_id = data['parent_id']
-            
+
             # Check for circular reference
             if parent_id and not category.can_have_parent(parent_id):
-                return jsonify({
-                    'success': False,
-                    'error': 'Invalid parent: would create circular reference'
-                }), 400
-            
+                return error_response('Invalid parent: would create circular reference', 400)
+
             category.parent_id = parent_id
-        
+
         db.session.commit()
-        
-        return jsonify({
-            'success': True,
+
+        return success_response({
             'category': category.to_dict(),
             'message': 'Category updated successfully'
         })
-        
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return error_response(str(e), 500)
 
 
 @categories_bp.route('/<int:category_id>', methods=['DELETE'])
@@ -207,35 +168,29 @@ def delete_category(category_id):
     """Delete a category"""
     try:
         category = Category.query.get_or_404(category_id)
-        
+
         # Check if category has children
         if category.children:
-            return jsonify({
-                'success': False,
-                'error': 'Cannot delete category with subcategories. Please move or delete subcategories first.'
-            }), 400
-        
+            return error_response(
+                'Cannot delete category with subcategories. Please move or delete subcategories first.',
+                400
+            )
+
         # Check if category has documents
         if category.documents:
-            return jsonify({
-                'success': False,
-                'error': 'Cannot delete category with documents. Please move or delete documents first.'
-            }), 400
-        
+            return error_response(
+                'Cannot delete category with documents. Please move or delete documents first.',
+                400
+            )
+
         db.session.delete(category)
         db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Category deleted successfully'
-        })
-        
+
+        return success_response(message='Category deleted successfully')
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return error_response(str(e), 500)
 
 
 @categories_bp.route('/<int:category_id>/documents', methods=['GET'])
@@ -263,14 +218,11 @@ def get_category_documents(category_id):
             query, page, per_page,
             serializer_func=lambda d: d.to_dict(),
             items_key='documents',
-            extra_fields={'success': True, 'category': category.to_dict()}
+            extra_fields={'category': category.to_dict()}
         )
-        
+
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return error_response(str(e), 500)
 
 
 @categories_bp.route('/<int:category_id>/move', methods=['POST'])
@@ -280,37 +232,27 @@ def move_category(category_id):
     try:
         category = Category.query.get_or_404(category_id)
         data = request.get_json()
-        
+
         if not data:
-            return jsonify({
-                'success': False,
-                'error': 'No data provided'
-            }), 400
-        
+            return error_response('No data provided', 400)
+
         new_parent_id = data.get('parent_id')
-        
+
         # Check for circular reference
         if new_parent_id and not category.can_have_parent(new_parent_id):
-            return jsonify({
-                'success': False,
-                'error': 'Invalid parent: would create circular reference'
-            }), 400
-        
+            return error_response('Invalid parent: would create circular reference', 400)
+
         category.parent_id = new_parent_id
         db.session.commit()
-        
-        return jsonify({
-            'success': True,
+
+        return success_response({
             'category': category.to_dict(),
             'message': 'Category moved successfully'
         })
-        
+
     except Exception as e:
         db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return error_response(str(e), 500)
 
 
 @categories_bp.route('/stats', methods=['GET'])
@@ -320,7 +262,7 @@ def get_category_stats():
         total_categories = Category.query.count()
         active_categories = Category.query.filter_by(is_active=True).count()
         root_categories = Category.query.filter_by(parent_id=None).count()
-        
+
         # Get categories with most documents
         top_categories = db.session.query(
             Category.id,
@@ -328,9 +270,8 @@ def get_category_stats():
             func.count(Document.id).label('doc_count')
         ).outerjoin(Document).group_by(Category.id, Category.name)\
          .order_by(func.count(Document.id).desc()).limit(10).all()
-        
-        return jsonify({
-            'success': True,
+
+        return success_response({
             'stats': {
                 'total_categories': total_categories,
                 'active_categories': active_categories,
@@ -341,9 +282,6 @@ def get_category_stats():
                 ]
             }
         })
-        
+
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        return error_response(str(e), 500)

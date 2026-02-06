@@ -1,11 +1,11 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, Response
 from app import db
 from sqlalchemy import text
 
 health_bp = Blueprint('health', __name__)
 
 @health_bp.route('/health', methods=['GET'])
-def health_check():
+def health_check() -> tuple[Response, int]:
     """Basic health check endpoint"""
     try:
         # Check database connection
@@ -26,7 +26,7 @@ def health_check():
         }), 503
 
 @health_bp.route('/health/detailed', methods=['GET'])
-def detailed_health_check():
+def detailed_health_check() -> tuple[Response, int]:
     """Detailed health check with more information"""
     try:
         # Check database connection and get some stats

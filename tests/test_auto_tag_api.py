@@ -23,8 +23,9 @@ def test_preview_auto_tags(client, sample_document):
     assert response.status_code == 200
     data = json.loads(response.data)
 
-    assert 'document' in data
-    assert 'detected_auto_tags' in data
+    assert data['success'] is True
+    assert 'document' in data['data']
+    assert 'detected_auto_tags' in data['data']
 
 
 def test_auto_generate_dry_run(client):
@@ -41,9 +42,10 @@ def test_auto_generate_dry_run(client):
     assert response.status_code == 200
     data = json.loads(response.data)
 
-    assert 'dry_run' in data
-    assert data['dry_run'] == True
-    assert 'summary' in data
+    assert data['success'] is True
+    assert 'dry_run' in data['data']
+    assert data['data']['dry_run'] is True
+    assert 'summary' in data['data']
 
 
 @pytest.mark.skip(reason="Modifies database - run manually")

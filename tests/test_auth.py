@@ -23,12 +23,13 @@ def test_register_success(client):
 
     assert response.status_code == 201
     data = json.loads(response.data)
-    assert data['message'] == 'User registered successfully'
-    assert 'access_token' in data
-    assert 'refresh_token' in data
-    assert 'user' in data
-    assert data['user']['username'] == 'newuser'
-    assert 'password_hash' not in data['user']
+    assert data['success'] is True
+    assert data['data']['message'] == 'User registered successfully'
+    assert 'access_token' in data['data']
+    assert 'refresh_token' in data['data']
+    assert 'user' in data['data']
+    assert data['data']['user']['username'] == 'newuser'
+    assert 'password_hash' not in data['data']['user']
 
 
 def test_register_duplicate_username(client, sample_user):
@@ -117,11 +118,12 @@ def test_login_success(client, sample_user):
 
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert data['message'] == 'Login successful'
-    assert 'access_token' in data
-    assert 'refresh_token' in data
-    assert 'user' in data
-    assert data['user']['username'] == 'testuser'
+    assert data['success'] is True
+    assert data['data']['message'] == 'Login successful'
+    assert 'access_token' in data['data']
+    assert 'refresh_token' in data['data']
+    assert 'user' in data['data']
+    assert data['data']['user']['username'] == 'testuser'
 
 
 def test_login_invalid_password(client, sample_user):
@@ -171,7 +173,8 @@ def test_get_current_user(client, auth_headers, sample_user, app):
 
     assert response.status_code == 200
     data = json.loads(response.data)
-    assert 'user' in data
-    assert data['user']['username'] == 'testuser'
-    assert data['user']['email'] == 'test@example.com'
-    assert data['user']['is_active'] is True
+    assert data['success'] is True
+    assert 'user' in data['data']
+    assert data['data']['user']['username'] == 'testuser'
+    assert data['data']['user']['email'] == 'test@example.com'
+    assert data['data']['user']['is_active'] is True
