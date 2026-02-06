@@ -25,12 +25,11 @@ const ImportPage = () => {
 
   const handleTextExtracted = (result) => {
     // Could show a success message or store extracted text for later use
-    console.log('Text extracted:', result);
+    // text extracted
   };
 
   const handleDocumentImported = (documents) => {
     // Show success message and optionally navigate to document list
-    console.log('Documents imported:', documents);
     if (documents.length === 1) {
       navigate(`/documents/${documents[0].id}`);
     } else {

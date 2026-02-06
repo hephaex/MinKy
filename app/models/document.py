@@ -21,6 +21,7 @@ class Document(db.Model):
     html_content = db.Column(db.Text)
     search_vector = db.Column(db.Text)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
     is_public = db.Column(db.Boolean, default=True)
     is_published = db.Column(db.Boolean, default=False)
     published_at = db.Column(db.DateTime, nullable=True)

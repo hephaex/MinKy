@@ -218,6 +218,66 @@
   font-style: italic;
 }
 
+/* Tree Mode Tabs */
+.tree-mode-tabs {
+  display: flex;
+  gap: 4px;
+  background-color: #222;
+  padding: 3px;
+  border-radius: 6px;
+}
+
+.tree-mode-tab {
+  flex: 1;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tree-mode-tab:hover {
+  color: #e5e5e5;
+}
+
+.tree-mode-tab.active {
+  background-color: #333;
+  color: #e5e5e5;
+}
+
+/* Tree Search Input */
+.tree-search-input {
+  width: 100%;
+  padding: 8px 12px;
+  background-color: #222;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #e5e5e5;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.tree-search-input::placeholder {
+  color: #666;
+}
+
+.tree-search-input:focus {
+  border-color: #ff6b35;
+}
+
+/* Tree Section */
+.tree-section {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 /* Scrollbar */
 .documents-sidebar::-webkit-scrollbar {
   width: 6px;

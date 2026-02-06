@@ -9,7 +9,6 @@ const DateExplorerByDate = () => {
   const navigate = useNavigate();
 
   const handleDateSelect = (dateKey) => {
-    console.log('Date selected:', dateKey);
     setSelectedDateKey(dateKey);
   };
 

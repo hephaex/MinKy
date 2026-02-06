@@ -97,7 +97,7 @@ const CollaborativeEditor = ({
     };
 
     const handleDocumentSaved = (data) => {
-      console.log('Document auto-saved');
+      // document auto-saved
     };
 
     const handleError = (error) => {

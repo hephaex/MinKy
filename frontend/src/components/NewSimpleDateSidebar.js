@@ -37,7 +37,6 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
   };
 
   const handleItemClick = (itemKey) => {
-    console.log('Item clicked:', itemKey);
     onDocumentSelect?.(itemKey);
   };
   

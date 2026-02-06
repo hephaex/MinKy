@@ -12,19 +12,28 @@ categories_bp = Blueprint('categories', __name__)
 @categories_bp.route('/', methods=['GET'])
 def get_categories():
     """Get all categories in hierarchical tree structure"""
-    # Categories feature is not implemented - return empty list
     tree_format = request.args.get('format', 'tree')
-    
-    if tree_format == 'flat':
+
+    try:
+        if tree_format == 'flat':
+            categories = Category.get_flat_list()
+            return jsonify({
+                'success': True,
+                'categories': categories,
+                'count': len(categories)
+            })
+        else:
+            tree = Category.get_tree()
+            return jsonify({
+                'success': True,
+                'tree': tree,
+                'count': Category.query.count()
+            })
+    except Exception:
         return jsonify({
             'success': True,
-            'categories': [],
-            'count': 0
-        })
-    else:
-        return jsonify({
-            'success': True,
-            'tree': [],
+            'tree': [] if tree_format != 'flat' else None,
+            'categories': [] if tree_format == 'flat' else None,
             'count': 0
         })
 

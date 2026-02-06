@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import DocumentsSidebar from '../components/DocumentsSidebar';
+import TreeSidebar from '../components/TreeSidebar';
 import DocumentList from './DocumentList';
 import './DocumentsPage.css';
 
@@ -11,30 +11,27 @@ const DocumentsPage = () => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   const toggleSidebar = () => {
-    console.log('DocumentsPage: toggleSidebar called, current state:', sidebarVisible);
-    setSidebarVisible(!sidebarVisible);
+    setSidebarVisible((prev) => !prev);
   };
-
-  console.log('DocumentsPage: Rendering with sidebarVisible =', sidebarVisible);
 
   return (
     <div className="documents-page">
-      <DocumentsSidebar 
-        isVisible={sidebarVisible} 
-        onToggle={toggleSidebar} 
+      <TreeSidebar
+        isVisible={sidebarVisible}
+        onToggle={toggleSidebar}
       />
-      
+
       {sidebarVisible && isMobile && (
         <div className="sidebar-overlay" onClick={toggleSidebar} />
       )}
-      
+
       <div className={`documents-main ${sidebarVisible ? 'with-sidebar' : ''}`}>
         <div className="documents-header">
           {!sidebarVisible && (
@@ -46,7 +43,7 @@ const DocumentsPage = () => {
           )}
           <h1>Documents</h1>
         </div>
-        
+
         <div className="documents-content">
           <DocumentList />
         </div>

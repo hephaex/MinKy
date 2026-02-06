@@ -24,8 +24,6 @@ const DocumentView = () => {
   const generateAndApplyTags = async (documentData) => {
     try {
       setAutoTaggingInProgress(true);
-      console.log('Auto-generating tags for document:', documentData.title);
-      
       // Get AI tag suggestions
       const response = await api.post('/ai/suggest-tags', {
         title: documentData.title,
@@ -34,7 +32,6 @@ const DocumentView = () => {
       
       if (response.data.success && response.data.suggested_tags?.length > 0) {
         const suggestedTags = response.data.suggested_tags;
-        console.log('AI suggested tags:', suggestedTags);
         setSuggestedTags(suggestedTags);
         
         // Automatically apply the suggested tags to the document
@@ -51,7 +48,7 @@ const DocumentView = () => {
           tags: updateResponse.tags || suggestedTags.map(tagName => ({ name: tagName }))
         }));
         
-        console.log('Tags automatically applied:', suggestedTags);
+        // tags applied
       }
     } catch (error) {
       console.error('Error generating and applying tags:', error);

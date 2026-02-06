@@ -37,7 +37,6 @@ const SimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
   };
 
   const handleItemClick = (item) => {
-    console.log('handleItemClick called for:', item.key);
     onDocumentSelect?.(item.key);
   };
   
@@ -168,10 +167,7 @@ const SimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
                         .map(child => (
                           <div 
                             key={child.key}
-                            onClick={() => {
-                              console.log('Child item clicked:', child.key);
-                              onDocumentSelect?.(child.key);
-                            }}
+                            onClick={() => onDocumentSelect?.(child.key)}
                             style={{
                               display: 'flex',
                               alignItems: 'center',

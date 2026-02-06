@@ -15,9 +15,6 @@ const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
       try {
         setLoading(true);
         const url = `/api/documents/by-date?date_key=${encodeURIComponent(dateKey)}&page=1&per_page=50`;
-        console.log('Fetching documents for dateKey:', dateKey);
-        console.log('API URL:', url);
-        
         const response = await fetch(url);
         if (!response.ok) {
           const errorText = await response.text();
@@ -26,7 +23,6 @@ const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
         }
         
         const data = await response.json();
-        console.log('API Response:', data);
         setDocuments(data.documents);
         setPagination(data.pagination);
         setDateRange(data.date_range);

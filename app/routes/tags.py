@@ -7,6 +7,9 @@ from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query, get_or_404
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 import bleach
+import logging
+
+logger = logging.getLogger(__name__)
 
 tags_bp = Blueprint('tags', __name__)
 
@@ -319,7 +322,7 @@ def generate_auto_tags():
             
             documents = query.limit(limit).all()
         
-        print(f"[AUTO_TAG_GENERATION] Processing {len(documents)} documents")
+        logger.info("AUTO_TAG_GENERATION: Processing %d documents", len(documents))
         
         for doc in documents:
             try:
@@ -371,11 +374,11 @@ def generate_auto_tags():
                     'status': 'error',
                     'error': str(e)
                 })
-                print(f"[AUTO_TAG_GENERATION] Error processing document {doc.id}: {e}")
+                logger.error("AUTO_TAG_GENERATION: Error processing document %s: %s", doc.id, e)
         
         if not dry_run:
             db.session.commit()
-            print("[AUTO_TAG_GENERATION] Committed changes to database")
+            logger.info("AUTO_TAG_GENERATION: Committed changes to database")
         
         return jsonify({
             'success': True,
@@ -391,7 +394,7 @@ def generate_auto_tags():
     except Exception as e:
         if not dry_run:
             db.session.rollback()
-        print(f"[AUTO_TAG_GENERATION] Fatal error: {e}")
+        logger.error("AUTO_TAG_GENERATION: Fatal error: %s", e)
         return jsonify({'error': str(e)}), 500
 
 @tags_bp.route('/tags/tagless-documents', methods=['GET'])

@@ -101,7 +101,7 @@ def create_document():
         try:
             obsidian_data = process_obsidian_content(data['markdown_content'], backup_dir="backup")
         except Exception as e:
-            print(f"Error processing Obsidian content during creation: {e}")
+            logger.warning("Error processing Obsidian content during creation: %s", e)
             # 옵시디언 처리 실패시 기본값 설정
             obsidian_data = {
                 'frontmatter': {},
@@ -154,11 +154,11 @@ def create_document():
         try:
             backup_path = create_document_backup(document)
             if backup_path:
-                print(f"Document backup created: {backup_path}")
+                logger.info("Document backup created: %s", backup_path)
             else:
-                print(f"Failed to create backup for document {document.id}")
+                logger.warning("Failed to create backup for document %s", document.id)
         except Exception as backup_error:
-            print(f"Backup creation error for document {document.id}: {backup_error}")
+            logger.error("Backup creation error for document %s: %s", document.id, backup_error)
             # 백업 실패가 문서 생성을 막지 않도록 함
         
         return jsonify(document.to_dict()), 201
@@ -363,7 +363,7 @@ def update_document(document_id):
                     document.add_tags(all_tags)
                     
             except Exception as e:
-                print(f"Error processing Obsidian content during update: {e}")
+                logger.warning("Error processing Obsidian content during update: %s", e)
         
         if 'author' in data:
             author = bleach.clean(data['author'].strip()) if data['author'] else None
@@ -387,9 +387,9 @@ def update_document(document_id):
         try:
             backup_path = update_document_backup(document)
             if backup_path:
-                print(f"Document backup updated: {backup_path}")
+                logger.info("Document backup updated: %s", backup_path)
         except Exception as backup_error:
-            print(f"Backup update error for document {document.id}: {backup_error}")
+            logger.error("Backup update error for document %s: %s", document.id, backup_error)
         
         return jsonify(document.to_dict())
     
@@ -450,7 +450,7 @@ def upload_markdown_file():
         try:
             obsidian_data = process_obsidian_content(content, backup_dir="backup")
         except Exception as e:
-            print(f"Error processing Obsidian content during upload: {e}")
+            logger.warning("Error processing Obsidian content during upload: %s", e)
             obsidian_data = {
                 'frontmatter': {},
                 'internal_links': [],
@@ -512,9 +512,9 @@ def upload_markdown_file():
         try:
             backup_path = upload_document_backup(document)
             if backup_path:
-                print(f"Document backup created: {backup_path}")
+                logger.info("Document backup created: %s", backup_path)
         except Exception as backup_error:
-            print(f"Backup creation error for uploaded document {document.id}: {backup_error}")
+            logger.error("Backup creation error for uploaded document %s: %s", document.id, backup_error)
         
         return jsonify({
             'message': 'File uploaded successfully',
@@ -719,6 +719,198 @@ def get_documents_timeline():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@documents_bp.route('/documents/tree', methods=['GET'])
+@jwt_required(optional=True)
+def get_documents_tree():
+    """문서 트리 구조 가져오기 (태그별 또는 날짜별)"""
+    try:
+        from app.models.tag import Tag, document_tags
+        from sqlalchemy import func
+
+        current_user_id = get_current_user_id()
+        mode = request.args.get('mode', 'by-tag')
+
+        if current_user_id:
+            base_filter = or_(
+                Document.user_id == current_user_id,
+                Document.is_public == True
+            )
+        else:
+            base_filter = Document.is_public == True
+
+        if mode == 'by-tag':
+            # 태그별 그룹핑: tag -> documents
+            tag_doc_counts = (
+                db.session.query(
+                    Tag.id,
+                    Tag.name,
+                    Tag.slug,
+                    Tag.color,
+                    func.count(Document.id).label('doc_count')
+                )
+                .join(document_tags, Tag.id == document_tags.c.tag_id)
+                .join(Document, Document.id == document_tags.c.document_id)
+                .filter(base_filter)
+                .group_by(Tag.id, Tag.name, Tag.slug, Tag.color)
+                .order_by(func.count(Document.id).desc())
+                .all()
+            )
+
+            tree = []
+            for tag_id, tag_name, tag_slug, tag_color, doc_count in tag_doc_counts:
+                # 각 태그의 문서 목록
+                docs_query = (
+                    Document.query
+                    .join(document_tags, Document.id == document_tags.c.document_id)
+                    .filter(
+                        document_tags.c.tag_id == tag_id,
+                        base_filter
+                    )
+                    .order_by(Document.updated_at.desc())
+                    .all()
+                )
+
+                children = [
+                    {
+                        'id': f'doc-{doc.id}',
+                        'label': doc.title,
+                        'type': 'document',
+                        'children': [],
+                        'count': 0,
+                        'documentId': doc.id
+                    }
+                    for doc in docs_query
+                ]
+
+                tree.append({
+                    'id': f'tag-{tag_slug}',
+                    'label': tag_name,
+                    'type': 'tag',
+                    'children': children,
+                    'count': doc_count,
+                    'documentId': None,
+                    'color': tag_color
+                })
+
+            # 태그 없는 문서들
+            untagged_docs = (
+                Document.query
+                .filter(base_filter, ~Document.tags.any())
+                .order_by(Document.updated_at.desc())
+                .all()
+            )
+
+            if untagged_docs:
+                untagged_children = [
+                    {
+                        'id': f'doc-{doc.id}',
+                        'label': doc.title,
+                        'type': 'document',
+                        'children': [],
+                        'count': 0,
+                        'documentId': doc.id
+                    }
+                    for doc in untagged_docs
+                ]
+                tree.append({
+                    'id': 'tag-untagged',
+                    'label': '태그 없음',
+                    'type': 'tag',
+                    'children': untagged_children,
+                    'count': len(untagged_docs),
+                    'documentId': None,
+                    'color': '#888888'
+                })
+
+            total = sum(node['count'] for node in tree)
+
+        elif mode == 'by-date':
+            # 날짜별 그룹핑: year -> month -> documents
+            documents = (
+                Document.query
+                .filter(base_filter)
+                .order_by(Document.created_at.desc())
+                .all()
+            )
+
+            years = {}
+            for doc in documents:
+                created_at = doc.created_at
+                if not created_at:
+                    continue
+
+                year_key = str(created_at.year)
+                month_key = f"{created_at.year}-{created_at.month:02d}"
+                month_label = f"{created_at.month}월"
+
+                if year_key not in years:
+                    years[year_key] = {
+                        'label': f"{created_at.year}년",
+                        'months': {}
+                    }
+
+                if month_key not in years[year_key]['months']:
+                    years[year_key]['months'][month_key] = {
+                        'label': month_label,
+                        'docs': []
+                    }
+
+                years[year_key]['months'][month_key]['docs'].append(doc)
+
+            tree = []
+            for year_key in sorted(years.keys(), reverse=True):
+                year_data = years[year_key]
+                month_nodes = []
+
+                for month_key in sorted(year_data['months'].keys(), reverse=True):
+                    month_data = year_data['months'][month_key]
+                    doc_nodes = [
+                        {
+                            'id': f'doc-{doc.id}',
+                            'label': doc.title,
+                            'type': 'document',
+                            'children': [],
+                            'count': 0,
+                            'documentId': doc.id
+                        }
+                        for doc in month_data['docs']
+                    ]
+
+                    month_nodes.append({
+                        'id': f'date-{month_key}',
+                        'label': month_data['label'],
+                        'type': 'month',
+                        'children': doc_nodes,
+                        'count': len(doc_nodes),
+                        'documentId': None
+                    })
+
+                year_doc_count = sum(m['count'] for m in month_nodes)
+                tree.append({
+                    'id': f'date-{year_key}',
+                    'label': year_data['label'],
+                    'type': 'year',
+                    'children': month_nodes,
+                    'count': year_doc_count,
+                    'documentId': None
+                })
+
+            total = sum(node['count'] for node in tree)
+
+        else:
+            return jsonify({'error': f'Invalid mode: {mode}. Use by-tag or by-date'}), 400
+
+        return jsonify({
+            'tree': tree,
+            'mode': mode,
+            'total_documents': total
+        })
+
+    except Exception as e:
+        logger.error(f"Error building document tree: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 @documents_bp.route('/documents/import', methods=['POST'])
 @jwt_required(optional=True)

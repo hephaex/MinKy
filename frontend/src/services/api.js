@@ -58,9 +58,6 @@ export const documentService = {
     const formData = new FormData();
     formData.append('file', file);
     
-    console.log('Uploading file:', file.name, 'size:', file.size);
-    console.log('FormData contents:', formData.get('file'));
-    
     // Try direct backend connection (bypassing nginx proxy)
     const directResponse = await axios.post('http://localhost:5001/api/documents/upload', formData, {
       timeout: 120000,
@@ -83,6 +80,11 @@ export const documentService = {
 
   exportAllDocuments: async (shortFilename = false) => {
     const response = await api.post('/documents/export', { short_filename: shortFilename });
+    return response.data;
+  },
+
+  getDocumentTree: async (mode = 'by-tag') => {
+    const response = await api.get('/documents/tree', { params: { mode } });
     return response.data;
   },
 };

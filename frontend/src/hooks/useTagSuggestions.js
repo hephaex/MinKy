@@ -26,8 +26,6 @@ const useTagSuggestions = ({ initialTags = [], onTagsChange } = {}) => {
    * Auto-applies suggested tags that don't already exist.
    */
   const handleTagSuggestions = useCallback((suggestedTagsList) => {
-    console.log('Suggested tags:', suggestedTagsList);
-
     if (!suggestedTagsList || suggestedTagsList.length === 0) {
       return;
     }

@@ -13,7 +13,7 @@ const OCRPage = () => {
 
   const handleTextExtracted = (result) => {
     // Could show a success message or store extracted text for later use
-    console.log('Text extracted:', result);
+    // text extracted
   };
 
   return (

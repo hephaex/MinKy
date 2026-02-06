@@ -89,18 +89,14 @@ const DocumentImport = ({
       }
 
       try {
-        console.log('DocumentImport: Starting upload for file:', file.name, 'size:', file.size);
         const formData = new FormData();
         formData.append('file', file);
         formData.append('auto_tag', 'true');
 
-        console.log('DocumentImport: FormData prepared, making API call to /documents/import');
         const response = await api.post('/documents/import', formData, {
           timeout: 120000, // 2 minutes timeout for large files
         });
         
-        console.log('DocumentImport: API response received:', response.status, response.data);
-
         if (response.data.success) {
           newResults.push({
             filename: file.name,

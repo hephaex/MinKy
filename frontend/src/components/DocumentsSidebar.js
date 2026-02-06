@@ -11,9 +11,7 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
   const [allMdExpanded, setAllMdExpanded] = useState(false);
 
   useEffect(() => {
-    console.log('DocumentsSidebar: isVisible changed to', isVisible);
     if (isVisible) {
-      console.log('DocumentsSidebar: Fetching documents...');
       fetchRecentDocuments();
       fetchAllDocuments();
     }
@@ -54,8 +52,6 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
   const truncateTitle = (title, maxLength = 30) => {
     return title.length > maxLength ? title.substring(0, maxLength) + '...' : title;
   };
-
-  console.log('DocumentsSidebar: Rendering with isVisible =', isVisible);
 
   return (
     <div className={`documents-sidebar ${!isVisible ? 'hidden' : ''}`}>

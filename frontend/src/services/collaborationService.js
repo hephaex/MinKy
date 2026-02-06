@@ -22,13 +22,13 @@ class CollaborationService {
     });
 
     this.socket.on('connect', () => {
-      console.log('Connected to collaboration server');
+      // connected
       this.isConnected = true;
       this.emit('connected');
     });
 
     this.socket.on('disconnect', () => {
-      console.log('Disconnected from collaboration server');
+      // disconnected
       this.isConnected = false;
       this.emit('disconnected');
     });
@@ -40,17 +40,17 @@ class CollaborationService {
 
     // Document collaboration events
     this.socket.on('document_joined', (data) => {
-      console.log('Joined document:', data.document_id);
+      // joined document
       this.emit('document_joined', data);
     });
 
     this.socket.on('user_joined', (data) => {
-      console.log('User joined:', data.username);
+      // user joined
       this.emit('user_joined', data);
     });
 
     this.socket.on('user_left', (data) => {
-      console.log('User left:', data.username);
+      // user left
       this.emit('user_left', data);
     });
 
@@ -63,7 +63,7 @@ class CollaborationService {
     });
 
     this.socket.on('document_saved', (data) => {
-      console.log('Document saved by user:', data.saved_by);
+      // document saved
       this.emit('document_saved', data);
     });
 

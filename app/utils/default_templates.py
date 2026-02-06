@@ -394,7 +394,7 @@ As a {user_type}, I want {functionality} so that {benefit}.
             db.session.add(template)
     
     db.session.commit()
-    print(f"Created {len(templates)} default templates")
+    # templates created
 
 if __name__ == "__main__":
     from app import create_app
