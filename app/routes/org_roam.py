@@ -24,7 +24,7 @@ class OrgRoamImportSchema(Schema):
     overwrite_existing = fields.Bool(load_default=False)
 
 @org_roam_bp.route('/org-roam/upload', methods=['POST'])
-@jwt_required
+@jwt_required()
 @rate_limit_upload("5 per hour")
 @validate_request_security
 @audit_log("org_roam_file_upload")
@@ -266,7 +266,7 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
     return results
 
 @org_roam_bp.route('/org-roam/import-directory', methods=['POST'])
-@jwt_required
+@jwt_required()
 @rate_limit_api("2 per hour")
 @validate_request_security
 @audit_log("org_roam_directory_import")
@@ -321,7 +321,7 @@ def import_org_roam_directory():
         return jsonify({'error': 'Directory import failed', 'details': str(e)}), 500
 
 @org_roam_bp.route('/org-roam/documents', methods=['GET'])
-@jwt_required
+@jwt_required()
 @rate_limit_api("30 per minute")
 @validate_request_security
 def get_org_roam_documents():
@@ -369,7 +369,7 @@ def get_org_roam_documents():
         return jsonify({'error': 'Failed to get documents', 'details': str(e)}), 500
 
 @org_roam_bp.route('/org-roam/documents/<int:document_id>/links', methods=['GET'])
-@jwt_required
+@jwt_required()
 @rate_limit_api("60 per minute")
 @validate_request_security
 def get_document_links(document_id):
@@ -462,7 +462,7 @@ def get_document_links(document_id):
         return jsonify({'error': 'Failed to get document links', 'details': str(e)}), 500
 
 @org_roam_bp.route('/org-roam/statistics', methods=['GET'])
-@jwt_required
+@jwt_required()
 @rate_limit_api("10 per minute")
 @validate_request_security
 def get_org_roam_statistics():

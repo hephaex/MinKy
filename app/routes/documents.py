@@ -357,8 +357,7 @@ def update_document(document_id):
                 all_tags = merge_tags(merge_tags(existing_user_tags, auto_tags), obsidian_tags)
                 
                 # Clear existing tags and add updated ones
-                for tag in document.tags.all():
-                    document.tags.remove(tag)
+                document.tags = []
                 if all_tags:
                     document.add_tags(all_tags)
                     
@@ -374,9 +373,8 @@ def update_document(document_id):
         
         
         if 'tags' in data:
-            # Handle manual tag updates
-            for tag in document.tags.all():
-                document.tags.remove(tag)
+            # Handle manual tag updates - clear all at once instead of iterating
+            document.tags = []
             if data['tags']:
                 document.add_tags(data['tags'])
         
@@ -607,15 +605,16 @@ def get_documents_timeline():
         current_user_id = get_current_user_id()
         group_by = request.args.get('group_by', 'month')  # 'month', 'year', 'day'
         
-        # 사용자가 볼 수 있는 문서들 가져오기
+        # 사용자가 볼 수 있는 문서들 가져오기 (최대 5000개로 제한)
+        max_documents = 5000
         if current_user_id:
             # 로그인한 사용자: 자신의 문서 + 공개 문서
             documents = Document.query.filter(
                 or_(Document.user_id == current_user_id, Document.is_public == True)
-            ).order_by(Document.created_at.desc()).all()
+            ).order_by(Document.created_at.desc()).limit(max_documents).all()
         else:
             # 비로그인 사용자: 공개 문서만
-            documents = Document.query.filter_by(is_public=True).order_by(Document.created_at.desc()).all()
+            documents = Document.query.filter_by(is_public=True).order_by(Document.created_at.desc()).limit(max_documents).all()
         
         # 타임라인 데이터 구성
         timeline = {}

@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from sqlalchemy import func
 from app import db
 from app.models.tag import Tag
 from app.models.document import Document
@@ -247,12 +248,16 @@ def get_tags_statistics():
         recent_tags = Tag.query.order_by(Tag.created_at.desc()).limit(5).all()
         recent_list = [{'name': tag.name, 'created_at': tag.created_at.isoformat(), 'color': tag.color} for tag in recent_tags]
         
-        # Tag usage distribution - simplified approach
-        all_tags = Tag.query.all()
+        # Tag usage distribution - single query with LEFT JOIN instead of N+1
+        tag_counts = db.session.query(
+            Tag.id,
+            func.count(Document.id).label('doc_count')
+        ).outerjoin(
+            Tag.documents
+        ).group_by(Tag.id).all()
+
         usage_distribution = {'unused': 0, 'low': 0, 'medium': 0, 'high': 0}
-        
-        for tag in all_tags:
-            doc_count = tag.get_document_count()
+        for _, doc_count in tag_counts:
             if doc_count == 0:
                 usage_distribution['unused'] += 1
             elif doc_count <= 5:

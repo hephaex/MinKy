@@ -8,7 +8,10 @@ from app.utils.exporters import DocumentExporter
 from app.services.notification_service import NotificationService
 import os
 import tempfile
+import logging
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 export_bp = Blueprint('export', __name__)
 
@@ -83,8 +86,8 @@ def export_document(document_id, format_type):
             def cleanup_after_send():
                 try:
                     exporter.cleanup()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Export cleanup error (non-critical): %s", e)
             
             response = send_file(
                 file_path,
@@ -198,8 +201,8 @@ def bulk_export_documents():
             try:
                 import shutil
                 shutil.rmtree(temp_dir)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Bulk export cleanup error (non-critical): %s", e)
         
         response = send_file(
             zip_path,
@@ -249,8 +252,8 @@ def export_document_bundle(document_id):
         def cleanup_bundle():
             try:
                 exporter.cleanup()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Bundle export cleanup error (non-critical): %s", e)
         
         response = send_file(
             bundle_path,

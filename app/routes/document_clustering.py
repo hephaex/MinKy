@@ -7,7 +7,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.services.document_clustering_service import document_clustering_service
 from app.models.document import Document
-from app.utils.auth import get_current_user_id
+from app.utils.auth import get_current_user_id, get_optional_user_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -57,11 +57,7 @@ def cluster_documents():
                 'error': 'Document clustering service is not available'
             }), 503
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Get request parameters
         data = request.get_json() or {}
@@ -147,11 +143,7 @@ def find_similar_documents(document_id):
         # Check if document exists and user has access
         document = Document.query.get_or_404(document_id)
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Check access permissions
         if not document.is_public and (not user_id or document.user_id != user_id):
@@ -219,11 +211,7 @@ def detect_duplicates():
                 'error': 'Duplicate detection service is not available'
             }), 503
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Get request parameters
         data = request.get_json() or {}
@@ -291,11 +279,7 @@ def batch_similarity_analysis():
                 'error': 'Similarity analysis service is not available'
             }), 503
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Get request parameters
         data = request.get_json() or {}
@@ -408,11 +392,7 @@ def get_clustering_recommendations(document_id):
         # Check if document exists and user has access
         document = Document.query.get_or_404(document_id)
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Check access permissions
         if not document.is_public and (not user_id or document.user_id != user_id):

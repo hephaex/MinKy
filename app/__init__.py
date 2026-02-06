@@ -121,7 +121,7 @@ def create_app():
     from app.routes.ml_analytics import ml_analytics_bp
     from app.routes.document_clustering import clustering_bp
     from app.routes.git import git_bp
-    # from app.routes.org_roam import org_roam_bp
+    from app.routes.org_roam import org_roam_bp
     app.register_blueprint(documents_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(health_bp, url_prefix='/api')
@@ -143,7 +143,7 @@ def create_app():
     app.register_blueprint(ml_analytics_bp, url_prefix='/api')
     app.register_blueprint(clustering_bp, url_prefix='/api')
     app.register_blueprint(git_bp, url_prefix='/api')
-    # app.register_blueprint(org_roam_bp, url_prefix='/api')  # Temporarily disabled due to decorator conflicts
+    app.register_blueprint(org_roam_bp, url_prefix='/api')
     
     # Initialize collaboration service and register WebSocket events
     from app.services.collaboration_service import init_collaboration_service

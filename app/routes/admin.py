@@ -76,21 +76,27 @@ def get_user_details(user_id):
         user = User.query.get_or_404(user_id)
         user_data = user.to_dict(include_sensitive=True)
         
-        # Add detailed stats
-        documents = Document.query.filter_by(user_id=user.id).all()
-        comments = Comment.query.filter_by(user_id=user.id).all()
-        
-        # Recent activity
+        # Add detailed stats - use count() instead of loading all records
+        document_count = Document.query.filter_by(user_id=user.id).count()
+        comment_count = Comment.query.filter_by(user_id=user.id).count()
+
+        # Recent activity count
         recent_docs = Document.query.filter(
             and_(
                 Document.user_id == user.id,
                 Document.created_at >= datetime.now(timezone.utc) - timedelta(days=30)
             )
         ).count()
-        
+
+        # Get only the last 5 documents for recent activity
+        recent_activity_docs = Document.query.filter_by(user_id=user.id)\
+            .order_by(Document.created_at.desc())\
+            .limit(5)\
+            .all()
+
         user_data.update({
-            'document_count': len(documents),
-            'comment_count': len(comments),
+            'document_count': document_count,
+            'comment_count': comment_count,
             'recent_documents': recent_docs,
             'recent_activity': [
                 {
@@ -98,7 +104,7 @@ def get_user_details(user_id):
                     'title': doc.title,
                     'created_at': doc.created_at.isoformat() if doc.created_at else None
                 }
-                for doc in documents[-5:]  # Last 5 documents
+                for doc in recent_activity_docs
             ]
         })
         

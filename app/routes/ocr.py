@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from app.services.ocr_service import ocr_service
 from app.models.document import Document
 from app.models.attachment import Attachment
-from app.utils.auth import get_current_user_id
+from app.utils.auth import get_current_user_id, get_optional_user_id
 from app import db
 import logging
 import os
@@ -77,11 +77,7 @@ def extract_text():
         )
         
         # Log OCR activity
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         logger.info(f"OCR processing: user={user_id}, file={file.filename}, "
                    f"method={result.get('method')}, success={result.get('success')}")

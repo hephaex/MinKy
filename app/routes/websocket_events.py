@@ -5,11 +5,25 @@ WebSocket Event Handlers for Real-time Collaboration
 from flask import request
 from flask_socketio import emit
 from flask_jwt_extended import verify_jwt_in_request
+from flask_jwt_extended.exceptions import NoAuthorizationError
+from jwt.exceptions import PyJWTError
 from app.services.collaboration_service import collaboration_service
 from app.utils.auth import get_current_user_id
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def get_websocket_user_id():
+    """Get user_id from JWT in websocket context, None for anonymous users."""
+    try:
+        verify_jwt_in_request()
+        return get_current_user_id()
+    except (NoAuthorizationError, PyJWTError):
+        return None  # Allow anonymous users
+    except Exception as e:
+        logger.debug("Unexpected error getting websocket user_id: %s", e)
+        return None
 
 def register_websocket_events(socketio):
     """Register WebSocket event handlers"""
@@ -36,12 +50,7 @@ def register_websocket_events(socketio):
                 return
             
             # Get user ID from JWT token (optional for anonymous users)
-            user_id = None
-            try:
-                verify_jwt_in_request()
-                user_id = get_current_user_id()
-            except Exception:
-                pass  # Allow anonymous users
+            user_id = get_websocket_user_id()
             
             collaboration_service.join_document_session(
                 document_id=str(document_id),
@@ -136,12 +145,9 @@ def register_websocket_events(socketio):
                 emit('error', {'message': 'Document ID required'})
                 return
             
-            # Get user ID from JWT token
-            user_id = None
-            try:
-                verify_jwt_in_request()
-                user_id = get_current_user_id()
-            except Exception:
+            # Get user ID from JWT token (required for saving)
+            user_id = get_websocket_user_id()
+            if not user_id:
                 emit('error', {'message': 'Authentication required to save'})
                 return
             

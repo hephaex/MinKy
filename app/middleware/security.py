@@ -1,10 +1,15 @@
 from flask import request, jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
+from flask_jwt_extended.exceptions import NoAuthorizationError
+from jwt.exceptions import PyJWTError
 from functools import wraps
 from datetime import datetime, timezone
 from app import limiter
 import ipaddress
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 class SecurityMiddleware:
     """Advanced security middleware for API protection"""
@@ -246,12 +251,14 @@ def audit_log(action):
             try:
                 result = f(*args, **kwargs)
                 
-                # Log successful action
+                # Log successful action - get user_id if authenticated
                 user_id = None
                 try:
                     user_id = get_jwt_identity()
-                except Exception:
-                    pass
+                except (NoAuthorizationError, PyJWTError):
+                    pass  # Anonymous user for audit log
+                except Exception as e:
+                    logger.debug("Unexpected error getting audit user_id: %s", e)
                 
                 audit_entry = {
                     'timestamp': start_time.isoformat(),

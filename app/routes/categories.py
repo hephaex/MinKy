@@ -5,6 +5,9 @@ from app.models.document import Document
 from app.utils.auth import require_auth
 from app.utils.responses import paginate_query
 from sqlalchemy import func
+import logging
+
+logger = logging.getLogger(__name__)
 
 categories_bp = Blueprint('categories', __name__)
 
@@ -29,7 +32,8 @@ def get_categories():
                 'tree': tree,
                 'count': Category.query.count()
             })
-    except Exception:
+    except Exception as e:
+        logger.warning("Error loading categories, returning empty: %s", e)
         return jsonify({
             'success': True,
             'tree': [] if tree_format != 'flat' else None,

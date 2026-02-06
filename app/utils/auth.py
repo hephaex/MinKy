@@ -3,10 +3,15 @@ Authentication utility functions for Minky
 """
 
 from functools import wraps
+import logging
 from flask import jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended.exceptions import NoAuthorizationError
+from jwt.exceptions import PyJWTError
 from app import db
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 
 def get_current_user_id():
@@ -25,6 +30,21 @@ def get_current_user_id():
         # Convert string identity back to int for DB queries
         return int(identity) if isinstance(identity, str) else identity
     except (ValueError, TypeError):
+        return None
+
+
+def get_optional_user_id():
+    """
+    Get user_id from JWT if available, None otherwise.
+    Silently handles JWT exceptions for optional authentication routes.
+    Logs unexpected errors at debug level.
+    """
+    try:
+        return get_current_user_id()
+    except (NoAuthorizationError, PyJWTError):
+        return None
+    except Exception as e:
+        logger.debug("Unexpected error getting optional user_id: %s", e)
         return None
 
 

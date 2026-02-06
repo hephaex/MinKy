@@ -7,7 +7,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.services.ml_analytics_service import ml_analytics_service
 from app.models.document import Document
-from app.utils.auth import get_current_user_id
+from app.utils.auth import get_current_user_id, get_optional_user_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -66,11 +66,7 @@ def get_document_insights(document_id):
         # Check if document exists and user has access
         document = Document.query.get_or_404(document_id)
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Check access permissions
         if not document.is_public and (not user_id or document.user_id != user_id):
@@ -113,11 +109,7 @@ def get_corpus_insights():
                 'error': 'ML analytics service is not available'
             }), 503
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Get query parameters
         scope = request.args.get('scope', 'user')  # 'user' or 'public'
@@ -170,11 +162,7 @@ def get_similar_documents(document_id):
         # Check if document exists and user has access
         document = Document.query.get_or_404(document_id)
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Check access permissions
         if not document.is_public and (not user_id or document.user_id != user_id):
@@ -215,11 +203,7 @@ def get_document_sentiment(document_id):
         # Check if document exists and user has access
         document = Document.query.get_or_404(document_id)
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Check access permissions
         if not document.is_public and (not user_id or document.user_id != user_id):
@@ -254,11 +238,7 @@ def get_document_recommendations(document_id):
         # Check if document exists and user has access
         document = Document.query.get_or_404(document_id)
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Check access permissions
         if not document.is_public and (not user_id or document.user_id != user_id):
@@ -296,11 +276,7 @@ def perform_document_clustering():
                 'error': 'Clustering requires ML libraries'
             }), 503
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Get request parameters
         data = request.get_json() or {}
@@ -364,11 +340,7 @@ def perform_topic_modeling():
                 'error': 'Topic modeling requires ML libraries'
             }), 503
         
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Get request parameters
         data = request.get_json() or {}
@@ -426,11 +398,7 @@ def get_document_trends():
     Get document creation and content trends
     """
     try:
-        user_id = None
-        try:
-            user_id = get_current_user_id()
-        except Exception:
-            pass
+        user_id = get_optional_user_id()
         
         # Get query parameters
         scope = request.args.get('scope', 'user')
@@ -454,8 +422,10 @@ def get_document_trends():
             from datetime import datetime, timedelta, timezone
             start_date = datetime.now(timezone.utc) - timedelta(days=days)
             query = query.filter(Document.created_at >= start_date)
-        
-        documents = query.all()
+
+        # Add limit to prevent loading excessive data
+        max_documents = 2000
+        documents = query.limit(max_documents).all()
         
         if not documents:
             return jsonify({
