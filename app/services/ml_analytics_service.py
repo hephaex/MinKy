@@ -108,7 +108,7 @@ class MLAnalyticsService:
     def get_document_insights(self, document_id: int) -> Dict[str, Any]:
         """Get comprehensive ML insights for a specific document"""
         try:
-            document = Document.query.get(document_id)
+            document = db.session.get(Document, document_id)
             if not document:
                 return {'error': 'Document not found'}
             

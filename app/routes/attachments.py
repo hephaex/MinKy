@@ -125,7 +125,7 @@ def upload_file():
         # Get document_id if provided
         document_id = request.form.get('document_id', type=int)
         if document_id:
-            document = Document.query.get(document_id)
+            document = db.session.get(Document, document_id)
             if not document or not document.can_edit(current_user_id):
                 os.remove(file_path)
                 if thumbnail_path and os.path.exists(thumbnail_path):

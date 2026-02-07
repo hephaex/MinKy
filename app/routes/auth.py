@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, Response
+from flask import Blueprint, request, Response
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from email_validator import validate_email, EmailNotValidError
 from pydantic import ValidationError
@@ -13,6 +13,64 @@ auth_bp = Blueprint('auth', __name__)
 @auth_bp.route('/register', methods=['POST'])
 @limiter.limit("20 per minute")
 def register() -> Response | tuple[Response, int]:
+    """Register a new user
+    ---
+    tags:
+      - Auth
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - username
+            - email
+            - password
+          properties:
+            username:
+              type: string
+              description: Username (3-50 chars, alphanumeric and underscores)
+              example: johndoe
+            email:
+              type: string
+              format: email
+              description: Email address
+              example: john@example.com
+            password:
+              type: string
+              format: password
+              description: Password (min 8 chars)
+              example: SecurePass123!
+            full_name:
+              type: string
+              description: Full name (optional)
+              example: John Doe
+    responses:
+      201:
+        description: User registered successfully
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            data:
+              type: object
+              properties:
+                message:
+                  type: string
+                user:
+                  type: object
+                access_token:
+                  type: string
+                refresh_token:
+                  type: string
+      400:
+        description: Validation error
+      409:
+        description: Username or email already exists
+    """
     try:
         data = request.get_json()
 
@@ -63,6 +121,53 @@ def register() -> Response | tuple[Response, int]:
 @auth_bp.route('/login', methods=['POST'])
 @limiter.limit("10 per minute")
 def login() -> Response | tuple[Response, int]:
+    """Authenticate user and get tokens
+    ---
+    tags:
+      - Auth
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - username
+            - password
+          properties:
+            username:
+              type: string
+              description: Username or email
+              example: johndoe
+            password:
+              type: string
+              format: password
+              description: Password
+              example: SecurePass123!
+    responses:
+      200:
+        description: Login successful
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            data:
+              type: object
+              properties:
+                message:
+                  type: string
+                user:
+                  type: object
+                access_token:
+                  type: string
+                refresh_token:
+                  type: string
+      400:
+        description: Validation error
+      401:
+        description: Invalid credentials or account disabled
+    """
     try:
         data = request.get_json()
 
@@ -105,6 +210,30 @@ def login() -> Response | tuple[Response, int]:
 @limiter.limit("30 per hour")
 @jwt_required(refresh=True)
 def refresh() -> Response | tuple[Response, int]:
+    """Refresh access token
+    ---
+    tags:
+      - Auth
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Token refreshed
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            data:
+              type: object
+              properties:
+                access_token:
+                  type: string
+                user:
+                  type: object
+      401:
+        description: Invalid or expired refresh token
+    """
     try:
         current_user_id = get_jwt_identity()
         user = db.session.get(User, current_user_id)
@@ -125,6 +254,44 @@ def refresh() -> Response | tuple[Response, int]:
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
 def get_current_user() -> Response | tuple[Response, int]:
+    """Get current user profile
+    ---
+    tags:
+      - Auth
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: User profile retrieved
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            data:
+              type: object
+              properties:
+                user:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    username:
+                      type: string
+                    email:
+                      type: string
+                    full_name:
+                      type: string
+                    is_active:
+                      type: boolean
+                    created_at:
+                      type: string
+                      format: date-time
+      401:
+        description: Unauthorized
+      404:
+        description: User not found
+    """
     try:
         current_user_id = get_jwt_identity()
         user = db.session.get(User, current_user_id)
@@ -142,6 +309,50 @@ def get_current_user() -> Response | tuple[Response, int]:
 @auth_bp.route('/profile', methods=['PUT'])
 @jwt_required()
 def update_profile() -> Response | tuple[Response, int]:
+    """Update user profile
+    ---
+    tags:
+      - Auth
+    security:
+      - Bearer: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            full_name:
+              type: string
+              description: Full name
+              example: John Doe
+            email:
+              type: string
+              format: email
+              description: New email address
+              example: newemail@example.com
+    responses:
+      200:
+        description: Profile updated successfully
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            data:
+              type: object
+              properties:
+                message:
+                  type: string
+                user:
+                  type: object
+      400:
+        description: Invalid data provided
+      401:
+        description: Unauthorized
+      409:
+        description: Email already registered
+    """
     try:
         current_user_id = get_jwt_identity()
         user = db.session.get(User, current_user_id)

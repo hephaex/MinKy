@@ -114,8 +114,8 @@ class Category(db.Model):
         
         if parent_id == self.id:
             return False
-        
-        parent = Category.query.get(parent_id)
+
+        parent = db.session.get(Category, parent_id)
         if not parent:
             return False
         

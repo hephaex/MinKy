@@ -8,6 +8,12 @@ services:
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-jwt-secret-key}
       - FLASK_ENV=production
+      # CORS Configuration
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      # Caching Configuration
+      - CACHE_TYPE=${CACHE_TYPE:-RedisCache}
+      - CACHE_DEFAULT_TIMEOUT=${CACHE_DEFAULT_TIMEOUT:-300}
+      - REDIS_URL=redis://redis:6379/0
       # AI Service Configuration
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
@@ -42,6 +48,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./logs:/app/logs
       - ./migrations:/app/migrations
@@ -59,6 +67,19 @@ services:
       - "9600:9600" # for performance analyzer
     volumes:
       - ./opensearch_data:/usr/share/opensearch/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   db:

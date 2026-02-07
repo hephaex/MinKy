@@ -7,6 +7,10 @@ from flask_bcrypt import Bcrypt
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_socketio import SocketIO
+from flask_talisman import Talisman
+from flask_caching import Cache
+from flasgger import Swagger
+from prometheus_flask_exporter import PrometheusMetrics
 from dotenv import load_dotenv
 import os
 import sys
@@ -28,6 +32,8 @@ limiter = Limiter(
     default_limits=["1000 per hour"]
 )
 socketio = SocketIO()
+talisman = Talisman()
+cache = Cache()
 
 
 def validate_security_config():
@@ -62,6 +68,11 @@ def create_app():
 
     flask_env = os.getenv('FLASK_ENV', 'production')
 
+    # Setup structured logging
+    from app.utils.logging_config import setup_logging, add_request_id_middleware
+    setup_logging(app)
+    add_request_id_middleware(app)
+
     # Validate security configuration
     security_errors = validate_security_config()
     if security_errors:
@@ -91,14 +102,113 @@ def create_app():
     # Rate limiting configuration
     app.config['RATELIMIT_DEFAULT'] = os.getenv('RATE_LIMIT_DEFAULT', '1000 per hour')
     app.config['RATELIMIT_HEADERS_ENABLED'] = True
-    
-    CORS(app, origins=["http://localhost:3000"])
+
+    # CORS configuration - environment-based
+    cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
+    cors_origins = [origin.strip() for origin in cors_origins]
+
+    # Caching configuration
+    cache_type = os.getenv('CACHE_TYPE', 'SimpleCache')
+    app.config['CACHE_TYPE'] = cache_type
+    app.config['CACHE_DEFAULT_TIMEOUT'] = int(os.getenv('CACHE_DEFAULT_TIMEOUT', '300'))
+    if cache_type == 'RedisCache':
+        app.config['CACHE_REDIS_URL'] = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+
+    CORS(app, origins=cors_origins, supports_credentials=True)
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
     bcrypt.init_app(app)
     limiter.init_app(app)
-    socketio.init_app(app, cors_allowed_origins=["http://localhost:3000"])
+    cache.init_app(app)
+    socketio.init_app(app, cors_allowed_origins=cors_origins)
+
+    # Prometheus metrics (disabled during testing to avoid registry conflicts)
+    metrics_enabled = os.getenv('METRICS_ENABLED', 'true').lower() == 'true'
+    if metrics_enabled and flask_env not in ('testing', 'test'):
+        metrics = PrometheusMetrics(app)
+        metrics.info('app_info', 'MinKy API', version='1.0.0')
+
+    # Security headers with Flask-Talisman (disabled in development for easier debugging)
+    if flask_env == 'production':
+        csp = {
+            'default-src': "'self'",
+            'script-src': ["'self'", "'unsafe-inline'"],
+            'style-src': ["'self'", "'unsafe-inline'"],
+            'img-src': ["'self'", "data:", "blob:"],
+            'font-src': ["'self'"],
+            'connect-src': ["'self'"] + cors_origins,
+        }
+        talisman.init_app(
+            app,
+            content_security_policy=csp,
+            force_https=True,
+            strict_transport_security=True,
+            strict_transport_security_max_age=31536000,
+            x_content_type_options=True,
+            x_xss_protection=True,
+        )
+    else:
+        # In development, only add basic security headers without HTTPS enforcement
+        talisman.init_app(
+            app,
+            content_security_policy=None,
+            force_https=False,
+            strict_transport_security=False,
+        )
+
+    # Swagger/OpenAPI configuration
+    swagger_config = {
+        "headers": [],
+        "specs": [
+            {
+                "endpoint": 'apispec',
+                "route": '/api/docs/apispec.json',
+                "rule_filter": lambda rule: True,
+                "model_filter": lambda tag: True,
+            }
+        ],
+        "static_url_path": "/flasgger_static",
+        "swagger_ui": True,
+        "specs_route": "/api/docs/"
+    }
+
+    swagger_template = {
+        "swagger": "2.0",
+        "info": {
+            "title": "MinKy API",
+            "description": "MinKy Document Management System API",
+            "version": "1.0.0",
+            "contact": {
+                "name": "MinKy Team",
+                "email": "support@minky.dev"
+            }
+        },
+        "basePath": "/api",
+        "schemes": ["http", "https"],
+        "securityDefinitions": {
+            "Bearer": {
+                "type": "apiKey",
+                "name": "Authorization",
+                "in": "header",
+                "description": "JWT Authorization header using the Bearer scheme. Example: 'Bearer {token}'"
+            }
+        },
+        "tags": [
+            {"name": "Auth", "description": "Authentication endpoints"},
+            {"name": "Documents", "description": "Document management"},
+            {"name": "Tags", "description": "Tag management"},
+            {"name": "Categories", "description": "Category management"},
+            {"name": "Comments", "description": "Comment management"},
+            {"name": "Versions", "description": "Document version control"},
+            {"name": "Export", "description": "Document export"},
+            {"name": "OCR", "description": "Optical Character Recognition"},
+            {"name": "Analytics", "description": "Analytics and statistics"},
+            {"name": "Health", "description": "Health check endpoints"}
+        ]
+    }
+
+    Swagger(app, config=swagger_config, template=swagger_template)
     
     from app.routes.documents import documents_bp
     from app.routes.auth import auth_bp

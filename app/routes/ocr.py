@@ -296,7 +296,7 @@ def extract_from_attachment(attachment_id: int) -> Response | tuple[Response, in
         
         # Check permission
         user_id = get_current_user_id()
-        document = Document.query.get(attachment.document_id)
+        document = db.session.get(Document, attachment.document_id)
         if not document or not document.can_edit(user_id):
             return jsonify({
                 'success': False,

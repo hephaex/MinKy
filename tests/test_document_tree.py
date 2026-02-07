@@ -37,7 +37,7 @@ def test_tree_by_tag_with_documents(app, client, auth_headers, sample_user):
     """Test tree endpoint groups documents by tags correctly."""
     with app.app_context():
         # Get the user object
-        user = User.query.get(sample_user)
+        user = db.session.get(User, sample_user)
 
         # Create document with tags
         doc1 = Document(
@@ -115,7 +115,7 @@ def test_tree_by_date_with_documents(app, client, auth_headers, sample_user):
     """Test tree endpoint groups documents by year/month correctly."""
     with app.app_context():
         # Get the user object
-        user = User.query.get(sample_user)
+        user = db.session.get(User, sample_user)
 
         # Create documents with specific dates
         doc1 = Document(
@@ -227,7 +227,7 @@ def test_tree_by_tag_untagged_documents(app, client, auth_headers, sample_user):
     """Test tree endpoint groups untagged documents under '태그 없음' node."""
     with app.app_context():
         # Get the user object
-        user = User.query.get(sample_user)
+        user = db.session.get(User, sample_user)
 
         # Create document without tags
         doc1 = Document(

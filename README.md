@@ -150,12 +150,42 @@ python run.py
 ### 상태 모니터링
 - `GET /api/health` - 기본 상태 확인
 - `GET /api/health/detailed` - 자세한 상태 정보
+- `GET /metrics` - Prometheus 메트릭 (성능 모니터링)
+
+### 전문 검색 (Full-Text Search)
+- `GET /api/documents/search?q=검색어` - PostgreSQL 전문 검색 (제목, 내용 통합 검색)
+
+### API 문서
+- `GET /api/docs/` - Swagger UI 인터랙티브 API 문서
+- `GET /api/docs/apispec.json` - OpenAPI JSON 스펙
+
+## 환경 변수
+
+| 변수명 | 설명 | 기본값 |
+|--------|------|--------|
+| `DATABASE_URL` | PostgreSQL 연결 문자열 | `postgresql://localhost/minky_db` |
+| `SECRET_KEY` | Flask 세션 암호화 키 | (개발: dev-secret-key) |
+| `JWT_SECRET_KEY` | JWT 토큰 서명 키 | (개발: jwt-secret-key) |
+| `FLASK_ENV` | 실행 환경 (development/production) | `production` |
+| `CORS_ORIGINS` | 허용된 CORS 도메인 (콤마 구분) | `http://localhost:3000` |
+| `REDIS_URL` | Redis 연결 문자열 (캐싱/속도제한) | `memory://` |
+| `CACHE_TYPE` | 캐시 백엔드 (SimpleCache/RedisCache) | `SimpleCache` |
+| `CACHE_DEFAULT_TIMEOUT` | 캐시 만료 시간 (초) | `300` |
+| `METRICS_ENABLED` | Prometheus 메트릭 활성화 | `true` |
+| `LOG_LEVEL` | 로그 레벨 (DEBUG/INFO/WARNING/ERROR) | `INFO` |
+| `LOG_FORMAT` | 로그 형식 (json/text) | `json` |
+| `RATE_LIMIT_DEFAULT` | 기본 API 속도 제한 | `1000 per hour` |
 
 ## 테스트
 
 테스트 실행:
 ```bash
-pytest tests/
+pytest tests/ -v --cov=app
+```
+
+커버리지 리포트 포함:
+```bash
+pytest tests/ --cov=app --cov-report=html
 ```
 
 ## 개발 환경 설정
@@ -222,8 +252,18 @@ cd minky
 다음 작업을 수행합니다:
 - 모든 서비스의 Docker 이미지 빌드
 - 적절한 인덱스로 PostgreSQL 데이터베이스 설정
+- Redis 캐시 서버 설정
 - 데이터베이스 마이그레이션 실행
-- 모든 서비스 시작 (프론트엔드, 백엔드, 데이터베이스)
+- 모든 서비스 시작 (프론트엔드, 백엔드, 데이터베이스, Redis)
+
+#### Docker Compose 서비스 구성
+```yaml
+services:
+  - backend (Flask API, 포트 5000)
+  - frontend (React, 포트 3000)
+  - db (PostgreSQL, 포트 5432)
+  - redis (Redis 캐시, 포트 6379)
+```
 
 ### 수동 배포
 
@@ -259,14 +299,42 @@ gunicorn --bind 0.0.0.0:5000 --workers 4 run:app
 - **SQL 인젝션 방지**: 매개변수화된 쿼리를 사용한 SQLAlchemy ORM
 - **비밀번호 보안**: 솔트를 사용한 Bcrypt 해싱
 - **입력 검증**: 이메일 검증 및 비밀번호 복잡성 요구사항
+- **보안 헤더**: Flask-Talisman을 통한 CSP, HSTS, X-Frame-Options
+- **속도 제한**: Flask-Limiter를 통한 API 속도 제한 (Redis 백엔드 지원)
+- **환경별 보안**: 프로덕션 환경에서 강력한 시크릿 키 강제
 
 ## 성능 최적화
 
 - **데이터베이스 인덱스**: 검색 및 필터링을 위한 최적화된 인덱스
 - **전문 검색**: 빠른 텍스트 검색을 위한 PostgreSQL GIN 인덱스
-- **캐싱**: nginx를 통한 정적 자산 캐싱
+- **응답 캐싱**: Flask-Caching을 통한 API 응답 캐싱 (Redis/SimpleCache)
 - **압축**: 모든 텍스트 기반 응답에 대한 Gzip 압축
 - **연결 풀링**: SQLAlchemy를 통한 데이터베이스 연결 풀링
+- **메트릭 모니터링**: Prometheus를 통한 실시간 성능 메트릭
+
+## 모니터링
+
+### Prometheus 메트릭
+`/metrics` 엔드포인트에서 다음 메트릭을 제공합니다:
+- HTTP 요청 수 및 지연 시간
+- 응답 상태 코드 분포
+- 애플리케이션 정보
+
+### 구조화된 로깅
+JSON 형식의 로그 출력 (ELK/Loki 호환):
+```json
+{
+  "timestamp": "2024-01-01T00:00:00Z",
+  "level": "INFO",
+  "logger": "minky.access",
+  "message": "Request completed",
+  "request_id": "abc-123",
+  "method": "GET",
+  "path": "/api/documents",
+  "duration_seconds": 0.045,
+  "status_code": 200
+}
+```
 
 ## 스프린트 구현 현황
 
@@ -331,7 +399,7 @@ gunicorn --bind 0.0.0.0:5000 --workers 4 run:app
 - 입력 검증 및 의심스러운 패턴 탐지를 지원하는 보안 미들웨어
 - 위협 분석 및 구성 관리를 지원하는 관리자 보안 대시보드
 
-### ✅ 스프린트 8 (한국어 지원 및 Org-roam 연동) - 완료
+### ✅ 스프린트 8 (한국어 지원 및 Org-roam 연동)
 - 한국어 형태소 분석기 통합 (KoNLPy/Mecab) 및 전문 검색 시스템
 - Emacs org-roam 문서 완전 호환성 (파싱, 임포트, 메타데이터 처리)
 - OpenSearch 기반 다국어 검색 엔진 (한국어 분석기 포함)
@@ -339,4 +407,25 @@ gunicorn --bind 0.0.0.0:5000 --workers 4 run:app
 - 한국어 문서 자동 태깅 및 키워드 추출
 - org-roam 메타데이터 보존 (ID, 태그, 별칭, 링크 구조)
 
-**현재 상태:** 스프린트 8 완료! Minky는 이제 한국어 문서를 위한 완전한 지식 관리 시스템이 되었습니다. Emacs org-roam 사용자들도 기존 문서를 완벽하게 마이그레이션할 수 있으며, 한국어 형태소 분석을 통한 정밀한 검색과 OpenSearch를 활용한 확장 가능한 아키텍처를 제공합니다.
+### ✅ 스프린트 9 (API 문서화 및 보안 강화)
+- Swagger/OpenAPI 인터랙티브 API 문서 (`/api/docs/`)
+- Flask-Talisman을 통한 보안 헤더 (CSP, HSTS, X-Frame-Options)
+- Flask-Caching을 통한 응답 캐싱 (Redis/SimpleCache 지원)
+- Prometheus 메트릭 엔드포인트 (`/metrics`)
+- 민감한 엔드포인트에 대한 속도 제한 강화
+
+### ✅ 스프린트 10 (DevOps 및 프론트엔드 개선)
+- Docker Compose에 Redis 서비스 추가
+- GitHub Actions CI/CD 파이프라인 (ruff, mypy, pytest, codecov)
+- React 에러 바운더리 및 로딩 상태 컴포넌트
+- useAsync 커스텀 훅을 통한 비동기 상태 관리
+- SQLAlchemy 2.0 호환성 마이그레이션
+
+### ✅ 스프린트 11 (모니터링 및 로깅)
+- python-json-logger를 통한 구조화된 JSON 로깅
+- 요청 ID 추적 (X-Request-ID 헤더)
+- 요청 기간 및 상태 코드 로깅
+- ELK/Loki 로그 집계 호환 형식
+- 테스트 환경에서 메트릭 충돌 방지
+
+**현재 상태:** 스프린트 11 완료! Minky는 이제 프로덕션 준비가 완료된 모니터링, 로깅, 보안 기능을 갖추었습니다. Swagger UI를 통한 API 탐색, Prometheus 메트릭을 통한 성능 모니터링, 구조화된 JSON 로깅을 통한 디버깅이 가능합니다.

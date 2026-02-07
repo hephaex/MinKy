@@ -1,0 +1,88 @@
+.error-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  text-align: center;
+  background: var(--error-bg, #fef2f2);
+  border: 1px solid var(--error-border, #fecaca);
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.error-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--error-color, #dc2626);
+  margin-bottom: 12px;
+}
+
+.error-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.error-title {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--error-color, #dc2626);
+}
+
+.error-text {
+  margin: 0;
+  color: var(--text-secondary, #6b7280);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.error-details {
+  margin-top: 16px;
+  width: 100%;
+  text-align: left;
+}
+
+.error-details summary {
+  cursor: pointer;
+  color: var(--text-secondary, #6b7280);
+  font-size: 12px;
+}
+
+.error-details pre {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--bg-secondary, #f3f4f6);
+  border-radius: 4px;
+  font-size: 11px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.error-retry-btn {
+  margin-top: 16px;
+  padding: 8px 20px;
+  background: var(--primary-color, #3b82f6);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.error-retry-btn:hover {
+  background: var(--primary-hover, #2563eb);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .error-message {
+    background: rgba(127, 29, 29, 0.2);
+    border-color: rgba(248, 113, 113, 0.3);
+  }
+
+  .error-details pre {
+    background: rgba(0, 0, 0, 0.3);
+  }
+}

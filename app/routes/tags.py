@@ -1,8 +1,8 @@
-from flask import Blueprint, request, jsonify, Response
+from flask import Blueprint, request, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from pydantic import ValidationError
 from sqlalchemy import func
-from app import db
+from app import db, cache
 from app.models.tag import Tag
 from app.models.document import Document
 from app.schemas.tag import TagCreate, TagUpdate
@@ -19,7 +19,59 @@ tags_bp = Blueprint('tags', __name__)
 
 @tags_bp.route('/tags', methods=['GET'])
 def list_tags() -> Response | tuple[Response, int]:
-    """Get all tags with optional filtering"""
+    """Get all tags with optional filtering
+    ---
+    tags:
+      - Tags
+    parameters:
+      - name: page
+        in: query
+        type: integer
+        default: 1
+        description: Page number
+      - name: per_page
+        in: query
+        type: integer
+        default: 20
+        description: Items per page
+      - name: search
+        in: query
+        type: string
+        description: Search query for tag names
+      - name: popular
+        in: query
+        type: boolean
+        default: false
+        description: Get popular tags ordered by usage
+    responses:
+      200:
+        description: List of tags
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            data:
+              type: object
+              properties:
+                tags:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      slug:
+                        type: string
+                      color:
+                        type: string
+                      document_count:
+                        type: integer
+                pagination:
+                  type: object
+    """
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
@@ -76,7 +128,54 @@ def list_tags() -> Response | tuple[Response, int]:
 @tags_bp.route('/tags', methods=['POST'])
 @jwt_required()
 def create_tag() -> Response | tuple[Response, int]:
-    """Create a new tag"""
+    """Create a new tag
+    ---
+    tags:
+      - Tags
+    security:
+      - Bearer: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - name
+          properties:
+            name:
+              type: string
+              description: Tag name (2-50 chars)
+              example: Python
+            description:
+              type: string
+              description: Tag description
+              example: Python programming language
+            color:
+              type: string
+              pattern: "^#[0-9A-Fa-f]{6}$"
+              description: Hex color code
+              example: "#3776AB"
+    responses:
+      201:
+        description: Tag created successfully
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            data:
+              type: object
+              properties:
+                tag:
+                  type: object
+      400:
+        description: Validation error
+      401:
+        description: Unauthorized
+      409:
+        description: Tag already exists
+    """
     try:
         data = request.get_json()
         current_user_id = get_jwt_identity()
@@ -119,7 +218,48 @@ def create_tag() -> Response | tuple[Response, int]:
 
 @tags_bp.route('/tags/<slug>', methods=['GET'])
 def get_tag(slug: str) -> Response | tuple[Response, int]:
-    """Get a specific tag and its documents"""
+    """Get a specific tag and its documents
+    ---
+    tags:
+      - Tags
+    parameters:
+      - name: slug
+        in: path
+        type: string
+        required: true
+        description: Tag slug
+      - name: page
+        in: query
+        type: integer
+        default: 1
+      - name: per_page
+        in: query
+        type: integer
+        default: 10
+      - name: include_private
+        in: query
+        type: boolean
+        default: false
+    responses:
+      200:
+        description: Tag with documents
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            data:
+              type: object
+              properties:
+                tag:
+                  type: object
+                documents:
+                  type: array
+                pagination:
+                  type: object
+      404:
+        description: Tag not found
+    """
     try:
         tag = Tag.query.filter_by(slug=slug).first_or_404()
 
@@ -239,8 +379,45 @@ def suggest_tags() -> Response | tuple[Response, int]:
         return error_response(str(e), 500)
 
 @tags_bp.route('/tags/statistics', methods=['GET'])
+@cache.cached(timeout=60)
 def get_tags_statistics() -> Response | tuple[Response, int]:
-    """Get comprehensive tag statistics"""
+    """Get comprehensive tag statistics
+    ---
+    tags:
+      - Tags
+    responses:
+      200:
+        description: Tag statistics
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            data:
+              type: object
+              properties:
+                total_tags:
+                  type: integer
+                auto_generated_tags:
+                  type: integer
+                manual_tags:
+                  type: integer
+                popular_tags:
+                  type: array
+                recent_tags:
+                  type: array
+                usage_distribution:
+                  type: object
+                  properties:
+                    unused:
+                      type: integer
+                    low:
+                      type: integer
+                    medium:
+                      type: integer
+                    high:
+                      type: integer
+    """
     try:
         
         # Total tags

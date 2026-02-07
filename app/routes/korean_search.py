@@ -1,6 +1,7 @@
 from typing import Dict, Any, Optional
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, verify_jwt_in_request
+from app import db
 from app.models.document import Document
 from app.models.user import User
 from app.utils.auth import get_current_user_id
@@ -247,7 +248,7 @@ def suggest_korean_tags():
 def analyze_korean_document(document_id):
     """문서의 한국어 분석 결과 반환"""
     current_user_id = get_current_user_id()
-    user = User.query.get(current_user_id)
+    user = db.session.get(User, current_user_id)
     
     if not user:
         return jsonify({'error': 'User not found'}), 404

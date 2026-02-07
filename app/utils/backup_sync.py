@@ -260,7 +260,7 @@ class BackupSyncManager:
             # 1. 원본 문서 ID로 찾기 (백업 헤더에 기록된 경우)
             original_doc_id = backup_info['header_info'].get('document_id')
             if original_doc_id:
-                doc: Optional[Document] = Document.query.get(original_doc_id)
+                doc: Optional[Document] = db.session.get(Document, original_doc_id)
                 if doc:
                     return doc
 

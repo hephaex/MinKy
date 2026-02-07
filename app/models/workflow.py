@@ -64,7 +64,7 @@ class DocumentWorkflow(db.Model):
     def can_perform_action(self, action, user_id):
         """Check if user can perform the given action on this workflow"""
         from app.models.user import User
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         
         if not user:
             return False
@@ -117,7 +117,7 @@ class DocumentWorkflow(db.Model):
             raise ValueError(f"User {user_id} cannot perform action {action.value}")
         
         old_status = self.current_status
-        user = User.query.get(user_id)
+        user = db.session.get(User, user_id)
         
         # Log the action
         workflow_log = WorkflowLog(

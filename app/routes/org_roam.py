@@ -31,7 +31,7 @@ class OrgRoamImportSchema(Schema):
 def upload_org_roam_files():
     """org-roam 파일 업로드 (단일 파일 또는 ZIP)"""
     current_user_id = get_current_user_id()
-    user = User.query.get(current_user_id)
+    user = db.session.get(User, current_user_id)
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -273,7 +273,7 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
 def import_org_roam_directory():
     """org-roam 디렉토리 경로를 통한 임포트 (서버 파일 시스템)"""
     current_user_id = get_current_user_id()
-    user = User.query.get(current_user_id)
+    user = db.session.get(User, current_user_id)
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -327,7 +327,7 @@ def import_org_roam_directory():
 def get_org_roam_documents():
     """org-roam에서 임포트된 문서 목록"""
     current_user_id = get_current_user_id()
-    user = User.query.get(current_user_id)
+    user = db.session.get(User, current_user_id)
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -375,7 +375,7 @@ def get_org_roam_documents():
 def get_document_links(document_id):
     """문서의 링크 관계 정보 (백링크 + 아웃바운드 링크)"""
     current_user_id = get_current_user_id()
-    user = User.query.get(current_user_id)
+    user = db.session.get(User, current_user_id)
     
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -468,7 +468,7 @@ def get_document_links(document_id):
 def get_org_roam_statistics():
     """org-roam 임포트 통계"""
     current_user_id = get_current_user_id()
-    user = User.query.get(current_user_id)
+    user = db.session.get(User, current_user_id)
     
     if not user:
         return jsonify({'error': 'User not found'}), 404

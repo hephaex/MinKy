@@ -1,5 +1,5 @@
 from flask import Blueprint, request
-from app import db
+from app import db, cache
 from app.models.category import Category
 from app.models.document import Document
 from app.utils.auth import require_auth
@@ -13,6 +13,7 @@ categories_bp = Blueprint('categories', __name__)
 
 
 @categories_bp.route('/', methods=['GET'])
+@cache.cached(timeout=60, query_string=True)
 def get_categories():
     """Get all categories in hierarchical tree structure"""
     tree_format = request.args.get('format', 'tree')
@@ -77,7 +78,7 @@ def create_category():
 
         parent_id = data.get('parent_id')
         if parent_id:
-            parent = Category.query.get(parent_id)
+            parent = db.session.get(Category, parent_id)
             if not parent:
                 return error_response('Parent category not found', 404)
 
@@ -256,6 +257,7 @@ def move_category(category_id):
 
 
 @categories_bp.route('/stats', methods=['GET'])
+@cache.cached(timeout=60)
 def get_category_stats():
     """Get category statistics"""
     try:

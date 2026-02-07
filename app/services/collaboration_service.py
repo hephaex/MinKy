@@ -37,7 +37,7 @@ class CollaborationService:
         try:
             # Verify document access
             document = Document.query.get_or_404(document_id)
-            user = User.query.get(user_id) if user_id else None
+            user = db.session.get(User, user_id) if user_id else None
             
             if not document.can_view(user_id):
                 emit('error', {'message': 'Access denied'}, room=sid)  # type: ignore[call-arg]
@@ -224,7 +224,7 @@ class CollaborationService:
                 return False
             
             session = self.active_sessions[document_id]
-            document = Document.query.get(document_id)
+            document = db.session.get(Document, document_id)
             
             if not document or not document.can_edit(user_id):
                 return False
