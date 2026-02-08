@@ -125,6 +125,14 @@ def create_document():
         if not title or not title.strip():
             title = "Untitled Document"
         
+        # Handle category_id if provided
+        category_id = data.get('category_id')
+        if category_id:
+            from app.models.category import Category
+            category = db.session.get(Category, category_id)
+            if not category:
+                return jsonify({'error': 'Category not found'}), 404
+
         document = Document(
             title=title,
             markdown_content=obsidian_data.get('processed_content', data['markdown_content']),  # Use processed content with converted images
@@ -137,6 +145,10 @@ def create_document():
                 'hashtags': obsidian_data['hashtags']
             }
         )
+
+        # Set category if provided
+        if category_id:
+            document.category_id = category_id
         
         # 옵시디언 태그 + 자동 감지 태그 + 사용자 제공 태그 결합
         auto_tags = detect_auto_tags(data['markdown_content'])
@@ -489,8 +501,18 @@ def update_document(document_id):
         
         if 'is_public' in data:
             document.is_public = data['is_public']
-        
-        
+
+        if 'category_id' in data:
+            category_id = data['category_id']
+            if category_id is None:
+                document.category_id = None
+            else:
+                from app.models.category import Category
+                category = db.session.get(Category, category_id)
+                if not category:
+                    return jsonify({'error': 'Category not found'}), 404
+                document.category_id = category_id
+
         if 'tags' in data:
             # Handle manual tag updates - clear all at once instead of iterating
             document.tags = []

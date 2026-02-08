@@ -1,7 +1,6 @@
 """
 Tests for Document CRUD operations
 """
-import pytest
 import json
 
 
@@ -109,3 +108,112 @@ def test_search_documents(client):
 
     data = json.loads(response.data)
     assert len(data['documents']) == 2
+
+
+def test_create_document_with_category(client, app):
+    """Test creating a document with a category"""
+    from app import db
+    from app.models.category import Category
+
+    with app.app_context():
+        category = Category(name='Test Category', color='#007bff')
+        db.session.add(category)
+        db.session.commit()
+        cat_id = category.id
+
+    doc_data = {
+        'title': 'Categorized Document',
+        'markdown_content': '# Content',
+        'is_public': True,
+        'category_id': cat_id
+    }
+
+    response = client.post('/api/documents',
+                          data=json.dumps(doc_data),
+                          content_type='application/json')
+
+    assert response.status_code == 201
+    data = json.loads(response.data)
+    assert data['category_id'] == cat_id
+    assert data['category']['name'] == 'Test Category'
+
+
+def test_create_document_with_invalid_category(client):
+    """Test creating a document with non-existent category returns 404"""
+    doc_data = {
+        'title': 'Document',
+        'markdown_content': '# Content',
+        'category_id': 99999
+    }
+
+    response = client.post('/api/documents',
+                          data=json.dumps(doc_data),
+                          content_type='application/json')
+
+    assert response.status_code == 404
+    data = json.loads(response.data)
+    assert 'error' in data
+
+
+def test_update_document_category(client, app, sample_document_data):
+    """Test updating a document's category"""
+    from app import db
+    from app.models.category import Category
+
+    # Create document first
+    create_response = client.post('/api/documents',
+                                 data=json.dumps(sample_document_data),
+                                 content_type='application/json')
+    created_doc = json.loads(create_response.data)
+    doc_id = created_doc['id']
+
+    # Create category
+    with app.app_context():
+        category = Category(name='New Category', color='#ff0000')
+        db.session.add(category)
+        db.session.commit()
+        cat_id = category.id
+
+    # Update document with category
+    update_data = {'category_id': cat_id}
+    response = client.put(f'/api/documents/{doc_id}',
+                         data=json.dumps(update_data),
+                         content_type='application/json')
+
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['category_id'] == cat_id
+    assert data['category']['name'] == 'New Category'
+
+
+def test_remove_document_category(client, app, sample_document_data):
+    """Test removing a document's category by setting to null"""
+    from app import db
+    from app.models.category import Category
+
+    # Create category
+    with app.app_context():
+        category = Category(name='Category', color='#007bff')
+        db.session.add(category)
+        db.session.commit()
+        cat_id = category.id
+
+    # Create document with category
+    doc_data = {**sample_document_data, 'category_id': cat_id}
+    create_response = client.post('/api/documents',
+                                 data=json.dumps(doc_data),
+                                 content_type='application/json')
+    created_doc = json.loads(create_response.data)
+    doc_id = created_doc['id']
+    assert created_doc['category_id'] == cat_id
+
+    # Remove category
+    update_data = {'category_id': None}
+    response = client.put(f'/api/documents/{doc_id}',
+                         data=json.dumps(update_data),
+                         content_type='application/json')
+
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['category_id'] is None
+    assert data['category'] is None

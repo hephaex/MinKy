@@ -25,6 +25,7 @@ class Category(db.Model):
     # Relationships
     parent = db.relationship('Category', remote_side=[id], backref='children')
     creator = db.relationship('User', backref='created_categories')
+    documents = db.relationship('Document', backref='category', lazy='dynamic')
     
     def __init__(self, name, description=None, parent_id=None, created_by=None, color='#007bff'):
         self.name = name

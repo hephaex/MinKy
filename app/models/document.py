@@ -181,6 +181,13 @@ class Document(db.Model):
             'markdown_content': self.markdown_content,
             'html_content': self.html_content,
             'user_id': self.user_id,
+            'category_id': self.category_id,
+            'category': {
+                'id': self.category.id,
+                'name': self.category.name,
+                'slug': self.category.slug,
+                'color': self.category.color
+            } if self.category else None,
             'is_public': self.is_public,
             'is_published': self.is_published,
             'published_at': self.published_at.isoformat() if self.published_at else None,
