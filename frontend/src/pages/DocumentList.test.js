@@ -58,7 +58,7 @@ describe('DocumentList', () => {
     jest.clearAllMocks();
     api.get.mockImplementation((url) => {
       if (url.includes('/categories')) {
-        return Promise.resolve({ data: { categories: mockCategories } });
+        return Promise.resolve({ data: { data: { categories: mockCategories } } });
       }
       if (url.includes('/documents')) {
         return Promise.resolve({
@@ -138,7 +138,7 @@ describe('DocumentList', () => {
     it('shows empty message when no documents', async () => {
       api.get.mockImplementation((url) => {
         if (url.includes('/categories')) {
-          return Promise.resolve({ data: { categories: [] } });
+          return Promise.resolve({ data: { data: { categories: [] } } });
         }
         return Promise.resolve({
           data: {
@@ -159,7 +159,7 @@ describe('DocumentList', () => {
     it('shows no results message when search returns empty', async () => {
       api.get.mockImplementation((url) => {
         if (url.includes('/categories')) {
-          return Promise.resolve({ data: { categories: [] } });
+          return Promise.resolve({ data: { data: { categories: [] } } });
         }
         if (url.includes('search=test')) {
           return Promise.resolve({

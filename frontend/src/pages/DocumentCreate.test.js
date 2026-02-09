@@ -73,7 +73,7 @@ describe('DocumentCreate', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    api.get.mockResolvedValue({ data: { categories: mockCategories } });
+    api.get.mockResolvedValue({ data: { data: { categories: mockCategories } } });
   });
 
   describe('initial render', () => {
@@ -306,7 +306,7 @@ describe('DocumentCreate', () => {
       render(<DocumentCreate />);
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith('/categories?format=flat');
+        expect(api.get).toHaveBeenCalledWith('/categories/?format=flat');
       });
     });
 
