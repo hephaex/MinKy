@@ -6,6 +6,7 @@ Provides comprehensive administrative functionality
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from sqlalchemy import func, desc, and_
+from app import limiter
 from datetime import datetime, timedelta, timezone
 from app import db
 from app.models.user import User
@@ -151,6 +152,7 @@ def get_user_details(user_id):
 
 @admin_bp.route('/admin/users/<int:user_id>', methods=['PUT'])
 @jwt_required()
+@limiter.limit("10 per minute")
 def update_user(user_id):
     """Update user information"""
     try:
@@ -197,9 +199,10 @@ def list_all_documents():
         query = Document.query
         
         if search:
+            search_escaped = escape_like(search)
             query = query.filter(
-                Document.title.ilike(f'%{search}%') |
-                Document.markdown_content.ilike(f'%{search}%')
+                Document.title.ilike(f'%{search_escaped}%') |
+                Document.markdown_content.ilike(f'%{search_escaped}%')
             )
         
         def serialize_doc_with_owner(doc):
@@ -286,6 +289,7 @@ def get_system_stats():
 
 @admin_bp.route('/admin/system/cleanup', methods=['POST'])
 @jwt_required()
+@limiter.limit("5 per hour")
 def system_cleanup():
     """Perform system cleanup operations"""
     try:
@@ -331,6 +335,7 @@ def system_cleanup():
 
 @admin_bp.route('/admin/tags/merge', methods=['POST'])
 @jwt_required()
+@limiter.limit("20 per minute")
 def merge_tags():
     """Merge duplicate tags"""
     try:
