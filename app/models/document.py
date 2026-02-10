@@ -206,10 +206,25 @@ class Document(db.Model):
         return Rating.get_document_rating_stats(self.id)
     
     def can_edit(self, user_id):
-        return self.user_id == user_id or user_id is None
-    
+        """Check if user can edit this document.
+
+        Note: user_id=None means unauthenticated - they cannot edit any document.
+        """
+        if user_id is None:
+            return False
+        return self.user_id == user_id
+
     def can_view(self, user_id):
-        return self.is_public or self.user_id == user_id or user_id is None
+        """Check if user can view this document.
+
+        Public documents can be viewed by anyone (including unauthenticated).
+        Private documents can only be viewed by their owner.
+        """
+        if self.is_public:
+            return True
+        if user_id is None:
+            return False
+        return self.user_id == user_id
     
     def to_dict(self):
         return {

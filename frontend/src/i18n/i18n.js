@@ -8,6 +8,7 @@ import en from './locales/en.json';
 import ko from './locales/ko.json';
 import ja from './locales/ja.json';
 import zh from './locales/zh.json';
+import { logWarning } from '../utils/logger';
 import './LanguageSelector.css';
 
 // Available languages
@@ -77,7 +78,7 @@ const translate = (key, params = {}, language = DEFAULT_LANGUAGE) => {
       for (const fallbackKey of keys) {
         translation = translation?.[fallbackKey];
         if (translation === undefined) {
-          console.warn(`Translation missing for key: ${key}`);
+          logWarning('i18n.translate', `Translation missing for key: ${key}`);
           return key; // Return the key itself if translation is not found
         }
       }
@@ -86,7 +87,7 @@ const translate = (key, params = {}, language = DEFAULT_LANGUAGE) => {
   }
 
   if (typeof translation !== 'string') {
-    console.warn(`Translation for key "${key}" is not a string:`, translation);
+    logWarning('i18n.translate', `Translation for key "${key}" is not a string`, { translation });
     return key;
   }
 

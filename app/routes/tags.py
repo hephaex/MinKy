@@ -124,7 +124,8 @@ def list_tags() -> Response | tuple[Response, int]:
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error listing tags: %s", e)
+        return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags', methods=['POST'])
 @jwt_required()
@@ -215,7 +216,8 @@ def create_tag() -> Response | tuple[Response, int]:
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error creating tag: %s", e)
+        return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags/<slug>', methods=['GET'])
 def get_tag(slug: str) -> Response | tuple[Response, int]:
@@ -293,7 +295,8 @@ def get_tag(slug: str) -> Response | tuple[Response, int]:
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting tag %s: %s", slug, e)
+        return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags/<slug>', methods=['PUT'])
 @jwt_required()
@@ -330,7 +333,8 @@ def update_tag(slug: str) -> Response | tuple[Response, int]:
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error updating tag %s: %s", slug, e)
+        return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags/<slug>', methods=['DELETE'])
 @jwt_required()
@@ -355,7 +359,8 @@ def delete_tag(slug: str) -> Response | tuple[Response, int]:
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error deleting tag %s: %s", slug, e)
+        return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags/suggest', methods=['GET'])
 def suggest_tags() -> Response | tuple[Response, int]:
@@ -378,7 +383,8 @@ def suggest_tags() -> Response | tuple[Response, int]:
         return success_response({'suggestions': suggestions})
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error suggesting tags: %s", e)
+        return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags/statistics', methods=['GET'])
 @cache.cached(timeout=60)
@@ -465,7 +471,8 @@ def get_tags_statistics() -> Response | tuple[Response, int]:
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting tag statistics: %s", e)
+        return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags/auto-generate', methods=['POST'])
 @jwt_required(optional=True)
@@ -584,7 +591,7 @@ def generate_auto_tags() -> Response | tuple[Response, int]:
         if not dry_run:
             db.session.rollback()
         logger.error("AUTO_TAG_GENERATION: Fatal error: %s", e)
-        return error_response(str(e), 500)
+        return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags/tagless-documents', methods=['GET'])
 @jwt_required(optional=True)
@@ -622,7 +629,8 @@ def get_tagless_documents() -> Response | tuple[Response, int]:
         )
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting tagless documents: %s", e)
+        return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags/preview-auto-tags/<int:document_id>', methods=['GET'])
 @jwt_required(optional=True)
@@ -660,4 +668,5 @@ def preview_auto_tags(document_id: int) -> Response | tuple[Response, int]:
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error previewing auto tags for document %s: %s", document_id, e)
+        return error_response('Internal server error', 500)

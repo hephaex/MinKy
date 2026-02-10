@@ -3,6 +3,7 @@ import React from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import DOMPurify from 'dompurify';
+import { logWarning } from './logger';
 
 export const processInternalLinks = (content, navigate, documentLookup = {}) => {
   // [[link|display]] 또는 [[link]] 패턴 처리
@@ -66,7 +67,7 @@ export const extractFrontmatter = (content) => {
         content: content.substring(match[0].length)
       };
     } catch (error) {
-      console.warn('프론트매터 파싱 실패:', error);
+      logWarning('obsidianRenderer.parseFrontMatter', '프론트매터 파싱 실패', { error });
     }
   }
   

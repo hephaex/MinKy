@@ -136,10 +136,10 @@ def git_status():
         })
         
     except Exception as e:
-        logger.error(f"Git status error: {e}")
+        logger.error("Git status error: %s", e)
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 
@@ -178,10 +178,10 @@ def git_pull():
             }), 400
             
     except Exception as e:
-        logger.error(f"Git pull error: {e}")
+        logger.error("Git pull error: %s", e)
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 
@@ -254,10 +254,10 @@ def git_push():
             }), 400
             
     except Exception as e:
-        logger.error(f"Git push error: {e}")
+        logger.error("Git push error: %s", e)
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 
@@ -367,10 +367,10 @@ def git_sync():
             }), 400
             
     except Exception as e:
-        logger.error(f"Git sync error: {e}")
+        logger.error("Git sync error: %s", e)
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 
@@ -397,8 +397,8 @@ def get_git_config():
         })
         
     except Exception as e:
-        logger.error(f"Git config error: {e}")
+        logger.error("Git config error: %s", e)
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500

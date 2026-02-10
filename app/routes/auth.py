@@ -7,6 +7,9 @@ from app.models.user import User
 from app.schemas.auth import RegisterRequest, LoginRequest
 from app.utils.validation import format_validation_errors
 from app.utils.responses import success_response, error_response
+import logging
+
+logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -116,7 +119,8 @@ def register() -> Response | tuple[Response, int]:
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error during registration: %s", e)
+        return error_response('Internal server error', 500)
 
 @auth_bp.route('/login', methods=['POST'])
 @limiter.limit("10 per minute")
@@ -204,7 +208,8 @@ def login() -> Response | tuple[Response, int]:
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error during login: %s", e)
+        return error_response('Internal server error', 500)
 
 @auth_bp.route('/refresh', methods=['POST'])
 @limiter.limit("30 per hour")
@@ -249,7 +254,8 @@ def refresh() -> Response | tuple[Response, int]:
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error during token refresh: %s", e)
+        return error_response('Internal server error', 500)
 
 @auth_bp.route('/me', methods=['GET'])
 @jwt_required()
@@ -304,7 +310,8 @@ def get_current_user() -> Response | tuple[Response, int]:
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting current user: %s", e)
+        return error_response('Internal server error', 500)
 
 @auth_bp.route('/profile', methods=['PUT'])
 @jwt_required()
@@ -387,4 +394,5 @@ def update_profile() -> Response | tuple[Response, int]:
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error updating profile: %s", e)
+        return error_response('Internal server error', 500)

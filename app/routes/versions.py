@@ -5,6 +5,9 @@ from app.models.document import Document
 from app.models.version import DocumentVersion, DocumentSnapshot
 from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query, success_response, error_response
+import logging
+
+logger = logging.getLogger(__name__)
 
 versions_bp = Blueprint('versions', __name__)
 
@@ -40,7 +43,8 @@ def get_document_versions(document_id):
         )
         
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting versions for document %s: %s", document_id, e)
+        return error_response('Internal server error', 500)
 
 @versions_bp.route('/documents/<int:document_id>/versions/<int:version_number>', methods=['GET'])
 def get_document_version(document_id, version_number):
@@ -69,7 +73,8 @@ def get_document_version(document_id, version_number):
         return success_response(result)
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting version %s for document %s: %s", version_number, document_id, e)
+        return error_response('Internal server error', 500)
 
 @versions_bp.route('/documents/<int:document_id>/versions/<int:version_number>/restore', methods=['POST'])
 @jwt_required()
@@ -117,7 +122,8 @@ def restore_document_version(document_id, version_number):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error restoring version %s for document %s: %s", version_number, document_id, e)
+        return error_response('Internal server error', 500)
 
 @versions_bp.route('/documents/<int:document_id>/versions/<int:version_number>/diff', methods=['GET'])
 def get_version_diff(document_id, version_number):
@@ -149,7 +155,8 @@ def get_version_diff(document_id, version_number):
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting diff for version %s of document %s: %s", version_number, document_id, e)
+        return error_response('Internal server error', 500)
 
 @versions_bp.route('/documents/<int:document_id>/versions/compare', methods=['GET'])
 def compare_versions(document_id):
@@ -208,7 +215,8 @@ def compare_versions(document_id):
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error comparing versions for document %s: %s", document_id, e)
+        return error_response('Internal server error', 500)
 
 @versions_bp.route('/documents/<int:document_id>/snapshots', methods=['GET'])
 def get_document_snapshots(document_id):
@@ -233,4 +241,5 @@ def get_document_snapshots(document_id):
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting snapshots for document %s: %s", document_id, e)
+        return error_response('Internal server error', 500)

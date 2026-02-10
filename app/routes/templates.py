@@ -6,6 +6,9 @@ from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query, success_response, error_response
 from app.utils.validation import escape_like
 import bleach
+import logging
+
+logger = logging.getLogger(__name__)
 
 templates_bp = Blueprint('templates', __name__)
 
@@ -59,7 +62,8 @@ def list_templates():
         )
         
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error listing templates: %s", e)
+        return error_response('Internal server error', 500)
 
 @templates_bp.route('/templates', methods=['POST'])
 @jwt_required()
@@ -97,7 +101,8 @@ def create_template():
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error creating template: %s", e)
+        return error_response('Internal server error', 500)
 
 @templates_bp.route('/templates/<int:template_id>', methods=['GET'])
 def get_template(template_id):
@@ -113,7 +118,8 @@ def get_template(template_id):
         return success_response(template.to_dict())
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting template %s: %s", template_id, e)
+        return error_response('Internal server error', 500)
 
 @templates_bp.route('/templates/<int:template_id>', methods=['PUT'])
 @jwt_required()
@@ -158,7 +164,8 @@ def update_template(template_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error updating template %s: %s", template_id, e)
+        return error_response('Internal server error', 500)
 
 @templates_bp.route('/templates/<int:template_id>', methods=['DELETE'])
 @jwt_required()
@@ -178,7 +185,8 @@ def delete_template(template_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error deleting template %s: %s", template_id, e)
+        return error_response('Internal server error', 500)
 
 @templates_bp.route('/templates/<int:template_id>/create-document', methods=['POST'])
 @jwt_required()
@@ -222,7 +230,8 @@ def create_document_from_template(template_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error creating document from template %s: %s", template_id, e)
+        return error_response('Internal server error', 500)
 
 @templates_bp.route('/templates/categories', methods=['GET'])
 def get_template_categories():
@@ -232,7 +241,8 @@ def get_template_categories():
         return success_response({'categories': categories})
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting template categories: %s", e)
+        return error_response('Internal server error', 500)
 
 @templates_bp.route('/templates/<int:template_id>/preview', methods=['POST'])
 def preview_template(template_id):
@@ -263,7 +273,8 @@ def preview_template(template_id):
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error previewing template %s: %s", template_id, e)
+        return error_response('Internal server error', 500)
 
 @templates_bp.route('/my-templates', methods=['GET'])
 @jwt_required()
@@ -286,4 +297,5 @@ def get_my_templates():
         )
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting user templates: %s", e)
+        return error_response('Internal server error', 500)

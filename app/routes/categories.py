@@ -5,6 +5,7 @@ from app.models.document import Document
 from app.utils.auth import require_auth
 from app.utils.responses import paginate_query, success_response, error_response
 from sqlalchemy import func
+import bleach
 import logging
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,8 @@ def get_category(category_id):
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting category %s: %s", category_id, e)
+        return error_response('Internal server error', 500)
 
 
 @categories_bp.route('/', methods=['POST'])
@@ -66,7 +68,7 @@ def create_category():
         if not data or 'name' not in data:
             return error_response('Category name is required', 400)
 
-        name = data['name'].strip()
+        name = bleach.clean(data['name'].strip())
         if not name:
             return error_response('Category name cannot be empty', 400)
 
@@ -82,12 +84,15 @@ def create_category():
             if not parent:
                 return error_response('Parent category not found', 404)
 
+        description = bleach.clean(data.get('description', '')) if data.get('description') else None
+        color = bleach.clean(data.get('color', '#007bff'))
+
         category = Category(
             name=name,
-            description=data.get('description'),
+            description=description,
             parent_id=parent_id,
             created_by=request.user.id if hasattr(request, 'user') else None,
-            color=data.get('color', '#007bff')
+            color=color
         )
 
         db.session.add(category)
@@ -100,7 +105,8 @@ def create_category():
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error creating category: %s", e)
+        return error_response('Internal server error', 500)
 
 
 @categories_bp.route('/<int:category_id>', methods=['PUT'])
@@ -116,7 +122,7 @@ def update_category(category_id):
 
         # Update fields
         if 'name' in data:
-            name = data['name'].strip()
+            name = bleach.clean(data['name'].strip())
             if not name:
                 return error_response('Category name cannot be empty', 400)
 
@@ -130,10 +136,10 @@ def update_category(category_id):
             category.slug = new_slug
 
         if 'description' in data:
-            category.description = data['description']
+            category.description = bleach.clean(data['description']) if data['description'] else None
 
         if 'color' in data:
-            category.color = data['color']
+            category.color = bleach.clean(data['color'])
 
         if 'sort_order' in data:
             category.sort_order = data['sort_order']
@@ -160,7 +166,8 @@ def update_category(category_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error updating category %s: %s", category_id, e)
+        return error_response('Internal server error', 500)
 
 
 @categories_bp.route('/<int:category_id>', methods=['DELETE'])
@@ -191,7 +198,8 @@ def delete_category(category_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error deleting category %s: %s", category_id, e)
+        return error_response('Internal server error', 500)
 
 
 @categories_bp.route('/<int:category_id>/documents', methods=['GET'])
@@ -223,7 +231,8 @@ def get_category_documents(category_id):
         )
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting category documents for %s: %s", category_id, e)
+        return error_response('Internal server error', 500)
 
 
 @categories_bp.route('/<int:category_id>/move', methods=['POST'])
@@ -253,7 +262,8 @@ def move_category(category_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error moving category %s: %s", category_id, e)
+        return error_response('Internal server error', 500)
 
 
 @categories_bp.route('/stats', methods=['GET'])
@@ -286,4 +296,5 @@ def get_category_stats():
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting category stats: %s", e)
+        return error_response('Internal server error', 500)

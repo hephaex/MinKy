@@ -6,6 +6,9 @@ from app.models.document import Document
 from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query, success_response, error_response
 import bleach
+import logging
+
+logger = logging.getLogger(__name__)
 
 comments_bp = Blueprint('comments', __name__)
 
@@ -36,7 +39,8 @@ def get_comments(document_id):
         )
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting comments for document %s: %s", document_id, e)
+        return error_response('Internal server error', 500)
 
 @comments_bp.route('/documents/<int:document_id>/comments', methods=['POST'])
 @jwt_required()
@@ -84,7 +88,8 @@ def create_comment(document_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error creating comment for document %s: %s", document_id, e)
+        return error_response('Internal server error', 500)
 
 @comments_bp.route('/comments/<int:comment_id>', methods=['PUT'])
 @jwt_required()
@@ -114,7 +119,8 @@ def update_comment(comment_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error updating comment %s: %s", comment_id, e)
+        return error_response('Internal server error', 500)
 
 @comments_bp.route('/comments/<int:comment_id>', methods=['DELETE'])
 @jwt_required()
@@ -134,7 +140,8 @@ def delete_comment(comment_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error deleting comment %s: %s", comment_id, e)
+        return error_response('Internal server error', 500)
 
 @comments_bp.route('/documents/<int:document_id>/rating', methods=['POST'])
 @jwt_required()
@@ -188,7 +195,8 @@ def rate_document(document_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error rating document %s: %s", document_id, e)
+        return error_response('Internal server error', 500)
 
 @comments_bp.route('/documents/<int:document_id>/rating', methods=['GET'])
 def get_document_rating(document_id):
@@ -219,7 +227,8 @@ def get_document_rating(document_id):
         })
 
     except Exception as e:
-        return error_response(str(e), 500)
+        logger.error("Error getting rating for document %s: %s", document_id, e)
+        return error_response('Internal server error', 500)
 
 @comments_bp.route('/documents/<int:document_id>/rating', methods=['DELETE'])
 @jwt_required()
@@ -249,4 +258,5 @@ def remove_rating(document_id):
 
     except Exception as e:
         db.session.rollback()
-        return error_response(str(e), 500)
+        logger.error("Error removing rating for document %s: %s", document_id, e)
+        return error_response('Internal server error', 500)

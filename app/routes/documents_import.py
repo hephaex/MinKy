@@ -208,9 +208,10 @@ def import_document():
             return jsonify(result), 400
 
     except Exception as e:
+        logger.error("Error importing document: %s", e)
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': 'Internal server error',
             'message': 'Import failed due to an unexpected error'
         }), 500
 

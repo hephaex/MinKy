@@ -1,6 +1,9 @@
 from flask import Blueprint, jsonify, Response
 from app import db, cache
 from sqlalchemy import text
+import logging
+
+logger = logging.getLogger(__name__)
 
 health_bp = Blueprint('health', __name__)
 
@@ -40,11 +43,11 @@ def health_check() -> tuple[Response, int]:
         }), 200
         
     except Exception as e:
+        logger.error("Health check failed: %s", e)
         return jsonify({
             'status': 'unhealthy',
             'service': 'minky-api',
-            'database': 'disconnected',
-            'error': str(e)
+            'database': 'disconnected'
         }), 503
 
 @health_bp.route('/health/detailed', methods=['GET'])
@@ -102,12 +105,12 @@ def detailed_health_check() -> tuple[Response, int]:
         }), 200
         
     except Exception as e:
+        logger.error("Detailed health check failed: %s", e)
         return jsonify({
             'status': 'unhealthy',
             'service': 'minky-api',
             'database': {
-                'status': 'disconnected',
-                'error': str(e)
+                'status': 'disconnected'
             },
             'version': '1.0.0'
         }), 503

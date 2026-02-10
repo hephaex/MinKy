@@ -57,8 +57,8 @@ def korean_text_search():
             return _search_with_postgresql(validated_data, current_user_id)
             
     except Exception as e:
-        current_app.logger.error(f"Korean search failed: {str(e)}")
-        return jsonify({'error': 'Search failed', 'details': str(e)}), 500
+        current_app.logger.error("Korean search failed: %s", e)
+        return jsonify({'error': 'Search failed'}), 500
 
 def _search_with_opensearch(search_params: dict, user_id: Optional[int] = None) -> Any:
     """OpenSearch를 사용한 검색"""
@@ -241,8 +241,8 @@ def suggest_korean_tags():
         })
         
     except Exception as e:
-        current_app.logger.error(f"Tag suggestion failed: {str(e)}")
-        return jsonify({'suggestions': [], 'error': str(e)})
+        current_app.logger.error("Tag suggestion failed: %s", e)
+        return jsonify({'suggestions': []})
 
 @korean_search_bp.route('/documents/<int:document_id>/analyze-korean', methods=['POST'])
 @jwt_required
@@ -284,8 +284,8 @@ def analyze_korean_document(document_id):
         })
         
     except Exception as e:
-        current_app.logger.error(f"Korean analysis failed for document {document_id}: {str(e)}")
-        return jsonify({'error': 'Analysis failed', 'details': str(e)}), 500
+        current_app.logger.error("Korean analysis failed for document %s: %s", document_id, e)
+        return jsonify({'error': 'Analysis failed'}), 500
 
 def _generate_korean_recommendations(analysis: dict) -> Dict[str, Any]:
     """한국어 분석 결과를 바탕으로 추천사항 생성"""
@@ -375,8 +375,8 @@ def get_korean_search_statistics():
         return jsonify({'statistics': stats})
         
     except Exception as e:
-        current_app.logger.error(f"Statistics query failed: {str(e)}")
-        return jsonify({'error': 'Failed to get statistics', 'details': str(e)}), 500
+        current_app.logger.error("Statistics query failed: %s", e)
+        return jsonify({'error': 'Failed to get statistics'}), 500
 
 @korean_search_bp.route('/search/health', methods=['GET'])
 @rate_limit_api("5 per minute")
@@ -394,8 +394,8 @@ def get_search_health():
         Document.query.limit(1).first()
         health_info['postgresql']['status'] = 'healthy'
     except Exception as e:
+        current_app.logger.error("PostgreSQL health check failed: %s", e)
         health_info['postgresql']['status'] = 'error'
-        health_info['postgresql']['error'] = str(e)
     
     try:
         # OpenSearch 테스트
@@ -406,8 +406,8 @@ def get_search_health():
         else:
             health_info['opensearch']['status'] = 'not_configured'
     except Exception as e:
+        current_app.logger.error("OpenSearch health check failed: %s", e)
         health_info['opensearch']['status'] = 'error'
-        health_info['opensearch']['error'] = str(e)
     
     try:
         # 한국어 프로세서 테스트
@@ -419,9 +419,9 @@ def get_search_health():
             'test_tokens': len(tokens)
         }
     except Exception as e:
+        current_app.logger.error("Korean processor health check failed: %s", e)
         health_info['korean_processor'] = {
-            'status': 'error',
-            'error': str(e)
+            'status': 'error'
         }
     
     # 전체 상태 결정
