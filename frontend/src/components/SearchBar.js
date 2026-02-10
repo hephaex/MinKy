@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import './SearchBar.css';
 
 const SearchBar = ({ onSearch, initialValue = '' }) => {
@@ -40,6 +41,15 @@ const SearchBar = ({ onSearch, initialValue = '' }) => {
       </div>
     </form>
   );
+};
+
+SearchBar.propTypes = {
+  onSearch: PropTypes.func.isRequired,
+  initialValue: PropTypes.string
+};
+
+SearchBar.defaultProps = {
+  initialValue: ''
 };
 
 export default SearchBar;

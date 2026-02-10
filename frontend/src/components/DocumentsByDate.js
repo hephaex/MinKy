@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import Pagination from './Pagination';
 import { formatDateTime, formatDateRange as formatDateRangeUtil } from '../utils/dateUtils';
@@ -192,6 +193,16 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
       )}
     </div>
   );
+};
+
+DocumentsByDate.propTypes = {
+  dateKey: PropTypes.string,
+  onDocumentClick: PropTypes.func
+};
+
+DocumentsByDate.defaultProps = {
+  dateKey: null,
+  onDocumentClick: null
 };
 
 export default DocumentsByDate;

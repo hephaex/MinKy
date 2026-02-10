@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { Link, useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
 import { logError } from '../utils/logger';
@@ -148,6 +149,11 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
       </div>
     </div>
   );
+};
+
+DocumentsSidebar.propTypes = {
+  isVisible: PropTypes.bool.isRequired,
+  onToggle: PropTypes.func.isRequired
 };
 
 export default DocumentsSidebar;

@@ -23,6 +23,61 @@ class OrgRoamImportSchema(Schema):
     auto_tag = fields.Bool(load_default=True)
     overwrite_existing = fields.Bool(load_default=False)
 
+
+def _process_single_file(file, temp_dir: str, upload_results: dict) -> list[str]:
+    """Process a single uploaded file and return list of org file paths"""
+    if not file.filename:
+        return []
+
+    filename = secure_filename(file.filename)
+    file_path = os.path.join(temp_dir, filename)
+
+    try:
+        file.save(file_path)
+
+        org_files = []
+        if filename.endswith('.zip'):
+            extracted_files = _extract_zip_file(file_path, temp_dir)
+            org_files.extend(extracted_files)
+        elif filename.endswith('.org'):
+            org_files.append(file_path)
+        else:
+            upload_results['errors'].append(f"Unsupported file type: {filename}")
+
+        upload_results['uploaded_files'].append({
+            'filename': filename,
+            'size': os.path.getsize(file_path),
+            'type': 'zip' if filename.endswith('.zip') else 'org'
+        })
+
+        return org_files
+
+    except Exception as e:
+        upload_results['errors'].append(f"Failed to process {filename}: {str(e)}")
+        return []
+
+
+def _process_uploaded_files(files: list, temp_dir: str, upload_results: dict) -> list[str]:
+    """Process all uploaded files and return list of org file paths"""
+    org_files = []
+
+    for file in files:
+        file_org_files = _process_single_file(file, temp_dir, upload_results)
+        org_files.extend(file_org_files)
+
+    return org_files
+
+
+def _get_import_settings_from_form() -> dict:
+    """Extract import settings from request form"""
+    return {
+        'import_as_private': request.form.get('import_as_private', 'true').lower() == 'true',
+        'preserve_links': request.form.get('preserve_links', 'true').lower() == 'true',
+        'auto_tag': request.form.get('auto_tag', 'true').lower() == 'true',
+        'overwrite_existing': request.form.get('overwrite_existing', 'false').lower() == 'true'
+    }
+
+
 @org_roam_bp.route('/org-roam/upload', methods=['POST'])
 @jwt_required()
 @rate_limit_upload("5 per hour")
@@ -32,23 +87,19 @@ def upload_org_roam_files():
     """org-roam 파일 업로드 (단일 파일 또는 ZIP)"""
     current_user_id = get_current_user_id()
     user = db.session.get(User, current_user_id)
-    
+
     if not user:
         return jsonify({'error': 'User not found'}), 404
-    
+
     if 'files' not in request.files:
         return jsonify({'error': 'No files provided'}), 400
-    
+
     files = request.files.getlist('files')
     if not files or files[0].filename == '':
         return jsonify({'error': 'No files selected'}), 400
-    
-    # 설정 파라미터
-    import_as_private = request.form.get('import_as_private', 'true').lower() == 'true'
-    preserve_links = request.form.get('preserve_links', 'true').lower() == 'true'
-    auto_tag = request.form.get('auto_tag', 'true').lower() == 'true'
-    overwrite_existing = request.form.get('overwrite_existing', 'false').lower() == 'true'
-    
+
+    settings = _get_import_settings_from_form()
+
     try:
         upload_results = {
             'uploaded_files': [],
@@ -56,55 +107,25 @@ def upload_org_roam_files():
             'total_files': len(files),
             'errors': []
         }
-        
-        # 임시 디렉토리 생성
+
         with tempfile.TemporaryDirectory() as temp_dir:
-            org_files = []
-            
-            for file in files:
-                if not file.filename:
-                    continue
-                
-                filename = secure_filename(file.filename)
-                file_path = os.path.join(temp_dir, filename)
-                
-                try:
-                    file.save(file_path)
-                    
-                    if filename.endswith('.zip'):
-                        # ZIP 파일 압축 해제
-                        extracted_files = _extract_zip_file(file_path, temp_dir)
-                        org_files.extend(extracted_files)
-                    elif filename.endswith('.org'):
-                        # 단일 org 파일
-                        org_files.append(file_path)
-                    else:
-                        upload_results['errors'].append(f"Unsupported file type: {filename}")
-                    
-                    upload_results['uploaded_files'].append({
-                        'filename': filename,
-                        'size': os.path.getsize(file_path),
-                        'type': 'zip' if filename.endswith('.zip') else 'org'
-                    })
-                    
-                except Exception as e:
-                    upload_results['errors'].append(f"Failed to process {filename}: {str(e)}")
-            
-            # org 파일 파싱 및 임포트
+            org_files = _process_uploaded_files(files, temp_dir, upload_results)
+
             if org_files:
                 import_results = _import_org_files(
                     org_files, current_user_id,
-                    import_as_private, preserve_links, auto_tag, overwrite_existing
+                    settings['import_as_private'], settings['preserve_links'],
+                    settings['auto_tag'], settings['overwrite_existing']
                 )
                 upload_results.update(import_results)
-            
+
             upload_results['processed_files'] = len(org_files)
-        
+
         return jsonify({
             'message': 'File upload and processing completed',
             'results': upload_results
         })
-        
+
     except Exception as e:
         current_app.logger.error(f"Org-roam upload failed: {str(e)}")
         return jsonify({'error': 'Upload failed', 'details': str(e)}), 500
@@ -133,6 +154,60 @@ def _extract_zip_file(zip_path: str, extract_dir: str) -> list:
     
     return org_files
 
+def _parse_org_file(parser, org_file):
+    """Parse org file and return parsed document"""
+    org_doc = parser.parse_org_file(org_file)
+    if not org_doc:
+        raise ValueError(f"Failed to parse {os.path.basename(org_file)}")
+    return org_doc
+
+
+def _create_document_from_org(org_doc, user_id, import_as_private, preserve_links):
+    """Create new document from org data"""
+    from app.utils.org_roam_parser import OrgRoamImporter
+    from app.utils.korean_text import process_korean_document
+
+    importer = OrgRoamImporter(db.session)
+    markdown_content = importer._convert_org_to_markdown(org_doc)
+    korean_processing = process_korean_document(org_doc['title'], markdown_content)
+
+    document = Document(
+        title=org_doc['title'],
+        markdown_content=markdown_content,
+        author=f"Imported from {org_doc['filename']}",
+        user_id=user_id,
+        is_public=not import_as_private
+    )
+
+    document.document_metadata = {
+        'org_roam_id': org_doc.get('id'),
+        'org_filename': org_doc['filename'],
+        'org_file_path': org_doc.get('file_path', ''),
+        'roam_tags': org_doc.get('roam_tags', []),
+        'roam_aliases': org_doc.get('roam_aliases', []),
+        'language': org_doc['language'],
+        'import_date': datetime.now(timezone.utc).isoformat(),
+        'preserve_links': preserve_links
+    }
+
+    return document, korean_processing
+
+
+def _process_org_tags(document, org_doc, korean_processing, auto_tag):
+    """Process and apply tags to document"""
+    if not auto_tag:
+        return
+
+    all_tags = []
+    all_tags.extend(org_doc.get('roam_tags', []))
+    all_tags.extend(org_doc.get('tags', []))
+    if korean_processing.get('auto_tags'):
+        all_tags.extend(korean_processing['auto_tags'])
+
+    if all_tags:
+        document.add_tags(list(set(all_tags)))
+
+
 def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
                      preserve_links: bool, auto_tag: bool, overwrite_existing: bool) -> Dict[str, Any]:
     """org 파일들을 데이터베이스로 임포트"""
@@ -145,52 +220,40 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
         'errors': [],
         'documents': []
     }
-    
+
     try:
+        from app.utils.org_roam_parser import OrgRoamImporter
+        from app.utils.korean_text import process_korean_document
+
         for org_file in org_files:
             try:
-                # org 파일 파싱
-                org_doc = parser.parse_org_file(org_file)
-                if not org_doc:
-                    results['failed'] += 1
-                    results['errors'].append(f"Failed to parse {os.path.basename(org_file)}")
-                    continue
-                
-                # 기존 문서 확인
+                org_doc = _parse_org_file(parser, org_file)
+
                 existing_doc = None
                 if org_doc.get('id'):
-                    # org-roam ID로 검색
                     existing_doc = Document.query.filter(
                         Document.document_metadata['org_roam_id'].astext == org_doc['id']
                     ).first()
-                
+
                 if not existing_doc:
-                    # 제목으로 검색
                     existing_doc = Document.query.filter_by(
                         title=org_doc['title'],
                         user_id=user_id
                     ).first()
-                
+
                 if existing_doc and not overwrite_existing:
                     results['skipped'] += 1
                     continue
-                
-                # 마크다운 변환
-                from app.utils.org_roam_parser import OrgRoamImporter
+
                 importer = OrgRoamImporter(db.session)
                 markdown_content = importer._convert_org_to_markdown(org_doc)
-                
-                # 한국어 처리
-                from app.utils.korean_text import process_korean_document
                 korean_processing = process_korean_document(org_doc['title'], markdown_content)
-                
+
                 if existing_doc:
-                    # 기존 문서 업데이트
                     existing_doc.markdown_content = markdown_content
                     existing_doc.html_content = existing_doc.convert_markdown_to_html()
                     existing_doc.updated_at = datetime.now(timezone.utc)
-                    
-                    # 메타데이터 업데이트
+
                     existing_doc.document_metadata.update({
                         'org_roam_id': org_doc.get('id'),
                         'org_filename': org_doc['filename'],
@@ -199,48 +262,20 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
                         'language': org_doc['language'],
                         'last_import_date': datetime.now(timezone.utc).isoformat()
                     })
-                    
+
                     results['updated'] += 1
                     action = 'updated'
                 else:
-                    # 새 문서 생성
-                    document = Document(
-                        title=org_doc['title'],
-                        markdown_content=markdown_content,
-                        author=f"Imported from {org_doc['filename']}",
-                        user_id=user_id,
-                        is_public=not import_as_private
+                    document, korean_processing = _create_document_from_org(
+                        org_doc, user_id, import_as_private, preserve_links
                     )
-                    
-                    # 메타데이터 설정
-                    document.document_metadata = {
-                        'org_roam_id': org_doc.get('id'),
-                        'org_filename': org_doc['filename'],
-                        'org_file_path': org_doc.get('file_path', ''),
-                        'roam_tags': org_doc.get('roam_tags', []),
-                        'roam_aliases': org_doc.get('roam_aliases', []),
-                        'language': org_doc['language'],
-                        'import_date': datetime.now(timezone.utc).isoformat(),
-                        'preserve_links': preserve_links
-                    }
-                    
                     db.session.add(document)
                     existing_doc = document
                     results['imported'] += 1
                     action = 'imported'
-                
-                # 태그 처리
-                if auto_tag:
-                    all_tags = []
-                    all_tags.extend(org_doc.get('roam_tags', []))
-                    all_tags.extend(org_doc.get('tags', []))
-                    if korean_processing.get('auto_tags'):
-                        all_tags.extend(korean_processing['auto_tags'])
-                    
-                    if all_tags:
-                        existing_doc.add_tags(list(set(all_tags)))
-                
-                # 결과에 문서 정보 추가
+
+                _process_org_tags(existing_doc, org_doc, korean_processing, auto_tag)
+
                 results['documents'].append({
                     'title': org_doc['title'],
                     'filename': org_doc['filename'],
@@ -250,19 +285,19 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
                     'links_count': len(org_doc.get('links', [])),
                     'word_count': len(korean_processing.get('content_tokens', []))
                 })
-                
+
             except Exception as e:
                 results['failed'] += 1
                 results['errors'].append(f"Failed to import {os.path.basename(org_file)}: {str(e)}")
                 current_app.logger.error(f"Import error for {org_file}: {e}")
-        
+
         db.session.commit()
-        
+
     except Exception as e:
         db.session.rollback()
         results['errors'].append(f"Database error: {str(e)}")
         raise
-    
+
     return results
 
 @org_roam_bp.route('/org-roam/import-directory', methods=['POST'])

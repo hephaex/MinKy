@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { highlightTextReact, truncateWithHighlight } from '../utils/highlightText';
 import { formatDateTime } from '../utils/dateUtils';
@@ -115,6 +116,36 @@ const DocumentCard = ({
       </Link>
     </div>
   );
+};
+
+DocumentCard.propTypes = {
+  document: PropTypes.shape({
+    id: PropTypes.number.isRequired,
+    title: PropTypes.string,
+    author: PropTypes.oneOfType([
+      PropTypes.string,
+      PropTypes.array
+    ]),
+    tags: PropTypes.arrayOf(
+      PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.shape({
+          name: PropTypes.string
+        })
+      ])
+    ),
+    updated_at: PropTypes.string,
+    markdown_content: PropTypes.string
+  }).isRequired,
+  searchQuery: PropTypes.string,
+  showPreview: PropTypes.bool,
+  formatDate: PropTypes.func
+};
+
+DocumentCard.defaultProps = {
+  searchQuery: '',
+  showPreview: false,
+  formatDate: null
 };
 
 export default DocumentCard;

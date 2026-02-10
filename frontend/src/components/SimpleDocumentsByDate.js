@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { logError } from '../utils/logger';
@@ -316,6 +317,16 @@ const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
       )}
     </div>
   );
+};
+
+SimpleDocumentsByDate.propTypes = {
+  dateKey: PropTypes.string,
+  onDocumentClick: PropTypes.func
+};
+
+SimpleDocumentsByDate.defaultProps = {
+  dateKey: null,
+  onDocumentClick: null
 };
 
 export default SimpleDocumentsByDate;

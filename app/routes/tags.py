@@ -477,6 +477,79 @@ def get_tags_statistics() -> Response | tuple[Response, int]:
         logger.error("Error getting tag statistics: %s", e)
         return error_response('Internal server error', 500)
 
+def _get_documents_for_auto_tagging(document_id, limit, current_user_id):
+    """Get documents to process for auto tagging"""
+    if document_id:
+        document = db.session.get(Document, document_id)
+        if not document:
+            return None, error_response('Document not found', 404)
+        if not document.can_view(current_user_id):
+            return None, error_response('Access denied', 403)
+        return [document], None
+
+    query = Document.query.filter(~Document.tags.any())
+    if current_user_id:
+        query = query.filter(
+            (Document.is_public == True) | (Document.user_id == current_user_id)
+        )
+    else:
+        query = query.filter(Document.is_public == True)
+
+    return query.limit(limit).all(), None
+
+
+def _process_document_tags(doc, dry_run, results):
+    """Process tags for a single document"""
+    results['processed'] += 1
+
+    if doc.tags:
+        results['documents'].append({
+            'id': doc.id,
+            'title': doc.title,
+            'status': 'skipped',
+            'reason': 'already_has_tags',
+            'existing_tags': [tag.name for tag in doc.tags]
+        })
+        return
+
+    content = doc.markdown_content or doc.content or ''
+    auto_tags = detect_auto_tags(content)
+
+    doc_result = {
+        'id': doc.id,
+        'title': doc.title,
+        'detected_tags': auto_tags,
+        'status': 'processed'
+    }
+
+    if auto_tags:
+        if not dry_run:
+            doc.add_tags(auto_tags)
+            doc_result['status'] = 'tagged'
+            doc_result['added_tags'] = auto_tags
+        else:
+            doc_result['status'] = 'preview'
+            doc_result['would_add_tags'] = auto_tags
+        results['tagged'] += 1
+    else:
+        doc_result['status'] = 'no_tags_detected'
+
+    results['documents'].append(doc_result)
+
+
+def _format_auto_tag_response(dry_run, results):
+    """Format auto tag generation response"""
+    return success_response({
+        'dry_run': dry_run,
+        'results': results,
+        'summary': {
+            'total_processed': results['processed'],
+            'documents_tagged': results['tagged'],
+            'errors': results['errors']
+        }
+    })
+
+
 @tags_bp.route('/tags/auto-generate', methods=['POST'])
 @jwt_required(optional=True)
 def generate_auto_tags() -> Response | tuple[Response, int]:
@@ -484,88 +557,27 @@ def generate_auto_tags() -> Response | tuple[Response, int]:
     try:
         current_user_id = get_current_user_id()
         data = request.get_json() or {}
-        
-        # Parameters
-        document_id = data.get('document_id')  # Single document
-        limit = data.get('limit', 100)  # Batch processing limit
-        dry_run = data.get('dry_run', False)  # Preview mode
-        
+
+        document_id = data.get('document_id')
+        limit = data.get('limit', 100)
+        dry_run = data.get('dry_run', False)
+
         results = {
             'processed': 0,
             'tagged': 0,
             'errors': 0,
             'documents': []
         }
-        
-        if document_id:
-            # Process single document
-            document = db.session.get(Document, document_id)
-            if not document:
-                return error_response('Document not found', 404)
 
-            # Check access permissions
-            if not document.can_view(current_user_id):
-                return error_response('Access denied', 403)
-            
-            documents = [document]
-        else:
-            # Process documents without tags (batch)
-            query = Document.query.filter(~Document.tags.any())
-            
-            # Filter by access permissions
-            if current_user_id:
-                query = query.filter(
-                    (Document.is_public == True) | (Document.user_id == current_user_id)
-                )
-            else:
-                query = query.filter(Document.is_public == True)
-            
-            documents = query.limit(limit).all()
-        
+        documents, error = _get_documents_for_auto_tagging(document_id, limit, current_user_id)
+        if error:
+            return error
+
         logger.info("AUTO_TAG_GENERATION: Processing %d documents", len(documents))
-        
+
         for doc in documents:
             try:
-                results['processed'] += 1
-                
-                # Skip if document already has tags
-                if doc.tags:
-                    results['documents'].append({
-                        'id': doc.id,
-                        'title': doc.title,
-                        'status': 'skipped',
-                        'reason': 'already_has_tags',
-                        'existing_tags': [tag.name for tag in doc.tags]
-                    })
-                    continue
-                
-                # Detect auto tags
-                content = doc.markdown_content or doc.content or ''
-                auto_tags = detect_auto_tags(content)
-                
-                doc_result = {
-                    'id': doc.id,
-                    'title': doc.title,
-                    'detected_tags': auto_tags,
-                    'status': 'processed'
-                }
-                
-                if auto_tags:
-                    if not dry_run:
-                        # Apply tags to document
-                        doc.add_tags(auto_tags)
-                        doc_result['status'] = 'tagged'
-                        doc_result['added_tags'] = auto_tags
-                    else:
-                        doc_result['status'] = 'preview'
-                        doc_result['would_add_tags'] = auto_tags
-                    
-                    results['tagged'] += 1
-                else:
-                    doc_result['status'] = 'no_tags_detected'
-                
-                results['documents'].append(doc_result)
-                
+                _process_document_tags(doc, dry_run, results)
             except Exception as e:
                 results['errors'] += 1
                 results['documents'].append({
@@ -575,20 +587,12 @@ def generate_auto_tags() -> Response | tuple[Response, int]:
                     'error': str(e)
                 })
                 logger.error("AUTO_TAG_GENERATION: Error processing document %s: %s", doc.id, e)
-        
+
         if not dry_run:
             db.session.commit()
             logger.info("AUTO_TAG_GENERATION: Committed changes to database")
 
-        return success_response({
-            'dry_run': dry_run,
-            'results': results,
-            'summary': {
-                'total_processed': results['processed'],
-                'documents_tagged': results['tagged'],
-                'errors': results['errors']
-            }
-        })
+        return _format_auto_tag_response(dry_run, results)
 
     except Exception as e:
         if not dry_run:

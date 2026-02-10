@@ -269,6 +269,88 @@ def detect_duplicates() -> Response | tuple[Response, int]:
             'error': 'Failed to detect duplicates'
         }), 500
 
+def _filter_accessible_documents(documents: list[Document], user_id: int | None) -> list[Document]:
+    """Filter documents based on user access permissions"""
+    accessible_docs = []
+    for doc in documents:
+        if doc.is_public or (user_id and doc.user_id == user_id):
+            accessible_docs.append(doc)
+    return accessible_docs
+
+
+def _calculate_similarity_score(doc1: Document, doc2: Document) -> float:
+    """Calculate similarity score between two documents"""
+    similarity_result = document_clustering_service.find_similar_documents(
+        target_document=doc1,
+        candidate_documents=[doc2],
+        similarity_threshold=0.0,
+        max_results=1
+    )
+
+    if similarity_result.get('similar_documents'):
+        return similarity_result['similar_documents'][0]['similarity_score']
+
+    return 0.0
+
+
+def _build_similarity_row(
+    doc1_index: int,
+    accessible_docs: list[Document],
+    similarity_matrix: list[list[dict]],
+    similarity_threshold: float
+) -> list[dict]:
+    """Build a single row of the similarity matrix"""
+    similarity_row = []
+
+    for j, doc2 in enumerate(accessible_docs):
+        if doc1_index == j:
+            similarity_row.append({
+                'document_id': doc2.id,
+                'similarity_score': 1.0,
+                'is_self': True
+            })
+        elif doc1_index < j:
+            score = _calculate_similarity_score(accessible_docs[doc1_index], doc2)
+            similarity_row.append({
+                'document_id': doc2.id,
+                'similarity_score': score,
+                'is_similar': score >= similarity_threshold
+            })
+        else:
+            score = similarity_matrix[j][doc1_index]['similarity_score']
+            similarity_row.append({
+                'document_id': doc2.id,
+                'similarity_score': score,
+                'is_similar': score >= similarity_threshold
+            })
+
+    return similarity_row
+
+
+def _build_similarity_matrix(accessible_docs: list[Document], similarity_threshold: float) -> list[list[dict]]:
+    """Build complete similarity matrix for all documents"""
+    similarity_matrix = []
+
+    for i in range(len(accessible_docs)):
+        similarity_row = _build_similarity_row(i, accessible_docs, similarity_matrix, similarity_threshold)
+        similarity_matrix.append(similarity_row)
+
+    return similarity_matrix
+
+
+def _extract_document_metadata(documents: list[Document]) -> list[dict]:
+    """Extract metadata from documents"""
+    return [
+        {
+            'id': doc.id,
+            'title': doc.title,
+            'author': doc.author,
+            'created_at': doc.created_at.isoformat()
+        }
+        for doc in documents
+    ]
+
+
 @clustering_bp.route('/clustering/batch-similarity', methods=['POST'])
 @jwt_required(optional=True)
 def batch_similarity_analysis() -> Response | tuple[Response, int]:
@@ -281,87 +363,31 @@ def batch_similarity_analysis() -> Response | tuple[Response, int]:
                 'success': False,
                 'error': 'Similarity analysis service is not available'
             }), 503
-        
+
         user_id = get_optional_user_id()
-        
-        # Get request parameters
+
         data = request.get_json() or {}
         document_ids = data.get('document_ids', [])
         similarity_threshold = data.get('threshold', 0.1)
-        
+
         if not document_ids or len(document_ids) < 2:
             return jsonify({
                 'success': False,
                 'error': 'At least 2 document IDs required'
             }), 400
-        
-        # Get documents
+
         documents = Document.query.filter(Document.id.in_(document_ids)).all()
-        
-        # Check access permissions
-        accessible_docs = []
-        for doc in documents:
-            if doc.is_public or (user_id and doc.user_id == user_id):
-                accessible_docs.append(doc)
-        
+        accessible_docs = _filter_accessible_documents(documents, user_id)
+
         if len(accessible_docs) < 2:
             return jsonify({
                 'success': False,
                 'error': 'Insufficient accessible documents'
             }), 403
-        
-        # Perform pairwise similarity analysis
-        similarity_matrix = []
-        
-        for i, doc1 in enumerate(accessible_docs):
-            similarity_row = []
-            for j, doc2 in enumerate(accessible_docs):
-                if i == j:
-                    similarity_row.append({
-                        'document_id': doc2.id,
-                        'similarity_score': 1.0,
-                        'is_self': True
-                    })
-                elif i < j:  # Avoid duplicate calculations
-                    # Find similarity between doc1 and doc2
-                    similarity_result = document_clustering_service.find_similar_documents(
-                        target_document=doc1,
-                        candidate_documents=[doc2],
-                        similarity_threshold=0.0,  # Get all results
-                        max_results=1
-                    )
-                    
-                    if similarity_result.get('similar_documents'):
-                        score = similarity_result['similar_documents'][0]['similarity_score']
-                    else:
-                        score = 0.0
-                    
-                    similarity_row.append({
-                        'document_id': doc2.id,
-                        'similarity_score': score,
-                        'is_similar': score >= similarity_threshold
-                    })
-                else:
-                    # Use symmetric property
-                    score = similarity_matrix[j][i]['similarity_score']
-                    similarity_row.append({
-                        'document_id': doc2.id,
-                        'similarity_score': score,
-                        'is_similar': score >= similarity_threshold
-                    })
-            
-            similarity_matrix.append(similarity_row)
-        
-        # Create document metadata
-        document_metadata = []
-        for doc in accessible_docs:
-            document_metadata.append({
-                'id': doc.id,
-                'title': doc.title,
-                'author': doc.author,
-                'created_at': doc.created_at.isoformat()
-            })
-        
+
+        similarity_matrix = _build_similarity_matrix(accessible_docs, similarity_threshold)
+        document_metadata = _extract_document_metadata(accessible_docs)
+
         return jsonify({
             'success': True,
             'batch_similarity': {
@@ -371,7 +397,7 @@ def batch_similarity_analysis() -> Response | tuple[Response, int]:
                 'documents_analyzed': len(accessible_docs)
             }
         })
-        
+
     except Exception as e:
         logger.error(f"Error in batch similarity analysis: {e}")
         return jsonify({

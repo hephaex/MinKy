@@ -23,63 +23,57 @@ class DocumentExporter:
         except Exception:
             pass
     
-    def export_to_html(self, include_styles=True):
-        """Export document to HTML format"""
-        html_content = markdown.markdown(
-            self.document.markdown_content,
-            extensions=['codehilite', 'fenced_code', 'tables', 'toc']
-        )
-        
-        if include_styles:
-            css_styles = """
+    def _generate_css_styles(self) -> str:
+        """Generate CSS styles for HTML export"""
+        return """
             <style>
-                body { 
+                body {
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                    line-height: 1.6; 
-                    max-width: 800px; 
-                    margin: 0 auto; 
+                    line-height: 1.6;
+                    max-width: 800px;
+                    margin: 0 auto;
                     padding: 20px;
                     color: #333;
                 }
-                h1, h2, h3, h4, h5, h6 { 
-                    color: #2c3e50; 
+                h1, h2, h3, h4, h5, h6 {
+                    color: #2c3e50;
                     margin-top: 2em;
                     margin-bottom: 1em;
                 }
                 h1 { border-bottom: 2px solid #3498db; padding-bottom: 10px; }
                 h2 { border-bottom: 1px solid #bdc3c7; padding-bottom: 5px; }
-                code { 
-                    background: #f8f9fa; 
-                    padding: 2px 6px; 
+                code {
+                    background: #f8f9fa;
+                    padding: 2px 6px;
                     border-radius: 3px;
                     font-family: 'Monaco', 'Consolas', monospace;
                 }
-                pre { 
-                    background: #f8f9fa; 
-                    padding: 15px; 
-                    border-radius: 5px; 
+                pre {
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 5px;
                     overflow-x: auto;
                     border-left: 4px solid #3498db;
                 }
-                blockquote { 
-                    border-left: 4px solid #3498db; 
-                    margin: 1.5em 0; 
-                    padding-left: 20px; 
+                blockquote {
+                    border-left: 4px solid #3498db;
+                    margin: 1.5em 0;
+                    padding-left: 20px;
                     color: #7f8c8d;
                     font-style: italic;
                 }
-                table { 
-                    border-collapse: collapse; 
-                    width: 100%; 
+                table {
+                    border-collapse: collapse;
+                    width: 100%;
                     margin: 1em 0;
                 }
-                th, td { 
-                    border: 1px solid #bdc3c7; 
-                    padding: 12px; 
+                th, td {
+                    border: 1px solid #bdc3c7;
+                    padding: 12px;
                     text-align: left;
                 }
-                th { 
-                    background: #ecf0f1; 
+                th {
+                    background: #ecf0f1;
                     font-weight: bold;
                 }
                 .document-meta {
@@ -98,27 +92,41 @@ class DocumentExporter:
                 }
             </style>
             """
-        else:
-            css_styles = ""
-        
-        # Document metadata
-        meta_html = f"""
+
+    def _convert_markdown_to_html(self) -> str:
+        """Convert markdown content to HTML"""
+        return markdown.markdown(
+            self.document.markdown_content,
+            extensions=['codehilite', 'fenced_code', 'tables', 'toc']
+        )
+
+    def _generate_document_metadata_html(self) -> str:
+        """Generate HTML for document metadata section"""
+        author_html = f'<p><strong>Author:</strong> {self.document.author}</p>' if self.document.author else ''
+        tags_html = f'<p><strong>Tags:</strong> {", ".join(self.document.get_tag_names())}</p>' if self.document.get_tag_names() else ''
+
+        return f"""
         <div class="document-meta">
             <h1>{self.document.title}</h1>
-            {f'<p><strong>Author:</strong> {self.document.author}</p>' if self.document.author else ''}
+            {author_html}
             <p><strong>Created:</strong> {self.document.created_at.strftime('%B %d, %Y at %I:%M %p')}</p>
             <p><strong>Last Updated:</strong> {self.document.updated_at.strftime('%B %d, %Y at %I:%M %p')}</p>
-            {f'<p><strong>Tags:</strong> {", ".join(self.document.get_tag_names())}</p>' if self.document.get_tag_names() else ''}
+            {tags_html}
         </div>
         """
-        
-        export_info = f"""
+
+    def _generate_export_info_html(self) -> str:
+        """Generate HTML for export information footer"""
+        export_time = datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')
+        return f"""
         <div class="export-info">
-            <p>Exported from Minky Document Management System on {datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')}</p>
+            <p>Exported from Minky Document Management System on {export_time}</p>
         </div>
         """
-        
-        full_html = f"""
+
+    def _build_html_template(self, css_styles: str, meta_html: str, content_html: str, export_info: str) -> str:
+        """Build complete HTML document from components"""
+        return f"""
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -129,13 +137,20 @@ class DocumentExporter:
         </head>
         <body>
             {meta_html}
-            {html_content}
+            {content_html}
             {export_info}
         </body>
         </html>
         """
-        
-        return full_html
+
+    def export_to_html(self, include_styles=True):
+        """Export document to HTML format"""
+        html_content = self._convert_markdown_to_html()
+        css_styles = self._generate_css_styles() if include_styles else ""
+        meta_html = self._generate_document_metadata_html()
+        export_info = self._generate_export_info_html()
+
+        return self._build_html_template(css_styles, meta_html, html_content, export_info)
     
     def export_to_pdf(self):
         """Export document to PDF format using WeasyPrint"""
@@ -165,86 +180,102 @@ class DocumentExporter:
     def export_to_docx(self):
         """Export document to DOCX format"""
         doc = DocxDocument()
-        
+
         # Add title
+        self._add_docx_title(doc)
+
+        # Add metadata table
+        self._add_docx_metadata(doc)
+
+        doc.add_page_break()
+
+        # Convert markdown to paragraphs
+        self._add_docx_content(doc)
+
+        # Add footer
+        self._add_docx_footer(doc)
+
+        # Save document
+        docx_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}.docx")
+        doc.save(docx_file)
+
+        return docx_file
+
+    def _add_docx_title(self, doc: DocxDocument) -> None:
+        """Add title to DOCX document"""
         title = doc.add_heading(self.document.title, 0)
         title.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        
-        # Add metadata
+
+    def _add_docx_metadata(self, doc: DocxDocument) -> None:
+        """Add metadata table to DOCX document"""
         meta_table = doc.add_table(rows=0, cols=2)
         meta_table.style = 'Table Grid'
-        
+
         if self.document.author:
             row = meta_table.add_row()
             row.cells[0].text = 'Author'
             row.cells[1].text = self.document.author
-        
+
         row = meta_table.add_row()
         row.cells[0].text = 'Created'
         row.cells[1].text = self.document.created_at.strftime('%B %d, %Y at %I:%M %p')
-        
+
         row = meta_table.add_row()
         row.cells[0].text = 'Last Updated'
         row.cells[1].text = self.document.updated_at.strftime('%B %d, %Y at %I:%M %p')
-        
+
         if self.document.get_tag_names():
             row = meta_table.add_row()
             row.cells[0].text = 'Tags'
             row.cells[1].text = ', '.join(self.document.get_tag_names())
-        
-        doc.add_page_break()
-        
-        # Convert markdown to paragraphs (simplified)
+
+    def _add_docx_content(self, doc: DocxDocument) -> None:
+        """Convert markdown to DOCX paragraphs"""
         lines = self.document.markdown_content.split('\n')
         current_paragraph = ""
-        
+
         for line in lines:
-            line = line.strip()
-            
-            if line.startswith('# '):
-                if current_paragraph:
-                    doc.add_paragraph(current_paragraph)
-                    current_paragraph = ""
-                doc.add_heading(line[2:], level=1)
-            elif line.startswith('## '):
-                if current_paragraph:
-                    doc.add_paragraph(current_paragraph)
-                    current_paragraph = ""
-                doc.add_heading(line[3:], level=2)
-            elif line.startswith('### '):
-                if current_paragraph:
-                    doc.add_paragraph(current_paragraph)
-                    current_paragraph = ""
-                doc.add_heading(line[4:], level=3)
-            elif line.startswith('```'):
-                # Handle code blocks (simplified)
-                if current_paragraph:
-                    doc.add_paragraph(current_paragraph)
-                    current_paragraph = ""
-                continue
-            elif line == '':
-                if current_paragraph:
-                    doc.add_paragraph(current_paragraph)
-                    current_paragraph = ""
-            else:
-                if current_paragraph:
-                    current_paragraph += " " + line
-                else:
-                    current_paragraph = line
-        
+            current_paragraph = self._process_docx_line(doc, line.strip(), current_paragraph)
+
         if current_paragraph:
             doc.add_paragraph(current_paragraph)
-        
-        # Add footer
+
+    def _process_docx_line(self, doc: DocxDocument, line: str, current_paragraph: str) -> str:
+        """Process a single markdown line for DOCX conversion"""
+        if line.startswith('# '):
+            return self._add_docx_heading(doc, line[2:], 1, current_paragraph)
+
+        if line.startswith('## '):
+            return self._add_docx_heading(doc, line[3:], 2, current_paragraph)
+
+        if line.startswith('### '):
+            return self._add_docx_heading(doc, line[4:], 3, current_paragraph)
+
+        if line.startswith('```'):
+            if current_paragraph:
+                doc.add_paragraph(current_paragraph)
+            return ""
+
+        if line == '':
+            if current_paragraph:
+                doc.add_paragraph(current_paragraph)
+            return ""
+
+        return (current_paragraph + " " + line) if current_paragraph else line
+
+    def _add_docx_heading(self, doc: DocxDocument, text: str, level: int, current_paragraph: str) -> str:
+        """Add heading to DOCX document and return empty paragraph"""
+        if current_paragraph:
+            doc.add_paragraph(current_paragraph)
+        doc.add_heading(text, level=level)
+        return ""
+
+    def _add_docx_footer(self, doc: DocxDocument) -> None:
+        """Add footer to DOCX document"""
         doc.add_page_break()
         footer_para = doc.add_paragraph()
         footer_para.add_run(f"Exported from Minky on {datetime.now(timezone.utc).strftime('%B %d, %Y')}")
         footer_para.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-        
-        docx_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}.docx")
-        doc.save(docx_file)
-        
-        return docx_file
     
     def export_to_markdown(self):
         """Export document as clean markdown with metadata"""
@@ -287,53 +318,68 @@ exported: {datetime.now(timezone.utc).isoformat()}
     def export_bundle(self, formats=['html', 'pdf', 'docx', 'markdown', 'json']):
         """Export document in multiple formats as a ZIP bundle"""
         zip_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}_bundle.zip")
-        
+
         with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zf:
             for format_type in formats:
-                try:
-                    if format_type == 'html':
-                        content = self.export_to_html()
-                        zf.writestr(f"{self.document.title[:50]}.html", content.encode('utf-8'))
-                    elif format_type == 'pdf':
-                        pdf_path = self.export_to_pdf()
-                        zf.write(pdf_path, f"{self.document.title[:50]}.pdf")
-                    elif format_type == 'docx':
-                        docx_path = self.export_to_docx()
-                        zf.write(docx_path, f"{self.document.title[:50]}.docx")
-                    elif format_type == 'markdown':
-                        md_path = self.export_to_markdown()
-                        zf.write(md_path, f"{self.document.title[:50]}.md")
-                    elif format_type == 'json':
-                        json_path = self.export_to_json()
-                        zf.write(json_path, f"{self.document.title[:50]}.json")
-                except Exception as e:
-                    # Add error log to zip
-                    zf.writestr(f"export_errors_{format_type}.txt", str(e))
-        
+                self._add_format_to_bundle(zf, format_type)
+
         return zip_file
+
+    def _add_format_to_bundle(self, zf: zipfile.ZipFile, format_type: str) -> None:
+        """Add a single format export to the bundle"""
+        try:
+            self._export_format_to_zip(zf, format_type)
+        except Exception as e:
+            zf.writestr(f"export_errors_{format_type}.txt", str(e))
+
+    def _export_format_to_zip(self, zf: zipfile.ZipFile, format_type: str) -> None:
+        """Export a specific format and add to ZIP"""
+        title_truncated = self.document.title[:50]
+
+        if format_type == 'html':
+            content = self.export_to_html()
+            zf.writestr(f"{title_truncated}.html", content.encode('utf-8'))
+        elif format_type == 'pdf':
+            pdf_path = self.export_to_pdf()
+            zf.write(pdf_path, f"{title_truncated}.pdf")
+        elif format_type == 'docx':
+            docx_path = self.export_to_docx()
+            zf.write(docx_path, f"{title_truncated}.docx")
+        elif format_type == 'markdown':
+            md_path = self.export_to_markdown()
+            zf.write(md_path, f"{title_truncated}.md")
+        elif format_type == 'json':
+            json_path = self.export_to_json()
+            zf.write(json_path, f"{title_truncated}.json")
 
 def export_document(document, format_type='html', **options):
     """Convenience function to export a document"""
     exporter = DocumentExporter(document)
-    
+
     try:
-        if format_type == 'html':
-            return exporter.export_to_html(**options)
-        elif format_type == 'pdf':
-            return exporter.export_to_pdf()
-        elif format_type == 'docx':
-            return exporter.export_to_docx()
-        elif format_type == 'markdown':
-            return exporter.export_to_markdown()
-        elif format_type == 'json':
-            return exporter.export_to_json()
-        elif format_type == 'bundle':
-            return exporter.export_bundle(**options)
-        else:
-            raise ValueError(f"Unsupported format: {format_type}")
+        result = _export_by_format(exporter, format_type, options)
+        return result
     finally:
         if format_type in ['html', 'json']:
             # For string returns, cleanup immediately
             exporter.cleanup()
-    
+
     # For file returns, cleanup is handled by the route
+
+
+def _export_by_format(exporter: DocumentExporter, format_type: str, options: dict):
+    """Export document using the specified format"""
+    format_handlers = {
+        'html': lambda: exporter.export_to_html(**options),
+        'pdf': lambda: exporter.export_to_pdf(),
+        'docx': lambda: exporter.export_to_docx(),
+        'markdown': lambda: exporter.export_to_markdown(),
+        'json': lambda: exporter.export_to_json(),
+        'bundle': lambda: exporter.export_bundle(**options),
+    }
+
+    handler = format_handlers.get(format_type)
+    if not handler:
+        raise ValueError(f"Unsupported format: {format_type}")
+
+    return handler()

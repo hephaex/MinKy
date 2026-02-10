@@ -47,86 +47,100 @@ class BackupSyncManager:
         self.obsidian_parser = ObsidianParser()
         self.backup_dir = backup_manager.backup_root_dir
     
+    def _try_pattern_with_time(self, filename: str) -> Optional[Dict]:
+        """Try parsing YYYYMMDD_title_HHMMSS.md pattern"""
+        pattern = r'^(\d{8})_(.+)_(\d{6})\.md$'
+        match = re.match(pattern, filename)
+
+        if match:
+            date_str, title_part, time_str = match.groups()
+            try:
+                date_obj = datetime.strptime(date_str + time_str, '%Y%m%d%H%M%S')
+                return {
+                    'filename': filename,
+                    'date': date_obj,
+                    'title_part': title_part,
+                    'original_date_str': date_str,
+                    'original_time_str': time_str
+                }
+            except ValueError:
+                pass
+        return None
+
+    def _try_pattern_date_only(self, filename: str) -> Optional[Dict]:
+        """Try parsing YYYYMMDD_title.md pattern"""
+        pattern = r'^(\d{8})_(.+)\.md$'
+        match = re.match(pattern, filename)
+
+        if match:
+            date_str, title_part = match.groups()
+            try:
+                date_obj = datetime.strptime(date_str, '%Y%m%d')
+                return {
+                    'filename': filename,
+                    'date': date_obj,
+                    'title_part': title_part,
+                    'original_date_str': date_str,
+                    'original_time_str': '000000'
+                }
+            except ValueError:
+                pass
+        return None
+
+    def _try_pattern_hyphenated(self, filename: str) -> Optional[Dict]:
+        """Try parsing YYYY-MM-DD_title.md pattern"""
+        pattern = r'^(\d{4}-\d{2}-\d{2})_(.+)\.md$'
+        match = re.match(pattern, filename)
+
+        if match:
+            date_str, title_part = match.groups()
+            try:
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                return {
+                    'filename': filename,
+                    'date': date_obj,
+                    'title_part': title_part,
+                    'original_date_str': date_str.replace('-', ''),
+                    'original_time_str': '000000'
+                }
+            except ValueError:
+                pass
+        return None
+
+    def _try_pattern_generic(self, filename: str) -> Optional[Dict]:
+        """Try parsing generic markdown file using file modification time"""
+        title_part = filename[:-3]
+        file_path = self.backup_dir / filename
+
+        if file_path.exists():
+            file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
+            return {
+                'filename': filename,
+                'date': file_mtime,
+                'title_part': title_part,
+                'original_date_str': file_mtime.strftime('%Y%m%d'),
+                'original_time_str': file_mtime.strftime('%H%M%S')
+            }
+        return None
+
     def parse_backup_filename(self, filename: str) -> Optional[Dict]:
         """백업 파일명에서 정보 추출: 다양한 패턴 지원"""
         try:
-            # .md 파일만 처리
             if not filename.lower().endswith('.md'):
                 return None
-            
-            # 패턴 1: YYYYMMDD_title_HHMMSS.md (기존 백업 패턴)
-            pattern1 = r'^(\d{8})_(.+)_(\d{6})\.md$'
-            match1 = re.match(pattern1, filename)
-            
-            if match1:
-                date_str, title_part, time_str = match1.groups()
-                try:
-                    date_obj = datetime.strptime(date_str + time_str, '%Y%m%d%H%M%S')
-                    return {
-                        'filename': filename,
-                        'date': date_obj,
-                        'title_part': title_part,
-                        'original_date_str': date_str,
-                        'original_time_str': time_str
-                    }
-                except ValueError:
-                    pass
-            
-            # 패턴 2: YYYYMMDD_title.md (Export 패턴)
-            pattern2 = r'^(\d{8})_(.+)\.md$'
-            match2 = re.match(pattern2, filename)
-            
-            if match2:
-                date_str, title_part = match2.groups()
-                try:
-                    date_obj = datetime.strptime(date_str, '%Y%m%d')
-                    return {
-                        'filename': filename,
-                        'date': date_obj,
-                        'title_part': title_part,
-                        'original_date_str': date_str,
-                        'original_time_str': '000000'
-                    }
-                except ValueError:
-                    pass
-            
-            # 패턴 3: YYYY-MM-DD_title.md (하이픈 날짜 패턴)
-            pattern3 = r'^(\d{4}-\d{2}-\d{2})_(.+)\.md$'
-            match3 = re.match(pattern3, filename)
-            
-            if match3:
-                date_str, title_part = match3.groups()
-                try:
-                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-                    return {
-                        'filename': filename,
-                        'date': date_obj,
-                        'title_part': title_part,
-                        'original_date_str': date_str.replace('-', ''),
-                        'original_time_str': '000000'
-                    }
-                except ValueError:
-                    pass
-            
-            # 패턴 4: 일반 마크다운 파일 (날짜 없음)
-            # 파일명에서 .md 제거한 부분을 제목으로 사용
-            title_part = filename[:-3]  # .md 제거
-            
-            # 파일 수정 시간을 날짜로 사용
-            file_path = self.backup_dir / filename
-            if file_path.exists():
-                file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                return {
-                    'filename': filename,
-                    'date': file_mtime,
-                    'title_part': title_part,
-                    'original_date_str': file_mtime.strftime('%Y%m%d'),
-                    'original_time_str': file_mtime.strftime('%H%M%S')
-                }
-            
-            logger.warning(f"Could not parse filename: {filename}")
-            return None
-            
+
+            result = (
+                self._try_pattern_with_time(filename) or
+                self._try_pattern_date_only(filename) or
+                self._try_pattern_hyphenated(filename) or
+                self._try_pattern_generic(filename)
+            )
+
+            if not result:
+                logger.warning(f"Could not parse filename: {filename}")
+
+            return result
+
         except Exception as e:
             logger.error(f"Failed to parse backup filename {filename}: {e}")
             return None
@@ -173,46 +187,72 @@ class BackupSyncManager:
     def _parse_backup_header(self, content: str) -> Dict[str, Any]:
         """백업 파일 헤더에서 메타데이터 파싱"""
         header_info: Dict[str, Any] = {}
-        
+
         try:
             # 헤더 부분 추출 (첫 번째 --- 블록)
             header_pattern = r'^---\s*\n(.*?)\n---\s*\n'
             header_match = re.match(header_pattern, content, re.DOTALL)
-            
-            if header_match:
-                header_content = header_match.group(1)
-                
-                # 각 라인에서 정보 추출
-                for line in header_content.split('\n'):
-                    if line.startswith('# Document ID:'):
-                        try:
-                            header_info['document_id'] = int(line.split(':', 1)[1].strip())
-                        except ValueError:
-                            pass
-                    elif line.startswith('# Title:'):
-                        header_info['title'] = line.split(':', 1)[1].strip()
-                    elif line.startswith('# Author:'):
-                        author = line.split(':', 1)[1].strip()
-                        if author != 'Unknown':
-                            header_info['author'] = author
-                    elif line.startswith('# Created:'):
-                        try:
-                            created_str = line.split(':', 1)[1].strip()
-                            header_info['created'] = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
-                        except ValueError:
-                            pass
-                    elif line.startswith('# Tags:'):
-                        tags_str = line.split(':', 1)[1].strip()
-                        if tags_str:
-                            header_info['tags'] = [tag.strip() for tag in tags_str.split(',')]
-                    elif line.startswith('# Public:'):
-                        is_public_str = line.split(':', 1)[1].strip().lower()
-                        header_info['is_public'] = is_public_str == 'true'
-        
+
+            if not header_match:
+                return header_info
+
+            header_content = header_match.group(1)
+
+            # 각 라인에서 정보 추출
+            for line in header_content.split('\n'):
+                self._parse_header_line(line, header_info)
+
         except Exception as e:
             logger.warning(f"Failed to parse backup header: {e}")
-        
+
         return header_info
+
+    def _parse_header_line(self, line: str, header_info: Dict[str, Any]) -> None:
+        """Parse a single header line and update header_info"""
+        if line.startswith('# Document ID:'):
+            self._parse_document_id(line, header_info)
+        elif line.startswith('# Title:'):
+            header_info['title'] = line.split(':', 1)[1].strip()
+        elif line.startswith('# Author:'):
+            self._parse_author(line, header_info)
+        elif line.startswith('# Created:'):
+            self._parse_created_date(line, header_info)
+        elif line.startswith('# Tags:'):
+            self._parse_tags(line, header_info)
+        elif line.startswith('# Public:'):
+            self._parse_is_public(line, header_info)
+
+    def _parse_document_id(self, line: str, header_info: Dict[str, Any]) -> None:
+        """Parse document ID from header line"""
+        try:
+            header_info['document_id'] = int(line.split(':', 1)[1].strip())
+        except ValueError:
+            pass
+
+    def _parse_author(self, line: str, header_info: Dict[str, Any]) -> None:
+        """Parse author from header line"""
+        author = line.split(':', 1)[1].strip()
+        if author != 'Unknown':
+            header_info['author'] = author
+
+    def _parse_created_date(self, line: str, header_info: Dict[str, Any]) -> None:
+        """Parse created date from header line"""
+        try:
+            created_str = line.split(':', 1)[1].strip()
+            header_info['created'] = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+
+    def _parse_tags(self, line: str, header_info: Dict[str, Any]) -> None:
+        """Parse tags from header line"""
+        tags_str = line.split(':', 1)[1].strip()
+        if tags_str:
+            header_info['tags'] = [tag.strip() for tag in tags_str.split(',')]
+
+    def _parse_is_public(self, line: str, header_info: Dict[str, Any]) -> None:
+        """Parse is_public flag from header line"""
+        is_public_str = line.split(':', 1)[1].strip().lower()
+        header_info['is_public'] = is_public_str == 'true'
     
     def _extract_markdown_content(self, content: str) -> str:
         """백업 파일에서 실제 마크다운 콘텐츠 추출 (헤더 제거)"""
@@ -332,86 +372,87 @@ class BackupSyncManager:
         else:
             return 'update_file'
     
+    def _generate_ai_tags(self, content: str, title: str) -> List[str]:
+        """Generate AI tags for content"""
+        try:
+            from app.services.ai_service import ai_service
+            ai_tags = ai_service.suggest_tags(content, title)
+            logger.info(f"AI generated tags for document '{title}': {ai_tags}")
+            return ai_tags
+        except Exception as e:
+            logger.warning(f"Failed to generate AI tags: {e}")
+            return []
+
+    def _update_document_from_backup(self, document: Document, backup_info: Dict) -> None:
+        """Update document with backup content and metadata"""
+        document.title = backup_info['title']
+        document.markdown_content = backup_info['markdown_content']
+        if backup_info['author']:
+            document.author = backup_info['author']
+
+        if backup_info['parsed_content']:
+            document.document_metadata = {
+                'frontmatter': backup_info['parsed_content'].get('frontmatter', {}),
+                'internal_links': backup_info['parsed_content'].get('internal_links', []),
+                'hashtags': backup_info['parsed_content'].get('hashtags', [])
+            }
+
+        existing_tags = backup_info['tags'] or []
+        ai_tags = self._generate_ai_tags(backup_info['markdown_content'], backup_info['title'])
+        all_tags = list(set(existing_tags + ai_tags))
+
+        for tag in document.tags.all():
+            document.tags.remove(tag)
+
+        if all_tags:
+            document.add_tags(all_tags)
+
+    def _create_new_backup(self, document: Document) -> str:
+        """Create new backup file from document"""
+        from app.utils.backup_manager import create_document_backup
+        return create_document_backup(document, force=True)
+
+    def _prepare_sync_result(self, action: str, document: Document, backup_info: Dict) -> Dict:
+        """Prepare base sync result structure"""
+        return {
+            'action': action,
+            'document_id': document.id,
+            'backup_file': backup_info['file_path'],
+            'success': False
+        }
+
     def sync_document_from_backup(self, document: Document, backup_info: Dict, force_direction: str = 'auto') -> Dict:
         """백업 파일과 문서 동기화"""
         try:
             comparison = self.compare_document_versions(document, backup_info)
-            
-            if force_direction == 'auto':
-                action = comparison['recommendation']
-            else:
-                action = force_direction
-            
-            result = {
-                'action': action,
-                'document_id': document.id,
-                'backup_file': backup_info['file_path'],
-                'success': False
-            }
-            
+            action = comparison['recommendation'] if force_direction == 'auto' else force_direction
+            result = self._prepare_sync_result(action, document, backup_info)
+
             if action == 'no_change':
                 result['success'] = True
                 result['message'] = 'No changes needed'
-                return result
-            
+
             elif action == 'update_db':
-                # DB를 백업 파일 내용으로 업데이트
-                document.title = backup_info['title']
-                document.markdown_content = backup_info['markdown_content']
-                if backup_info['author']:
-                    document.author = backup_info['author']
-                
-                # 메타데이터 업데이트
-                if backup_info['parsed_content']:
-                    document.document_metadata = {
-                        'frontmatter': backup_info['parsed_content'].get('frontmatter', {}),
-                        'internal_links': backup_info['parsed_content'].get('internal_links', []),
-                        'hashtags': backup_info['parsed_content'].get('hashtags', [])
-                    }
-                
-                # 태그 업데이트 (기존 태그 + AI 생성 태그)
-                existing_tags = backup_info['tags'] or []
-                
-                # AI 태그 자동 생성
-                ai_tags = []
-                try:
-                    from app.services.ai_service import ai_service
-                    ai_tags = ai_service.suggest_tags(backup_info['markdown_content'], backup_info['title'])
-                    logger.info(f"AI generated tags for imported/updated document '{backup_info['title']}': {ai_tags}")
-                except Exception as e:
-                    logger.warning(f"Failed to generate AI tags for imported/updated document: {e}")
-                
-                # 기존 태그와 AI 태그 병합 (중복 제거)
-                all_tags = list(set(existing_tags + ai_tags))
-                
-                # 기존 태그 제거 후 새 태그 추가
-                for tag in document.tags.all():
-                    document.tags.remove(tag)
-                
-                if all_tags:
-                    document.add_tags(all_tags)
-                
+                self._update_document_from_backup(document, backup_info)
                 db.session.commit()
                 result['success'] = True
                 result['message'] = 'Database updated from backup file'
-                
+
             elif action == 'update_file':
-                # 백업 파일을 DB 내용으로 업데이트 (새 백업 생성)
-                from app.utils.backup_manager import create_document_backup
-                new_backup_path = create_document_backup(document, force=True)
+                new_backup_path = self._create_new_backup(document)
                 result['success'] = True
                 result['message'] = f'New backup created: {new_backup_path}'
                 result['new_backup'] = new_backup_path
-                
+
             elif action == 'conflict':
                 result['message'] = 'Conflict detected - manual resolution required'
                 result['conflict_info'] = comparison
-                
-            else:  # skip
+
+            else:
                 result['message'] = 'Sync skipped'
-            
+
             return result
-            
+
         except Exception as e:
             db.session.rollback()
             logger.error(f"Failed to sync document {document.id}: {e}")
@@ -506,11 +547,9 @@ class BackupSyncManager:
         
         return backup_files
     
-    def perform_full_sync(self, user_id: Optional[int] = None, dry_run: bool = False) -> Dict[str, Any]:
-        """전체 백업 파일 동기화 수행"""
-        backup_files = self.scan_backup_files()
-
-        results: Dict[str, Any] = {
+    def _initialize_sync_results(self, backup_files: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Initialize sync results structure"""
+        return {
             'total_files': len(backup_files),
             'processed': 0,
             'created': 0,
@@ -520,59 +559,66 @@ class BackupSyncManager:
             'skipped': 0,
             'details': []
         }
-        
+
+    def _process_existing_document(self, existing_doc: Document, backup_info: Dict, dry_run: bool) -> Dict:
+        """Process sync for existing document"""
+        if not dry_run:
+            return self.sync_document_from_backup(existing_doc, backup_info)
+
+        comparison = self.compare_document_versions(existing_doc, backup_info)
+        return {
+            'action': comparison['recommendation'],
+            'document_id': existing_doc.id,
+            'backup_file': backup_info['file_path'],
+            'success': True,
+            'message': f'Would {comparison["recommendation"]} (dry run)'
+        }
+
+    def _process_new_document(self, backup_info: Dict, user_id: Optional[int], dry_run: bool) -> Dict:
+        """Process creation of new document from backup"""
+        if not dry_run:
+            return self.create_document_from_backup(backup_info, user_id)
+
+        return {
+            'action': 'create',
+            'success': True,
+            'backup_file': backup_info['file_path'],
+            'message': f'Would create new document: {backup_info["title"]} (dry run)'
+        }
+
+    def _update_result_counters(self, results: Dict[str, Any], sync_result: Dict) -> None:
+        """Update result counters based on sync result"""
+        if sync_result['success']:
+            action = sync_result['action']
+            if action == 'update_db':
+                results['updated'] += 1
+            elif action == 'conflict':
+                results['conflicts'] += 1
+            elif action == 'create':
+                results['created'] += 1
+            else:
+                results['skipped'] += 1
+        else:
+            results['errors'] += 1
+
+    def perform_full_sync(self, user_id: Optional[int] = None, dry_run: bool = False) -> Dict[str, Any]:
+        """전체 백업 파일 동기화 수행"""
+        backup_files = self.scan_backup_files()
+        results = self._initialize_sync_results(backup_files)
+
         for backup_info in backup_files:
             try:
                 results['processed'] += 1
-                
-                # 매칭되는 문서 찾기
                 existing_doc = self.find_matching_document(backup_info)
-                
+
                 if existing_doc:
-                    # 기존 문서와 동기화
-                    if not dry_run:
-                        sync_result = self.sync_document_from_backup(existing_doc, backup_info)
-                    else:
-                        comparison = self.compare_document_versions(existing_doc, backup_info)
-                        sync_result = {
-                            'action': comparison['recommendation'],
-                            'document_id': existing_doc.id,
-                            'backup_file': backup_info['file_path'],
-                            'success': True,
-                            'message': f'Would {comparison["recommendation"]} (dry run)'
-                        }
-                    
-                    if sync_result['success']:
-                        if sync_result['action'] == 'update_db':
-                            results['updated'] += 1
-                        elif sync_result['action'] == 'conflict':
-                            results['conflicts'] += 1
-                        else:
-                            results['skipped'] += 1
-                    else:
-                        results['errors'] += 1
-                        
+                    sync_result = self._process_existing_document(existing_doc, backup_info, dry_run)
                 else:
-                    # 새 문서 생성
-                    if not dry_run:
-                        create_result = self.create_document_from_backup(backup_info, user_id)
-                    else:
-                        create_result = {
-                            'action': 'create',
-                            'success': True,
-                            'backup_file': backup_info['file_path'],
-                            'message': f'Would create new document: {backup_info["title"]} (dry run)'
-                        }
-                    
-                    if create_result['success']:
-                        results['created'] += 1
-                    else:
-                        results['errors'] += 1
-                    
-                    sync_result = create_result
-                
+                    sync_result = self._process_new_document(backup_info, user_id, dry_run)
+
+                self._update_result_counters(results, sync_result)
                 results['details'].append(sync_result)
-                
+
             except Exception as e:
                 results['errors'] += 1
                 results['details'].append({
@@ -582,7 +628,7 @@ class BackupSyncManager:
                     'message': f'Processing error: {str(e)}'
                 })
                 logger.error(f"Error processing backup file: {e}")
-        
+
         return results
 
 # 전역 동기화 매니저 인스턴스

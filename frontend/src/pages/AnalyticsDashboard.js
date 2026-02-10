@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import PropTypes from 'prop-types';
 import api from '../services/api';
 import { logError } from '../utils/logger';
 import '../styles/AnalyticsDashboard.css';
@@ -41,6 +42,13 @@ const AnalyticsDashboard = () => {
     </div>
   );
 
+  StatCard.propTypes = {
+    title: PropTypes.string.isRequired,
+    value: PropTypes.number,
+    subtitle: PropTypes.string,
+    trend: PropTypes.number
+  };
+
   const ChartPlaceholder = ({ title, data }) => (
     <div className="chart-container">
       <h3>{title}</h3>
@@ -56,6 +64,17 @@ const AnalyticsDashboard = () => {
       </div>
     </div>
   );
+
+  ChartPlaceholder.propTypes = {
+    title: PropTypes.string.isRequired,
+    data: PropTypes.arrayOf(
+      PropTypes.shape({
+        name: PropTypes.string,
+        date: PropTypes.string,
+        count: PropTypes.number.isRequired
+      })
+    )
+  };
 
   if (loading) {
     return (

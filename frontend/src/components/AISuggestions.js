@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import api from '../services/api';
 import { logError } from '../utils/logger';
 import './AISuggestions.css';
@@ -270,5 +271,23 @@ function debounce(func, wait) {
     timeout = setTimeout(later, wait);
   };
 }
+
+AISuggestions.propTypes = {
+  content: PropTypes.string,
+  cursorPosition: PropTypes.number,
+  onSuggestionSelect: PropTypes.func,
+  onTitleSuggestion: PropTypes.func,
+  onTagSuggestions: PropTypes.func,
+  isVisible: PropTypes.bool
+};
+
+AISuggestions.defaultProps = {
+  content: '',
+  cursorPosition: 0,
+  onSuggestionSelect: null,
+  onTitleSuggestion: null,
+  onTagSuggestions: null,
+  isVisible: true
+};
 
 export default AISuggestions;

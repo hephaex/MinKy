@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
 import { tagService } from '../services/api';
 import { logError } from '../utils/logger';
 import './TagInput.css';
@@ -182,6 +183,19 @@ const TagInput = ({ tags = [], onChange, suggestedTags = [], onSuggestionApply }
       )}
     </div>
   );
+};
+
+TagInput.propTypes = {
+  tags: PropTypes.arrayOf(PropTypes.string),
+  onChange: PropTypes.func.isRequired,
+  suggestedTags: PropTypes.arrayOf(PropTypes.string),
+  onSuggestionApply: PropTypes.func
+};
+
+TagInput.defaultProps = {
+  tags: [],
+  suggestedTags: [],
+  onSuggestionApply: null
 };
 
 export default TagInput;

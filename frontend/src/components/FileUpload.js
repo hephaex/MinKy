@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import { documentService } from '../services/api';
 import { logError } from '../utils/logger';
 import './FileUpload.css';
@@ -176,6 +177,16 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
       </div>
     </div>
   );
+};
+
+FileUpload.propTypes = {
+  onUploadSuccess: PropTypes.func,
+  onUploadError: PropTypes.func
+};
+
+FileUpload.defaultProps = {
+  onUploadSuccess: null,
+  onUploadError: null
 };
 
 export default FileUpload;
