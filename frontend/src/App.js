@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { I18nProvider } from './i18n/i18n';
 import Header from './components/Header';
+import ErrorBoundary from './components/ErrorBoundary';
 import DocumentList from './pages/DocumentList';
 import DocumentView from './pages/DocumentView';
 import DocumentCreate from './pages/DocumentCreate';
@@ -28,24 +29,26 @@ function App() {
         <div className="App">
           <Header />
           <main className="main-content">
-            <Routes>
-              <Route path="/" element={<DocumentsPage />} />
-              <Route path="/documents/new" element={<DocumentCreate />} />
-              <Route path="/documents/:id" element={<DocumentView />} />
-              <Route path="/documents/:id/edit" element={<DocumentEdit />} />
-              <Route path="/tags" element={<TagList />} />
-              <Route path="/tags/:slug" element={<TagDetail />} />
-              <Route path="/categories" element={<CategoryManager />} />
-              <Route path="/explore-date" element={<DateExplorerByDate />} />
-              <Route path="/analytics" element={<AnalyticsDashboard />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/admin" element={<AdminPanel />} />
-              <Route path="/ocr" element={<OCRPage />} />
-              <Route path="/import" element={<ImportPage />} />
-              <Route path="/documents" element={<DocumentsPage />} />
-              <Route path="/explore" element={<ExplorePage />} />
-              <Route path="/config" element={<ConfigPage />} />
-            </Routes>
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/" element={<DocumentsPage />} />
+                <Route path="/documents/new" element={<DocumentCreate />} />
+                <Route path="/documents/:id" element={<DocumentView />} />
+                <Route path="/documents/:id/edit" element={<DocumentEdit />} />
+                <Route path="/tags" element={<TagList />} />
+                <Route path="/tags/:slug" element={<TagDetail />} />
+                <Route path="/categories" element={<CategoryManager />} />
+                <Route path="/explore-date" element={<DateExplorerByDate />} />
+                <Route path="/analytics" element={<AnalyticsDashboard />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/admin" element={<AdminPanel />} />
+                <Route path="/ocr" element={<OCRPage />} />
+                <Route path="/import" element={<ImportPage />} />
+                <Route path="/documents" element={<DocumentsPage />} />
+                <Route path="/explore" element={<ExplorePage />} />
+                <Route path="/config" element={<ConfigPage />} />
+              </Routes>
+            </ErrorBoundary>
           </main>
         </div>
       </Router>

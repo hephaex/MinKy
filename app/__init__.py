@@ -211,6 +211,10 @@ def create_app():
     Swagger(app, config=swagger_config, template=swagger_template)
     
     from app.routes.documents import documents_bp
+    from app.routes.documents_search import documents_search_bp
+    from app.routes.documents_sync import documents_sync_bp
+    from app.routes.documents_timeline import documents_timeline_bp
+    from app.routes.documents_import import documents_import_bp
     from app.routes.auth import auth_bp
     from app.routes.health import health_bp
     from app.routes.tags import tags_bp
@@ -233,6 +237,10 @@ def create_app():
     from app.routes.git import git_bp
     from app.routes.org_roam import org_roam_bp
     app.register_blueprint(documents_bp, url_prefix='/api')
+    app.register_blueprint(documents_search_bp, url_prefix='/api')
+    app.register_blueprint(documents_sync_bp, url_prefix='/api')
+    app.register_blueprint(documents_timeline_bp, url_prefix='/api')
+    app.register_blueprint(documents_import_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(health_bp, url_prefix='/api')
     app.register_blueprint(tags_bp, url_prefix='/api')
