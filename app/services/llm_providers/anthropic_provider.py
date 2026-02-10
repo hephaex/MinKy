@@ -24,42 +24,45 @@ logger = logging.getLogger(__name__)
 class AnthropicProvider(BaseLLMProvider):
     """Anthropic Claude API provider implementation.
 
-    Supports Claude 3 model family: Opus, Sonnet, and Haiku.
+    Supports Claude 4, Claude 3.7, Claude 3.5, and Claude 3 model families.
     """
 
     # Available models with their specifications
     MODELS = {
-        'claude-3-opus-20240229': ModelInfo(
-            id='claude-3-opus-20240229',
-            name='Claude 3 Opus',
+        # Claude 4 models (latest)
+        'claude-opus-4-20250514': ModelInfo(
+            id='claude-opus-4-20250514',
+            name='Claude Opus 4',
             max_tokens=200000,
             supports_vision=True,
             supports_functions=True,
-            description='Most powerful model for complex tasks'
+            description='Most capable model with deepest reasoning'
         ),
-        'claude-3-sonnet-20240229': ModelInfo(
-            id='claude-3-sonnet-20240229',
-            name='Claude 3 Sonnet',
+        'claude-sonnet-4-20250514': ModelInfo(
+            id='claude-sonnet-4-20250514',
+            name='Claude Sonnet 4',
             max_tokens=200000,
             supports_vision=True,
             supports_functions=True,
-            description='Balanced performance and cost'
+            description='Best balance of performance and speed'
         ),
+        # Claude 3.7 models
+        'claude-3-7-sonnet-20250219': ModelInfo(
+            id='claude-3-7-sonnet-20250219',
+            name='Claude 3.7 Sonnet',
+            max_tokens=200000,
+            supports_vision=True,
+            supports_functions=True,
+            description='Enhanced Sonnet with extended thinking'
+        ),
+        # Claude 3.5 models
         'claude-3-5-sonnet-20241022': ModelInfo(
             id='claude-3-5-sonnet-20241022',
             name='Claude 3.5 Sonnet',
             max_tokens=200000,
             supports_vision=True,
             supports_functions=True,
-            description='Latest Sonnet with improved capabilities'
-        ),
-        'claude-3-haiku-20240307': ModelInfo(
-            id='claude-3-haiku-20240307',
-            name='Claude 3 Haiku',
-            max_tokens=200000,
-            supports_vision=True,
-            supports_functions=True,
-            description='Fastest and most cost-effective'
+            description='High performance Sonnet model'
         ),
         'claude-3-5-haiku-20241022': ModelInfo(
             id='claude-3-5-haiku-20241022',
@@ -67,11 +70,36 @@ class AnthropicProvider(BaseLLMProvider):
             max_tokens=200000,
             supports_vision=True,
             supports_functions=True,
-            description='Latest Haiku with improved speed'
+            description='Fast and efficient Haiku model'
+        ),
+        # Claude 3 models (legacy)
+        'claude-3-opus-20240229': ModelInfo(
+            id='claude-3-opus-20240229',
+            name='Claude 3 Opus',
+            max_tokens=200000,
+            supports_vision=True,
+            supports_functions=True,
+            description='Legacy powerful model'
+        ),
+        'claude-3-sonnet-20240229': ModelInfo(
+            id='claude-3-sonnet-20240229',
+            name='Claude 3 Sonnet',
+            max_tokens=200000,
+            supports_vision=True,
+            supports_functions=True,
+            description='Legacy balanced model'
+        ),
+        'claude-3-haiku-20240307': ModelInfo(
+            id='claude-3-haiku-20240307',
+            name='Claude 3 Haiku',
+            max_tokens=200000,
+            supports_vision=True,
+            supports_functions=True,
+            description='Legacy fast model'
         ),
     }
 
-    DEFAULT_MODEL = 'claude-3-5-sonnet-20241022'
+    DEFAULT_MODEL = 'claude-sonnet-4-20250514'
 
     def __init__(self, api_key: str, base_url: Optional[str] = None, **kwargs):
         """Initialize Anthropic provider.
