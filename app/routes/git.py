@@ -104,6 +104,7 @@ def run_git_command(command, cwd=None):
 
 
 @git_bp.route('/git/status', methods=['GET'])
+@jwt_required()
 def git_status():
     """Get git repository status"""
     try:
@@ -375,6 +376,7 @@ def git_sync():
 
 
 @git_bp.route('/git/config', methods=['GET'])
+@jwt_required()
 def get_git_config():
     """Get git configuration"""
     try:

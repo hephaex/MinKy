@@ -2,7 +2,7 @@ from flask import Blueprint, request, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from pydantic import ValidationError
 from sqlalchemy import func
-from app import db, cache
+from app import db, cache, limiter
 from app.models.tag import Tag
 from app.models.document import Document
 from app.schemas.tag import TagCreate, TagUpdate
@@ -128,6 +128,7 @@ def list_tags() -> Response | tuple[Response, int]:
         return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags', methods=['POST'])
+@limiter.limit("30 per hour")
 @jwt_required()
 def create_tag() -> Response | tuple[Response, int]:
     """Create a new tag
@@ -299,6 +300,7 @@ def get_tag(slug: str) -> Response | tuple[Response, int]:
         return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags/<slug>', methods=['PUT'])
+@limiter.limit("60 per hour")
 @jwt_required()
 def update_tag(slug: str) -> Response | tuple[Response, int]:
     """Update a tag"""
@@ -337,6 +339,7 @@ def update_tag(slug: str) -> Response | tuple[Response, int]:
         return error_response('Internal server error', 500)
 
 @tags_bp.route('/tags/<slug>', methods=['DELETE'])
+@limiter.limit("30 per hour")
 @jwt_required()
 def delete_tag(slug: str) -> Response | tuple[Response, int]:
     """Delete a tag"""

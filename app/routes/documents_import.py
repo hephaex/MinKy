@@ -4,7 +4,6 @@ from flask_jwt_extended import jwt_required
 from app import db
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
-from app.utils.auto_tag import detect_auto_tags, merge_tags
 from app.utils.obsidian_parser import ObsidianParser
 from app.utils.backup_manager import upload_document_backup, export_all_documents
 from app.services.document_import_service import document_import_service

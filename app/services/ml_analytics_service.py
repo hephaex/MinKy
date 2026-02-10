@@ -4,7 +4,7 @@ Provides machine learning-powered analytics and recommendations
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 from datetime import datetime, timezone
 from app import db
 from app.models.document import Document

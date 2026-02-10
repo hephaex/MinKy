@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { documentService } from '../services/api';
+import api from '../services/api';
 import DocumentCard from '../components/DocumentCard';
 import { logError } from '../utils/logger';
 import { formatRelativeTime } from '../utils/dateUtils';
@@ -23,11 +23,8 @@ const DateExplorer = () => {
       setLoading(true);
       setError(null);
       // Fetch recent documents (sorted by creation date)
-      const response = await fetch('/api/documents?per_page=12&page=1');
-      if (!response.ok) throw new Error('Failed to fetch documents');
-      
-      const data = await response.json();
-      setRecentDocuments(data.documents);
+      const response = await api.get('/documents?per_page=12&page=1');
+      setRecentDocuments(response.data.documents);
     } catch (error) {
       logError('DateExplorer.fetchRecentDocuments', error);
       setError(error.message);

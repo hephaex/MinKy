@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app import db
+from app import db, limiter
 from app.models.template import DocumentTemplate
 from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query, success_response, error_response
@@ -66,6 +66,7 @@ def list_templates():
         return error_response('Internal server error', 500)
 
 @templates_bp.route('/templates', methods=['POST'])
+@limiter.limit("30 per hour")
 @jwt_required()
 def create_template():
     """Create a new template"""
@@ -86,8 +87,8 @@ def create_template():
 
         template = DocumentTemplate(
             name=name,
-            title_template=data['title_template'],
-            content_template=data['content_template'],
+            title_template=bleach.clean(data['title_template']),
+            content_template=bleach.clean(data['content_template']),
             created_by=current_user_id,
             description=description,
             category=category,
@@ -122,6 +123,7 @@ def get_template(template_id):
         return error_response('Internal server error', 500)
 
 @templates_bp.route('/templates/<int:template_id>', methods=['PUT'])
+@limiter.limit("60 per hour")
 @jwt_required()
 def update_template(template_id):
     """Update a template"""
@@ -149,10 +151,10 @@ def update_template(template_id):
             template.category = bleach.clean(data['category'].strip())
 
         if 'title_template' in data:
-            template.title_template = data['title_template']
+            template.title_template = bleach.clean(data['title_template'])
 
         if 'content_template' in data:
-            template.content_template = data['content_template']
+            template.content_template = bleach.clean(data['content_template'])
 
         if 'is_public' in data:
             template.is_public = bool(data['is_public'])
@@ -168,6 +170,7 @@ def update_template(template_id):
         return error_response('Internal server error', 500)
 
 @templates_bp.route('/templates/<int:template_id>', methods=['DELETE'])
+@limiter.limit("30 per hour")
 @jwt_required()
 def delete_template(template_id):
     """Delete a template"""

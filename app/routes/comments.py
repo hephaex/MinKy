@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app import db
+from app import db, limiter
 from app.models.comment import Comment, Rating
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
@@ -43,6 +43,7 @@ def get_comments(document_id):
         return error_response('Internal server error', 500)
 
 @comments_bp.route('/documents/<int:document_id>/comments', methods=['POST'])
+@limiter.limit("30 per hour")
 @jwt_required()
 def create_comment(document_id):
     """Create a new comment on a document"""
@@ -92,6 +93,7 @@ def create_comment(document_id):
         return error_response('Internal server error', 500)
 
 @comments_bp.route('/comments/<int:comment_id>', methods=['PUT'])
+@limiter.limit("60 per hour")
 @jwt_required()
 def update_comment(comment_id):
     """Update a comment"""
@@ -123,6 +125,7 @@ def update_comment(comment_id):
         return error_response('Internal server error', 500)
 
 @comments_bp.route('/comments/<int:comment_id>', methods=['DELETE'])
+@limiter.limit("30 per hour")
 @jwt_required()
 def delete_comment(comment_id):
     """Delete a comment (soft delete)"""

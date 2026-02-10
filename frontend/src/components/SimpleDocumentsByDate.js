@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import api from '../services/api';
 import { logError } from '../utils/logger';
 import { formatDateTime } from '../utils/dateUtils';
 
@@ -16,18 +17,10 @@ const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
     const loadDocuments = async () => {
       try {
         setLoading(true);
-        const url = `/api/documents/by-date?date_key=${encodeURIComponent(dateKey)}&page=1&per_page=50`;
-        const response = await fetch(url);
-        if (!response.ok) {
-          const errorText = await response.text();
-          logError('SimpleDocumentsByDate.loadDocuments', new Error(`API Error: ${response.status}`), { errorText });
-          throw new Error(`Failed to fetch documents: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        setDocuments(data.documents);
-        setPagination(data.pagination);
-        setDateRange(data.date_range);
+        const response = await api.get(`/documents/by-date?date_key=${encodeURIComponent(dateKey)}&page=1&per_page=50`);
+        setDocuments(response.data.documents);
+        setPagination(response.data.pagination);
+        setDateRange(response.data.date_range);
         setError(null);
       } catch (err) {
         logError('SimpleDocumentsByDate.loadDocuments', err);

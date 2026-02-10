@@ -34,10 +34,7 @@ class DocumentClusteringService:
         """Initialize ML models for clustering"""
         try:
             from sklearn.feature_extraction.text import TfidfVectorizer
-            from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
             from sklearn.decomposition import PCA
-            from sklearn.manifold import TSNE
-            from sklearn.metrics.pairwise import cosine_similarity
             from sklearn.preprocessing import StandardScaler
             
             self.vectorizer = TfidfVectorizer(
@@ -173,7 +170,6 @@ class DocumentClusteringService:
             return {'error': 'Similarity detection requires scikit-learn'}
         
         try:
-            from sklearn.metrics.pairwise import cosine_similarity
             
             target_content = target_document.markdown_content or ''
             if not target_content.strip():
@@ -272,7 +268,6 @@ class DocumentClusteringService:
             return {'error': 'Duplicate detection requires scikit-learn'}
         
         try:
-            from sklearn.metrics.pairwise import cosine_similarity
             
             # Get documents to check
             if documents is None:

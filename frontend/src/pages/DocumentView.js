@@ -5,7 +5,6 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import DOMPurify from 'dompurify';
-import { documentService } from '../services/api';
 import { logError } from '../utils/logger';
 import { formatDateTime } from '../utils/dateUtils';
 import { extractFrontmatter, processInternalLinks, processHashtags } from '../utils/obsidianRenderer';
@@ -38,7 +37,7 @@ const DocumentView = () => {
         setSuggestedTags(suggestedTags);
         
         // Automatically apply the suggested tags to the document
-        const updateResponse = await documentService.updateDocument(documentData.id, {
+        const updateResponse = await api.put(`/documents/${documentData.id}`, {
           title: documentData.title,
           author: documentData.author,
           markdown_content: documentData.markdown_content,
@@ -48,7 +47,7 @@ const DocumentView = () => {
         // Update the document state with the new tags
         setDocument(prevDoc => ({
           ...prevDoc,
-          tags: updateResponse.tags || suggestedTags.map(tagName => ({ name: tagName }))
+          tags: updateResponse.data.tags || suggestedTags.map(tagName => ({ name: tagName }))
         }));
         
         // tags applied
@@ -64,7 +63,8 @@ const DocumentView = () => {
     const fetchDocument = async () => {
       try {
         setLoading(true);
-        const data = await documentService.getDocument(id);
+        const response = await api.get(`/documents/${id}`);
+        const data = response.data;
         setDocument(data);
         
         // 옵시디언 스타일 콘텐츠 처리
@@ -98,7 +98,7 @@ const DocumentView = () => {
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this document?')) {
       try {
-        await documentService.deleteDocument(id);
+        await api.delete(`/documents/${id}`);
         navigate('/');
       } catch (err) {
         setError('Failed to delete document');

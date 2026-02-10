@@ -7,7 +7,7 @@ import FileUpload from '../components/FileUpload';
 import DocumentCard from '../components/DocumentCard';
 import useCategories from '../hooks/useCategories';
 import { logError } from '../utils/logger';
-import { formatDate, formatDateTime } from '../utils/dateUtils';
+import { formatDate } from '../utils/dateUtils';
 import './DocumentList.css';
 
 const DocumentList = () => {

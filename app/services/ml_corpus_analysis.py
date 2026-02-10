@@ -4,7 +4,7 @@ Provides clustering, topic modeling, and trend analysis for document collections
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from datetime import datetime, timedelta, timezone
 from collections import Counter, defaultdict
 import numpy as np

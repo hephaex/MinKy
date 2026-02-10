@@ -2,12 +2,11 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from pydantic import ValidationError
-from app import db
+from app import db, limiter
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
 from app.utils.responses import get_or_404
 from app.schemas.document import DocumentCreate, DocumentUpdate
-from sqlalchemy import or_
 import bleach
 import logging
 from datetime import datetime, timezone
@@ -74,6 +73,7 @@ def extract_author_from_frontmatter(frontmatter):
 
 
 @documents_bp.route('/documents', methods=['POST'])
+@limiter.limit("30 per hour")
 @jwt_required(optional=True)
 def create_document():
     try:
@@ -230,6 +230,7 @@ def get_document(document_id):
 
 
 @documents_bp.route('/documents/<int:document_id>', methods=['PUT'])
+@limiter.limit("60 per hour")
 @jwt_required(optional=True)
 def update_document(document_id):
     try:
@@ -317,6 +318,7 @@ def update_document(document_id):
 
 
 @documents_bp.route('/documents/<int:document_id>', methods=['DELETE'])
+@limiter.limit("30 per hour")
 @jwt_required(optional=True)
 def delete_document(document_id):
     try:

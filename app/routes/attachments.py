@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app import db
+from app import db, limiter
 from app.models.attachment import Attachment
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
@@ -55,6 +55,7 @@ def create_thumbnail(image_path, thumbnail_path, size=(300, 300)):
         return False
 
 @attachments_bp.route('/attachments/upload', methods=['POST'])
+@limiter.limit("20 per hour")
 @jwt_required()
 def upload_file():
     """Upload a file"""
