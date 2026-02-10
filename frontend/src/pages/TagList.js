@@ -32,7 +32,7 @@ const TagList = () => {
         data = await tagService.getTags(page, 20, search, false);
       }
       
-      setTags(data.tags);
+      setTags(data.tags || []);
       setPagination(data.pagination || {});
       setCurrentPage(page);
       setError(null);
@@ -68,10 +68,11 @@ const TagList = () => {
   };
 
   const getTagsByType = () => {
+    const tagList = tags || [];
     if (viewMode === 'auto-generated') {
-      return tags.filter(tag => !tag.description);
+      return tagList.filter(tag => !tag.description);
     }
-    return tags;
+    return tagList;
   };
 
   const formatUsageCount = (count) => {
