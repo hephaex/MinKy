@@ -77,7 +77,7 @@ const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, focusedId, o
           {isDocument ? '📄 ' : ''}{node.label}
         </span>
 
-        {!isDocument && node.count > 0 && (
+        {!isDocument && node.count !== undefined && (
           <span className="tree-node-count">{node.count}</span>
         )}
       </div>
