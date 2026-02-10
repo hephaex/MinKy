@@ -4,6 +4,7 @@ import { documentService } from '../services/api';
 import CollaborativeEditor from '../components/CollaborativeEditor';
 import TagInput from '../components/TagInput';
 import useTagSuggestions from '../hooks/useTagSuggestions';
+import { logError } from '../utils/logger';
 import './DocumentForm.css';
 
 const DocumentEdit = () => {
@@ -47,7 +48,7 @@ const DocumentEdit = () => {
         setError(null);
       } catch (err) {
         setError('Failed to fetch document');
-        console.error('Error fetching document:', err);
+        logError('DocumentEdit.fetchDocument', err);
       } finally {
         setLoading(false);
       }
@@ -116,7 +117,7 @@ const DocumentEdit = () => {
       navigate(`/documents/${updatedDocument.id}`);
     } catch (err) {
       setError('Failed to update document');
-      console.error('Error updating document:', err);
+      logError('DocumentEdit.handleSubmit', err);
     } finally {
       setSaving(false);
     }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
+import { logError } from '../utils/logger';
 import './DocumentsSidebar.css';
 
 const DocumentsSidebar = ({ isVisible, onToggle }) => {
@@ -23,7 +24,7 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
       const response = await documentService.getDocuments(1, 5, '');
       setRecentDocuments(response.documents || []);
     } catch (error) {
-      console.error('Error fetching recent documents:', error);
+      logError('DocumentsSidebar.fetchRecentDocuments', error);
     } finally {
       setLoading(false);
     }
@@ -34,7 +35,7 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
       const response = await documentService.getDocuments(1, 50, '');
       setAllDocuments(response.documents || []);
     } catch (error) {
-      console.error('Error fetching all documents:', error);
+      logError('DocumentsSidebar.fetchAllDocuments', error);
     }
   };
 

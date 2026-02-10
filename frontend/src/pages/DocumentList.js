@@ -6,6 +6,7 @@ import Pagination from '../components/Pagination';
 import FileUpload from '../components/FileUpload';
 import DocumentCard from '../components/DocumentCard';
 import useCategories from '../hooks/useCategories';
+import { logError } from '../utils/logger';
 import './DocumentList.css';
 
 const DocumentList = () => {
@@ -39,7 +40,7 @@ const DocumentList = () => {
       setError(null);
     } catch (err) {
       setError('Failed to fetch documents');
-      console.error('Error fetching documents:', err);
+      logError('DocumentList.fetchDocuments', err);
     } finally {
       setLoading(false);
     }

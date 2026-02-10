@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
+from pydantic import ValidationError
 from app import db
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query, get_or_404
+from app.schemas.document import DocumentCreate, DocumentUpdate
 from sqlalchemy import or_
 import bleach
 import logging
@@ -82,24 +84,30 @@ def extract_author_from_frontmatter(frontmatter):
 def create_document():
     try:
         data = request.get_json()
-        
-        if not data or 'title' not in data or 'markdown_content' not in data:
-            return jsonify({'error': 'Title and markdown_content are required'}), 400
-        
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+
+        # Pydantic validation
+        try:
+            validated = DocumentCreate.model_validate(data)
+        except ValidationError as e:
+            return jsonify({
+                'error': 'Validation failed',
+                'details': e.errors()
+            }), 400
+
         current_user_id = get_current_user_id()
-        
-        # Sanitize input to prevent XSS
-        title = bleach.clean(data['title'].strip())
-        author = bleach.clean(data.get('author', '').strip()) if data.get('author') else None
-        is_public = data.get('is_public', True)
-        tags = data.get('tags', [])
-        
-        if not title:
-            return jsonify({'error': 'Title cannot be empty'}), 400
+
+        # Sanitize validated input to prevent XSS
+        title = bleach.clean(validated.title)
+        author = bleach.clean(validated.author) if validated.author else None
+        is_public = validated.is_public
+        tags = validated.tags
+        category_id = validated.category_id
         
         # 옵시디언 스타일 콘텐츠 처리
         try:
-            obsidian_data = process_obsidian_content(data['markdown_content'], backup_dir="backup")
+            obsidian_data = process_obsidian_content(validated.markdown_content, backup_dir="backup")
         except Exception as e:
             logger.warning("Error processing Obsidian content during creation: %s", e)
             # 옵시디언 처리 실패시 기본값 설정
@@ -108,7 +116,7 @@ def create_document():
                 'internal_links': [],
                 'hashtags': [],
                 'all_tags': [],
-                'processed_content': data['markdown_content']
+                'processed_content': validated.markdown_content
             }
         
         # 프론트매터에서 제목 오버라이드 (옵션) - only if title is empty and frontmatter has valid title
@@ -126,7 +134,6 @@ def create_document():
             title = "Untitled Document"
         
         # Handle category_id if provided
-        category_id = data.get('category_id')
         if category_id:
             from app.models.category import Category
             category = db.session.get(Category, category_id)
@@ -135,7 +142,7 @@ def create_document():
 
         document = Document(
             title=title,
-            markdown_content=obsidian_data.get('processed_content', data['markdown_content']),  # Use processed content with converted images
+            markdown_content=obsidian_data.get('processed_content', validated.markdown_content),  # Use processed content with converted images
             author=author,
             user_id=current_user_id,
             is_public=is_public,
@@ -151,7 +158,7 @@ def create_document():
             document.category_id = category_id
         
         # 옵시디언 태그 + 자동 감지 태그 + 사용자 제공 태그 결합
-        auto_tags = detect_auto_tags(data['markdown_content'])
+        auto_tags = detect_auto_tags(validated.markdown_content)
         obsidian_tags = obsidian_data.get('all_tags', [])
         all_tags = merge_tags(merge_tags(tags, auto_tags), obsidian_tags)
         
@@ -454,70 +461,74 @@ def update_document(document_id):
     try:
         document = get_or_404(Document, document_id)
         current_user_id = get_current_user_id()
-        
+
         if not document.can_edit(current_user_id):
             return jsonify({'error': 'Access denied'}), 403
-        
+
         data = request.get_json()
         if not data:
             return jsonify({'error': 'No data provided'}), 400
-        
+
+        # Pydantic validation
+        try:
+            validated = DocumentUpdate.model_validate(data)
+        except ValidationError as e:
+            return jsonify({
+                'error': 'Validation failed',
+                'details': e.errors()
+            }), 400
+
         # Update fields if provided
-        if 'title' in data:
-            title = bleach.clean(data['title'].strip())
-            if not title:
-                return jsonify({'error': 'Title cannot be empty'}), 400
-            document.title = title
-        
-        if 'markdown_content' in data:
-            document.markdown_content = data['markdown_content']
-            
+        if validated.title is not None:
+            document.title = bleach.clean(validated.title)
+
+        if validated.markdown_content is not None:
+            document.markdown_content = validated.markdown_content
+
             # Process Obsidian content for updated content
             try:
-                obsidian_data = process_obsidian_content(data['markdown_content'])
+                obsidian_data = process_obsidian_content(validated.markdown_content)
                 document.document_metadata = {
                     'frontmatter': obsidian_data['frontmatter'],
                     'internal_links': obsidian_data['internal_links'],
                     'hashtags': obsidian_data['hashtags']
                 }
-                
+
                 # Update tags if content changed
-                auto_tags = detect_auto_tags(data['markdown_content'])
+                auto_tags = detect_auto_tags(validated.markdown_content)
                 obsidian_tags = obsidian_data.get('all_tags', [])
                 existing_user_tags = [tag.name for tag in document.tags if not tag.is_auto_tag]
                 all_tags = merge_tags(merge_tags(existing_user_tags, auto_tags), obsidian_tags)
-                
+
                 # Clear existing tags and add updated ones
                 document.tags = []
                 if all_tags:
                     document.add_tags(all_tags)
-                    
+
             except Exception as e:
                 logger.warning("Error processing Obsidian content during update: %s", e)
-        
-        if 'author' in data:
-            author = bleach.clean(data['author'].strip()) if data['author'] else None
-            document.author = author
-        
-        if 'is_public' in data:
-            document.is_public = data['is_public']
 
-        if 'category_id' in data:
-            category_id = data['category_id']
-            if category_id is None:
+        if validated.author is not None:
+            document.author = bleach.clean(validated.author) if validated.author else None
+
+        if validated.is_public is not None:
+            document.is_public = validated.is_public
+
+        if validated.category_id is not None:
+            if validated.category_id == 0:  # Use 0 to clear category
                 document.category_id = None
             else:
                 from app.models.category import Category
-                category = db.session.get(Category, category_id)
+                category = db.session.get(Category, validated.category_id)
                 if not category:
                     return jsonify({'error': 'Category not found'}), 404
-                document.category_id = category_id
+                document.category_id = validated.category_id
 
-        if 'tags' in data:
+        if validated.tags is not None:
             # Handle manual tag updates - clear all at once instead of iterating
             document.tags = []
-            if data['tags']:
-                document.add_tags(data['tags'])
+            if validated.tags:
+                document.add_tags(validated.tags)
         
         document.updated_at = datetime.now(timezone.utc)
         db.session.commit()

@@ -6,6 +6,7 @@ import OCRUpload from '../components/OCRUpload';
 import TagInput from '../components/TagInput';
 import useTagSuggestions from '../hooks/useTagSuggestions';
 import useCategories from '../hooks/useCategories';
+import { logError } from '../utils/logger';
 import './DocumentForm.css';
 
 const DocumentCreate = () => {
@@ -77,7 +78,7 @@ const DocumentCreate = () => {
       navigate(`/documents/${document.id}`);
     } catch (err) {
       setError('Failed to create document');
-      console.error('Error creating document:', err);
+      logError('DocumentCreate.handleSubmit', err);
     } finally {
       setLoading(false);
     }

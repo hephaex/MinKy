@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import { logError } from '../utils/logger';
 import '../styles/AnalyticsDashboard.css';
 
 const AnalyticsDashboard = () => {
@@ -21,7 +22,7 @@ const AnalyticsDashboard = () => {
       setError(null);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load analytics');
-      console.error('Analytics fetch error:', err);
+      logError('AnalyticsDashboard.fetchAnalytics', err);
     } finally {
       setLoading(false);
     }

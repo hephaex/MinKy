@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { tagService } from '../services/api';
 import SearchBar from '../components/SearchBar';
 import Pagination from '../components/Pagination';
+import { logError } from '../utils/logger';
 import './TagList.css';
 
 const TagList = () => {
@@ -37,7 +38,7 @@ const TagList = () => {
       setError(null);
     } catch (err) {
       setError('Failed to fetch tags');
-      console.error('Error fetching tags:', err);
+      logError('TagList.fetchTags', err);
     } finally {
       setLoading(false);
     }
@@ -48,7 +49,7 @@ const TagList = () => {
       const stats = await tagService.getTagStatistics();
       setStatistics(stats);
     } catch (err) {
-      console.error('Error fetching tag statistics:', err);
+      logError('TagList.fetchStatistics', err);
     }
   };
 

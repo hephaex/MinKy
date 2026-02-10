@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
 import DocumentCard from '../components/DocumentCard';
+import { logError } from '../utils/logger';
 import './DateExplorer.css';
 
 const DateExplorer = () => {
@@ -27,7 +28,7 @@ const DateExplorer = () => {
       const data = await response.json();
       setRecentDocuments(data.documents);
     } catch (error) {
-      console.error('Error loading recent documents:', error);
+      logError('DateExplorer.fetchRecentDocuments', error);
       setError(error.message);
     } finally {
       setLoading(false);

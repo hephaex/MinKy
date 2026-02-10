@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { logError } from '../utils/logger';
 
 const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
   const [documents, setDocuments] = useState([]);
@@ -18,7 +19,7 @@ const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
         const response = await fetch(url);
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('API Error:', response.status, errorText);
+          logError('SimpleDocumentsByDate.loadDocuments', new Error(`API Error: ${response.status}`), { errorText });
           throw new Error(`Failed to fetch documents: ${response.status}`);
         }
         
@@ -28,7 +29,7 @@ const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
         setDateRange(data.date_range);
         setError(null);
       } catch (err) {
-        console.error('Error loading documents:', err);
+        logError('SimpleDocumentsByDate.loadDocuments', err);
         setError(err.message);
       } finally {
         setLoading(false);

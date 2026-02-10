@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import DOMPurify from 'dompurify';
 import { documentService } from '../services/api';
+import { logError } from '../utils/logger';
 import { extractFrontmatter, processInternalLinks, processHashtags } from '../utils/obsidianRenderer';
 import api from '../services/api';
 import './DocumentView.css';
@@ -52,7 +53,7 @@ const DocumentView = () => {
         // tags applied
       }
     } catch (error) {
-      console.error('Error generating and applying tags:', error);
+      logError('DocumentView.generateAndApplyTags', error);
     } finally {
       setAutoTaggingInProgress(false);
     }
@@ -84,7 +85,7 @@ const DocumentView = () => {
         setError(null);
       } catch (err) {
         setError('Failed to fetch document');
-        console.error('Error fetching document:', err);
+        logError('DocumentView.fetchDocument', err);
       } finally {
         setLoading(false);
       }
@@ -100,7 +101,7 @@ const DocumentView = () => {
         navigate('/');
       } catch (err) {
         setError('Failed to delete document');
-        console.error('Error deleting document:', err);
+        logError('DocumentView.handleDelete', err);
       }
     }
   };

@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import { logError, logWarning } from '../utils/logger';
 
 class CollaborationService {
   constructor() {
@@ -34,7 +35,7 @@ class CollaborationService {
     });
 
     this.socket.on('error', (error) => {
-      console.error('Collaboration error:', error);
+      logError('CollaborationService', error);
       this.emit('error', error);
     });
 
@@ -87,7 +88,7 @@ class CollaborationService {
 
   joinDocument(documentId) {
     if (!this.isConnected) {
-      console.error('Not connected to collaboration server');
+      logWarning('CollaborationService', 'Not connected to collaboration server');
       return;
     }
 
@@ -214,7 +215,7 @@ class CollaborationService {
       const { type, position } = operation;
 
       if (position < 0 || position > content.length) {
-        console.error('Invalid operation position:', position);
+        logWarning('CollaborationService', `Invalid operation position: ${position}`);
         return content;
       }
 
@@ -236,11 +237,11 @@ class CollaborationService {
                  content.substring(replaceEndPos);
 
         default:
-          console.error('Unknown operation type:', type);
+          logWarning('CollaborationService', `Unknown operation type: ${type}`);
           return content;
       }
     } catch (error) {
-      console.error('Error applying operation:', error);
+      logError('CollaborationService.applyOperation', error);
       return content;
     }
   }
@@ -321,7 +322,7 @@ class CollaborationService {
       try {
         handler(data);
       } catch (error) {
-        console.error('Error in event handler:', error);
+        logError('CollaborationService.emit', error);
       }
     });
   }

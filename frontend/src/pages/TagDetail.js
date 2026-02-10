@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { tagService } from '../services/api';
 import Pagination from '../components/Pagination';
 import { highlightTextReact, truncateWithHighlight } from '../utils/highlightText';
+import { logError } from '../utils/logger';
 import './TagDetail.css';
 
 const TagDetail = () => {
@@ -29,7 +30,7 @@ const TagDetail = () => {
       setError(null);
     } catch (err) {
       setError('Failed to fetch tag data');
-      console.error('Error fetching tag data:', err);
+      logError('TagDetail.fetchTagData', err);
     } finally {
       setLoading(false);
     }
