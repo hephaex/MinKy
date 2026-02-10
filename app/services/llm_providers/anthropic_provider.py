@@ -93,7 +93,7 @@ class AnthropicProvider(BaseLLMProvider):
 
         Args:
             messages: List of conversation messages
-            model: Model identifier (defaults to claude-3-5-sonnet)
+            model: Model identifier (defaults to claude-sonnet-4)
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature (0.0 - 1.0)
             stop: Optional stop sequences
@@ -179,7 +179,7 @@ class AnthropicProvider(BaseLLMProvider):
 
             # Make a minimal API call to verify credentials
             response = self._client.messages.create(
-                model='claude-3-haiku-20240307',
+                model='claude-sonnet-4-20250514',
                 messages=[{'role': 'user', 'content': 'Hi'}],
                 max_tokens=5
             )
