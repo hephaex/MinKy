@@ -24,12 +24,11 @@ logger = logging.getLogger(__name__)
 class AnthropicProvider(BaseLLMProvider):
     """Anthropic Claude API provider implementation.
 
-    Supports Claude 4, Claude 3.7, Claude 3.5, and Claude 3 model families.
+    Supports Claude 4 model family: Opus 4 and Sonnet 4.
     """
 
     # Available models with their specifications
     MODELS = {
-        # Claude 4 models (latest)
         'claude-opus-4-20250514': ModelInfo(
             id='claude-opus-4-20250514',
             name='Claude Opus 4',
@@ -45,57 +44,6 @@ class AnthropicProvider(BaseLLMProvider):
             supports_vision=True,
             supports_functions=True,
             description='Best balance of performance and speed'
-        ),
-        # Claude 3.7 models
-        'claude-3-7-sonnet-20250219': ModelInfo(
-            id='claude-3-7-sonnet-20250219',
-            name='Claude 3.7 Sonnet',
-            max_tokens=200000,
-            supports_vision=True,
-            supports_functions=True,
-            description='Enhanced Sonnet with extended thinking'
-        ),
-        # Claude 3.5 models
-        'claude-3-5-sonnet-20241022': ModelInfo(
-            id='claude-3-5-sonnet-20241022',
-            name='Claude 3.5 Sonnet',
-            max_tokens=200000,
-            supports_vision=True,
-            supports_functions=True,
-            description='High performance Sonnet model'
-        ),
-        'claude-3-5-haiku-20241022': ModelInfo(
-            id='claude-3-5-haiku-20241022',
-            name='Claude 3.5 Haiku',
-            max_tokens=200000,
-            supports_vision=True,
-            supports_functions=True,
-            description='Fast and efficient Haiku model'
-        ),
-        # Claude 3 models (legacy)
-        'claude-3-opus-20240229': ModelInfo(
-            id='claude-3-opus-20240229',
-            name='Claude 3 Opus',
-            max_tokens=200000,
-            supports_vision=True,
-            supports_functions=True,
-            description='Legacy powerful model'
-        ),
-        'claude-3-sonnet-20240229': ModelInfo(
-            id='claude-3-sonnet-20240229',
-            name='Claude 3 Sonnet',
-            max_tokens=200000,
-            supports_vision=True,
-            supports_functions=True,
-            description='Legacy balanced model'
-        ),
-        'claude-3-haiku-20240307': ModelInfo(
-            id='claude-3-haiku-20240307',
-            name='Claude 3 Haiku',
-            max_tokens=200000,
-            supports_vision=True,
-            supports_functions=True,
-            description='Legacy fast model'
         ),
     }
 
