@@ -79,16 +79,36 @@ class Category(db.Model):
             descendants.extend(child.get_all_descendants())
         return descendants
     
-    def get_document_count(self, include_descendants=True):
-        """Get number of documents in this category"""
+    def get_document_count(self, include_descendants=True, _cache=None):
+        """Get number of documents in this category (optimized)"""
+        # Use cache if provided (for batch operations)
+        if _cache is not None and self.id in _cache:
+            return _cache[self.id]
+
         from app.models.document import Document
-        count = Document.query.filter_by(category_id=self.id).count()
-        
-        if include_descendants:
-            for child in self.children:
-                count += child.get_document_count(include_descendants=True)
-        
-        return count
+
+        if not include_descendants:
+            return Document.query.filter_by(category_id=self.id).count()
+
+        # Get all descendant IDs in a single query
+        descendant_ids = [self.id] + [d.id for d in self.get_all_descendants()]
+        return Document.query.filter(Document.category_id.in_(descendant_ids)).count()
+
+    @classmethod
+    def get_document_counts_bulk(cls):
+        """Get document counts for all categories in a single query"""
+        from app.models.document import Document
+        from sqlalchemy import func
+
+        # Single query to get counts per category
+        counts = db.session.query(
+            Document.category_id,
+            func.count(Document.id).label('count')
+        ).filter(
+            Document.category_id.isnot(None)
+        ).group_by(Document.category_id).all()
+
+        return {cat_id: count for cat_id, count in counts}
     
     def get_level(self):
         """Get the depth level in the hierarchy (0 for root)"""
@@ -144,28 +164,43 @@ class Category(db.Model):
     
     @classmethod
     def get_flat_list(cls, include_inactive=False):
-        """Get flat list of all categories with path information"""
+        """Get flat list of all categories with path information (optimized)"""
         query = cls.query
-        
+
         if not include_inactive:
             query = query.filter_by(is_active=True)
-        
+
         categories = query.order_by(cls.name).all()
-        
+
+        # Get all document counts in a single query
+        doc_counts = cls.get_document_counts_bulk()
+
+        # Build parent lookup for efficient path calculation
+        cat_lookup = {cat.id: cat for cat in categories}
+
         result = []
         for category in categories:
+            # Calculate level and path without additional queries
+            level = 0
+            path_parts = []
+            current = category
+            while current:
+                path_parts.insert(0, current.name)
+                level += 1 if current.parent_id else 0
+                current = cat_lookup.get(current.parent_id)
+
             result.append({
                 'id': category.id,
                 'name': category.name,
-                'path': category.get_path_string(),
-                'level': category.get_level(),
-                'document_count': category.get_document_count()
+                'path': ' > '.join(path_parts),
+                'level': level,
+                'document_count': doc_counts.get(category.id, 0)
             })
-        
+
         return result
     
-    def to_dict(self, include_children=False, include_documents=False):
-        """Convert category to dictionary"""
+    def to_dict(self, include_children=False, include_documents=False, _doc_counts=None):
+        """Convert category to dictionary (with optional pre-computed counts)"""
         result = {
             'id': self.id,
             'name': self.name,
@@ -180,16 +215,16 @@ class Category(db.Model):
             'is_active': self.is_active,
             'level': self.get_level(),
             'path': self.get_path_string(),
-            'document_count': self.get_document_count(),
-            'parent': self.parent.to_dict() if self.parent else None
+            'document_count': _doc_counts.get(self.id, 0) if _doc_counts else self.get_document_count(include_descendants=False),
+            'parent': {'id': self.parent.id, 'name': self.parent.name, 'slug': self.parent.slug} if self.parent else None
         }
-        
+
         if include_children:
-            result['children'] = [child.to_dict() for child in self.children]
-        
+            result['children'] = [child.to_dict(_doc_counts=_doc_counts) for child in self.children]
+
         if include_documents:
-            result['documents'] = [doc.to_dict() for doc in self.documents]
-        
+            result['documents'] = [doc.to_dict() for doc in self.documents.limit(100)]
+
         return result
     
     def __repr__(self):

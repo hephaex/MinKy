@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import DOMPurify from 'dompurify';
 import { documentService } from '../services/api';
 import { extractFrontmatter, processInternalLinks, processHashtags } from '../utils/obsidianRenderer';
 import api from '../services/api';
@@ -261,11 +262,15 @@ const DocumentView = () => {
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
-                // 텍스트 노드에서 이미 처리된 HTML을 렌더링
+                // 텍스트 노드에서 이미 처리된 HTML을 DOMPurify로 살균 후 렌더링
                 text({ children }) {
-                  if (typeof children === 'string' && 
+                  if (typeof children === 'string' &&
                       (children.includes('<a') || children.includes('<span'))) {
-                    return <span dangerouslySetInnerHTML={{ __html: children }} />;
+                    const sanitized = DOMPurify.sanitize(children, {
+                      ALLOWED_TAGS: ['a', 'span'],
+                      ALLOWED_ATTR: ['href', 'class', 'data-target', 'title']
+                    });
+                    return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
                   }
                   return children;
                 },

@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import api from '../services/api';
+import { logError } from '../utils/logger';
 import './DocumentImport.css';
 
 const DocumentImport = ({ 
@@ -108,16 +109,9 @@ const DocumentImport = ({
           newErrors.push(`${file.name}: ${response.data.error || 'Import failed'}`);
         }
       } catch (error) {
-        console.error('Import error details:', {
-          message: error.message,
+        logError('DocumentImport', error, {
           status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          config: {
-            url: error.config?.url,
-            method: error.config?.method,
-            baseURL: error.config?.baseURL
-          }
+          data: error.response?.data
         });
         newErrors.push(`${file.name}: ${error.response?.data?.error || error.message || 'Import failed'}`);
       }

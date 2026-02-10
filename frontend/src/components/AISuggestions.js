@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../services/api';
+import { logError } from '../utils/logger';
 import './AISuggestions.css';
 
 const AISuggestions = ({ 
@@ -26,7 +27,7 @@ const AISuggestions = ({
       const response = await api.get('/ai/status');
       setAiEnabled(response.data.enabled);
     } catch (error) {
-      console.error('Error checking AI status:', error);
+      logError('AISuggestions.checkAIStatus', error);
       setAiEnabled(false);
     }
   };
@@ -51,7 +52,7 @@ const AISuggestions = ({
           setSuggestions(response.data.suggestions);
         }
       } catch (error) {
-        console.error('Error getting AI suggestions:', error);
+        logError('AISuggestions.getSuggestions', error);
         setSuggestions([]);
       } finally {
         setLoading(false);
@@ -90,7 +91,7 @@ const AISuggestions = ({
         }
       }
     } catch (error) {
-      console.error('Error getting auto-completion:', error);
+      logError('AISuggestions.getAutoCompletion', error);
     }
   };
 
@@ -108,7 +109,7 @@ const AISuggestions = ({
         }
       }
     } catch (error) {
-      console.error('Error getting title suggestion:', error);
+      logError('AISuggestions.suggestTitle', error);
     }
   };
 
@@ -127,7 +128,7 @@ const AISuggestions = ({
         }
       }
     } catch (error) {
-      console.error('Error getting tag suggestions:', error);
+      logError('AISuggestions.suggestTags', error);
     }
   };
 
@@ -145,7 +146,7 @@ const AISuggestions = ({
         setShowWritingSuggestions(true);
       }
     } catch (error) {
-      console.error('Error getting writing suggestions:', error);
+      logError('AISuggestions.getWritingSuggestions', error);
     } finally {
       setLoading(false);
     }

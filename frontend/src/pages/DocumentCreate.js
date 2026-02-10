@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { documentService } from '../services/api';
-import api from '../services/api';
 import MarkdownEditor from '../components/MarkdownEditor';
 import OCRUpload from '../components/OCRUpload';
 import TagInput from '../components/TagInput';
 import useTagSuggestions from '../hooks/useTagSuggestions';
+import useCategories from '../hooks/useCategories';
 import './DocumentForm.css';
 
 const DocumentCreate = () => {
@@ -16,12 +16,12 @@ const DocumentCreate = () => {
     markdown_content: '',
     category_id: null
   });
-  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showOCR, setShowOCR] = useState(false);
 
-  // Use the custom hook for tag handling
+  // Use custom hooks
+  const { categories } = useCategories();
   const {
     tags,
     suggestedTags,
@@ -29,19 +29,6 @@ const DocumentCreate = () => {
     handleTagsChange,
     clearSuggestedTags
   } = useTagSuggestions();
-
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  const fetchCategories = async () => {
-    try {
-      const response = await api.get('/categories?format=flat');
-      setCategories(response.data.categories);
-    } catch (err) {
-      console.error('Error fetching categories:', err);
-    }
-  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

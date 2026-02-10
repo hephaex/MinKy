@@ -9,6 +9,30 @@ from pydantic import BaseModel, ValidationError
 from app.utils.responses import error_response
 
 
+def escape_like(value: str) -> str:
+    """
+    Escape special characters for SQL LIKE/ILIKE queries.
+
+    Prevents SQL injection via pattern matching characters.
+
+    Args:
+        value: The user input string to escape
+
+    Returns:
+        Escaped string safe for use in LIKE patterns
+
+    Example:
+        search_escaped = escape_like(user_input)
+        query.filter(Model.field.ilike(f'%{search_escaped}%'))
+    """
+    if not value:
+        return value
+    return (value
+            .replace('\\', '\\\\')
+            .replace('%', '\\%')
+            .replace('_', '\\_'))
+
+
 T = TypeVar('T', bound=BaseModel)
 
 

@@ -5,6 +5,7 @@ Provides endpoints for AI-powered content suggestions and auto-completion
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
+from app import limiter
 from app.services.ai_service import ai_service
 from app.utils.auth import get_current_user_id
 import logging
@@ -13,7 +14,13 @@ logger = logging.getLogger(__name__)
 
 ai_suggestions_bp = Blueprint('ai_suggestions', __name__)
 
+# Rate limit constants for AI endpoints (expensive operations)
+AI_RATE_LIMIT = "10 per minute"
+AI_BURST_LIMIT = "30 per hour"
+
 @ai_suggestions_bp.route('/ai/suggestions', methods=['POST'])
+@limiter.limit(AI_RATE_LIMIT)
+@limiter.limit(AI_BURST_LIMIT)
 @jwt_required(optional=True)
 def get_content_suggestions():
     """
@@ -62,6 +69,8 @@ def get_content_suggestions():
         }), 500
 
 @ai_suggestions_bp.route('/ai/autocomplete', methods=['POST'])
+@limiter.limit(AI_RATE_LIMIT)
+@limiter.limit(AI_BURST_LIMIT)
 @jwt_required(optional=True)
 def get_autocomplete():
     """
@@ -102,6 +111,8 @@ def get_autocomplete():
         }), 500
 
 @ai_suggestions_bp.route('/ai/suggest-tags', methods=['POST'])
+@limiter.limit(AI_RATE_LIMIT)
+@limiter.limit(AI_BURST_LIMIT)
 @jwt_required(optional=True)
 def suggest_tags():
     """
@@ -142,6 +153,8 @@ def suggest_tags():
         }), 500
 
 @ai_suggestions_bp.route('/ai/suggest-title', methods=['POST'])
+@limiter.limit(AI_RATE_LIMIT)
+@limiter.limit(AI_BURST_LIMIT)
 @jwt_required(optional=True)
 def suggest_title():
     """
@@ -178,6 +191,8 @@ def suggest_title():
         }), 500
 
 @ai_suggestions_bp.route('/ai/writing-suggestions', methods=['POST'])
+@limiter.limit(AI_RATE_LIMIT)
+@limiter.limit(AI_BURST_LIMIT)
 @jwt_required(optional=True)
 def get_writing_suggestions():
     """
@@ -285,6 +300,7 @@ def save_ai_config():
         }), 500
 
 @ai_suggestions_bp.route('/ai/test/<service>', methods=['POST'])
+@limiter.limit("5 per minute")
 @jwt_required()
 def test_ai_service(service):
     """

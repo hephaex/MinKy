@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { tagService } from '../services/api';
+import { logError } from '../utils/logger';
 import './TagInput.css';
 
 const TagInput = ({ tags = [], onChange, suggestedTags = [], onSuggestionApply }) => {
@@ -25,7 +26,7 @@ const TagInput = ({ tags = [], onChange, suggestedTags = [], onSuggestionApply }
       const response = await tagService.suggestTags(query);
       setSuggestions(response.suggestions || []);
     } catch (error) {
-      console.error('Error searching tags:', error);
+      logError('TagInput.searchTags', error);
       setSuggestions([]);
     }
   };

@@ -8,7 +8,7 @@ from app.models.document import Document
 from app.schemas.tag import TagCreate, TagUpdate
 from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query, get_or_404, success_response, error_response
-from app.utils.validation import format_validation_errors
+from app.utils.validation import format_validation_errors, escape_like
 from app.utils.auto_tag import detect_auto_tags, merge_tags
 import bleach
 import logging
@@ -92,7 +92,8 @@ def list_tags() -> Response | tuple[Response, int]:
         query = Tag.query
         
         if search:
-            query = query.filter(Tag.name.ilike(f'%{search}%'))
+            search_escaped = escape_like(search)
+            query = query.filter(Tag.name.ilike(f'%{search_escaped}%'))
         
         # Order by document count (calculated in to_dict)
         pagination = query.order_by(Tag.name).paginate(
@@ -366,7 +367,8 @@ def suggest_tags() -> Response | tuple[Response, int]:
         if not query or len(query) < 2:
             return success_response({'suggestions': []})
 
-        tags = Tag.query.filter(Tag.name.ilike(f'%{query}%'))\
+        query_escaped = escape_like(query)
+        tags = Tag.query.filter(Tag.name.ilike(f'%{query_escaped}%'))\
             .order_by(Tag.name)\
             .limit(limit)\
             .all()

@@ -4,6 +4,7 @@ from app import db
 from app.models.template import DocumentTemplate
 from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query, success_response, error_response
+from app.utils.validation import escape_like
 import bleach
 
 templates_bp = Blueprint('templates', __name__)
@@ -40,11 +41,12 @@ def list_templates():
             query = query.filter_by(category=category)
         
         if search:
+            search_escaped = escape_like(search)
             query = query.filter(
                 db.or_(
-                    DocumentTemplate.name.ilike(f'%{search}%'),
-                    DocumentTemplate.description.ilike(f'%{search}%'),
-                    DocumentTemplate.content_template.ilike(f'%{search}%')
+                    DocumentTemplate.name.ilike(f'%{search_escaped}%'),
+                    DocumentTemplate.description.ilike(f'%{search_escaped}%'),
+                    DocumentTemplate.content_template.ilike(f'%{search_escaped}%')
                 )
             )
         

@@ -1,7 +1,36 @@
 from datetime import datetime, timezone
 from app import db
 import markdown
+import bleach
 from app.models.tag import document_tags
+
+
+def escape_like_pattern(value: str) -> str:
+    """Escape special characters for SQL LIKE/ILIKE queries."""
+    if not value:
+        return value
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+# Allowed HTML tags for sanitized markdown output
+ALLOWED_TAGS = [
+    'p', 'br', 'strong', 'em', 'b', 'i', 'u', 's',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'ul', 'ol', 'li', 'dl', 'dt', 'dd',
+    'a', 'img', 'code', 'pre', 'blockquote',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'hr', 'div', 'span', 'sup', 'sub', 'mark'
+]
+
+ALLOWED_ATTRIBUTES = {
+    'a': ['href', 'title', 'target', 'rel'],
+    'img': ['src', 'alt', 'title', 'width', 'height'],
+    'code': ['class'],
+    'pre': ['class'],
+    'span': ['class'],
+    'div': ['class'],
+    'td': ['colspan', 'rowspan'],
+    'th': ['colspan', 'rowspan']
+}
 
 
 def utc_now():
@@ -40,7 +69,17 @@ class Document(db.Model):
         self.html_content = self.convert_markdown_to_html()
     
     def convert_markdown_to_html(self):
-        return markdown.markdown(self.markdown_content)
+        """Convert markdown to sanitized HTML to prevent XSS attacks"""
+        raw_html = markdown.markdown(
+            self.markdown_content,
+            extensions=['tables', 'fenced_code', 'codehilite']
+        )
+        return bleach.clean(
+            raw_html,
+            tags=ALLOWED_TAGS,
+            attributes=ALLOWED_ATTRIBUTES,
+            strip=True
+        )
     
     def update_content(self, title=None, markdown_content=None, author=None, create_version=True, change_summary=None, updated_by=None):
         # Check if content actually changed
@@ -122,10 +161,11 @@ class Document(db.Model):
             )
         
         # Use simple ILIKE search instead of full-text search for better compatibility
+        query_escaped = escape_like_pattern(query_text)
         search_query = base_query.filter(
             db.or_(
-                cls.title.ilike(f'%{query_text}%'),
-                cls.markdown_content.ilike(f'%{query_text}%')
+                cls.title.ilike(f'%{query_escaped}%'),
+                cls.markdown_content.ilike(f'%{query_escaped}%')
             )
         ).order_by(cls.updated_at.desc())
         

@@ -15,6 +15,7 @@ from app.models.comment import Comment
 from app.models.attachment import Attachment
 from app.utils.auth import get_current_user
 from app.utils.responses import paginate_query
+from app.utils.validation import escape_like
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,38 +30,69 @@ def require_admin():
 @admin_bp.route('/admin/users', methods=['GET'])
 @jwt_required()
 def list_users():
-    """List all users with pagination"""
+    """List all users with pagination - optimized with single query aggregation"""
     try:
         if not require_admin():
             return jsonify({'error': 'Admin access required'}), 403
-        
+
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         search = request.args.get('search', '')
-        
-        query = User.query
-        
+
+        # Subqueries for counts (executed once, not N times)
+        doc_count_subq = db.session.query(
+            Document.user_id,
+            func.count(Document.id).label('doc_count')
+        ).group_by(Document.user_id).subquery()
+
+        comment_count_subq = db.session.query(
+            Comment.user_id,
+            func.count(Comment.id).label('comment_count')
+        ).group_by(Comment.user_id).subquery()
+
+        # Main query with left joins to subqueries
+        query = db.session.query(
+            User,
+            func.coalesce(doc_count_subq.c.doc_count, 0).label('document_count'),
+            func.coalesce(comment_count_subq.c.comment_count, 0).label('comment_count')
+        ).outerjoin(
+            doc_count_subq, User.id == doc_count_subq.c.user_id
+        ).outerjoin(
+            comment_count_subq, User.id == comment_count_subq.c.user_id
+        )
+
         if search:
+            search_escaped = escape_like(search)
             query = query.filter(
-                User.username.ilike(f'%{search}%') |
-                User.email.ilike(f'%{search}%') |
-                User.full_name.ilike(f'%{search}%')
+                User.username.ilike(f'%{search_escaped}%') |
+                User.email.ilike(f'%{search_escaped}%') |
+                User.full_name.ilike(f'%{search_escaped}%')
             )
-        
-        def serialize_user_with_stats(user):
-            user_data = user.to_dict(include_sensitive=True)
-            user_data['document_count'] = Document.query.filter_by(user_id=user.id).count()
-            user_data['comment_count'] = Comment.query.filter_by(user_id=user.id).count()
-            return user_data
 
         query = query.order_by(desc(User.created_at))
-        return paginate_query(
-            query, page, per_page,
-            serializer_func=serialize_user_with_stats,
-            items_key='users',
-            extra_fields={'success': True}
-        )
-        
+
+        # Manual pagination for tuple results
+        total = query.count()
+        items = query.offset((page - 1) * per_page).limit(per_page).all()
+
+        users = []
+        for user, doc_count, comment_count in items:
+            user_data = user.to_dict(include_sensitive=True)
+            user_data['document_count'] = doc_count
+            user_data['comment_count'] = comment_count
+            users.append(user_data)
+
+        return jsonify({
+            'success': True,
+            'users': users,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total,
+                'pages': (total + per_page - 1) // per_page
+            }
+        })
+
     except Exception as e:
         logger.error(f"Error in list users: {e}")
         return jsonify({'error': 'Internal server error'}), 500

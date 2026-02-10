@@ -23,11 +23,11 @@ const CategoryManager = () => {
     try {
       setLoading(true);
       const response = await api.get('/categories/?format=tree');
-      setCategories(response.data.tree);
+      setCategories(response.data.data?.tree || []);
       setError(null);
     } catch (err) {
       setError('Failed to load categories');
-      console.error('Error fetching categories:', err);
+      setCategories([]);
     } finally {
       setLoading(false);
     }

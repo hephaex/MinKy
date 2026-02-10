@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { documentService } from '../services/api';
 import api from '../services/api';
 import SearchBar from '../components/SearchBar';
 import Pagination from '../components/Pagination';
 import FileUpload from '../components/FileUpload';
 import DocumentCard from '../components/DocumentCard';
-import { highlightTextReact, truncateWithHighlight } from '../utils/highlightText';
+import useCategories from '../hooks/useCategories';
 import './DocumentList.css';
 
 const DocumentList = () => {
@@ -18,11 +17,11 @@ const DocumentList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showUpload, setShowUpload] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState(null);
-  const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const navigate = useNavigate();
+
+  // Use custom hook for categories
+  const { categories } = useCategories();
 
   const fetchDocuments = async (page = 1, search = '', categoryId = null) => {
     try {
@@ -45,19 +44,6 @@ const DocumentList = () => {
       setLoading(false);
     }
   };
-
-  const fetchCategories = async () => {
-    try {
-      const response = await api.get('/categories?format=flat');
-      setCategories(response.data.categories);
-    } catch (err) {
-      console.error('Error fetching categories:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchCategories();
-  }, []);
 
   useEffect(() => {
     fetchDocuments(1, searchQuery, selectedCategory);
@@ -115,34 +101,6 @@ const DocumentList = () => {
 
   const clearUploadStatus = () => {
     setUploadStatus(null);
-  };
-
-
-  const handleGitSync = async () => {
-    try {
-      setSyncing(true);
-      // TODO: Implement actual git pull functionality
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
-      
-      setSyncStatus({
-        type: 'success',
-        message: 'Git pull completed successfully. Documents are up to date.'
-      });
-      
-      // Refresh documents after successful sync
-      fetchDocuments(currentPage, searchQuery);
-    } catch (error) {
-      setSyncStatus({
-        type: 'error',
-        message: 'Git sync failed: ' + error.message
-      });
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const clearSyncStatus = () => {
-    setSyncStatus(null);
   };
 
   const formatDate = (dateString) => {
@@ -203,15 +161,6 @@ const DocumentList = () => {
         <div className={`upload-status ${uploadStatus.type}`}>
           <span>{uploadStatus.message}</span>
           <button className="close-btn" onClick={clearUploadStatus}>×</button>
-        </div>
-      )}
-
-
-      {/* Sync Status Messages */}
-      {syncStatus && (
-        <div className={`upload-status ${syncStatus.type}`}>
-          <span>{syncStatus.message}</span>
-          <button className="close-btn" onClick={clearSyncStatus}>×</button>
         </div>
       )}
 

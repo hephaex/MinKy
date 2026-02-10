@@ -2,6 +2,7 @@
 import React from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import DOMPurify from 'dompurify';
 
 export const processInternalLinks = (content, navigate, documentLookup = {}) => {
   // [[link|display]] 또는 [[link]] 패턴 처리
@@ -87,9 +88,13 @@ export const createCustomMarkdownComponents = (navigate, documentLookup = {}) =>
       // 해시태그 처리
       processed = processHashtags(processed);
       
-      // HTML이 포함되어 있으면 dangerouslySetInnerHTML 사용
+      // HTML이 포함되어 있으면 DOMPurify로 살균 후 dangerouslySetInnerHTML 사용
       if (processed !== children && (processed.includes('<a') || processed.includes('<span'))) {
-        return <span dangerouslySetInnerHTML={{ __html: processed }} />;
+        const sanitized = DOMPurify.sanitize(processed, {
+          ALLOWED_TAGS: ['a', 'span'],
+          ALLOWED_ATTR: ['href', 'class', 'data-target', 'title']
+        });
+        return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
       }
       
       return children;

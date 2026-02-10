@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MDEditor from '@uiw/react-md-editor';
 import { collaborationService } from '../services/collaborationService';
 import AISuggestions from './AISuggestions';
+import { logError } from '../utils/logger';
 import './CollaborativeEditor.css';
 
 const CollaborativeEditor = ({
@@ -101,7 +102,7 @@ const CollaborativeEditor = ({
     };
 
     const handleError = (error) => {
-      console.error('Collaboration error:', error);
+      logError('CollaborativeEditor', error);
       setConnectionStatus('error');
     };
 
@@ -176,7 +177,7 @@ const CollaborativeEditor = ({
         onChange(newValue);
       }
     } catch (error) {
-      console.error('Error applying remote operation:', error);
+      logError('CollaborativeEditor.applyRemoteOperation', error);
     } finally {
       isApplyingRemoteOperation.current = false;
       

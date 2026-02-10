@@ -6,6 +6,7 @@ from app.models.document import Document
 from app.models.user import User
 from app.utils.auth import get_current_user_id
 from app.utils.korean_text import korean_processor, process_korean_document
+from app.utils.validation import escape_like
 from app.services.opensearch_service import get_opensearch_service
 from app.middleware.security import rate_limit_api, rate_limit_search, validate_request_security, audit_log
 from marshmallow import Schema, fields, ValidationError
@@ -126,7 +127,8 @@ def _search_with_postgresql(search_params: dict, user_id: Optional[int] = None) 
                 base_query = base_query.filter(Document.tags.contains(tag))
     
     if search_params.get('author'):
-        base_query = base_query.filter(Document.author.ilike(f"%{search_params['author']}%"))
+        author_escaped = escape_like(search_params['author'])
+        base_query = base_query.filter(Document.author.ilike(f"%{author_escaped}%"))
     
     if search_params.get('date_from'):
         base_query = base_query.filter(Document.updated_at >= search_params['date_from'])
@@ -141,9 +143,10 @@ def _search_with_postgresql(search_params: dict, user_id: Optional[int] = None) 
         if query_tokens:
             search_conditions = []
             for token in query_tokens:
+                token_escaped = escape_like(token)
                 search_conditions.extend([
-                    Document.title.ilike(f"%{token}%"),
-                    Document.markdown_content.ilike(f"%{token}%")
+                    Document.title.ilike(f"%{token_escaped}%"),
+                    Document.markdown_content.ilike(f"%{token_escaped}%")
                 ])
             
             if search_conditions:
@@ -218,15 +221,16 @@ def suggest_korean_tags():
         from app.models.tag import Tag
         
         # 한국어 처리
+        query_escaped = escape_like(query)
         if korean_processor.detect_language(query) == 'korean':
             # 한국어 태그 검색 (부분 매칭)
             tags = Tag.query.filter(
-                Tag.name.ilike(f"%{query}%")
+                Tag.name.ilike(f"%{query_escaped}%")
             ).order_by(Tag.name).limit(limit).all()
         else:
             # 영어/숫자 태그 검색
             tags = Tag.query.filter(
-                Tag.name.ilike(f"{query}%")
+                Tag.name.ilike(f"{query_escaped}%")
             ).order_by(Tag.name).limit(limit).all()
         
         suggestions = [tag.name for tag in tags]
