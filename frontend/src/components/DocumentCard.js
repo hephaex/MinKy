@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { highlightTextReact, truncateWithHighlight } from '../utils/highlightText';
+import { formatDateTime } from '../utils/dateUtils';
 import './DocumentCard.css';
 
 const DocumentCard = ({ 
@@ -9,17 +10,7 @@ const DocumentCard = ({
   showPreview = false,
   formatDate 
 }) => {
-  const formatDateDefault = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const dateFormatter = formatDate || formatDateDefault;
+  const dateFormatter = formatDate || formatDateTime;
   
   const formatAuthor = (author) => {
     if (!author) return '';

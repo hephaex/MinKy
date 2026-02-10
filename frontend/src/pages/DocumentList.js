@@ -7,6 +7,7 @@ import FileUpload from '../components/FileUpload';
 import DocumentCard from '../components/DocumentCard';
 import useCategories from '../hooks/useCategories';
 import { logError } from '../utils/logger';
+import { formatDate, formatDateTime } from '../utils/dateUtils';
 import './DocumentList.css';
 
 const DocumentList = () => {
@@ -102,16 +103,6 @@ const DocumentList = () => {
 
   const clearUploadStatus = () => {
     setUploadStatus(null);
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   if (loading) {

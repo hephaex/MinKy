@@ -2,6 +2,9 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from app.utils.auth import get_current_user_id
+import logging
+
+logger = logging.getLogger(__name__)
 
 documents_sync_bp = Blueprint('documents_sync', __name__)
 
@@ -31,7 +34,8 @@ def sync_backup_files():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error syncing backup files: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @documents_sync_bp.route('/documents/sync/preview', methods=['GET'])
@@ -56,7 +60,8 @@ def preview_backup_sync():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error previewing sync: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @documents_sync_bp.route('/documents/sync/files', methods=['GET'])
@@ -100,4 +105,5 @@ def list_backup_files_for_sync():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error listing backup files: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500

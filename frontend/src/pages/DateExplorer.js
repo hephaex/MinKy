@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
 import DocumentCard from '../components/DocumentCard';
 import { logError } from '../utils/logger';
+import { formatRelativeTime } from '../utils/dateUtils';
 import './DateExplorer.css';
 
 const DateExplorer = () => {
@@ -71,19 +72,6 @@ const DateExplorer = () => {
   const handleSettings = () => {
     setActiveAction('settings');
     navigate('/settings');
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now - date);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 1) return '방금 전';
-    if (diffDays < 7) return `${diffDays}일 전`;
-    if (diffDays < 30) return `${Math.ceil(diffDays / 7)}주 전`;
-    if (diffDays < 365) return `${Math.ceil(diffDays / 30)}개월 전`;
-    return `${Math.ceil(diffDays / 365)}년 전`;
   };
 
   const formatTime = (dateString) => {
@@ -252,7 +240,7 @@ const DateExplorer = () => {
                   updated_at: doc.created_at, // Use created_at for recent documents
                   title: doc.title || '제목 없음'
                 }}
-                formatDate={(dateString) => `${formatDate(dateString)} • ${formatTime(dateString)}`}
+                formatDate={(dateString) => `${formatRelativeTime(dateString, 'ko-KR')} • ${formatTime(dateString)}`}
               />
             ))}
           </div>

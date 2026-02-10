@@ -165,7 +165,8 @@ def create_document():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error creating document: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @documents_bp.route('/documents', methods=['GET'])
@@ -204,7 +205,8 @@ def list_documents():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error listing documents: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @documents_bp.route('/documents/<int:document_id>', methods=['GET'])
@@ -223,7 +225,8 @@ def get_document(document_id):
     except HTTPException:
         raise
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error getting document %s: %s", document_id, e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @documents_bp.route('/documents/<int:document_id>', methods=['PUT'])
@@ -309,7 +312,8 @@ def update_document(document_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error updating document %s: %s", document_id, e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @documents_bp.route('/documents/<int:document_id>', methods=['DELETE'])
@@ -334,4 +338,5 @@ def delete_document(document_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error deleting document %s: %s", document_id, e)
+        return jsonify({'error': 'Internal server error'}), 500

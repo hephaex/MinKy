@@ -7,7 +7,10 @@ from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query
 import os
 import mimetypes
+import logging
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 attachments_bp = Blueprint('attachments', __name__)
 
@@ -155,7 +158,8 @@ def upload_file():
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error uploading file: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 @attachments_bp.route('/attachments/<int:attachment_id>/download', methods=['GET'])
 def download_file(attachment_id):
@@ -178,7 +182,8 @@ def download_file(attachment_id):
         )
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error downloading file %s: %s", attachment_id, e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 @attachments_bp.route('/attachments/<int:attachment_id>/preview', methods=['GET'])
 def preview_file(attachment_id):
@@ -206,7 +211,8 @@ def preview_file(attachment_id):
         return send_file(attachment.file_path, mimetype=attachment.mime_type)
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error previewing file %s: %s", attachment_id, e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 @attachments_bp.route('/attachments', methods=['GET'])
 @jwt_required()
@@ -248,7 +254,8 @@ def list_attachments():
         )
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error listing attachments: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 @attachments_bp.route('/attachments/<int:attachment_id>', methods=['GET'])
 def get_attachment(attachment_id):
@@ -263,7 +270,8 @@ def get_attachment(attachment_id):
         return jsonify(attachment.to_dict())
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error getting attachment %s: %s", attachment_id, e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 @attachments_bp.route('/attachments/<int:attachment_id>', methods=['DELETE'])
 @jwt_required()
@@ -296,7 +304,8 @@ def delete_attachment(attachment_id):
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error deleting attachment %s: %s", attachment_id, e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 @attachments_bp.route('/documents/<int:document_id>/attachments', methods=['GET'])
 def get_document_attachments(document_id):
@@ -320,7 +329,8 @@ def get_document_attachments(document_id):
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error getting document attachments for document %s: %s", document_id, e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 @attachments_bp.route('/attachments/stats', methods=['GET'])
 @jwt_required()
@@ -357,4 +367,5 @@ def get_attachment_stats():
         })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error getting attachment stats: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { logError } from '../utils/logger';
+import { formatDateTime } from '../utils/dateUtils';
 
 const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
   const [documents, setDocuments] = useState([]);
@@ -61,17 +62,6 @@ const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
     }
     
     return dateKey;
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const truncateContent = (content, maxLength = 120) => {
@@ -264,7 +254,7 @@ const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
                   color: '#999',
                   fontWeight: 'normal'
                 }}>
-                  {formatDate(doc.created_at)}
+                  {formatDateTime(doc.created_at)}
                 </span>
               </div>
               

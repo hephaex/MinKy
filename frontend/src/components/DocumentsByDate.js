@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Pagination from './Pagination';
+import { formatDateTime, formatDateRange as formatDateRangeUtil } from '../utils/dateUtils';
 import './DocumentsByDate.css';
 
 const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
@@ -81,17 +82,6 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
     return dateKey;
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   const truncateContent = (content, maxLength = 120) => {
     if (content.length <= maxLength) return content;
     return content.substring(0, maxLength) + '...';
@@ -162,7 +152,7 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
                     </Link>
                   </h3>
                   <span className="document-date">
-                    {formatDate(doc.created_at)}
+                    {formatDateTime(doc.created_at)}
                   </span>
                 </div>
                 

@@ -4,6 +4,7 @@ import { tagService } from '../services/api';
 import Pagination from '../components/Pagination';
 import { highlightTextReact, truncateWithHighlight } from '../utils/highlightText';
 import { logError } from '../utils/logger';
+import { formatDateTime } from '../utils/dateUtils';
 import './TagDetail.css';
 
 const TagDetail = () => {
@@ -38,16 +39,6 @@ const TagDetail = () => {
 
   const handlePageChange = (page) => {
     fetchTagData(page);
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const formatAuthor = (author) => {
@@ -142,7 +133,7 @@ const TagDetail = () => {
 
           <div className="tag-meta">
             <small>
-              Created: {formatDate(tagData.created_at)}
+              Created: {formatDateTime(tagData.created_at)}
               {tagData.creator && ` by ${tagData.creator}`}
             </small>
           </div>
@@ -174,7 +165,7 @@ const TagDetail = () => {
                         <span className="document-author">By {formatAuthor(doc.author)}</span>
                       )}
                       <span className="document-date">
-                        Updated {formatDate(doc.updated_at)}
+                        Updated {formatDateTime(doc.updated_at)}
                       </span>
                     </div>
                     

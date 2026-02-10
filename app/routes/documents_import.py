@@ -156,7 +156,8 @@ def upload_markdown_file():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error uploading document: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @documents_import_bp.route('/documents/export', methods=['POST'])
@@ -175,7 +176,8 @@ def export_all_documents_to_backup():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error exporting documents: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @documents_import_bp.route('/documents/import', methods=['POST'])

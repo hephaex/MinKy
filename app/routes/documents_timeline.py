@@ -65,7 +65,8 @@ def get_documents_by_date():
         )
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error getting documents by date: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @documents_timeline_bp.route('/documents/timeline', methods=['GET'])
@@ -172,7 +173,8 @@ def get_documents_timeline():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error getting documents timeline: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @documents_timeline_bp.route('/documents/tree', methods=['GET'])
@@ -361,5 +363,5 @@ def get_documents_tree():
         })
 
     except Exception as e:
-        logger.error(f"Error building document tree: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error("Error building document tree: %s", e)
+        return jsonify({'error': 'Internal server error'}), 500

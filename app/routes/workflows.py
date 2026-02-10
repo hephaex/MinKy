@@ -136,7 +136,8 @@ def perform_workflow_action(document_id):
         })
         
     except ValueError as e:
-        return jsonify({'error': str(e)}), 403
+        current_app.logger.warning("Workflow validation error: %s", e)
+        return jsonify({'error': 'Invalid workflow action'}), 403
     except Exception as e:
         current_app.logger.error(f"Error performing workflow action: {str(e)}")
         return jsonify({'error': 'Failed to perform workflow action'}), 500

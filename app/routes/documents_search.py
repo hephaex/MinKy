@@ -125,4 +125,4 @@ def search_documents_fulltext():
 
     except Exception as e:
         logger.error("Full-text search failed: %s", e)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500

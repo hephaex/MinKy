@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
 import { logError } from '../utils/logger';
+import { formatDate } from '../utils/dateUtils';
 import './DocumentsSidebar.css';
 
 const DocumentsSidebar = ({ isVisible, onToggle }) => {
@@ -41,13 +42,6 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
 
   const handleNewDocument = () => {
     navigate('/documents/new');
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('ko-KR', {
-      month: 'short',
-      day: 'numeric'
-    });
   };
 
   const truncateTitle = (title, maxLength = 30) => {

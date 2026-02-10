@@ -7,6 +7,7 @@ import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import DOMPurify from 'dompurify';
 import { documentService } from '../services/api';
 import { logError } from '../utils/logger';
+import { formatDateTime } from '../utils/dateUtils';
 import { extractFrontmatter, processInternalLinks, processHashtags } from '../utils/obsidianRenderer';
 import api from '../services/api';
 import './DocumentView.css';
@@ -106,16 +107,6 @@ const DocumentView = () => {
     }
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   const formatAuthor = (author) => {
     if (!author) return '';
     
@@ -213,9 +204,9 @@ const DocumentView = () => {
               <span className="document-author">By {formatAuthor(document.author)}</span>
             )}
             <span className="document-dates">
-              Created: {formatDate(document.created_at)}
+              Created: {formatDateTime(document.created_at)}
               {document.updated_at !== document.created_at && (
-                <span> • Updated: {formatDate(document.updated_at)}</span>
+                <span> • Updated: {formatDateTime(document.updated_at)}</span>
               )}
             </span>
           </div>
