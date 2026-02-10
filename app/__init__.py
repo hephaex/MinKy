@@ -236,6 +236,7 @@ def create_app():
     from app.routes.document_clustering import clustering_bp
     from app.routes.git import git_bp
     from app.routes.org_roam import org_roam_bp
+    from app.routes.agents import agents_bp
     app.register_blueprint(documents_bp, url_prefix='/api')
     app.register_blueprint(documents_search_bp, url_prefix='/api')
     app.register_blueprint(documents_sync_bp, url_prefix='/api')
@@ -262,7 +263,8 @@ def create_app():
     app.register_blueprint(clustering_bp, url_prefix='/api')
     app.register_blueprint(git_bp, url_prefix='/api')
     app.register_blueprint(org_roam_bp, url_prefix='/api')
-    
+    app.register_blueprint(agents_bp, url_prefix='/api')
+
     # Initialize collaboration service and register WebSocket events
     from app.services.collaboration_service import init_collaboration_service
     from app.routes.websocket_events import register_websocket_events
