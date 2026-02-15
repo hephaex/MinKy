@@ -145,17 +145,31 @@ class MLAnalyticsService:
             return insights
 
         except Exception as e:
-            logger.error(f"Error getting document insights: {e}")
-            return {'error': f'Failed to generate insights: {str(e)}'}
+            logger.error(f"Error getting document insights: {e}", exc_info=True)
+            # SECURITY: Don't leak internal error details to users
+            return {'error': 'Failed to generate insights. Please try again later.'}
 
-    def get_corpus_insights(self, user_id: Optional[int] = None) -> Dict[str, Any]:
-        """Get ML insights for the entire document corpus or user's documents"""
+    def get_corpus_insights(self, user_id: Optional[int] = None, requesting_user_id: int = None, is_admin: bool = False) -> Dict[str, Any]:
+        """Get ML insights for the entire document corpus or user's documents
+
+        Args:
+            user_id: Filter documents by this user ID
+            requesting_user_id: The authenticated user making the request
+            is_admin: Whether the requesting user is an admin
+        """
         try:
+            # Authorization check: users can only view their own analytics unless admin
+            if user_id and requesting_user_id and user_id != requesting_user_id and not is_admin:
+                return {'error': 'Not authorized to view this user\'s analytics'}
+
+            # SECURITY: Limit query results to prevent resource exhaustion
+            MAX_CORPUS_DOCUMENTS = 1000
+
             query = Document.query
             if user_id:
                 query = query.filter(Document.user_id == user_id)
 
-            documents = query.all()
+            documents = query.limit(MAX_CORPUS_DOCUMENTS).all()
 
             if not documents:
                 return {'error': 'No documents found'}
@@ -177,8 +191,9 @@ class MLAnalyticsService:
             return insights
 
         except Exception as e:
-            logger.error(f"Error getting corpus insights: {e}")
-            return {'error': f'Failed to generate corpus insights: {str(e)}'}
+            logger.error(f"Error getting corpus insights: {e}", exc_info=True)
+            # SECURITY: Don't leak internal error details to users
+            return {'error': 'Failed to generate corpus insights. Please try again later.'}
 
     def _analyze_document_content(self, content: str) -> Dict[str, Any]:
         """Analyze document content using NLP techniques"""
@@ -194,16 +209,37 @@ class MLAnalyticsService:
 
         return analysis
 
-    def _get_document_similarities(self, document: Document) -> Dict[str, Any]:
-        """Find similar documents using TF-IDF and cosine similarity"""
+    def _get_document_similarities(self, document: Document, requesting_user_id: int = None) -> Dict[str, Any]:
+        """Find similar documents using TF-IDF and cosine similarity
+
+        Args:
+            document: The document to find similar documents for
+            requesting_user_id: The user requesting the analysis (for authorization)
+        """
         if not self.sklearn_available:
             return {'error': 'ML libraries not available'}
 
         try:
             from sklearn.feature_extraction.text import TfidfVectorizer
             from sklearn.metrics.pairwise import cosine_similarity
+            from sqlalchemy import or_
 
-            all_docs = Document.query.filter(Document.id != document.id).limit(100).all()
+            # SECURITY: Only query documents the user can access
+            query = Document.query.filter(Document.id != document.id)
+
+            if requesting_user_id:
+                # User can see public docs + their own private docs
+                query = query.filter(
+                    or_(
+                        Document.is_public == True,
+                        Document.user_id == requesting_user_id
+                    )
+                )
+            else:
+                # Unauthenticated: only public documents
+                query = query.filter(Document.is_public == True)
+
+            all_docs = query.limit(100).all()
 
             if not all_docs:
                 return {'similar_documents': []}
@@ -233,8 +269,9 @@ class MLAnalyticsService:
             return {'similar_documents': similar_docs}
 
         except Exception as e:
-            logger.error(f"Similarity analysis error: {e}")
-            return {'error': f'Similarity analysis failed: {str(e)}'}
+            # SECURITY: Log detailed error but return generic message
+            logger.error(f"Similarity analysis error: {e}", exc_info=True)
+            return {'error': 'Similarity analysis failed. Please try again later.'}
 
     def _get_document_topics(self, document: Document) -> Dict[str, Any]:
         """Extract topics from document content"""
@@ -268,8 +305,9 @@ class MLAnalyticsService:
             return {'topics': topics}
 
         except Exception as e:
-            logger.error(f"Topic analysis error: {e}")
-            return {'error': f'Topic analysis failed: {str(e)}'}
+            # SECURITY: Log detailed error but return generic message
+            logger.error(f"Topic analysis error: {e}", exc_info=True)
+            return {'error': 'Topic analysis failed. Please try again later.'}
 
     def _get_sentiment_analysis(self, content: str) -> Dict[str, Any]:
         """Perform sentiment analysis on document content"""

@@ -23,6 +23,7 @@ class CategoryCreate(BaseModel):
     )
     parent_id: Optional[int] = Field(
         default=None,
+        ge=1,
         description="Parent category ID for nesting"
     )
     color: str = Field(
@@ -55,6 +56,7 @@ class CategoryCreate(BaseModel):
         return v.upper()
 
     model_config = {
+        "extra": "forbid",  # SECURITY: Reject unknown fields
         "json_schema_extra": {
             "examples": [
                 {
@@ -84,6 +86,7 @@ class CategoryUpdate(BaseModel):
     )
     parent_id: Optional[int] = Field(
         default=None,
+        ge=1,
         description="Parent category ID"
     )
     color: Optional[str] = Field(

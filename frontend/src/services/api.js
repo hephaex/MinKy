@@ -57,15 +57,11 @@ export const documentService = {
   uploadDocument: async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    
-    // Try direct backend connection (bypassing nginx proxy)
-    const directResponse = await axios.post('http://localhost:5001/api/documents/upload', formData, {
+
+    const response = await api.post('/documents/upload', formData, {
       timeout: 120000,
-      validateStatus: function (status) {
-        return status >= 200 && status < 300;
-      },
     });
-    return directResponse.data;
+    return response.data;
   },
 
   previewBackupSync: async () => {
@@ -90,6 +86,9 @@ export const documentService = {
 };
 
 export const authService = {
+  // SECURITY TODO: localStorage is vulnerable to XSS attacks.
+  // Consider migrating to HttpOnly cookies for token storage.
+  // Backend should set: Set-Cookie: token=<jwt>; HttpOnly; Secure; SameSite=Strict
   login: async (credentials) => {
     const response = await api.post('/auth/login', credentials);
     if (response.data.access_token) {
@@ -123,41 +122,41 @@ export const tagService = {
     const params = { page, per_page: perPage };
     if (search) params.search = search;
     if (popular) params.popular = 'true';
-    
+
     const response = await api.get('/tags', { params });
-    return response.data;
+    return response.data.data || response.data;
   },
 
   getTag: async (slug, page = 1, perPage = 10) => {
     const params = { page, per_page: perPage };
     const response = await api.get(`/tags/${slug}`, { params });
-    return response.data;
+    return response.data.data || response.data;
   },
 
   getTagStatistics: async () => {
     const response = await api.get('/tags/statistics');
-    return response.data;
+    return response.data.data || response.data;
   },
 
   suggestTags: async (query, limit = 10) => {
     const params = { q: query, limit };
     const response = await api.get('/tags/suggest', { params });
-    return response.data;
+    return response.data.data || response.data;
   },
 
   createTag: async (tagData) => {
     const response = await api.post('/tags', tagData);
-    return response.data;
+    return response.data.data || response.data;
   },
 
   updateTag: async (slug, tagData) => {
     const response = await api.put(`/tags/${slug}`, tagData);
-    return response.data;
+    return response.data.data || response.data;
   },
 
   deleteTag: async (slug) => {
     const response = await api.delete(`/tags/${slug}`);
-    return response.data;
+    return response.data.data || response.data;
   },
 };
 

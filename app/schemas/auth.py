@@ -18,9 +18,9 @@ class RegisterRequest(BaseModel):
     email: EmailStr = Field(..., description="Valid email address")
     password: str = Field(
         ...,
-        min_length=8,
+        min_length=12,
         max_length=128,
-        description="Password (minimum 8 characters)"
+        description="Password (min 12 chars, uppercase, lowercase, number, special char)"
     )
 
     @field_validator('username')
@@ -35,12 +35,16 @@ class RegisterRequest(BaseModel):
     @classmethod
     def password_strength(cls, v: str) -> str:
         """Ensure password meets strength requirements."""
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters long')
-        if not re.search(r'[a-zA-Z]', v):
-            raise ValueError('Password must contain at least one letter')
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters long')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
         if not re.search(r'\d', v):
             raise ValueError('Password must contain at least one number')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character')
         return v
 
     model_config = {
@@ -49,7 +53,7 @@ class RegisterRequest(BaseModel):
                 {
                     "username": "john_doe",
                     "email": "john@example.com",
-                    "password": "securepass123"
+                    "password": "SecurePass123!"
                 }
             ]
         }
@@ -78,19 +82,23 @@ class PasswordChange(BaseModel):
     current_password: str = Field(..., min_length=1, description="Current password")
     new_password: str = Field(
         ...,
-        min_length=8,
+        min_length=12,
         max_length=128,
-        description="New password (minimum 8 characters)"
+        description="New password (min 12 chars, uppercase, lowercase, number, special char)"
     )
 
     @field_validator('new_password')
     @classmethod
     def new_password_strength(cls, v: str) -> str:
         """Ensure new password meets strength requirements."""
-        if len(v) < 8:
-            raise ValueError('New password must be at least 8 characters long')
-        if not re.search(r'[a-zA-Z]', v):
-            raise ValueError('New password must contain at least one letter')
+        if len(v) < 12:
+            raise ValueError('New password must be at least 12 characters long')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('New password must contain at least one lowercase letter')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('New password must contain at least one uppercase letter')
         if not re.search(r'\d', v):
             raise ValueError('New password must contain at least one number')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('New password must contain at least one special character')
         return v

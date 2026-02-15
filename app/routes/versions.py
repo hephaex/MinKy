@@ -1,17 +1,34 @@
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from app import db
+from flask_jwt_extended import jwt_required
+from app import db, limiter
 from app.models.document import Document
 from app.models.version import DocumentVersion, DocumentSnapshot
 from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query, success_response, error_response
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
 versions_bp = Blueprint('versions', __name__)
 
+
+def _log_version_operation(operation: str, user_id: int, document_id: int,
+                           version_number: int = None, details: dict = None) -> None:
+    """SECURITY: Audit log version operations for compliance."""
+    log_entry = {
+        'operation': operation,
+        'user_id': user_id,
+        'document_id': document_id,
+        'version_number': version_number,
+        'ip_address': request.remote_addr if request else None,
+        'details': details or {}
+    }
+    logger.info(f"AUDIT_VERSION: {json.dumps(log_entry)}")
+
 @versions_bp.route('/documents/<int:document_id>/versions', methods=['GET'])
+@limiter.limit("60 per minute")
+@jwt_required(optional=True)
 def get_document_versions(document_id):
     """Get version history for a document"""
     try:
@@ -22,8 +39,9 @@ def get_document_versions(document_id):
         if not document.can_view(current_user_id):
             return error_response('Access denied', 403)
 
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
+        # SECURITY: Validate pagination parameters
+        page = max(1, request.args.get('page', 1, type=int))
+        per_page = min(100, max(1, request.args.get('per_page', 20, type=int)))
         include_content = request.args.get('include_content', 'false').lower() == 'true'
         
         query = DocumentVersion.query.filter_by(document_id=document_id)\
@@ -47,12 +65,18 @@ def get_document_versions(document_id):
         return error_response('Internal server error', 500)
 
 @versions_bp.route('/documents/<int:document_id>/versions/<int:version_number>', methods=['GET'])
+@limiter.limit("60 per minute")
+@jwt_required(optional=True)
 def get_document_version(document_id, version_number):
     """Get a specific version of a document"""
     try:
+        # SECURITY: Validate version number is positive
+        if version_number < 1:
+            return error_response('Invalid version number', 400)
+
         document = Document.query.get_or_404(document_id)
         current_user_id = get_current_user_id()
-        
+
         # Check if user can view document
         if not document.can_view(current_user_id):
             return error_response('Access denied', 403)
@@ -77,13 +101,19 @@ def get_document_version(document_id, version_number):
         return error_response('Internal server error', 500)
 
 @versions_bp.route('/documents/<int:document_id>/versions/<int:version_number>/restore', methods=['POST'])
+@limiter.limit("10 per hour")
 @jwt_required()
 def restore_document_version(document_id, version_number):
     """Restore a document to a specific version"""
     try:
+        # SECURITY: Validate version number is positive
+        if version_number < 1:
+            return error_response('Invalid version number', 400)
+
         document = Document.query.get_or_404(document_id)
-        current_user_id = get_jwt_identity()
-        
+        # SECURITY: Use get_current_user_id() for consistent int type comparison
+        current_user_id = get_current_user_id()
+
         # Check if user can edit document
         if not document.can_edit(current_user_id):
             return error_response('Access denied', 403)
@@ -102,8 +132,8 @@ def restore_document_version(document_id, version_number):
             created_by=current_user_id
         )
 
-        # Restore to the specified version
-        version.restore_to_document()
+        # Restore to the specified version with authorization
+        version.restore_to_document(user_id=current_user_id)
 
         # Create another version for the restore action
         document.create_version(
@@ -112,6 +142,15 @@ def restore_document_version(document_id, version_number):
         )
 
         db.session.commit()
+
+        # SECURITY: Audit log the restore operation
+        _log_version_operation(
+            'restore',
+            current_user_id,
+            document_id,
+            version_number,
+            {'new_version': document.get_latest_version_number()}
+        )
 
         return success_response({
             'message': f'Document restored to version {version_number}',
@@ -126,9 +165,15 @@ def restore_document_version(document_id, version_number):
         return error_response('Internal server error', 500)
 
 @versions_bp.route('/documents/<int:document_id>/versions/<int:version_number>/diff', methods=['GET'])
+@limiter.limit("60 per minute")
+@jwt_required(optional=True)
 def get_version_diff(document_id, version_number):
     """Get diff between a version and its previous version"""
     try:
+        # SECURITY: Validate version number is positive
+        if version_number < 1:
+            return error_response('Invalid version number', 400)
+
         document = Document.query.get_or_404(document_id)
         current_user_id = get_current_user_id()
 
@@ -159,6 +204,8 @@ def get_version_diff(document_id, version_number):
         return error_response('Internal server error', 500)
 
 @versions_bp.route('/documents/<int:document_id>/versions/compare', methods=['GET'])
+@limiter.limit("30 per minute")
+@jwt_required(optional=True)
 def compare_versions(document_id):
     """Compare two specific versions"""
     try:
@@ -175,6 +222,10 @@ def compare_versions(document_id):
         if not version1_num or not version2_num:
             return error_response('Both version1 and version2 parameters are required', 400)
 
+        # SECURITY: Validate version numbers are positive
+        if version1_num < 1 or version2_num < 1:
+            return error_response('Invalid version number', 400)
+
         version1 = DocumentVersion.query.filter_by(
             document_id=document_id,
             version_number=version1_num
@@ -184,6 +235,16 @@ def compare_versions(document_id):
             document_id=document_id,
             version_number=version2_num
         ).first_or_404()
+
+        # SECURITY: Limit diff size to prevent DoS via CPU exhaustion
+        MAX_DIFF_SIZE = 500000  # 500KB
+        content1_size = len(version1.markdown_content or '')
+        content2_size = len(version2.markdown_content or '')
+        if content1_size > MAX_DIFF_SIZE or content2_size > MAX_DIFF_SIZE:
+            return error_response(
+                f'Content too large for diff comparison (max {MAX_DIFF_SIZE // 1000}KB per version)',
+                413
+            )
 
         # Generate diff between the two versions
         import difflib
@@ -219,6 +280,8 @@ def compare_versions(document_id):
         return error_response('Internal server error', 500)
 
 @versions_bp.route('/documents/<int:document_id>/snapshots', methods=['GET'])
+@limiter.limit("60 per minute")
+@jwt_required(optional=True)
 def get_document_snapshots(document_id):
     """Get snapshots for a document"""
     try:
@@ -229,16 +292,24 @@ def get_document_snapshots(document_id):
         if not document.can_view(current_user_id):
             return error_response('Access denied', 403)
 
-        snapshots = DocumentSnapshot.query.filter_by(document_id=document_id)\
-            .order_by(DocumentSnapshot.version_number.desc()).all()
+        # SECURITY: Validate pagination parameters
+        page = max(1, request.args.get('page', 1, type=int))
+        per_page = min(100, max(1, request.args.get('per_page', 20, type=int)))
 
-        return success_response({
-            'snapshots': [snapshot.to_dict() for snapshot in snapshots],
-            'document': {
-                'id': document.id,
-                'title': document.title
+        query = DocumentSnapshot.query.filter_by(document_id=document_id)\
+            .order_by(DocumentSnapshot.version_number.desc())
+
+        return paginate_query(
+            query, page, per_page,
+            serializer_func=lambda s: s.to_dict(),
+            items_key='snapshots',
+            extra_fields={
+                'document': {
+                    'id': document.id,
+                    'title': document.title
+                }
             }
-        })
+        )
 
     except Exception as e:
         logger.error("Error getting snapshots for document %s: %s", document_id, e)

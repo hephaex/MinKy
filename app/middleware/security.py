@@ -8,6 +8,7 @@ from app import limiter
 import ipaddress
 import re
 import logging
+import hmac  # SECURITY: For constant-time comparison
 
 logger = logging.getLogger(__name__)
 
@@ -15,28 +16,28 @@ class SecurityMiddleware:
     """Advanced security middleware for API protection"""
     
     # Security headers
+    # NOTE: X-XSS-Protection removed - it's deprecated and can introduce vulnerabilities
+    # Modern browsers ignore it; rely on Content-Security-Policy instead
     SECURITY_HEADERS = {
         'X-Content-Type-Options': 'nosniff',
         'X-Frame-Options': 'DENY',
-        'X-XSS-Protection': '1; mode=block',
         'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
         'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'",
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Permissions-Policy': 'geolocation=(), microphone=(), camera=()'
     }
     
-    # Suspicious patterns in requests
+    # Suspicious patterns in requests (refined to avoid ReDoS and false positives)
     SUSPICIOUS_PATTERNS = [
-        r'<script.*?>.*?</script>',  # XSS attempts
+        r'<script[^>]*>',  # XSS attempts (non-greedy)
         r'javascript:',  # JavaScript execution
         r'data:text/html',  # Data URL XSS
-        r'union.*select',  # SQL injection
-        r'drop\s+table',  # SQL injection
+        r'\bunion\b.*\bselect\b',  # SQL injection (word boundaries)
+        r'\bdrop\s+table\b',  # SQL injection
         r'exec\(\s*["\']',  # Code execution
         r'eval\(\s*["\']',  # Code execution
-        r'../../../',  # Path traversal
-        r'\\x[0-9a-f]{2}',  # Hex encoding
-        r'%[0-9a-f]{2}',  # URL encoding of suspicious chars
+        r'(?:\.\.[\\/]){3,}',  # Path traversal (3+ levels)
+        r'%(?:00|0a|0d|3c|3e|22|27)',  # Only dangerous URL-encoded chars (null, newline, <, >, ", ')
     ]
     
     @staticmethod
@@ -200,15 +201,25 @@ def require_api_key(f):
     def decorated_function(*args, **kwargs):
         api_key = request.headers.get('X-API-Key')
         expected_key = current_app.config.get('API_KEY')
-        
-        if expected_key and api_key != expected_key:
+
+        # Fail-secure: deny access when API_KEY is not configured
+        if not expected_key:
+            SecurityMiddleware.log_security_event(
+                'api_key_not_configured',
+                'API_KEY not configured in application',
+                'high'
+            )
+            return jsonify({'error': 'API key authentication not configured'}), 500
+
+        # SECURITY: Use constant-time comparison to prevent timing attacks
+        if not api_key or not hmac.compare_digest(api_key, expected_key):
             SecurityMiddleware.log_security_event(
                 'invalid_api_key',
                 'Invalid or missing API key',
                 'medium'
             )
             return jsonify({'error': 'Invalid API key'}), 401
-        
+
         return f(*args, **kwargs)
     return decorated_function
 

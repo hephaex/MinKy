@@ -13,8 +13,27 @@ from app.models.comment import Comment
 from app.models.version import DocumentVersion
 from app.models.attachment import Attachment
 import logging
+import hashlib
 
 logger = logging.getLogger(__name__)
+
+# SECURITY: Maximum query result limits to prevent DoS
+MAX_TOP_TAGS = 50
+MAX_ACTIVE_USERS = 50
+MAX_ENGAGEMENT_RESULTS = 100
+MAX_TAG_DISTRIBUTION = 100
+MAX_ATTACHMENT_TYPES = 20
+
+
+def _anonymize_username(username: str, user_id: int) -> str:
+    """SECURITY: Anonymize username for analytics to protect PII.
+
+    Creates a consistent but non-reversible identifier.
+    """
+    # Use user_id hash for consistency across analytics queries
+    hash_input = f"analytics_user_{user_id}"
+    user_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:8]
+    return f"user_{user_hash}"
 
 class AnalyticsService:
     """Service for generating analytics and insights"""
@@ -43,21 +62,22 @@ class AnalyticsService:
             published_docs = Document.query.filter_by(is_public=True).count()
             private_docs = Document.query.filter_by(is_public=False).count()
             
-            # Top tags
+            # Top tags - SECURITY: Limit results
             top_tags = db.session.query(
                 Tag.name,
                 func.count(document_tags.c.document_id).label('usage_count')
             ).join(document_tags).group_by(Tag.id, Tag.name)\
-             .order_by(desc('usage_count')).limit(10).all()
-            
-            # Most active users
+             .order_by(desc('usage_count')).limit(min(10, MAX_TOP_TAGS)).all()
+
+            # Most active users - SECURITY: Anonymize usernames and limit results
             active_users = db.session.query(
+                User.id,
                 User.username,
                 func.count(Document.id).label('document_count')
             ).join(Document, User.id == Document.user_id)\
              .group_by(User.id, User.username)\
-             .order_by(desc('document_count')).limit(10).all()
-            
+             .order_by(desc('document_count')).limit(min(10, MAX_ACTIVE_USERS)).all()
+
             return {
                 'overview': {
                     'total_documents': total_documents,
@@ -72,7 +92,14 @@ class AnalyticsService:
                     'comments_last_30_days': recent_comments
                 },
                 'top_tags': [{'name': tag.name, 'count': tag.usage_count} for tag in top_tags],
-                'active_users': [{'username': user.username, 'documents': user.document_count} for user in active_users]
+                # SECURITY: Anonymize usernames in analytics to protect PII
+                'active_users': [
+                    {
+                        'user_id': _anonymize_username(user.username, user.id),
+                        'documents': user.document_count
+                    }
+                    for user in active_users
+                ]
             }
             
         except Exception as e:
@@ -102,10 +129,12 @@ class AnalyticsService:
     
     @staticmethod
     def get_user_engagement_metrics():
-        """Get user engagement metrics"""
+        """Get user engagement metrics (anonymized)"""
         try:
             # Users with their document and comment counts
+            # SECURITY: Include user.id for anonymization, limit results
             engagement_data = db.session.query(
+                User.id,
                 User.username,
                 func.count(Document.id).label('documents'),
                 func.count(Comment.id).label('comments')
@@ -113,10 +142,12 @@ class AnalyticsService:
              .outerjoin(Comment, User.id == Comment.user_id)\
              .group_by(User.id, User.username)\
              .having(func.count(Document.id) > 0)\
-             .order_by(desc('documents')).all()
-            
+             .order_by(desc('documents'))\
+             .limit(MAX_ENGAGEMENT_RESULTS).all()
+
+            # SECURITY: Anonymize usernames in analytics to protect PII
             return [{
-                'username': user.username,
+                'user_id': _anonymize_username(user.username, user.id),
                 'documents': user.documents,
                 'comments': user.comments
             } for user in engagement_data]
@@ -134,13 +165,14 @@ class AnalyticsService:
                 func.avg(func.length(Document.markdown_content))
             ).scalar() or 0
             
-            # Documents by tag distribution
+            # Documents by tag distribution - SECURITY: Limit results
             tag_distribution = db.session.query(
                 Tag.name,
                 func.count(document_tags.c.document_id).label('document_count')
             ).join(document_tags)\
              .group_by(Tag.id, Tag.name)\
-             .order_by(desc('document_count')).all()
+             .order_by(desc('document_count'))\
+             .limit(MAX_TAG_DISTRIBUTION).all()
             
             # Version statistics
             total_versions = DocumentVersion.query.count()

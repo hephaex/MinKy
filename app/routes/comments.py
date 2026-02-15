@@ -1,5 +1,5 @@
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required
 from app import db, limiter
 from app.models.comment import Comment, Rating
 from app.models.document import Document
@@ -7,10 +7,28 @@ from app.utils.auth import get_current_user_id
 from app.utils.responses import paginate_query, success_response, error_response
 import bleach
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
 comments_bp = Blueprint('comments', __name__)
+
+
+def _log_comment_operation(operation: str, user_id: int, comment_id: int = None,
+                           document_id: int = None, details: dict = None) -> None:
+    """SECURITY: Audit log comment operations for compliance."""
+    log_entry = {
+        'operation': operation,
+        'user_id': user_id,
+        'comment_id': comment_id,
+        'document_id': document_id,
+        'ip_address': request.remote_addr if request else None,
+        'details': details or {}
+    }
+    logger.info(f"AUDIT_COMMENT: {json.dumps(log_entry)}")
+
+# SECURITY: Maximum nesting depth for comments to prevent stack overflow and performance issues
+MAX_NESTING_DEPTH = 10
 
 @comments_bp.route('/documents/<int:document_id>/comments', methods=['GET'])
 def get_comments(document_id):
@@ -25,6 +43,9 @@ def get_comments(document_id):
 
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
+        # SECURITY: Enforce pagination bounds
+        page = max(1, page)
+        per_page = max(1, min(per_page, 100))
 
         query = Comment.query.filter_by(
             document_id=document_id,
@@ -49,7 +70,8 @@ def create_comment(document_id):
     """Create a new comment on a document"""
     try:
         document = Document.query.get_or_404(document_id)
-        current_user_id = get_jwt_identity()
+        # SECURITY: Use get_current_user_id() for consistent int type (not get_jwt_identity() which returns string)
+        current_user_id = get_current_user_id()
 
         # Check if user can view document
         if not document.can_view(current_user_id):
@@ -59,7 +81,13 @@ def create_comment(document_id):
         if not data or 'content' not in data:
             return error_response('Comment content is required', 400)
 
-        content = bleach.clean(data['content'].strip())
+        # SECURITY: Validate content length to prevent DoS
+        MAX_COMMENT_LENGTH = 10000
+        raw_content = data['content'].strip()
+        if len(raw_content) > MAX_COMMENT_LENGTH:
+            return error_response(f'Comment must be less than {MAX_COMMENT_LENGTH} characters', 400)
+
+        content = bleach.clean(raw_content)
         parent_id = data.get('parent_id')
 
         if not content:
@@ -75,6 +103,26 @@ def create_comment(document_id):
             if not parent_comment:
                 return error_response('Parent comment not found', 404)
 
+            # SECURITY: Check nesting depth to prevent deep recursion
+            def get_depth(comment):
+                depth = 0
+                current = comment
+                while current.parent_id:
+                    depth += 1
+                    if depth > MAX_NESTING_DEPTH:
+                        return depth
+                    current = Comment.query.get(current.parent_id)
+                    if not current:
+                        break
+                return depth
+
+            parent_depth = get_depth(parent_comment)
+            if parent_depth >= MAX_NESTING_DEPTH:
+                return error_response(
+                    f'Maximum comment nesting depth ({MAX_NESTING_DEPTH}) exceeded',
+                    400
+                )
+
         comment = Comment(
             content=content,
             document_id=document_id,
@@ -84,6 +132,15 @@ def create_comment(document_id):
 
         db.session.add(comment)
         db.session.commit()
+
+        # SECURITY: Audit log comment creation
+        _log_comment_operation(
+            'create',
+            current_user_id,
+            comment.id,
+            document_id,
+            {'parent_id': parent_id, 'content_length': len(content)}
+        )
 
         return success_response(comment.to_dict(include_replies=False), status_code=201)
 
@@ -99,7 +156,12 @@ def update_comment(comment_id):
     """Update a comment"""
     try:
         comment = Comment.query.get_or_404(comment_id)
-        current_user_id = get_jwt_identity()
+        # SECURITY: Use get_current_user_id() for consistent int type
+        current_user_id = get_current_user_id()
+
+        # SECURITY: Verify user has access to the document (IDOR prevention)
+        if comment.document and not comment.document.can_view(current_user_id):
+            return error_response('Access denied', 403)
 
         if not comment.can_edit(current_user_id):
             return error_response('Access denied', 403)
@@ -108,7 +170,13 @@ def update_comment(comment_id):
         if not data or 'content' not in data:
             return error_response('Comment content is required', 400)
 
-        content = bleach.clean(data['content'].strip())
+        # SECURITY: Validate content length to prevent DoS (same as create)
+        MAX_COMMENT_LENGTH = 10000
+        raw_content = data['content'].strip()
+        if len(raw_content) > MAX_COMMENT_LENGTH:
+            return error_response(f'Comment must be less than {MAX_COMMENT_LENGTH} characters', 400)
+
+        content = bleach.clean(raw_content)
         if not content:
             return error_response('Comment content cannot be empty', 400)
 
@@ -116,6 +184,15 @@ def update_comment(comment_id):
         comment.updated_at = db.func.now()
 
         db.session.commit()
+
+        # SECURITY: Audit log comment update
+        _log_comment_operation(
+            'update',
+            current_user_id,
+            comment_id,
+            comment.document_id,
+            {'content_length': len(content)}
+        )
 
         return success_response(comment.to_dict(include_replies=False))
 
@@ -131,13 +208,22 @@ def delete_comment(comment_id):
     """Delete a comment (soft delete)"""
     try:
         comment = Comment.query.get_or_404(comment_id)
-        current_user_id = get_jwt_identity()
+        # SECURITY: Use get_current_user_id() for consistent int type
+        current_user_id = get_current_user_id()
+
+        # SECURITY: Verify user has access to the document (IDOR prevention)
+        if comment.document and not comment.document.can_view(current_user_id):
+            return error_response('Access denied', 403)
 
         if not comment.can_delete(current_user_id):
             return error_response('Access denied', 403)
 
+        document_id = comment.document_id
         comment.soft_delete()
         db.session.commit()
+
+        # SECURITY: Audit log comment deletion
+        _log_comment_operation('delete', current_user_id, comment_id, document_id)
 
         return success_response(message='Comment deleted successfully')
 
@@ -147,12 +233,14 @@ def delete_comment(comment_id):
         return error_response('Internal server error', 500)
 
 @comments_bp.route('/documents/<int:document_id>/rating', methods=['POST'])
+@limiter.limit("30 per hour")
 @jwt_required()
 def rate_document(document_id):
     """Rate a document"""
     try:
         document = Document.query.get_or_404(document_id)
-        current_user_id = get_jwt_identity()
+        # SECURITY: Use get_current_user_id() for consistent int type
+        current_user_id = get_current_user_id()
 
         # Check if user can view document
         if not document.can_view(current_user_id):
@@ -234,11 +322,18 @@ def get_document_rating(document_id):
         return error_response('Internal server error', 500)
 
 @comments_bp.route('/documents/<int:document_id>/rating', methods=['DELETE'])
+@limiter.limit("30 per hour")
 @jwt_required()
 def remove_rating(document_id):
     """Remove user's rating from a document"""
     try:
-        current_user_id = get_jwt_identity()
+        # SECURITY: Verify document exists and user has access
+        document = Document.query.get_or_404(document_id)
+        # SECURITY: Use get_current_user_id() for consistent int type
+        current_user_id = get_current_user_id()
+
+        if not document.can_view(current_user_id):
+            return error_response('Access denied', 403)
 
         rating = Rating.query.filter_by(
             document_id=document_id,

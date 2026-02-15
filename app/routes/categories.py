@@ -1,5 +1,5 @@
 from flask import Blueprint, request
-from app import db, cache
+from app import db, cache, limiter
 from app.models.category import Category
 from app.models.document import Document
 from app.utils.auth import require_auth
@@ -14,6 +14,7 @@ categories_bp = Blueprint('categories', __name__)
 
 
 @categories_bp.route('/', methods=['GET'])
+@limiter.limit("60 per minute")  # SECURITY: Rate limiting
 @cache.cached(timeout=60, query_string=True)
 def get_categories():
     """Get all categories in hierarchical tree structure"""
@@ -42,6 +43,7 @@ def get_categories():
 
 
 @categories_bp.route('/<int:category_id>', methods=['GET'])
+@limiter.limit("60 per minute")  # SECURITY: Rate limiting
 def get_category(category_id):
     """Get a specific category with its details"""
     try:
@@ -203,6 +205,7 @@ def delete_category(category_id):
 
 
 @categories_bp.route('/<int:category_id>/documents', methods=['GET'])
+@limiter.limit("60 per minute")  # SECURITY: Rate limiting
 def get_category_documents(category_id):
     """Get all documents in a category"""
     try:
@@ -267,6 +270,7 @@ def move_category(category_id):
 
 
 @categories_bp.route('/stats', methods=['GET'])
+@limiter.limit("60 per minute")  # SECURITY: Rate limiting
 @cache.cached(timeout=60)
 def get_category_stats():
     """Get category statistics"""

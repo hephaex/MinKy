@@ -5,18 +5,33 @@ import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import DOMPurify from 'dompurify';
 import { logWarning } from './logger';
 
+// HTML escape function to prevent XSS before DOMPurify processing
+const escapeHtml = (text) => {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return String(text).replace(/[&<>"']/g, (m) => map[m]);
+};
+
 export const processInternalLinks = (content, navigate, documentLookup = {}) => {
   // [[link|display]] 또는 [[link]] 패턴 처리
   const linkPattern = /\[\[([^\|\]]+)(?:\|([^\]]+))?\]\]/g;
-  
+
   return content.replace(linkPattern, (match, target, displayText) => {
     const display = displayText || target;
     const docId = documentLookup[target];
-    
+    // Escape HTML to prevent attribute injection
+    const safeTarget = escapeHtml(target);
+    const safeDisplay = escapeHtml(display);
+
     if (docId) {
-      return `<a href="/documents/${docId}" class="internal-link" data-target="${target}">${display}</a>`;
+      return `<a href="/documents/${docId}" class="internal-link" data-target="${safeTarget}">${safeDisplay}</a>`;
     } else {
-      return `<span class="internal-link broken" data-target="${target}" title="문서를 찾을 수 없습니다">${display}</span>`;
+      return `<span class="internal-link broken" data-target="${safeTarget}" title="문서를 찾을 수 없습니다">${safeDisplay}</span>`;
     }
   });
 };
@@ -24,10 +39,13 @@ export const processInternalLinks = (content, navigate, documentLookup = {}) => 
 export const processHashtags = (content) => {
   // #tag 패턴 처리 (워드 경계 고려)
   const hashtagPattern = /(?:^|\s)(#([a-zA-Z가-힣][a-zA-Z0-9가-힣_-]*))/g;
-  
+
   return content.replace(hashtagPattern, (match, fullTag, tagName) => {
     const prefix = match.substring(0, match.indexOf('#'));
-    return `${prefix}<a href="/tags/${tagName}" class="hashtag">${fullTag}</a>`;
+    // Escape HTML to prevent XSS
+    const safeTagName = escapeHtml(tagName);
+    const safeFullTag = escapeHtml(fullTag);
+    return `${prefix}<a href="/tags/${safeTagName}" class="hashtag">${safeFullTag}</a>`;
   });
 };
 

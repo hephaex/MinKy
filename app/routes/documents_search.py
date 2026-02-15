@@ -2,9 +2,10 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from sqlalchemy import func, text, or_
-from app import db
+from app import db, limiter
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
+import bleach
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,12 +16,22 @@ documents_search_bp = Blueprint('documents_search', __name__)
 def _build_search_query(query_text, current_user_id, include_private):
     """Build PostgreSQL full-text search query"""
     base_query = Document.query
+
+    # SECURITY: Authorization logic for document visibility
+    # - include_private=False: Only public documents
+    # - include_private=True AND authenticated: Public + user's own documents
+    # - include_private=True AND NOT authenticated: Fall back to public only (prevent auth bypass)
     if not include_private:
         base_query = base_query.filter(Document.is_public == True)
     elif current_user_id:
+        # Authenticated user requesting private: show public + their own
         base_query = base_query.filter(
             or_(Document.is_public == True, Document.user_id == current_user_id)
         )
+    else:
+        # SECURITY: Unauthenticated user requesting include_private=True
+        # Fall back to public only to prevent authorization bypass
+        base_query = base_query.filter(Document.is_public == True)
 
     search_vector = func.to_tsvector('english',
         func.coalesce(Document.title, '') + ' ' +
@@ -36,7 +47,10 @@ def _build_search_query(query_text, current_user_id, include_private):
 
 
 def _generate_search_headline(doc, query_text):
-    """Generate highlighted search snippet"""
+    """Generate highlighted search snippet with XSS protection"""
+    # SECURITY: Only allow <mark> tags in highlight output to prevent XSS
+    HIGHLIGHT_ALLOWED_TAGS = ['mark']
+
     headline_sql = text("""
         SELECT ts_headline('english',
             COALESCE(:content, ''),
@@ -49,8 +63,12 @@ def _generate_search_headline(doc, query_text):
             headline_sql,
             {'content': doc.markdown_content or '', 'query': query_text}
         ).scalar()
-        return headline_result
-    except Exception:
+        # SECURITY: Sanitize output to only allow <mark> tags, preventing XSS
+        if headline_result:
+            return bleach.clean(headline_result, tags=HIGHLIGHT_ALLOWED_TAGS, strip=True)
+        return None
+    except Exception as e:
+        logger.debug("Headline generation failed: %s", e)
         return None
 
 
@@ -58,7 +76,8 @@ def _format_search_results(pagination_items, rank, query_text, include_highlight
     """Format search results with optional highlighting"""
     results = []
     for doc in pagination_items:
-        doc_dict = doc.to_dict()
+        # Use lite serialization for search results to avoid N+1 queries
+        doc_dict = doc.to_dict_lite()
         doc_dict['relevance_score'] = float(rank) if rank else 0.0
 
         if include_highlight:
@@ -70,6 +89,7 @@ def _format_search_results(pagination_items, rank, query_text, include_highlight
 
 
 @documents_search_bp.route('/documents/search', methods=['GET'])
+@limiter.limit("30 per minute")
 @jwt_required(optional=True)
 def search_documents_fulltext():
     """Full-text search with PostgreSQL tsvector/tsquery
@@ -101,8 +121,8 @@ def search_documents_fulltext():
     """
     try:
         query_text = request.args.get('q', '').strip()
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 10, type=int)
+        page = max(1, request.args.get('page', 1, type=int))
+        per_page = min(100, max(1, request.args.get('per_page', 10, type=int)))
         include_highlight = request.args.get('highlight', 'true').lower() == 'true'
         include_private = request.args.get('include_private', 'false').lower() == 'true'
 
@@ -110,6 +130,11 @@ def search_documents_fulltext():
 
         if not query_text:
             return jsonify({'error': 'Search query is required'}), 400
+
+        # SECURITY: Validate search query length to prevent DoS
+        MAX_SEARCH_QUERY_LENGTH = 500
+        if len(query_text) > MAX_SEARCH_QUERY_LENGTH:
+            return jsonify({'error': f'Search query too long. Maximum {MAX_SEARCH_QUERY_LENGTH} characters'}), 400
 
         ordered_query, rank = _build_search_query(query_text, current_user_id, include_private)
         pagination = ordered_query.paginate(page=page, per_page=per_page, error_out=False)
@@ -125,7 +150,8 @@ def search_documents_fulltext():
                 'has_next': pagination.has_next,
                 'has_prev': pagination.has_prev
             },
-            'search_query': query_text,
+            # SECURITY: Sanitize search query in response to prevent XSS reflection
+            'search_query': bleach.clean(query_text, tags=[], strip=True),
             'search_engine': 'postgresql_fulltext'
         })
 

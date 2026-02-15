@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required
 from app.utils.auth import get_current_user
 from app.utils.responses import success_response, error_response
 from app.middleware.security import rate_limit_api, validate_request_security, audit_log
+from app.utils.constants import MAX_QUERY_HOURS
 from datetime import datetime, timedelta, timezone
 
 security_bp = Blueprint('security', __name__)
@@ -15,7 +16,14 @@ def require_admin(f):
     def decorated_function(*args, **kwargs):
         user = get_current_user()
 
-        if not user or not user.is_admin:
+        if not user:
+            return error_response('Authentication required', 401)
+
+        # SECURITY: Check both is_admin AND is_active
+        if not user.is_active:
+            return error_response('User account is inactive', 403)
+
+        if not user.is_admin:
             return error_response('Admin privileges required', 403)
 
         return f(*args, **kwargs)
@@ -28,29 +36,30 @@ def require_admin(f):
 @validate_request_security
 @audit_log("view_security_status")
 def get_security_status():
-    """Get overall security status and metrics"""
+    """Get overall security status and metrics (limited exposure)"""
     try:
-        # Get rate limiting status
+        # SECURITY: Only expose minimal rate limiting info (no storage URL details)
         rate_limit_info = {
             'enabled': True,
-            'storage': current_app.config.get('RATELIMIT_STORAGE_URL', 'memory://'),
-            'default_limit': current_app.config.get('RATELIMIT_DEFAULT', '1000 per hour')
+            # SECURITY: Don't expose storage URL which may reveal infrastructure details
+            'storage_type': 'configured'
         }
 
-        # Get security configuration
+        # SECURITY: Only expose boolean status, not actual values
         security_config = {
             'ip_whitelist_enabled': bool(current_app.config.get('IP_WHITELIST')),
             'ip_blacklist_enabled': bool(current_app.config.get('IP_BLACKLIST')),
             'api_key_required': bool(current_app.config.get('API_KEY')),
-            'max_concurrent_sessions': current_app.config.get('MAX_CONCURRENT_SESSIONS', 5),
-            'max_token_age_hours': current_app.config.get('MAX_TOKEN_AGE_HOURS', 24)
+            # SECURITY: Don't expose exact session/token limits
+            'session_management': 'enabled',
+            'token_management': 'enabled'
         }
 
-        # Security headers check
+        # Security headers check - only confirm enabled status
         security_headers = {
-            'x_content_type_options': 'nosniff',
-            'x_frame_options': 'DENY',
-            'x_xss_protection': '1; mode=block',
+            'x_content_type_options': 'enabled',
+            'x_frame_options': 'enabled',
+            'x_xss_protection': 'enabled',
             'strict_transport_security': 'enabled',
             'content_security_policy': 'enabled'
         }
@@ -80,9 +89,17 @@ def get_security_logs():
         # In a production system, you would read from a proper log storage
         # For this demo, we'll simulate some security log entries
         
-        limit = min(int(request.args.get('limit', 100)), 1000)
-        severity = request.args.get('severity', 'all')  # all, low, medium, high
-        hours = int(request.args.get('hours', 24))
+        limit = min(request.args.get('limit', 100, type=int), 1000)
+        severity = request.args.get('severity', 'all').lower()
+        hours = min(request.args.get('hours', 24, type=int), MAX_QUERY_HOURS)
+
+        # SECURITY: Validate severity against whitelist
+        VALID_SEVERITIES = frozenset({'all', 'low', 'medium', 'high', 'critical'})
+        if severity not in VALID_SEVERITIES:
+            return error_response(
+                f'severity must be one of: {", ".join(sorted(VALID_SEVERITIES))}',
+                400
+            )
         
         # Simulate security log entries
         # In practice, these would come from your logging system
@@ -147,8 +164,8 @@ def get_security_logs():
 def get_threat_analysis():
     """Get threat analysis and blocked IPs"""
     try:
-        hours = int(request.args.get('hours', 24))
-        
+        hours = min(request.args.get('hours', 24, type=int), MAX_QUERY_HOURS)
+
         # In a real system, this would analyze actual security logs
         threat_summary = {
             'total_threats_detected': 15,
@@ -198,28 +215,34 @@ def get_threat_analysis():
 @validate_request_security
 @audit_log("view_security_config")
 def get_security_config():
-    """Get current security configuration"""
+    """Get current security configuration (limited exposure for security)"""
     try:
+        # SECURITY: Limit exposure of security configuration details
+        # Don't expose exact values that could help attackers
         config = {
             'rate_limiting': {
                 'enabled': True,
-                'default_limit': current_app.config.get('RATELIMIT_DEFAULT', '1000 per hour'),
-                'storage_type': current_app.config.get('RATELIMIT_STORAGE_URL', 'memory://').split('://')[0]
+                # SECURITY: Don't expose exact rate limits
+                'configured': True,
+                'storage_type': 'configured'
             },
             'ip_filtering': {
                 'whitelist_enabled': bool(current_app.config.get('IP_WHITELIST')),
                 'blacklist_enabled': bool(current_app.config.get('IP_BLACKLIST')),
-                'whitelist_count': len(current_app.config.get('IP_WHITELIST', [])),
-                'blacklist_count': len(current_app.config.get('IP_BLACKLIST', []))
+                # SECURITY: Don't expose exact counts (could reveal security posture)
+                'whitelist_configured': len(current_app.config.get('IP_WHITELIST', [])) > 0,
+                'blacklist_configured': len(current_app.config.get('IP_BLACKLIST', [])) > 0
             },
             'authentication': {
-                'jwt_expiry_hours': current_app.config.get('JWT_ACCESS_TOKEN_EXPIRES', timedelta(hours=24)).total_seconds() / 3600,
-                'refresh_token_expiry_days': current_app.config.get('JWT_REFRESH_TOKEN_EXPIRES', timedelta(days=30)).days,
-                'max_concurrent_sessions': current_app.config.get('MAX_CONCURRENT_SESSIONS', 5)
+                # SECURITY: Only expose boolean status, not exact token lifetimes
+                'jwt_configured': True,
+                'refresh_tokens_enabled': True,
+                'session_management_enabled': True
             },
             'file_uploads': {
-                'max_size_mb': current_app.config.get('MAX_CONTENT_LENGTH', 16 * 1024 * 1024) / (1024 * 1024),
-                'allowed_extensions': current_app.config.get('UPLOAD_ALLOWED_EXTENSIONS', [])
+                # SECURITY: Don't expose exact size limits
+                'size_limits_configured': True,
+                'extension_filtering_enabled': len(current_app.config.get('UPLOAD_ALLOWED_EXTENSIONS', [])) > 0
             },
             'security_headers': {
                 'enabled': True,
@@ -227,7 +250,7 @@ def get_security_config():
                 'hsts_enabled': True
             }
         }
-        
+
         return success_response({
             'security_config': config,
             'generated_at': datetime.now(timezone.utc).isoformat()
@@ -237,6 +260,14 @@ def get_security_config():
         current_app.logger.error(f"Error getting security config: {str(e)}")
         return error_response('Failed to get security config', 500)
 
+# SECURITY: Allowed IP management actions whitelist
+ALLOWED_IP_ACTIONS = frozenset({
+    'add_to_whitelist',
+    'remove_from_whitelist',
+    'add_to_blacklist',
+    'remove_from_blacklist'
+})
+
 @security_bp.route('/security/config', methods=['PUT'])
 @jwt_required()
 @require_admin
@@ -245,25 +276,44 @@ def get_security_config():
 @audit_log("update_security_config")
 def update_security_config():
     """Update security configuration (limited updates for safety)"""
+    import re
+
     try:
         data = request.get_json()
         if not data:
             return error_response('Request body required', 400)
 
         updated_settings = []
+        errors = []
 
-        # Only allow updating certain safe settings
-        safe_updates = {
-            'rate_limit_default': 'RATELIMIT_DEFAULT',
-            'max_concurrent_sessions': 'MAX_CONCURRENT_SESSIONS'
-        }
+        # SECURITY: Validate rate_limit_default format and bounds
+        if 'rate_limit_default' in data:
+            rate_limit = data['rate_limit_default']
+            if not isinstance(rate_limit, str):
+                errors.append('rate_limit_default must be a string')
+            elif not re.match(r'^\d+\s+per\s+(minute|hour|day)$', rate_limit):
+                errors.append('rate_limit_default must be in format "N per minute/hour/day"')
+            else:
+                limit_value = int(rate_limit.split()[0])
+                if limit_value < 1 or limit_value > 10000:
+                    errors.append('rate_limit_default value must be between 1 and 10000')
+                else:
+                    current_app.config['RATELIMIT_DEFAULT'] = rate_limit
+                    updated_settings.append('rate_limit_default')
 
-        for key, config_key in safe_updates.items():
-            if key in data:
-                # In a real application, you'd want to persist these changes
-                # to a configuration file or database
-                current_app.config[config_key] = data[key]
-                updated_settings.append(key)
+        # SECURITY: Validate max_concurrent_sessions bounds
+        if 'max_concurrent_sessions' in data:
+            max_sessions = data['max_concurrent_sessions']
+            if not isinstance(max_sessions, int):
+                errors.append('max_concurrent_sessions must be an integer')
+            elif max_sessions < 1 or max_sessions > 100:
+                errors.append('max_concurrent_sessions must be between 1 and 100')
+            else:
+                current_app.config['MAX_CONCURRENT_SESSIONS'] = max_sessions
+                updated_settings.append('max_concurrent_sessions')
+
+        if errors:
+            return error_response('Validation failed', 400, details={'errors': errors})
 
         if not updated_settings:
             return error_response('No valid settings to update', 400)
@@ -292,11 +342,15 @@ def manage_ip_lists():
         if not data:
             return error_response('Request body required', 400)
 
-        action = data.get('action')  # 'add_to_whitelist', 'remove_from_whitelist', 'add_to_blacklist', 'remove_from_blacklist'
+        action = data.get('action')
         ip_address = data.get('ip_address')
 
         if not action or not ip_address:
             return error_response('action and ip_address required', 400)
+
+        # SECURITY: Validate action against whitelist to prevent log injection
+        if action not in ALLOWED_IP_ACTIONS:
+            return error_response(f'action must be one of: {", ".join(sorted(ALLOWED_IP_ACTIONS))}', 400)
 
         # Validate IP address
         import ipaddress

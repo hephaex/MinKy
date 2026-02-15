@@ -28,11 +28,15 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
   useEffect(() => {
     const loadOCRInfo = async () => {
       try {
-        const statusResponse = await fetch('/api/ocr/status');
+        // SECURITY: Include auth headers for consistency
+        const token = authService.getToken();
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+        const statusResponse = await fetch('/api/ocr/status', { headers });
         const statusData = await statusResponse.json();
         setOcrStatus(statusData.status);
 
-        const langResponse = await fetch('/api/ocr/languages');
+        const langResponse = await fetch('/api/ocr/languages', { headers });
         const langData = await langResponse.json();
         if (langData.success) {
           setSupportedLanguages(langData.languages);

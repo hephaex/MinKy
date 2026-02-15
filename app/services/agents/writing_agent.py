@@ -8,6 +8,24 @@ from .base_agent import BaseAgent, AgentTask, AgentType, TaskStatus
 
 logger = logging.getLogger(__name__)
 
+# SECURITY: Patterns that may indicate prompt injection attempts
+PROMPT_INJECTION_PATTERNS = [
+    r'ignore\s+(previous|above|all)\s+instructions',
+    r'disregard\s+(previous|above|all)',
+    r'forget\s+(previous|above|all)',
+    r'system\s*:\s*',
+    r'<\s*system\s*>',
+    r'\[\s*INST\s*\]',
+    r'</?\s*prompt\s*>',
+    r'new\s+instructions?\s*:',
+    r'override\s+system',
+    r'you\s+are\s+now\s+a',
+]
+
+# SECURITY: Maximum input lengths to prevent abuse
+MAX_CONTENT_LENGTH = 50000
+MAX_INSTRUCTIONS_LENGTH = 2000
+
 
 @register_agent('writing')
 class WritingAgent(BaseAgent):
@@ -52,6 +70,39 @@ Output Format:
         """Return the writing agent system prompt."""
         return self.SYSTEM_PROMPT
 
+    # SECURITY: Allowed values whitelists
+    ALLOWED_TASK_TYPES = frozenset({'generate', 'edit', 'rewrite', 'expand', 'condense'})
+    ALLOWED_TONES = frozenset({'professional', 'casual', 'academic', 'formal', 'friendly', 'technical'})
+    ALLOWED_FORMATS = frozenset({'prose', 'bullet points', 'numbered list', 'article', 'summary'})
+    ALLOWED_LENGTHS = frozenset({'short', 'medium', 'long'})
+
+    def _sanitize_input(self, text: str, max_length: int, field_name: str) -> str:
+        """SECURITY: Sanitize user input to prevent prompt injection.
+
+        - Truncates to max_length
+        - Detects suspicious patterns
+        - Removes control characters
+        """
+        if not isinstance(text, str):
+            return ''
+
+        # Truncate to max length
+        text = text[:max_length]
+
+        # Remove control characters (except newlines and tabs)
+        text = ''.join(c for c in text if c.isprintable() or c in '\n\t')
+
+        # Check for prompt injection patterns
+        for pattern in PROMPT_INJECTION_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                logger.warning(
+                    f"SECURITY: Potential prompt injection detected in {field_name}"
+                )
+                # Remove the suspicious pattern
+                text = re.sub(pattern, '[REDACTED]', text, flags=re.IGNORECASE)
+
+        return text
+
     def execute(self, task: AgentTask) -> AgentTask:
         """Execute a writing task.
 
@@ -70,13 +121,58 @@ Output Format:
 
         try:
             input_data = task.input_data
-            content = input_data.get('content', '')
+
+            # SECURITY: Validate and sanitize all user inputs
+            content = self._sanitize_input(
+                input_data.get('content', ''),
+                MAX_CONTENT_LENGTH,
+                'content'
+            )
+
             task_type = input_data.get('task_type', 'generate')
-            instructions = input_data.get('instructions', '')
+            # SECURITY: Validate task_type against whitelist
+            if task_type not in self.ALLOWED_TASK_TYPES:
+                task.mark_failed(f"Invalid task_type. Must be one of: {', '.join(sorted(self.ALLOWED_TASK_TYPES))}")
+                return task
+
+            instructions = self._sanitize_input(
+                input_data.get('instructions', ''),
+                MAX_INSTRUCTIONS_LENGTH,
+                'instructions'
+            )
+
+            # SECURITY: Validate tone against whitelist
             tone = input_data.get('tone', 'professional')
+            if tone not in self.ALLOWED_TONES:
+                tone = 'professional'  # Safe default
+
+            # SECURITY: Validate format against whitelist
             output_format = input_data.get('format', 'prose')
+            if output_format not in self.ALLOWED_FORMATS:
+                output_format = 'prose'  # Safe default
+
+            # SECURITY: Validate length
             length = input_data.get('length', 'medium')
+            if length not in self.ALLOWED_LENGTHS:
+                # Check if it's a valid word count
+                try:
+                    word_count = int(length)
+                    if word_count < 50 or word_count > 5000:
+                        length = 'medium'
+                except (ValueError, TypeError):
+                    length = 'medium'
+
             previous_output = input_data.get('previous_output', {})
+            # SECURITY: Sanitize previous output content
+            if isinstance(previous_output, dict) and 'content' in previous_output:
+                previous_output = {
+                    **previous_output,
+                    'content': self._sanitize_input(
+                        str(previous_output.get('content', ''))[:500],
+                        500,
+                        'previous_output.content'
+                    )
+                }
 
             # Build the writing prompt
             prompt = self._build_prompt(
@@ -123,8 +219,9 @@ Output Format:
             task.mark_completed(result)
 
         except Exception as e:
-            logger.error(f"Writing agent execution failed: {e}")
-            task.mark_failed(str(e))
+            # SECURITY: Log full error internally, return generic message to user
+            logger.error(f"Writing agent execution failed: {e}", exc_info=True)
+            task.mark_failed("Writing task failed. Please try again.")
 
         return task
 

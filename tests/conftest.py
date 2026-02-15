@@ -3,13 +3,16 @@ Pytest configuration for Minky tests.
 Sets up the test environment before importing the app.
 """
 import os
+import secrets
 import pytest
 
 # Set test environment variables BEFORE importing the app
 os.environ['FLASK_ENV'] = 'testing'
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
-os.environ['SECRET_KEY'] = 'test-secret-key-for-testing-only-12345'
-os.environ['JWT_SECRET_KEY'] = 'test-jwt-secret-key-for-testing-only'
+# Use randomly generated secrets for tests to avoid weak secret patterns
+# being copied to production. Prefix with 'test-' to ensure detection if misused.
+os.environ['SECRET_KEY'] = f'test-{secrets.token_hex(32)}'
+os.environ['JWT_SECRET_KEY'] = f'test-{secrets.token_hex(32)}'
 
 from app import create_app, db
 from app.models.document import Document
@@ -66,10 +69,11 @@ def sample_document(app):
 def sample_user(app):
     """Create a sample user in the database."""
     with app.app_context():
+        # SECURITY: Use password that meets all requirements (12+ chars, special char)
         user = User(
             username='testuser',
             email='test@example.com',
-            password='TestPassword123'
+            password='TestPassword123!'  # Meets: 12+ chars, upper, lower, digit, special
         )
         user.is_active = True
         db.session.add(user)
@@ -87,6 +91,14 @@ def auth_headers(app, sample_user):
         # PyJWT 2.x requires string identity
         access_token = create_access_token(identity=str(sample_user))
         return {'Authorization': f'Bearer {access_token}'}
+
+
+@pytest.fixture
+def auth_token(app, sample_user):
+    """Get authentication token for API requests (used by test_security.py)."""
+    with app.app_context():
+        from flask_jwt_extended import create_access_token
+        return create_access_token(identity=str(sample_user))
 
 
 @pytest.fixture

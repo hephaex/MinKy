@@ -1,12 +1,7 @@
-from datetime import datetime, timezone
 from app import db
+from app.utils.datetime_utils import utc_now
 import hashlib
 import difflib
-
-
-def utc_now():
-    """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
 
 
 class DocumentVersion(db.Model):
@@ -102,15 +97,41 @@ class DocumentVersion(db.Model):
             'has_changes': bool(title_diff or content_diff)
         }
     
-    def restore_to_document(self):
-        """Restore this version to the document"""
+    def restore_to_document(self, user_id: int):
+        """Restore this version to the document
+
+        Args:
+            user_id: The user attempting the restore (REQUIRED for authorization)
+
+        Raises:
+            ValueError: If user_id is not provided
+            PermissionError: If user is not authorized to edit the document
+        """
+        # SECURITY: Always require user_id for authorization
+        if user_id is None:
+            raise ValueError("user_id is required for authorization")
+        if not self.document.can_edit(user_id):
+            raise PermissionError("User is not authorized to edit this document")
+
         self.document.title = self.title
         self.document.markdown_content = self.markdown_content
         self.document.html_content = self.html_content
         self.document.author = self.author
-        self.document.updated_at = datetime.now(timezone.utc)
+        self.document.updated_at = utc_now()
     
     def to_dict(self, include_content=True):
+        """Serialize version to dictionary.
+
+        SECURITY: Creator info limited to prevent PII exposure.
+        """
+        # SECURITY: Only expose minimal creator info (id and username)
+        creator_info = None
+        if self.creator:
+            creator_info = {
+                'id': self.creator.id,
+                'username': self.creator.username
+            }
+
         data = {
             'id': self.id,
             'document_id': self.document_id,
@@ -121,15 +142,15 @@ class DocumentVersion(db.Model):
             'change_summary': self.change_summary,
             'created_by': self.created_by,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'creator': self.creator.to_dict() if self.creator else None
+            'creator': creator_info
         }
-        
+
         if include_content:
             data.update({
                 'markdown_content': self.markdown_content,
                 'html_content': self.html_content
             })
-        
+
         return data
     
     def __repr__(self):

@@ -1,18 +1,22 @@
+import os
+import secrets
 from app.models.template import DocumentTemplate
 from app.models.user import User
 from app import db
 
 def create_default_templates():
     """Create default templates for the system"""
-    
+
     # Get system user (first admin user) or create a system user
     system_user = User.query.filter_by(is_admin=True).first()
     if not system_user:
         # Create a system user if no admin exists
+        # Use environment variable or generate secure random password
+        system_password = os.environ.get('SYSTEM_USER_PASSWORD') or secrets.token_urlsafe(32)
         system_user = User(
             username='system',
             email='system@minky.local',
-            password='system',
+            password=system_password,
             full_name='System User'
         )
         system_user.is_admin = True

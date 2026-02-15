@@ -8,6 +8,7 @@ from flask_jwt_extended import jwt_required
 from app.services.document_clustering_service import document_clustering_service
 from app.models.document import Document
 from app.utils.auth import get_optional_user_id
+from app.utils.constants import MAX_SIMILAR_DOCUMENTS
 from app import limiter
 import logging
 
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 clustering_bp = Blueprint('clustering', __name__)
 
 @clustering_bp.route('/clustering/status', methods=['GET'])
+@limiter.limit("60 per minute")
 def get_clustering_status() -> Response | tuple[Response, int]:
     """
     Get document clustering service status and capabilities
@@ -68,7 +70,41 @@ def cluster_documents() -> Response | tuple[Response, int]:
         scope = data.get('scope', 'user')
         max_documents = data.get('max_documents', 100)
         document_ids = data.get('document_ids')  # Specific documents to cluster
-        
+
+        # SECURITY: Validate n_clusters to prevent resource exhaustion
+        MAX_CLUSTERS = 100
+        if n_clusters is not None:
+            if not isinstance(n_clusters, int) or n_clusters < 2 or n_clusters > MAX_CLUSTERS:
+                return jsonify({
+                    'success': False,
+                    'error': f'n_clusters must be an integer between 2 and {MAX_CLUSTERS}'
+                }), 400
+
+        # SECURITY: Validate max_documents to prevent resource exhaustion
+        MAX_CLUSTERING_DOCUMENTS = 500
+        max_documents = min(max_documents if isinstance(max_documents, int) else 100, MAX_CLUSTERING_DOCUMENTS)
+        if max_documents < 1:
+            max_documents = 100
+
+        # SECURITY: Validate scope
+        ALLOWED_SCOPES = ['user', 'public', 'all']
+        if scope not in ALLOWED_SCOPES:
+            scope = 'user'
+
+        # SECURITY: Validate document_ids array
+        MAX_DOCUMENT_IDS = 200
+        if document_ids:
+            if not isinstance(document_ids, list) or len(document_ids) > MAX_DOCUMENT_IDS:
+                return jsonify({
+                    'success': False,
+                    'error': f'document_ids must be an array with maximum {MAX_DOCUMENT_IDS} items'
+                }), 400
+            if not all(isinstance(id, int) and id > 0 for id in document_ids):
+                return jsonify({
+                    'success': False,
+                    'error': 'All document_ids must be positive integers'
+                }), 400
+
         # Validate method
         if method not in ['kmeans', 'hierarchical', 'dbscan', 'auto']:
             return jsonify({
@@ -78,22 +114,30 @@ def cluster_documents() -> Response | tuple[Response, int]:
         
         # Get documents to cluster
         if document_ids:
-            # Cluster specific documents
+            # Cluster specific documents - filter by access permissions
             documents = Document.query.filter(Document.id.in_(document_ids)).all()
+            documents = _filter_accessible_documents(documents, user_id)
         else:
-            # Cluster based on scope
+            # Cluster based on scope with proper authorization
+            from sqlalchemy import or_
             query = Document.query
             if scope == 'user' and user_id:
                 query = query.filter(Document.user_id == user_id)
             elif scope == 'public':
                 query = query.filter(Document.is_public == True)
+            elif scope == 'all':
+                # SECURITY: 'all' means accessible documents (public + user's own), not ALL in DB
+                if user_id:
+                    query = query.filter(or_(Document.is_public == True, Document.user_id == user_id))
+                else:
+                    query = query.filter(Document.is_public == True)
             else:
-                # Default behavior
+                # Default behavior (unknown scope falls back to user's documents or public)
                 if user_id:
                     query = query.filter(Document.user_id == user_id)
                 else:
                     query = query.filter(Document.is_public == True)
-            
+
             documents = query.limit(max_documents).all()
         
         if len(documents) < 3:
@@ -130,6 +174,7 @@ def cluster_documents() -> Response | tuple[Response, int]:
         }), 500
 
 @clustering_bp.route('/clustering/similar/<int:document_id>', methods=['GET'])
+@limiter.limit("30 per minute")
 @jwt_required(optional=True)
 def find_similar_documents(document_id: int) -> Response | tuple[Response, int]:
     """
@@ -154,24 +199,54 @@ def find_similar_documents(document_id: int) -> Response | tuple[Response, int]:
                 'error': 'Access denied'
             }), 403
         
-        # Get query parameters
-        similarity_threshold = float(request.args.get('threshold', 0.1))
-        max_results = int(request.args.get('max_results', 10))
+        # Get query parameters with validation
+        try:
+            similarity_threshold = float(request.args.get('threshold', 0.1))
+        except (ValueError, TypeError):
+            similarity_threshold = 0.1
+
+        # SECURITY: Validate similarity_threshold range
+        if similarity_threshold < 0.0 or similarity_threshold > 1.0:
+            return jsonify({
+                'success': False,
+                'error': 'threshold must be between 0.0 and 1.0'
+            }), 400
+
+        max_results = min(request.args.get('max_results', 10, type=int), MAX_SIMILAR_DOCUMENTS)
         scope = request.args.get('scope', 'all')
+
+        # SECURITY: Validate scope
+        if scope not in ['user', 'public', 'all']:
+            scope = 'all'
         
-        # Get candidate documents
-        candidate_documents = None
+        # SECURITY: Get candidate documents with proper authorization
+        # MAX_CANDIDATE_DOCUMENTS prevents resource exhaustion
+        MAX_CANDIDATE_DOCUMENTS = 1000
         if scope == 'user' and user_id:
             candidate_documents = Document.query.filter(
                 Document.user_id == user_id,
                 Document.id != document_id
-            ).all()
+            ).limit(MAX_CANDIDATE_DOCUMENTS).all()
         elif scope == 'public':
             candidate_documents = Document.query.filter(
                 Document.is_public == True,
                 Document.id != document_id
-            ).all()
-        # If scope == 'all', candidate_documents stays None (use all accessible documents)
+            ).limit(MAX_CANDIDATE_DOCUMENTS).all()
+        else:
+            # SECURITY: scope='all' means accessible documents only (public + user's own)
+            # NOT all documents in the database (which would be IDOR)
+            from sqlalchemy import or_
+            if user_id:
+                candidate_documents = Document.query.filter(
+                    Document.id != document_id,
+                    or_(Document.is_public == True, Document.user_id == user_id)
+                ).limit(MAX_CANDIDATE_DOCUMENTS).all()
+            else:
+                # Unauthenticated: only public documents
+                candidate_documents = Document.query.filter(
+                    Document.is_public == True,
+                    Document.id != document_id
+                ).limit(MAX_CANDIDATE_DOCUMENTS).all()
         
         # Find similar documents
         similarity_results = document_clustering_service.find_similar_documents(
@@ -221,20 +296,51 @@ def detect_duplicates() -> Response | tuple[Response, int]:
         similarity_threshold = data.get('threshold', 0.8)
         scope = data.get('scope', 'user')
         max_documents = data.get('max_documents', 500)
-        
-        # Get documents to check for duplicates
+
+        # SECURITY: Validate similarity_threshold range
+        try:
+            similarity_threshold = float(similarity_threshold)
+        except (ValueError, TypeError):
+            similarity_threshold = 0.8
+
+        if similarity_threshold < 0.0 or similarity_threshold > 1.0:
+            return jsonify({
+                'success': False,
+                'error': 'threshold must be between 0.0 and 1.0'
+            }), 400
+
+        # SECURITY: Validate scope
+        if scope not in ['user', 'public', 'all']:
+            scope = 'user'
+
+        # SECURITY: Validate max_documents to prevent resource exhaustion
+        MAX_DUPLICATE_DOCUMENTS = 500
+        try:
+            max_documents = int(max_documents)
+        except (ValueError, TypeError):
+            max_documents = 500
+        max_documents = min(max(1, max_documents), MAX_DUPLICATE_DOCUMENTS)
+
+        # Get documents to check for duplicates with proper authorization
+        from sqlalchemy import or_
         query = Document.query
         if scope == 'user' and user_id:
             query = query.filter(Document.user_id == user_id)
         elif scope == 'public':
             query = query.filter(Document.is_public == True)
+        elif scope == 'all':
+            # SECURITY: 'all' means accessible documents (public + user's own), not ALL in DB
+            if user_id:
+                query = query.filter(or_(Document.is_public == True, Document.user_id == user_id))
+            else:
+                query = query.filter(Document.is_public == True)
         else:
-            # Default behavior
+            # Default behavior (unknown scope falls back to user's documents or public)
             if user_id:
                 query = query.filter(Document.user_id == user_id)
             else:
                 query = query.filter(Document.is_public == True)
-        
+
         documents = query.limit(max_documents).all()
         
         if len(documents) < 2:
@@ -352,6 +458,7 @@ def _extract_document_metadata(documents: list[Document]) -> list[dict]:
 
 
 @clustering_bp.route('/clustering/batch-similarity', methods=['POST'])
+@limiter.limit("10 per hour")
 @jwt_required(optional=True)
 def batch_similarity_analysis() -> Response | tuple[Response, int]:
     """
@@ -370,10 +477,43 @@ def batch_similarity_analysis() -> Response | tuple[Response, int]:
         document_ids = data.get('document_ids', [])
         similarity_threshold = data.get('threshold', 0.1)
 
+        # SECURITY: Validate similarity_threshold range
+        try:
+            similarity_threshold = float(similarity_threshold)
+        except (ValueError, TypeError):
+            similarity_threshold = 0.1
+
+        if similarity_threshold < 0.0 or similarity_threshold > 1.0:
+            return jsonify({
+                'success': False,
+                'error': 'threshold must be between 0.0 and 1.0'
+            }), 400
+
+        # SECURITY: Validate document_ids array size
+        MAX_BATCH_DOCUMENTS = 100
+        if len(document_ids) > MAX_BATCH_DOCUMENTS:
+            return jsonify({
+                'success': False,
+                'error': f'Maximum {MAX_BATCH_DOCUMENTS} documents allowed for batch analysis'
+            }), 400
+
         if not document_ids or len(document_ids) < 2:
             return jsonify({
                 'success': False,
                 'error': 'At least 2 document IDs required'
+            }), 400
+
+        # SECURITY: Validate document_ids are positive integers within valid range
+        MAX_DOCUMENT_ID = 2**31 - 1  # 32-bit signed integer max
+        if not isinstance(document_ids, list):
+            return jsonify({
+                'success': False,
+                'error': 'document_ids must be an array'
+            }), 400
+        if not all(isinstance(id, int) and 0 < id <= MAX_DOCUMENT_ID for id in document_ids):
+            return jsonify({
+                'success': False,
+                'error': 'All document_ids must be positive integers within valid range'
             }), 400
 
         documents = Document.query.filter(Document.id.in_(document_ids)).all()
@@ -406,6 +546,7 @@ def batch_similarity_analysis() -> Response | tuple[Response, int]:
         }), 500
 
 @clustering_bp.route('/clustering/recommendations/<int:document_id>', methods=['GET'])
+@limiter.limit("30 per minute")
 @jwt_required(optional=True)
 def get_clustering_recommendations(document_id: int) -> Response | tuple[Response, int]:
     """
@@ -430,9 +571,25 @@ def get_clustering_recommendations(document_id: int) -> Response | tuple[Respons
                 'error': 'Access denied'
             }), 403
         
+        # SECURITY: Get candidate documents with proper authorization
+        # This prevents IDOR by ensuring only accessible documents are considered
+        from sqlalchemy import or_
+        MAX_CANDIDATE_DOCUMENTS = 1000
+        if user_id:
+            candidate_documents = Document.query.filter(
+                Document.id != document_id,
+                or_(Document.is_public == True, Document.user_id == user_id)
+            ).limit(MAX_CANDIDATE_DOCUMENTS).all()
+        else:
+            candidate_documents = Document.query.filter(
+                Document.is_public == True,
+                Document.id != document_id
+            ).limit(MAX_CANDIDATE_DOCUMENTS).all()
+
         # Get similar documents for recommendations
         similarity_results = document_clustering_service.find_similar_documents(
             target_document=document,
+            candidate_documents=candidate_documents,
             similarity_threshold=0.1,
             max_results=20
         )

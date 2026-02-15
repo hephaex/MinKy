@@ -1,7 +1,8 @@
 """File upload, export, and import endpoints for documents."""
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
-from app import db
+from werkzeug.utils import secure_filename
+from app import db, limiter
 from app.models.document import Document
 from app.utils.auth import get_current_user_id
 from app.utils.obsidian_parser import ObsidianParser
@@ -68,7 +69,8 @@ def extract_author_from_frontmatter(frontmatter):
 
 
 @documents_import_bp.route('/documents/upload', methods=['POST'])
-@jwt_required(optional=True)
+@limiter.limit("10 per hour")
+@jwt_required()
 def upload_markdown_file():
     """Upload a markdown file and create a document"""
     try:
@@ -84,8 +86,19 @@ def upload_markdown_file():
         if not file.filename.lower().endswith('.md'):
             return jsonify({'error': 'Only markdown files (.md) are allowed'}), 400
 
+        # SECURITY: Check file size before reading into memory to prevent DoS
+        MAX_MARKDOWN_SIZE = 10 * 1024 * 1024  # 10MB
+        file.seek(0, 2)  # Seek to end
+        file_size = file.tell()
+        file.seek(0)  # Reset position
+
+        if file_size > MAX_MARKDOWN_SIZE:
+            return jsonify({'error': f'File too large. Maximum size is {MAX_MARKDOWN_SIZE // (1024*1024)}MB'}), 413
+
         content = file.read().decode('utf-8')
-        title = file.filename[:-3] if file.filename.endswith('.md') else file.filename
+        # SECURITY: Use secure_filename to prevent path traversal in title extraction
+        safe_filename = secure_filename(file.filename)
+        title = safe_filename[:-3] if safe_filename.endswith('.md') else safe_filename
 
         try:
             obsidian_data = process_obsidian_content(content, backup_dir="backup")
@@ -160,14 +173,25 @@ def upload_markdown_file():
 
 
 @documents_import_bp.route('/documents/export', methods=['POST'])
-@jwt_required(optional=True)
+@limiter.limit("5 per hour")
+@jwt_required()
 def export_all_documents_to_backup():
-    """Export all documents to backup folder"""
+    """Export all documents to backup folder (admin only)"""
     try:
+        # SECURITY: Require admin privileges for bulk export of ALL documents
+        from app.utils.auth import get_current_user
+        user = get_current_user()
+        if not user or not user.is_active:
+            return jsonify({'error': 'Authentication required'}), 401
+        if not user.is_admin:
+            return jsonify({'error': 'Admin privileges required'}), 403
+
         data = request.get_json() or {}
         use_short_filename = data.get('short_filename', False)
 
         results = export_all_documents(use_short_filename=use_short_filename)
+
+        logger.info(f"Admin {user.id} exported all documents: {results['exported']} documents")
 
         return jsonify({
             'message': f'Export completed: {results["exported"]} documents exported',
@@ -180,10 +204,14 @@ def export_all_documents_to_backup():
 
 
 @documents_import_bp.route('/documents/import', methods=['POST'])
-@jwt_required(optional=True)
+@limiter.limit("10 per hour")
+@jwt_required()
 def import_document():
     """Import various document formats and convert to Markdown"""
     try:
+        # SECURITY: Get current user for document ownership
+        current_user_id = get_current_user_id()
+
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
 
@@ -192,14 +220,16 @@ def import_document():
             return jsonify({'error': 'No file selected'}), 400
 
         if not document_import_service.is_supported_file(file):
+            # SECURITY: Don't expose MIME type in error message to prevent information disclosure
             return jsonify({
-                'error': f'Unsupported file type: {file.mimetype}',
-                'supported_types': list(document_import_service.supported_types.keys())
+                'error': 'Unsupported file type',
+                'supported_extensions': ['.docx', '.pptx', '.xlsx', '.pdf', '.html', '.txt', '.csv', '.json', '.xml']
             }), 400
 
         auto_tag = request.form.get('auto_tag', 'true').lower() == 'true'
 
-        result = document_import_service.import_file(file, auto_tag=auto_tag)
+        # SECURITY: Pass user_id to ensure document ownership
+        result = document_import_service.import_file(file, user_id=current_user_id, auto_tag=auto_tag)
 
         if result['success']:
             return jsonify(result), 201
@@ -216,8 +246,10 @@ def import_document():
 
 
 @documents_import_bp.route('/documents/import/supported-types', methods=['GET'])
+@limiter.limit("60 per minute")  # SECURITY: Rate limiting
+@jwt_required()  # SECURITY: Require authentication for API endpoint
 def get_supported_import_types():
-    """Get list of supported file types for import"""
+    """Get list of supported file types for import (authenticated)"""
     return jsonify({
         'supported_types': document_import_service.supported_types,
         'extensions': ['.docx', '.pptx', '.xlsx', '.pdf', '.html', '.htm', '.txt',

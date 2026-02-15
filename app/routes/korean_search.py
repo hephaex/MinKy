@@ -12,6 +12,7 @@ from app.middleware.security import rate_limit_api, rate_limit_search, validate_
 from marshmallow import Schema, fields, ValidationError
 from sqlalchemy import or_
 from datetime import datetime, timezone
+import bleach
 
 korean_search_bp = Blueprint('korean_search', __name__)
 
@@ -44,7 +45,15 @@ def korean_text_search():
     try:
         validated_data = schema.load(data)
     except ValidationError as e:
-        return jsonify({'error': 'Invalid data', 'details': e.messages}), 400
+        # SECURITY: Return generic error in production to avoid exposing field names
+        if current_app.config.get('DEBUG'):
+            return jsonify({'error': 'Invalid data', 'details': e.messages}), 400
+        return jsonify({'error': 'Invalid request parameters'}), 400
+
+    # SECURITY: Validate query length to prevent DoS
+    query_text = validated_data.get('query', '')
+    if len(query_text) > MAX_SEARCH_QUERY_LENGTH:
+        return jsonify({'error': 'Query too long', 'max_length': MAX_SEARCH_QUERY_LENGTH}), 400
     
     use_opensearch = validated_data['use_opensearch']
 
@@ -140,7 +149,11 @@ def _search_with_postgresql(search_params: dict, user_id: Optional[int] = None) 
     if detected_language == 'korean':
         # 한국어 토큰 기반 검색
         query_tokens = korean_processor.tokenize(query)
+        # SECURITY: Limit tokens to prevent ReDoS via excessive ILIKE conditions
+        MAX_SEARCH_TOKENS = 20
         if query_tokens:
+            # Truncate to prevent performance degradation
+            query_tokens = query_tokens[:MAX_SEARCH_TOKENS]
             search_conditions = []
             for token in query_tokens:
                 token_escaped = escape_like(token)
@@ -148,7 +161,7 @@ def _search_with_postgresql(search_params: dict, user_id: Optional[int] = None) 
                     Document.title.ilike(f"%{token_escaped}%"),
                     Document.markdown_content.ilike(f"%{token_escaped}%")
                 ])
-            
+
             if search_conditions:
                 base_query = base_query.filter(or_(*search_conditions))
     else:
@@ -165,24 +178,34 @@ def _search_with_postgresql(search_params: dict, user_id: Optional[int] = None) 
         page=page, per_page=per_page, error_out=False
     )
     
-    # 결과 처리
+    # 결과 처리 (to_dict_lite 사용으로 N+1 쿼리 방지)
     documents = []
     for doc in paginated_results.items:
-        doc_dict = doc.to_dict()
-        
+        doc_dict = doc.to_dict_lite()
+
         # 검색어 하이라이트
+        # SECURITY: Sanitize highlighted content to prevent XSS
+        # Only allow <mark> tags for highlighting, escape everything else
+        ALLOWED_HIGHLIGHT_TAGS = ['mark']
         if detected_language == 'korean':
-            doc_dict['highlighted_content'] = korean_processor.highlight_korean_text(
+            raw_highlighted = korean_processor.highlight_korean_text(
                 doc.markdown_content, query
             )
+            doc_dict['highlighted_content'] = bleach.clean(
+                raw_highlighted,
+                tags=ALLOWED_HIGHLIGHT_TAGS,
+                strip=True
+            )
         else:
-            # 기본 하이라이트
+            # 기본 하이라이트 (plain text, no HTML)
             content = doc.markdown_content[:200] + '...' if len(doc.markdown_content) > 200 else doc.markdown_content
-            doc_dict['highlighted_content'] = content
-        
+            # Escape any HTML in content
+            doc_dict['highlighted_content'] = bleach.clean(content, tags=[], strip=True)
+
         documents.append(doc_dict)
     
-    return jsonify({
+    # SECURITY: Don't expose query_tokens in production to prevent information disclosure
+    response_data = {
         'documents': documents,
         'pagination': {
             'page': page,
@@ -191,9 +214,19 @@ def _search_with_postgresql(search_params: dict, user_id: Optional[int] = None) 
             'pages': paginated_results.pages
         },
         'search_engine': 'postgresql',
-        'detected_language': detected_language,
-        'query_tokens': korean_processor.tokenize(query) if detected_language == 'korean' else []
-    })
+        'detected_language': detected_language
+    }
+
+    # Only include token count in debug mode (not actual tokens)
+    if current_app.config.get('DEBUG'):
+        tokens = korean_processor.tokenize(query) if detected_language == 'korean' else []
+        response_data['token_count'] = len(tokens)
+
+    return jsonify(response_data)
+
+# SECURITY: Maximum query length for search operations
+MAX_SEARCH_QUERY_LENGTH = 500
+MAX_TAG_QUERY_LENGTH = 100
 
 @korean_search_bp.route('/search/suggest-tags', methods=['GET'])
 @rate_limit_api("60 per minute")
@@ -202,10 +235,14 @@ def suggest_korean_tags():
     """한국어 태그 자동완성"""
     verify_jwt_in_request(optional=True)
     query = request.args.get('q', '').strip()
-    limit = min(int(request.args.get('limit', 10)), 20)
-    
+    limit = min(request.args.get('limit', 10, type=int), 20)
+
     if not query:
         return jsonify({'suggestions': []})
+
+    # SECURITY: Validate query length to prevent DoS via long strings
+    if len(query) > MAX_TAG_QUERY_LENGTH:
+        return jsonify({'error': 'Query too long', 'max_length': MAX_TAG_QUERY_LENGTH}), 400
     
     try:
         # OpenSearch 사용 가능한 경우
@@ -245,7 +282,7 @@ def suggest_korean_tags():
         return jsonify({'suggestions': []})
 
 @korean_search_bp.route('/documents/<int:document_id>/analyze-korean', methods=['POST'])
-@jwt_required
+@jwt_required()
 @rate_limit_api("20 per minute")
 @validate_request_security
 @audit_log("analyze_korean_document")
@@ -337,37 +374,44 @@ def get_korean_search_statistics():
         # PostgreSQL 기반 통계
         from app.models.tag import Tag
         from sqlalchemy import func
-        
-        # 기본 통계
-        total_docs = Document.query.count()
+
+        # SECURITY: Apply authorization filter for statistics
+        # Only count documents the user can access
+        if current_user_id:
+            accessible_filter = or_(Document.user_id == current_user_id, Document.is_public == True)
+        else:
+            accessible_filter = Document.is_public == True
+
+        # 기본 통계 (filtered by access)
+        total_docs = Document.query.filter(accessible_filter).count()
         public_docs = Document.query.filter_by(is_public=True).count()
-        
+
         if current_user_id:
             user_docs = Document.query.filter_by(user_id=current_user_id).count()
         else:
             user_docs = 0
-        
-        # 언어별 분포 (간단한 추정)
+
+        # 언어별 분포 (간단한 추정) - filtered by access
         korean_docs = Document.query.filter(
+            accessible_filter,
             Document.markdown_content.op('~*')('[가-힣]')
         ).count()
         
-        # 인기 태그
+        # 인기 태그 (이미 count 포함)
         popular_tags_data = Tag.get_popular_tags(limit=10)
-        popular_tags = [tag for tag, count in popular_tags_data]
-        
+
         # 월별 생성 분포
         monthly_stats = Document.query.with_entities(
             func.date_trunc('month', Document.created_at).label('month'),
             func.count(Document.id).label('count')
         ).group_by('month').order_by('month').limit(12).all()
-        
+
         stats = {
             'total_documents': total_docs,
             'public_documents': public_docs,
             'user_documents': user_docs,
             'estimated_korean_documents': korean_docs,
-            'popular_tags': [(tag.name, tag.get_document_count()) for tag in popular_tags],
+            'popular_tags': [(tag.name, count) for tag, count in popular_tags_data],
             'monthly_distribution': [(str(month), count) for month, count in monthly_stats],
             'source': 'postgresql'
         }

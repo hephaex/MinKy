@@ -4,12 +4,27 @@ Provides optical character recognition capabilities
 """
 
 import os
+import re
 import logging
-from typing import Dict, List
+from typing import Dict, List, FrozenSet
 import io
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# SECURITY: Whitelist of allowed language codes to prevent command injection
+ALLOWED_OCR_LANGUAGES: FrozenSet[str] = frozenset({
+    'eng', 'kor', 'jpn', 'chi_sim', 'chi_tra',
+    'fra', 'deu', 'spa', 'ita', 'por', 'rus',
+    'ara', 'hin', 'tha', 'vie', 'nld', 'pol',
+    'tur', 'ukr', 'ces', 'dan', 'fin', 'ell',
+    'heb', 'hun', 'ind', 'msa', 'nor', 'ron',
+    'slk', 'slv', 'swe', 'eng+kor', 'eng+jpn'
+})
+
+# SECURITY: Maximum image size to prevent decompression bombs
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_IMAGE_PIXELS = 89_478_485  # ~9500x9500 pixels
 
 class OCRService:
     def __init__(self):
@@ -82,23 +97,70 @@ class OCRService:
             }
             
         except Exception as e:
-            logger.error(f"Error in OCR processing: {e}")
+            logger.error(f"Error in OCR processing: {e}", exc_info=True)
             return {
                 'success': False,
-                'error': str(e),
+                'error': 'OCR processing failed. Please try again.',
                 'text': '',
                 'confidence': 0,
                 'method': 'error'
             }
     
+    def _validate_language(self, language: str) -> str:
+        """Validate and sanitize language parameter to prevent command injection"""
+        if not language or not isinstance(language, str):
+            return 'eng'
+
+        # Strip and lowercase
+        clean_lang = language.strip().lower()
+
+        # Only allow alphanumeric, underscore, and plus (for multi-language like eng+kor)
+        if not re.match(r'^[a-z_+]+$', clean_lang):
+            logger.warning(f"Invalid OCR language format rejected: {language[:50]}")
+            return 'eng'
+
+        # Whitelist check
+        if clean_lang not in ALLOWED_OCR_LANGUAGES:
+            logger.warning(f"Unsupported OCR language rejected: {clean_lang}")
+            return 'eng'
+
+        return clean_lang
+
     def _extract_with_tesseract(self, image_data: bytes, language: str) -> Dict:
         """Extract text using Tesseract OCR"""
         try:
             import pytesseract
             from PIL import Image
-            
+
+            # SECURITY: Validate language parameter
+            validated_language = self._validate_language(language)
+
+            # SECURITY: Check image data size before processing
+            if len(image_data) > MAX_IMAGE_SIZE:
+                return {
+                    'success': False,
+                    'error': 'Image exceeds maximum size limit',
+                    'text': '',
+                    'confidence': 0,
+                    'method': 'size_exceeded'
+                }
+
+            # SECURITY: Set PIL decompression limit
+            Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+
             # Open image from bytes
             image = Image.open(io.BytesIO(image_data))
+
+            # SECURITY: Verify image dimensions
+            width, height = image.size
+            if width * height > MAX_IMAGE_PIXELS:
+                return {
+                    'success': False,
+                    'error': 'Image dimensions exceed maximum allowed',
+                    'text': '',
+                    'confidence': 0,
+                    'method': 'image_too_large'
+                }
             
             # Convert to RGB if necessary
             if image.mode != 'RGB':
@@ -106,12 +168,12 @@ class OCRService:
             
             # Configure Tesseract
             custom_config = r'--oem 3 --psm 6'
-            
-            # Extract text
-            text = pytesseract.image_to_string(image, lang=language, config=custom_config)
-            
+
+            # Extract text with validated language
+            text = pytesseract.image_to_string(image, lang=validated_language, config=custom_config)
+
             # Get confidence scores
-            data = pytesseract.image_to_data(image, lang=language, config=custom_config, output_type=pytesseract.Output.DICT)
+            data = pytesseract.image_to_data(image, lang=validated_language, config=custom_config, output_type=pytesseract.Output.DICT)
             confidences = [int(conf) for conf in data['conf'] if int(conf) > 0]
             avg_confidence = sum(confidences) / len(confidences) if confidences else 0
             
@@ -120,16 +182,16 @@ class OCRService:
                 'text': text.strip(),
                 'confidence': round(avg_confidence, 2),
                 'method': 'tesseract',
-                'language': language,
+                'language': validated_language,
                 'word_count': len(text.split()),
                 'char_count': len(text)
             }
             
         except Exception as e:
-            logger.error(f"Tesseract OCR error: {e}")
+            logger.error(f"Tesseract OCR error: {e}", exc_info=True)
             return {
                 'success': False,
-                'error': str(e),
+                'error': 'Text extraction failed. Please try again.',
                 'text': '',
                 'confidence': 0,
                 'method': 'tesseract_error'
@@ -202,10 +264,10 @@ class OCRService:
             }
             
         except Exception as e:
-            logger.error(f"Google Vision OCR error: {e}")
+            logger.error(f"Google Vision OCR error: {e}", exc_info=True)
             return {
                 'success': False,
-                'error': str(e),
+                'error': 'Cloud OCR service unavailable.',
                 'text': '',
                 'confidence': 0,
                 'method': 'google_vision_error'
@@ -240,7 +302,14 @@ class OCRService:
                 'detectOrientation': 'true'
             }
             
-            response = requests.post(ocr_url, headers=headers, params=params, data=image_data)
+            response = requests.post(
+                ocr_url,
+                headers=headers,
+                params=params,
+                data=image_data,
+                verify=True,  # Explicit TLS verification
+                timeout=30    # 30 second timeout
+            )
             response.raise_for_status()
             
             result = response.json()
@@ -265,10 +334,10 @@ class OCRService:
             }
             
         except Exception as e:
-            logger.error(f"Azure Vision OCR error: {e}")
+            logger.error(f"Azure Vision OCR error: {e}", exc_info=True)
             return {
                 'success': False,
-                'error': str(e),
+                'error': 'Cloud OCR service unavailable.',
                 'text': '',
                 'confidence': 0,
                 'method': 'azure_vision_error'
@@ -311,10 +380,10 @@ class OCRService:
             }
             
         except Exception as e:
-            logger.error(f"PDF OCR error: {e}")
+            logger.error(f"PDF OCR error: {e}", exc_info=True)
             return {
                 'success': False,
-                'error': str(e),
+                'error': 'PDF text extraction failed.',
                 'text': '',
                 'confidence': 0,
                 'method': 'pdf_error'
@@ -344,11 +413,12 @@ class OCRService:
             import fitz  # PyMuPDF
             
             doc = fitz.open(stream=pdf_data, filetype="pdf")
+            page_count = len(doc)  # Store before processing
             all_text = []
             total_confidence = 0
             processed_pages = 0
-            
-            for page_num in range(len(doc)):
+
+            for page_num in range(page_count):
                 page = doc[page_num]
                 
                 # Convert page to image
@@ -374,17 +444,17 @@ class OCRService:
                 'text': full_text,
                 'confidence': round(avg_confidence, 2),
                 'method': 'pdf_ocr',
-                'page_count': len(doc),
+                'page_count': page_count,
                 'processed_pages': processed_pages,
                 'word_count': len(full_text.split()),
                 'char_count': len(full_text)
             }
             
         except Exception as e:
-            logger.error(f"PDF OCR processing error: {e}")
+            logger.error(f"PDF OCR processing error: {e}", exc_info=True)
             return {
                 'success': False,
-                'error': str(e),
+                'error': 'PDF processing failed.',
                 'text': '',
                 'confidence': 0,
                 'method': 'pdf_ocr_error'

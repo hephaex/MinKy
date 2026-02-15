@@ -3,7 +3,7 @@ OCR API Routes
 Provides endpoints for optical character recognition on uploaded files
 """
 
-from flask import Blueprint, request, jsonify, Response
+from flask import Blueprint, request, jsonify, Response, current_app
 from flask_jwt_extended import jwt_required
 from werkzeug.utils import secure_filename
 from app.services.ocr_service import ocr_service
@@ -47,9 +47,15 @@ def extract_text() -> Response | tuple[Response, int]:
                 'error': 'No file selected'
             }), 400
         
-        # Get language parameter
+        # SECURITY: Validate language parameter against whitelist
+        ALLOWED_LANGUAGES = frozenset({
+            'eng', 'kor', 'jpn', 'chi_sim', 'chi_tra',
+            'fra', 'deu', 'spa', 'ita', 'por', 'rus'
+        })
         language = request.form.get('language', 'eng')
-        
+        if language not in ALLOWED_LANGUAGES:
+            language = 'eng'  # Default to English if invalid
+
         # Validate file type
         allowed_extensions = {'.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif'}
         file_ext = os.path.splitext(secure_filename(file.filename))[1].lower()
@@ -177,7 +183,8 @@ def get_ocr_status() -> Response | tuple[Response, int]:
         }), 500
 
 @ocr_bp.route('/ocr/extract-and-create', methods=['POST'])
-@jwt_required(optional=True)
+@limiter.limit("10 per hour")
+@jwt_required()
 def extract_and_create_document() -> Response | tuple[Response, int]:
     """
     Extract text from file and create a new document
@@ -188,29 +195,57 @@ def extract_and_create_document() -> Response | tuple[Response, int]:
                 'success': False,
                 'error': 'OCR service is not available'
             }), 503
-        
+
         # Check if file was uploaded
         if 'file' not in request.files:
             return jsonify({
                 'success': False,
                 'error': 'No file uploaded'
             }), 400
-        
+
         file = request.files['file']
         if file.filename == '':
             return jsonify({
                 'success': False,
                 'error': 'No file selected'
             }), 400
-        
-        # Get parameters
+
+        # SECURITY: Validate file type BEFORE reading content
+        allowed_extensions = {'.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif'}
+        file_ext = os.path.splitext(secure_filename(file.filename))[1].lower()
+
+        if file_ext not in allowed_extensions:
+            return jsonify({
+                'success': False,
+                'error': f'Unsupported file type: {file_ext}. Supported: {", ".join(allowed_extensions)}'
+            }), 400
+
+        # Get parameters with validation
+        # SECURITY: Validate language parameter against whitelist
+        ALLOWED_LANGUAGES = frozenset({
+            'eng', 'kor', 'jpn', 'chi_sim', 'chi_tra',
+            'fra', 'deu', 'spa', 'ita', 'por', 'rus'
+        })
         language = request.form.get('language', 'eng')
+        if language not in ALLOWED_LANGUAGES:
+            language = 'eng'  # Default to English if invalid
+
         title = request.form.get('title', '')
         author = request.form.get('author', '')
         is_public = request.form.get('is_public', 'true').lower() == 'true'
-        
-        # Process file with OCR
+
+        # Read file data
         file_data = file.read()
+
+        # SECURITY: Check file size AFTER reading (limit to 10MB)
+        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+        if len(file_data) > MAX_FILE_SIZE:
+            return jsonify({
+                'success': False,
+                'error': 'File too large. Maximum size is 10MB.'
+            }), 400
+
+        # Process file with OCR
         ocr_result = ocr_service.process_uploaded_file(
             file_data=file_data,
             filename=file.filename,
@@ -279,6 +314,7 @@ def extract_and_create_document() -> Response | tuple[Response, int]:
         }), 500
 
 @ocr_bp.route('/ocr/extract-attachment/<int:attachment_id>', methods=['POST'])
+@limiter.limit("20 per hour")
 @jwt_required()
 def extract_from_attachment(attachment_id: int) -> Response | tuple[Response, int]:
     """
@@ -293,28 +329,53 @@ def extract_from_attachment(attachment_id: int) -> Response | tuple[Response, in
         
         # Find attachment
         attachment = Attachment.query.get_or_404(attachment_id)
-        
-        # Check permission
+
+        # Check permission - user must own the attachment or be able to edit the document
         user_id = get_current_user_id()
-        document = db.session.get(Document, attachment.document_id)
-        if not document or not document.can_edit(user_id):
+        has_permission = False
+
+        # Check if user owns the attachment directly
+        if attachment.uploaded_by == user_id:
+            has_permission = True
+        # Check if user can edit the associated document
+        elif attachment.document_id:
+            document = db.session.get(Document, attachment.document_id)
+            if document and document.can_edit(user_id):
+                has_permission = True
+
+        if not has_permission:
             return jsonify({
                 'success': False,
                 'error': 'Access denied'
             }), 403
         
+        # SECURITY: Validate file path is within allowed upload directory
+        upload_dir = current_app.config.get('UPLOAD_FOLDER', './uploads')
+        real_path = os.path.realpath(attachment.file_path)
+        real_upload_dir = os.path.realpath(upload_dir)
+
+        if not real_path.startswith(real_upload_dir + os.sep):
+            logger.warning(f"Path traversal attempt: {attachment.file_path}")
+            return jsonify({
+                'success': False,
+                'error': 'Invalid file path'
+            }), 400
+
         # Check if file exists
-        if not os.path.exists(attachment.file_path):
+        if not os.path.exists(real_path):
             return jsonify({
                 'success': False,
                 'error': 'Attachment file not found'
             }), 404
-        
-        # Get language parameter
+
+        # Get language parameter with validation
+        ALLOWED_LANGUAGES = {'eng', 'kor', 'jpn', 'chi_sim', 'chi_tra', 'fra', 'deu', 'spa'}
         language = request.json.get('language', 'eng') if request.json else 'eng'
-        
+        if language not in ALLOWED_LANGUAGES:
+            language = 'eng'  # Default to English if invalid
+
         # Read file and process with OCR
-        with open(attachment.file_path, 'rb') as f:
+        with open(real_path, 'rb') as f:
             file_data = f.read()
         
         ocr_result = ocr_service.process_uploaded_file(
@@ -323,12 +384,17 @@ def extract_from_attachment(attachment_id: int) -> Response | tuple[Response, in
             language=language
         )
         
-        # Update attachment metadata with OCR result
+        # SECURITY: Update attachment metadata with OCR result using immutable pattern
+        # Use dict copy to avoid mutation tracking issues
+        from sqlalchemy.orm.attributes import flag_modified
         if attachment.metadata:
-            attachment.metadata['ocr_result'] = ocr_result
+            new_metadata = dict(attachment.metadata)
+            new_metadata['ocr_result'] = ocr_result
+            attachment.metadata = new_metadata
         else:
             attachment.metadata = {'ocr_result': ocr_result}
-        
+        flag_modified(attachment, 'metadata')
+
         db.session.commit()
         
         logger.info(f"OCR on attachment: user={user_id}, attachment_id={attachment_id}, "

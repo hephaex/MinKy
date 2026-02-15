@@ -4,14 +4,29 @@ from app import db, limiter
 from app.models.document import Document
 from app.utils.auth import get_current_user_id, get_current_user
 from app.utils.responses import get_or_404
-from app.utils.exporters import DocumentExporter
+from app.utils.exporters import DocumentExporter, _sanitize_title_for_filename
 from app.services.notification_service import NotificationService
 import os
 import tempfile
 import logging
+import json
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
+
+
+def _log_export_operation(operation: str, user_id: int, document_id: int = None,
+                          details: dict = None) -> None:
+    """SECURITY: Audit log export operations for compliance."""
+    log_entry = {
+        'operation': operation,
+        'user_id': user_id,
+        'document_id': document_id,
+        'ip_address': request.remote_addr if request else None,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'details': details or {}
+    }
+    logger.info(f"AUDIT_EXPORT: {json.dumps(log_entry)}")
 
 export_bp = Blueprint('export', __name__)
 
@@ -25,7 +40,7 @@ def _export_html_format(exporter: DocumentExporter, document: Document) -> Respo
         content,
         mimetype='text/html',
         headers={
-            'Content-Disposition': f'attachment; filename="{document.title[:50]}.html"'
+            'Content-Disposition': f'attachment; filename="{_sanitize_title_for_filename(document.title)}.html"'
         }
     )
 
@@ -43,7 +58,7 @@ def _export_json_format(exporter: DocumentExporter, document: Document) -> Respo
         json_content,
         mimetype='application/json',
         headers={
-            'Content-Disposition': f'attachment; filename="{document.title[:50]}.json"'
+            'Content-Disposition': f'attachment; filename="{_sanitize_title_for_filename(document.title)}.json"'
         }
     )
 
@@ -58,7 +73,7 @@ def _export_file_format(exporter: DocumentExporter, document: Document, format_t
 
     mimetype, export_func = format_configs[format_type]
     file_path = export_func()
-    filename = f"{document.title[:50]}.{format_type}"
+    filename = f"{_sanitize_title_for_filename(document.title)}.{format_type}"
 
     def cleanup_after_send():
         try:
@@ -106,6 +121,14 @@ def export_document(document_id: int, format_type: str) -> Response | tuple[Resp
     try:
         exporter = DocumentExporter(document)
 
+        # SECURITY: Audit log single document export
+        _log_export_operation(
+            'single_export',
+            current_user_id,
+            document_id,
+            {'format': format_type}
+        )
+
         if format_type == 'html':
             return _export_html_format(exporter, document)
 
@@ -116,7 +139,7 @@ def export_document(document_id: int, format_type: str) -> Response | tuple[Resp
 
     except Exception as e:
         current_app.logger.error(f"Export error for document {document_id}: {str(e)}")
-        return jsonify({'error': 'Export failed', 'details': str(e)}), 500
+        return jsonify({'error': 'Export failed'}), 500
 
 def _get_accessible_documents(document_ids: list[int], current_user_id: int) -> list[Document]:
     """Get documents user has access to"""
@@ -130,7 +153,7 @@ def _get_accessible_documents(document_ids: list[int], current_user_id: int) -> 
 
 def _export_document_format(document: Document, format_type: str, temp_dir: str, exporter: DocumentExporter) -> str:
     """Export a single document in the specified format and return the file path"""
-    base_filename = f"{document.id}_{document.title[:30]}"
+    base_filename = f"{document.id}_{_sanitize_title_for_filename(document.title, 30)}"
 
     if format_type == 'html':
         content = exporter.export_to_html()
@@ -206,10 +229,35 @@ def bulk_export_documents() -> Response | tuple[Response, int]:
     if not isinstance(document_ids, list):
         return jsonify({'error': 'document_ids must be a list'}), 400
 
+    # SECURITY: Validate each document_id is an integer to prevent injection
+    validated_ids = []
+    for doc_id in document_ids:
+        if not isinstance(doc_id, int) or doc_id < 1:
+            return jsonify({'error': 'Each document_id must be a positive integer'}), 400
+        validated_ids.append(doc_id)
+    document_ids = validated_ids
+
+    # Limit bulk exports to prevent resource exhaustion
+    MAX_BULK_EXPORT = 50
+    if len(document_ids) > MAX_BULK_EXPORT:
+        return jsonify({'error': f'Maximum {MAX_BULK_EXPORT} documents per bulk export'}), 400
+
+    # SECURITY: Validate formats parameter
+    if not isinstance(formats, list):
+        return jsonify({'error': 'formats must be a list'}), 400
+
     valid_formats = ['html', 'pdf', 'docx', 'markdown', 'json']
     for fmt in formats:
-        if fmt not in valid_formats:
+        if not isinstance(fmt, str) or fmt not in valid_formats:
             return jsonify({'error': f'Invalid format "{fmt}". Supported formats: {", ".join(valid_formats)}'}), 400
+
+    # SECURITY: Limit total exports (documents * formats) to prevent resource exhaustion
+    MAX_TOTAL_EXPORTS = 100
+    total_exports = len(document_ids) * len(formats)
+    if total_exports > MAX_TOTAL_EXPORTS:
+        return jsonify({
+            'error': f'Too many exports requested. Maximum {MAX_TOTAL_EXPORTS} total (documents × formats)'
+        }), 400
 
     accessible_documents = _get_accessible_documents(document_ids, current_user_id)
 
@@ -217,6 +265,17 @@ def bulk_export_documents() -> Response | tuple[Response, int]:
         return jsonify({'error': 'No accessible documents found'}), 404
 
     try:
+        # SECURITY: Audit log bulk export operation
+        _log_export_operation(
+            'bulk_export',
+            current_user_id,
+            details={
+                'document_count': len(accessible_documents),
+                'document_ids': [d.id for d in accessible_documents],
+                'formats': formats
+            }
+        )
+
         temp_dir = tempfile.mkdtemp()
         export_files = _export_all_documents(accessible_documents, formats, temp_dir)
         zip_path = _create_zip_archive(export_files, temp_dir)
@@ -240,7 +299,7 @@ def bulk_export_documents() -> Response | tuple[Response, int]:
 
     except Exception as e:
         current_app.logger.error(f"Bulk export error: {str(e)}")
-        return jsonify({'error': 'Bulk export failed', 'details': str(e)}), 500
+        return jsonify({'error': 'Bulk export failed'}), 500
 
 @export_bp.route('/documents/<int:document_id>/export/bundle', methods=['GET'])
 @limiter.limit("10 per hour")
@@ -262,39 +321,55 @@ def export_document_bundle(document_id: int) -> Response | tuple[Response, int]:
     # Get formats from query parameters
     formats_param = request.args.get('formats', 'html,pdf,docx,markdown,json')
     formats = [fmt.strip() for fmt in formats_param.split(',')]
-    
+
     # Validate formats
     valid_formats = ['html', 'pdf', 'docx', 'markdown', 'json']
-    formats = [fmt for fmt in formats if fmt in valid_formats]
-    
+    # SECURITY: Use set to deduplicate formats and prevent resource exhaustion
+    formats = list(set(fmt for fmt in formats if fmt in valid_formats))
+
     if not formats:
         formats = ['html', 'markdown', 'json']  # Default formats
+
+    # SECURITY: Limit maximum formats per request
+    MAX_BUNDLE_FORMATS = 5
+    if len(formats) > MAX_BUNDLE_FORMATS:
+        return jsonify({'error': f'Maximum {MAX_BUNDLE_FORMATS} formats allowed per bundle'}), 400
     
     try:
+        # SECURITY: Audit log bundle export operation
+        _log_export_operation(
+            'bundle_export',
+            current_user_id,
+            document_id,
+            {'formats': formats}
+        )
+
         exporter = DocumentExporter(document)
         bundle_path = exporter.export_bundle(formats=formats)
-        
+
         def cleanup_bundle():
             try:
                 exporter.cleanup()
             except Exception as e:
                 logger.debug("Bundle export cleanup error (non-critical): %s", e)
-        
+
         response = send_file(
             bundle_path,
             mimetype='application/zip',
             as_attachment=True,
-            download_name=f"{document.title[:50]}_bundle.zip"
+            download_name=f"{_sanitize_title_for_filename(document.title)}_bundle.zip"
         )
-        
+
         response.call_on_close(cleanup_bundle)
         return response
-        
+
     except Exception as e:
         current_app.logger.error(f"Bundle export error for document {document_id}: {str(e)}")
-        return jsonify({'error': 'Bundle export failed', 'details': str(e)}), 500
+        return jsonify({'error': 'Bundle export failed'}), 500
 
 @export_bp.route('/export/formats', methods=['GET'])
+@limiter.limit("60 per minute")  # SECURITY: Rate limiting
+@jwt_required(optional=True)  # SECURITY: Add auth decorator for consistent API posture
 def get_export_formats() -> Response:
     """Get list of supported export formats"""
     formats = {

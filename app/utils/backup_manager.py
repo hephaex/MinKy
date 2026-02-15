@@ -23,25 +23,46 @@ class DocumentBackupManager:
             logger.error(f"Failed to create backup directory: {e}")
             raise
     
+    # SECURITY: Reserved Windows filenames that should be blocked
+    RESERVED_FILENAMES = frozenset({
+        'CON', 'PRN', 'AUX', 'NUL',
+        'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+        'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'
+    })
+
     def sanitize_filename(self, title: str, max_length: int = 100) -> str:
-        """파일명에 사용할 수 없는 문자를 제거하고 정리"""
-        # 파일명에 사용할 수 없는 문자 제거
-        sanitized = re.sub(r'[<>:"/\\|?*]', '_', title)
-        
+        """파일명에 사용할 수 없는 문자를 제거하고 정리 (보안 강화)"""
+        import unicodedata
+
+        # SECURITY: Normalize unicode to catch look-alike characters
+        sanitized = unicodedata.normalize('NFKC', title)
+
+        # SECURITY: Remove NULL bytes and control characters
+        sanitized = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', sanitized)
+
+        # SECURITY: Remove path separators and unsafe characters (including unicode variants)
+        # Includes fullwidth characters: \uff0f (/) \uff3c (\) \uff1a (:)
+        sanitized = re.sub(r'[<>:"/\\|?*\uff0f\uff3c\uff1a\u2024\u2025]', '_', sanitized)
+
         # 연속된 공백이나 언더스코어를 하나로 변경
         sanitized = re.sub(r'[\s_]+', '_', sanitized)
-        
-        # 앞뒤 공백 및 언더스코어 제거
-        sanitized = sanitized.strip('_').strip()
-        
+
+        # SECURITY: Remove leading/trailing dots, spaces, underscores (hidden files, path issues)
+        sanitized = sanitized.strip('._ ')
+
         # 길이 제한
         if len(sanitized) > max_length:
-            sanitized = sanitized[:max_length]
-        
+            sanitized = sanitized[:max_length].rstrip('._')
+
+        # SECURITY: Handle reserved Windows filenames
+        base_name = sanitized.split('.')[0].upper()
+        if base_name in self.RESERVED_FILENAMES:
+            sanitized = f"_{sanitized}"
+
         # 빈 제목인 경우 기본값 설정
         if not sanitized:
             sanitized = "untitled"
-        
+
         return sanitized
     
     def generate_short_filename(self, document_title: str, created_at: Optional[datetime] = None) -> str:
@@ -126,16 +147,25 @@ class DocumentBackupManager:
         if not backup_config.is_backup_enabled():
             logger.info("Backup is disabled in configuration")
             return None
-            
+
         try:
             # 백업 파일명 생성
             filename = self.generate_backup_filename(
-                document.title, 
+                document.title,
                 document.created_at
             )
-            
+
             backup_path = self.backup_root_dir / filename
-            
+
+            # SECURITY: Path traversal protection - validate path is within backup directory
+            try:
+                resolved_path = backup_path.resolve()
+                backup_root = self.backup_root_dir.resolve()
+                resolved_path.relative_to(backup_root)
+            except ValueError:
+                logger.error(f"Path traversal prevented for backup: {filename}")
+                return None
+
             # 백업 내용 생성
             backup_content = self.generate_backup_content(document)
             
@@ -263,7 +293,23 @@ class DocumentBackupManager:
     def delete_backup(self, backup_path: str) -> bool:
         """백업 파일 삭제"""
         try:
-            Path(backup_path).unlink()
+            target_path = Path(backup_path).resolve()
+            backup_root = self.backup_root_dir.resolve()
+
+            # Validate path is within backup directory to prevent path traversal
+            # Use is_relative_to (Python 3.9+) or fallback to try/except approach
+            try:
+                target_path.relative_to(backup_root)
+            except ValueError:
+                logger.warning(f"Path traversal attempt detected: {backup_path}")
+                return False
+
+            # Additional check: ensure file has expected extension
+            if target_path.suffix.lower() not in ('.md', '.markdown'):
+                logger.warning(f"Unexpected file type for backup deletion: {backup_path}")
+                return False
+
+            target_path.unlink()
             logger.info(f"Backup deleted: {backup_path}")
             return True
         except Exception as e:
@@ -309,6 +355,19 @@ class DocumentBackupManager:
             deleted_count = 0
             
             for file_path in self.backup_root_dir.glob("*.md"):
+                # SECURITY: Skip symlinks to prevent symlink attacks
+                if file_path.is_symlink():
+                    logger.warning(f"Skipping symlink during cleanup: {file_path}")
+                    continue
+
+                # SECURITY: Validate path is within backup directory
+                try:
+                    resolved = file_path.resolve()
+                    resolved.relative_to(self.backup_root_dir.resolve())
+                except ValueError:
+                    logger.warning(f"Path escape detected during cleanup: {file_path}")
+                    continue
+
                 if file_path.stat().st_ctime < cutoff_date:
                     file_path.unlink()
                     deleted_count += 1
@@ -338,6 +397,11 @@ class DocumentBackupManager:
             deleted_count = 0
             
             for file_path in backup_files[:excess_count]:
+                # SECURITY: Skip symlinks to prevent symlink attacks
+                if file_path.is_symlink():
+                    logger.warning(f"Skipping symlink during excess cleanup: {file_path}")
+                    continue
+
                 file_path.unlink()
                 deleted_count += 1
                 logger.info(f"Excess backup deleted: {file_path}")
@@ -374,10 +438,11 @@ def export_all_documents(use_short_filename: bool = False) -> dict:
     """DB의 모든 문서를 백업 폴더로 내보내기 (중복 제거 포함)"""
     from app.models.document import Document
     import hashlib
-    
+
     try:
-        # 모든 문서 가져오기
-        documents = Document.query.all()
+        # 문서를 배치로 스트리밍 처리 (메모리 효율적)
+        total_count = Document.query.count()
+        documents = Document.query.yield_per(100)
         
         # 기존 백업 파일들 스캔 (파일명 비교용)
         existing_files = set()
@@ -402,13 +467,13 @@ def export_all_documents(use_short_filename: bool = False) -> dict:
                     import re
                     comparison_content = re.sub(r'# Generated:.*\n', '', content)
                     # 내용 해시 생성 (내용 비교용)
-                    content_hash = hashlib.md5(comparison_content.strip().encode('utf-8')).hexdigest()
+                    content_hash = hashlib.sha256(comparison_content.strip().encode('utf-8')).hexdigest()
                     existing_file_contents[content_hash] = file_path.name
             except Exception as e:
                 logger.warning(f"Error reading existing file {file_path}: {e}")
         
         results: Dict[str, Any] = {
-            'total_documents': len(documents),
+            'total_documents': total_count,
             'exported': 0,
             'skipped_filename': 0,
             'skipped_content': 0,
@@ -435,7 +500,7 @@ def export_all_documents(use_short_filename: bool = False) -> dict:
                 backup_content = backup_manager.generate_backup_content(document)
                 # 비교용 콘텐츠 생성 (타임스탬프 제외)
                 comparison_content = backup_manager.generate_backup_content_for_comparison(document)
-                content_hash = hashlib.md5(comparison_content.strip().encode('utf-8')).hexdigest()
+                content_hash = hashlib.sha256(comparison_content.strip().encode('utf-8')).hexdigest()
                 
                 # 1차: 파일명 비교 (Primary comparison by filename)
                 # 정확한 파일명 또는 기본 파일명 확인
@@ -468,9 +533,25 @@ def export_all_documents(use_short_filename: bool = False) -> dict:
                 
                 # 파일명과 내용 모두 중복되지 않은 경우 내보내기
                 backup_path = backup_manager.backup_root_dir / filename
-                
+
+                # SECURITY: Path traversal protection - validate path is within backup directory
+                try:
+                    resolved_path = backup_path.resolve()
+                    backup_root = backup_manager.backup_root_dir.resolve()
+                    resolved_path.relative_to(backup_root)
+                except ValueError:
+                    logger.error(f"Path traversal prevented in export: {filename}")
+                    results['errors'] += 1
+                    results['details'].append({
+                        'document_id': document.id,
+                        'title': document.title,
+                        'error': 'Path traversal attempt blocked',
+                        'status': 'error'
+                    })
+                    continue
+
                 # 파일 쓰기
-                with open(backup_path, 'w', encoding='utf-8') as f:
+                with open(resolved_path, 'w', encoding='utf-8') as f:
                     f.write(backup_content)
                 
                 # 내보낸 파일 추적에 추가

@@ -53,6 +53,8 @@ logs/
 # Configuration
 .env
 .env.local
+.env.production
+.env.development
 
 # Document Backups
 backup/

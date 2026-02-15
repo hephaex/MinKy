@@ -1,17 +1,76 @@
 import os
+import re
 import tempfile
+import logging
+import html
+import secrets
 from datetime import datetime, timezone
 import markdown
+import bleach
 # from weasyprint import HTML, CSS  # Commented out due to system dependencies
 from docx import Document as DocxDocument
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 import zipfile
 import json
 
+logger = logging.getLogger(__name__)
+
+# SECURITY: Maximum document size for export (10MB)
+MAX_EXPORT_CONTENT_SIZE = 10 * 1024 * 1024
+
+# SECURITY: Maximum line count for DOCX export to prevent DoS
+MAX_EXPORT_LINES = 100000
+
+# SECURITY: Allowed HTML tags and attributes for sanitization
+ALLOWED_TAGS = [
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'p', 'br', 'hr',
+    'ul', 'ol', 'li',
+    'blockquote', 'pre', 'code',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'strong', 'em', 'b', 'i', 'u', 's', 'del', 'ins',
+    'a', 'img',
+    'div', 'span',
+    'sup', 'sub',
+]
+
+ALLOWED_ATTRIBUTES = {
+    '*': ['class', 'id'],
+    'a': ['href', 'title', 'rel'],
+    'img': ['src', 'alt', 'title', 'width', 'height'],
+    'th': ['colspan', 'rowspan'],
+    'td': ['colspan', 'rowspan'],
+}
+
+
+def _sanitize_title_for_filename(title: str | None, max_length: int = 50) -> str:
+    """Sanitize document title for safe use in filenames.
+
+    Removes dangerous characters to prevent path traversal attacks.
+    Returns 'document' as fallback for None or empty titles.
+    """
+    if not title:
+        return 'document'
+    # Remove dangerous characters (only allow alphanumeric, spaces, dots, hyphens, underscores)
+    sanitized = re.sub(r'[^\w\s.-]', '', title)
+    # Replace multiple spaces with single underscore
+    sanitized = re.sub(r'\s+', '_', sanitized)
+    # Remove leading dots to prevent hidden files
+    sanitized = sanitized.lstrip('.')
+    # Truncate to max length
+    return sanitized[:max_length] if sanitized else 'document'
+
+
 class DocumentExporter:
     """Handle document export to various formats"""
-    
+
     def __init__(self, document):
+        # SECURITY: Validate document content size before export
+        content = document.markdown_content or ''
+        content_size = len(content.encode('utf-8'))
+        if content_size > MAX_EXPORT_CONTENT_SIZE:
+            raise ValueError(f"Document too large for export: {content_size} bytes exceeds {MAX_EXPORT_CONTENT_SIZE} limit")
+
         self.document = document
         self.temp_dir = tempfile.mkdtemp()
     
@@ -20,8 +79,8 @@ class DocumentExporter:
         import shutil
         try:
             shutil.rmtree(self.temp_dir)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to cleanup temp dir %s: %s", self.temp_dir, e)
     
     def _generate_css_styles(self) -> str:
         """Generate CSS styles for HTML export"""
@@ -94,20 +153,32 @@ class DocumentExporter:
             """
 
     def _convert_markdown_to_html(self) -> str:
-        """Convert markdown content to HTML"""
-        return markdown.markdown(
-            self.document.markdown_content,
+        """Convert markdown content to HTML with XSS protection"""
+        raw_html = markdown.markdown(
+            self.document.markdown_content or '',
             extensions=['codehilite', 'fenced_code', 'tables', 'toc']
+        )
+        # SECURITY: Sanitize HTML to prevent XSS attacks
+        return bleach.clean(
+            raw_html,
+            tags=ALLOWED_TAGS,
+            attributes=ALLOWED_ATTRIBUTES,
+            strip=True
         )
 
     def _generate_document_metadata_html(self) -> str:
         """Generate HTML for document metadata section"""
-        author_html = f'<p><strong>Author:</strong> {self.document.author}</p>' if self.document.author else ''
-        tags_html = f'<p><strong>Tags:</strong> {", ".join(self.document.get_tag_names())}</p>' if self.document.get_tag_names() else ''
+        # Escape user-controlled content to prevent XSS
+        title_escaped = html.escape(self.document.title or '')
+        author_escaped = html.escape(self.document.author or '') if self.document.author else ''
+        tags_escaped = ", ".join(html.escape(tag) for tag in self.document.get_tag_names())
+
+        author_html = f'<p><strong>Author:</strong> {author_escaped}</p>' if author_escaped else ''
+        tags_html = f'<p><strong>Tags:</strong> {tags_escaped}</p>' if tags_escaped else ''
 
         return f"""
         <div class="document-meta">
-            <h1>{self.document.title}</h1>
+            <h1>{title_escaped}</h1>
             {author_html}
             <p><strong>Created:</strong> {self.document.created_at.strftime('%B %d, %Y at %I:%M %p')}</p>
             <p><strong>Last Updated:</strong> {self.document.updated_at.strftime('%B %d, %Y at %I:%M %p')}</p>
@@ -126,13 +197,16 @@ class DocumentExporter:
 
     def _build_html_template(self, css_styles: str, meta_html: str, content_html: str, export_info: str) -> str:
         """Build complete HTML document from components"""
+        title_escaped = html.escape(self.document.title or '')
+        # SECURITY: Add Content-Security-Policy to prevent XSS
         return f"""
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{self.document.title}</title>
+            <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https:;">
+            <title>{title_escaped}</title>
             {css_styles}
         </head>
         <body>
@@ -172,7 +246,7 @@ class DocumentExporter:
         #     pre, table { page-break-inside: avoid; }
         # """)
         
-        # pdf_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}.pdf")
+        # pdf_file = os.path.join(self.temp_dir, f"{self.document.id}_{_sanitize_title_for_filename(self.document.title)}.pdf")
         # HTML(string=html_content).write_pdf(pdf_file, stylesheets=[pdf_css])
         
         # return pdf_file
@@ -196,7 +270,7 @@ class DocumentExporter:
         self._add_docx_footer(doc)
 
         # Save document
-        docx_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}.docx")
+        docx_file = os.path.join(self.temp_dir, f"{self.document.id}_{_sanitize_title_for_filename(self.document.title)}.docx")
         doc.save(docx_file)
 
         return docx_file
@@ -232,6 +306,11 @@ class DocumentExporter:
     def _add_docx_content(self, doc: DocxDocument) -> None:
         """Convert markdown to DOCX paragraphs"""
         lines = self.document.markdown_content.split('\n')
+
+        # SECURITY: Limit line count to prevent DoS
+        if len(lines) > MAX_EXPORT_LINES:
+            raise ValueError(f"Document has too many lines for export: {len(lines)} exceeds {MAX_EXPORT_LINES}")
+
         current_paragraph = ""
 
         for line in lines:
@@ -279,29 +358,48 @@ class DocumentExporter:
     
     def export_to_markdown(self):
         """Export document as clean markdown with metadata"""
-        metadata = f"""---
-title: {self.document.title}
-author: {self.document.author or 'Unknown'}
-created: {self.document.created_at.isoformat()}
-updated: {self.document.updated_at.isoformat()}
-tags: [{', '.join(f'"{tag}"' for tag in self.document.get_tag_names())}]
-exported: {datetime.now(timezone.utc).isoformat()}
----
+        import yaml
 
-"""
+        # SECURITY: Use yaml.safe_dump to properly escape special characters
+        # This prevents YAML injection attacks via document title/author/tags
+        metadata_dict = {
+            'title': self.document.title or 'Untitled',
+            'author': self.document.author or 'Unknown',
+            'created': self.document.created_at.isoformat() if self.document.created_at else None,
+            'updated': self.document.updated_at.isoformat() if self.document.updated_at else None,
+            'tags': list(self.document.get_tag_names()),
+            'exported': datetime.now(timezone.utc).isoformat()
+        }
+
+        yaml_content = yaml.safe_dump(metadata_dict, default_flow_style=False, allow_unicode=True)
+        metadata = f"---\n{yaml_content}---\n\n"
         
         content = metadata + self.document.markdown_content
         
-        md_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}.md")
+        md_file = os.path.join(self.temp_dir, f"{self.document.id}_{_sanitize_title_for_filename(self.document.title)}.md")
         with open(md_file, 'w', encoding='utf-8') as f:
             f.write(content)
         
         return md_file
     
+    def _get_export_safe_dict(self) -> dict:
+        """SECURITY: Get document data safe for export (excludes internal IDs and owner PII)"""
+        return {
+            'title': self.document.title,
+            'author': self.document.author,
+            'created_at': self.document.created_at.isoformat() if self.document.created_at else None,
+            'updated_at': self.document.updated_at.isoformat() if self.document.updated_at else None,
+            'markdown_content': self.document.markdown_content,
+            'is_public': self.document.is_public,
+            'tags': list(self.document.get_tag_names()),
+            # SECURITY: Exclude user_id, owner object, category internal details, document_metadata
+        }
+
     def export_to_json(self):
-        """Export document as JSON with full metadata"""
+        """Export document as JSON with safe metadata (excludes internal IDs)"""
         data = {
-            'document': self.document.to_dict(),
+            # SECURITY: Use export-safe dict instead of full to_dict()
+            'document': self._get_export_safe_dict(),
             'export_info': {
                 'exported_at': datetime.now(timezone.utc).isoformat(),
                 'format': 'json',
@@ -309,7 +407,7 @@ exported: {datetime.now(timezone.utc).isoformat()}
             }
         }
         
-        json_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}.json")
+        json_file = os.path.join(self.temp_dir, f"{self.document.id}_{_sanitize_title_for_filename(self.document.title)}.json")
         with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         
@@ -317,7 +415,7 @@ exported: {datetime.now(timezone.utc).isoformat()}
     
     def export_bundle(self, formats=['html', 'pdf', 'docx', 'markdown', 'json']):
         """Export document in multiple formats as a ZIP bundle"""
-        zip_file = os.path.join(self.temp_dir, f"{self.document.id}_{self.document.title[:50]}_bundle.zip")
+        zip_file = os.path.join(self.temp_dir, f"{self.document.id}_{_sanitize_title_for_filename(self.document.title)}_bundle.zip")
 
         with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zf:
             for format_type in formats:
@@ -330,11 +428,14 @@ exported: {datetime.now(timezone.utc).isoformat()}
         try:
             self._export_format_to_zip(zf, format_type)
         except Exception as e:
-            zf.writestr(f"export_errors_{format_type}.txt", str(e))
+            # SECURITY: Log detailed error server-side, provide generic message in export
+            logger.error(f"Export format {format_type} failed: {e}")
+            zf.writestr(f"export_errors_{format_type}.txt",
+                       f"Export to {format_type} format failed. Please contact support.")
 
     def _export_format_to_zip(self, zf: zipfile.ZipFile, format_type: str) -> None:
         """Export a specific format and add to ZIP"""
-        title_truncated = self.document.title[:50]
+        title_truncated = _sanitize_title_for_filename(self.document.title)
 
         if format_type == 'html':
             content = self.export_to_html()
@@ -358,13 +459,15 @@ def export_document(document, format_type='html', **options):
 
     try:
         result = _export_by_format(exporter, format_type, options)
-        return result
-    finally:
         if format_type in ['html', 'json']:
             # For string returns, cleanup immediately
             exporter.cleanup()
-
-    # For file returns, cleanup is handled by the route
+        return result
+    except Exception:
+        # SECURITY: Always cleanup on exception to prevent temp file accumulation
+        exporter.cleanup()
+        raise
+    # For file returns (pdf, docx, etc.), cleanup is handled by the route after sending
 
 
 def _export_by_format(exporter: DocumentExporter, format_type: str, options: dict):

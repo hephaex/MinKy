@@ -215,11 +215,25 @@ class OrgRoamParser:
         from app.utils.korean_text import KoreanTextProcessor
         return KoreanTextProcessor.detect_language(content)
     
-    def parse_org_roam_directory(self, directory_path: str) -> List[Dict[str, Any]]:
-        """org-roam 디렉토리 전체 파싱"""
+    def parse_org_roam_directory(self, directory_path: str, allowed_base: Optional[str] = None) -> List[Dict[str, Any]]:
+        """org-roam 디렉토리 전체 파싱
+
+        Args:
+            directory_path: Directory to parse
+            allowed_base: If provided, directory must be within this base path (security check)
+        """
         documents: List[Dict[str, Any]] = []
-        directory = Path(directory_path)
-        
+        directory = Path(directory_path).resolve()
+
+        # Security: validate directory is within allowed base path
+        if allowed_base:
+            allowed_base_resolved = Path(allowed_base).resolve()
+            try:
+                directory.relative_to(allowed_base_resolved)
+            except ValueError:
+                logger.error(f"Security: Directory {directory_path} is outside allowed base {allowed_base}")
+                return documents
+
         if not directory.exists():
             logger.error(f"Directory not found: {directory_path}")
             return documents

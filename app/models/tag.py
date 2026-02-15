@@ -1,10 +1,5 @@
-from datetime import datetime, timezone
 from app import db
-
-
-def utc_now():
-    """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
+from app.utils.datetime_utils import utc_now
 
 
 # Association table for many-to-many relationship between documents and tags
@@ -17,6 +12,10 @@ document_tags = db.Table('document_tags',
 
 class Tag(db.Model):
     __tablename__ = 'tags'
+    __table_args__ = (
+        db.Index('idx_tags_created_at', 'created_at'),
+        db.Index('idx_tags_created_by', 'created_by'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
@@ -87,7 +86,21 @@ class Tag(db.Model):
             .filter(document_tags.c.tag_id == self.id)\
             .scalar()
     
-    def to_dict(self):
+    def to_dict_lite(self):
+        """Lightweight serialization without document count - for list views."""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'slug': self.slug,
+            'color': self.color,
+        }
+
+    def to_dict(self, document_count=None):
+        """Full serialization with optional pre-computed document count.
+
+        Args:
+            document_count: Optional pre-computed count to avoid N+1 queries
+        """
         return {
             'id': self.id,
             'name': self.name,
@@ -95,9 +108,32 @@ class Tag(db.Model):
             'description': self.description,
             'color': self.color,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'document_count': self.get_document_count(),
+            'document_count': document_count if document_count is not None else self.get_document_count(),
             'creator': self.creator.to_dict() if self.creator else None
         }
-    
+
+    @staticmethod
+    def get_tags_with_counts(tag_ids=None):
+        """Get tags with document counts in a single query.
+
+        Args:
+            tag_ids: Optional list of tag IDs to filter
+
+        Returns:
+            Dict mapping tag_id to document_count
+        """
+        query = db.session.query(
+            Tag.id,
+            db.func.count(document_tags.c.document_id).label('doc_count')
+        ).outerjoin(
+            document_tags, Tag.id == document_tags.c.tag_id
+        ).group_by(Tag.id)
+
+        if tag_ids:
+            query = query.filter(Tag.id.in_(tag_ids))
+
+        results = query.all()
+        return {tag_id: count for tag_id, count in results}
+
     def __repr__(self):
         return f'<Tag {self.name}>'

@@ -1,4 +1,5 @@
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, jsonify
+from werkzeug.utils import safe_join
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
@@ -96,12 +97,18 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SECRET_KEY'] = secret_key
     app.config['JWT_SECRET_KEY'] = jwt_secret
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=24)
-    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
+    # Security: Short-lived access tokens reduce impact of token theft
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
+    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=7)
     
     # Rate limiting configuration
     app.config['RATELIMIT_DEFAULT'] = os.getenv('RATE_LIMIT_DEFAULT', '1000 per hour')
     app.config['RATELIMIT_HEADERS_ENABLED'] = True
+
+    # SECURITY: Session cookie configuration
+    app.config['SESSION_COOKIE_SECURE'] = flask_env == 'production'  # Require HTTPS in production
+    app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
 
     # CORS configuration - environment-based
     cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
@@ -120,6 +127,15 @@ def create_app():
     jwt.init_app(app)
     bcrypt.init_app(app)
     limiter.init_app(app)
+
+    # SECURITY: Register JWT token revocation callback for logout functionality
+    @jwt.token_in_blocklist_loader
+    def check_if_token_revoked(jwt_header, jwt_payload):
+        jti = jwt_payload.get('jti')
+        if jti:
+            from app.routes.auth import is_token_revoked
+            return is_token_revoked(jti)
+        return False
     cache.init_app(app)
     socketio.init_app(app, cors_allowed_origins=cors_origins)
 
@@ -130,6 +146,9 @@ def create_app():
         metrics.info('app_info', 'MinKy API', version='1.0.0')
 
     # Security headers with Flask-Talisman (disabled in development for easier debugging)
+    # SECURITY TODO: 'unsafe-inline' weakens XSS protection. Consider:
+    # 1. Using nonces or hashes for inline scripts/styles
+    # 2. Migrating inline code to external files
     if flask_env == 'production':
         csp = {
             'default-src': "'self'",
@@ -217,7 +236,9 @@ def create_app():
     from app.routes.documents_import import documents_import_bp
     from app.routes.auth import auth_bp
     from app.routes.health import health_bp
-    from app.routes.tags import tags_bp
+    from app.routes.tags_crud import tags_crud_bp
+    from app.routes.tags_statistics import tags_statistics_bp
+    from app.routes.tags_auto import tags_auto_bp
     from app.routes.comments import comments_bp
     from app.routes.versions import versions_bp
     from app.routes.templates import templates_bp
@@ -244,7 +265,9 @@ def create_app():
     app.register_blueprint(documents_import_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(health_bp, url_prefix='/api')
-    app.register_blueprint(tags_bp, url_prefix='/api')
+    app.register_blueprint(tags_crud_bp, url_prefix='/api')
+    app.register_blueprint(tags_statistics_bp, url_prefix='/api')
+    app.register_blueprint(tags_auto_bp, url_prefix='/api')
     app.register_blueprint(comments_bp, url_prefix='/api')
     app.register_blueprint(versions_bp, url_prefix='/api')
     app.register_blueprint(templates_bp, url_prefix='/api')
@@ -275,8 +298,12 @@ def create_app():
     # Add static route for serving images from backup/img directory
     @app.route('/img/<path:filename>')
     def serve_image(filename):
-        """Serve images from backup/img directory"""
+        """Serve images from backup/img directory with path traversal protection"""
         backup_img_dir = os.path.join(os.getcwd(), 'backup', 'img')
+        # Validate path to prevent traversal attacks
+        safe_path = safe_join(backup_img_dir, filename)
+        if safe_path is None or not os.path.isfile(safe_path):
+            return jsonify({'error': 'File not found'}), 404
         return send_from_directory(backup_img_dir, filename)
     
     return app

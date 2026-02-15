@@ -1,12 +1,8 @@
 from app import db
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from sqlalchemy import Index
-
-
-def utc_now():
-    """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
+from app.utils.datetime_utils import utc_now
 
 
 class WorkflowStatus(Enum):
@@ -71,7 +67,7 @@ class DocumentWorkflow(db.Model):
         
         # Document author can always withdraw or submit for review
         if action in [WorkflowAction.WITHDRAW, WorkflowAction.SUBMIT_FOR_REVIEW]:
-            return self.document.author_id == user_id
+            return self.document.user_id == user_id
         
         # Admins can perform any action
         if user.is_admin:
@@ -203,7 +199,7 @@ class DocumentWorkflow(db.Model):
         elif action == WorkflowAction.APPROVE:
             # Notify document author
             notifications_to_send.append({
-                'user_id': self.document.author_id,
+                'user_id': self.document.user_id,
                 'title': f"Document approved: '{self.document.title}'",
                 'message': f"{actor.username} approved your document"
             })
@@ -211,7 +207,7 @@ class DocumentWorkflow(db.Model):
         elif action == WorkflowAction.REJECT:
             # Notify document author
             notifications_to_send.append({
-                'user_id': self.document.author_id,
+                'user_id': self.document.user_id,
                 'title': f"Document rejected: '{self.document.title}'",
                 'message': f"{actor.username} rejected your document"
             })
@@ -229,7 +225,18 @@ class DocumentWorkflow(db.Model):
             )
     
     def to_dict(self, include_logs=False):
-        """Convert workflow to dictionary"""
+        """Convert workflow to dictionary.
+
+        SECURITY: Reviewer info limited to prevent PII exposure.
+        """
+        # SECURITY: Only expose minimal reviewer info
+        reviewer_info = None
+        if self.assigned_reviewer:
+            reviewer_info = {
+                'id': self.assigned_reviewer.id,
+                'username': self.assigned_reviewer.username
+            }
+
         data = {
             'id': self.id,
             'document_id': self.document_id,
@@ -237,16 +244,16 @@ class DocumentWorkflow(db.Model):
             'current_status': self.current_status.value,
             'requires_approval': self.requires_approval,
             'assigned_reviewer_id': self.assigned_reviewer_id,
-            'assigned_reviewer': self.assigned_reviewer.to_dict() if self.assigned_reviewer else None,
+            'assigned_reviewer': reviewer_info,
             'assigned_at': self.assigned_at.isoformat() if self.assigned_at else None,
             'due_date': self.due_date.isoformat() if self.due_date else None,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }
-        
+
         if include_logs:
             data['logs'] = [log.to_dict() for log in self.logs]
-        
+
         return data
 
 class WorkflowTemplate(db.Model):
@@ -288,7 +295,18 @@ class WorkflowTemplate(db.Model):
         return None
     
     def to_dict(self):
-        """Convert template to dictionary"""
+        """Convert template to dictionary.
+
+        SECURITY: Creator info limited to prevent PII exposure.
+        """
+        # SECURITY: Only expose minimal creator info
+        creator_info = None
+        if self.created_by:
+            creator_info = {
+                'id': self.created_by.id,
+                'username': self.created_by.username
+            }
+
         return {
             'id': self.id,
             'name': self.name,
@@ -298,7 +316,7 @@ class WorkflowTemplate(db.Model):
             'auto_publish': self.auto_publish,
             'reviewer_ids': self.reviewer_ids,
             'created_by_id': self.created_by_id,
-            'created_by': self.created_by.to_dict() if self.created_by else None,
+            'created_by': creator_info,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
@@ -331,12 +349,23 @@ class WorkflowLog(db.Model):
     )
     
     def to_dict(self):
-        """Convert log entry to dictionary"""
+        """Convert log entry to dictionary.
+
+        SECURITY: Performer info limited to prevent PII exposure.
+        """
+        # SECURITY: Only expose minimal performer info
+        performer_info = None
+        if self.performed_by:
+            performer_info = {
+                'id': self.performed_by.id,
+                'username': self.performed_by.username
+            }
+
         return {
             'id': self.id,
             'workflow_id': self.workflow_id,
             'action': self.action.value,
-            'performed_by': self.performed_by.to_dict() if self.performed_by else None,
+            'performed_by': performer_info,
             'from_status': self.from_status.value if self.from_status else None,
             'to_status': self.to_status.value if self.to_status else None,
             'comment': self.comment,

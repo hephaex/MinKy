@@ -3,11 +3,16 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import logging
 
 from ..llm_providers import BaseLLMProvider, LLMMessage, LLMResponse
+
+
+def _utc_now() -> datetime:
+    """Return current UTC datetime with timezone info."""
+    return datetime.now(timezone.utc)
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +43,19 @@ class AgentTask:
     status: TaskStatus = TaskStatus.PENDING
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=_utc_now)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    user_id: Optional[int] = None  # SECURITY: Track task owner for authorization
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert task to dictionary."""
-        return {
+    def to_dict(self, include_user_id: bool = False) -> Dict[str, Any]:
+        """Convert task to dictionary.
+
+        Args:
+            include_user_id: Whether to include user_id in output (for internal use only)
+        """
+        result = {
             'id': self.id,
             'type': self.type.value,
             'input_data': self.input_data,
@@ -57,23 +67,26 @@ class AgentTask:
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'metadata': self.metadata
         }
+        if include_user_id:
+            result['user_id'] = self.user_id
+        return result
 
     def mark_running(self) -> None:
         """Mark task as running."""
         self.status = TaskStatus.RUNNING
-        self.started_at = datetime.utcnow()
+        self.started_at = _utc_now()
 
     def mark_completed(self, result: Dict[str, Any]) -> None:
         """Mark task as completed with result."""
         self.status = TaskStatus.COMPLETED
         self.result = result
-        self.completed_at = datetime.utcnow()
+        self.completed_at = _utc_now()
 
     def mark_failed(self, error: str) -> None:
         """Mark task as failed with error."""
         self.status = TaskStatus.FAILED
         self.error = error
-        self.completed_at = datetime.utcnow()
+        self.completed_at = _utc_now()
 
 
 @dataclass
@@ -84,7 +97,7 @@ class AgentStep:
     input_data: Dict[str, Any]
     output_data: Optional[Dict[str, Any]] = None
     reasoning: Optional[str] = None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=_utc_now)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert step to dictionary."""

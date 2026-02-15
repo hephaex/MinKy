@@ -27,7 +27,11 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
 
   const loadClusteringStatus = async () => {
     try {
-      const response = await fetch('/api/clustering/status');
+      // SECURITY: Include auth headers for consistency
+      const token = authService.getToken();
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+      const response = await fetch('/api/clustering/status', { headers });
       const data = await response.json();
       setClusteringStatus(data.status);
     } catch (err) {

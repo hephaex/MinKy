@@ -1,13 +1,8 @@
-from datetime import datetime, timezone
 from app import db
+from app.utils.datetime_utils import utc_now
 import os
 import hashlib
 from werkzeug.utils import secure_filename
-
-
-def utc_now():
-    """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
 
 
 class Attachment(db.Model):
@@ -22,15 +17,15 @@ class Attachment(db.Model):
     file_hash = db.Column(db.String(64), nullable=False)  # SHA-256 hash
     document_id = db.Column(db.Integer, db.ForeignKey('documents.id'), nullable=True)  # Can be null for orphaned files
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    is_public = db.Column(db.Boolean, default=True)
+    is_public = db.Column(db.Boolean, default=False)  # Private by default for security
     created_at = db.Column(db.DateTime, default=utc_now)
     
     # Relationships
     document = db.relationship('Document', backref='attachments')
     uploader = db.relationship('User', backref='uploaded_files')
     
-    def __init__(self, filename, original_filename, file_path, file_size, mime_type, 
-                 file_hash, uploaded_by, document_id=None, is_public=True):
+    def __init__(self, filename, original_filename, file_path, file_size, mime_type,
+                 file_hash, uploaded_by, document_id=None, is_public=False):
         self.filename = filename
         self.original_filename = original_filename
         self.file_path = file_path
@@ -67,8 +62,12 @@ class Attachment(db.Model):
         return os.path.splitext(self.original_filename)[1].lower()
     
     def is_image(self):
-        """Check if file is an image"""
-        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
+        """Check if file is an image.
+
+        SECURITY: SVG excluded due to potential XSS via embedded JavaScript.
+        """
+        # SECURITY: SVG removed to prevent XSS attacks
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
         return self.get_file_extension() in image_extensions
     
     def is_document(self):
@@ -101,11 +100,12 @@ class Attachment(db.Model):
     
     def get_human_readable_size(self):
         """Get human readable file size"""
+        size = self.file_size  # Use local variable to avoid mutating instance state
         for unit in ['B', 'KB', 'MB', 'GB']:
-            if self.file_size < 1024.0:
-                return f"{self.file_size:.1f} {unit}"
-            self.file_size /= 1024.0
-        return f"{self.file_size:.1f} TB"
+            if size < 1024.0:
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} TB"
     
     def can_view(self, user_id):
         """Check if user can view this attachment"""
@@ -166,8 +166,13 @@ class Attachment(db.Model):
             ]
         }
     
-    def to_dict(self):
-        return {
+    def to_dict(self, include_hash=False):
+        """Serialize attachment to dictionary.
+
+        Args:
+            include_hash: If True, include file_hash (internal use only)
+        """
+        result = {
             'id': self.id,
             'filename': self.filename,
             'original_filename': self.original_filename,
@@ -175,7 +180,6 @@ class Attachment(db.Model):
             'human_readable_size': self.get_human_readable_size(),
             'mime_type': self.mime_type,
             'file_type': self.get_file_type(),
-            'file_hash': self.file_hash,
             'document_id': self.document_id,
             'uploaded_by': self.uploaded_by,
             'is_public': self.is_public,
@@ -187,6 +191,10 @@ class Attachment(db.Model):
             'is_video': self.is_video(),
             'is_audio': self.is_audio()
         }
+        # Only include file_hash for internal operations (duplicate detection)
+        if include_hash:
+            result['file_hash'] = self.file_hash
+        return result
     
     def __repr__(self):
         return f'<Attachment {self.original_filename}>'

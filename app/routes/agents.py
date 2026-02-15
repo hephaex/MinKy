@@ -5,12 +5,14 @@ from app import limiter
 from app.services.agent_service import agent_service
 from app.services.agents import list_agents, AgentType
 from app.services.llm_providers import list_providers
-from app.utils.auth import get_current_user_id
 import logging
 
 logger = logging.getLogger(__name__)
 
 agents_bp = Blueprint('agents', __name__)
+
+# SECURITY: Maximum chain steps to prevent resource exhaustion
+MAX_CHAIN_STEPS = 10
 
 
 @agents_bp.route('/agents/execute', methods=['POST'])
@@ -19,12 +21,14 @@ agents_bp = Blueprint('agents', __name__)
 def execute_agent_task():
     """Execute a single agent task.
 
+    Headers:
+        X-LLM-API-Key: API key for the LLM provider
+
     Request body:
     {
         "agent_type": "research|writing|coding",
         "input_data": {...},
         "provider": "openai|anthropic",
-        "api_key": "sk-...",
         "model": "optional-model-override"
     }
 
@@ -48,20 +52,38 @@ def execute_agent_task():
             }), 400
 
         input_data = data.get('input_data', {})
+
+        # SECURITY: Validate input_data size to prevent resource exhaustion
+        import json
+        MAX_INPUT_SIZE = 100 * 1024  # 100KB
+        try:
+            input_size = len(json.dumps(input_data))
+            if input_size > MAX_INPUT_SIZE:
+                return jsonify({
+                    'error': f'input_data too large (max {MAX_INPUT_SIZE // 1024}KB)'
+                }), 400
+        except (TypeError, ValueError):
+            return jsonify({'error': 'input_data must be JSON serializable'}), 400
+
         provider_name = data.get('provider', 'openai')
-        api_key = data.get('api_key', '')
+        # Get API key from header instead of request body for security
+        api_key = request.headers.get('X-LLM-API-Key', '')
         model = data.get('model')
 
         if not api_key:
-            return jsonify({'error': 'api_key is required'}), 400
+            return jsonify({'error': 'X-LLM-API-Key header is required'}), 400
 
-        # Execute the task
+        # SECURITY: Get current user for task ownership (IDOR protection)
+        current_user_id = get_jwt_identity()
+
+        # Execute the task with user_id for ownership tracking
         task = agent_service.execute_task(
             agent_type=agent_type,
             input_data=input_data,
             provider_name=provider_name,
             api_key=api_key,
-            model=model
+            model=model,
+            user_id=current_user_id
         )
 
         return jsonify({
@@ -80,6 +102,9 @@ def execute_agent_task():
 def execute_agent_chain():
     """Execute a chain of agent tasks.
 
+    Headers:
+        X-LLM-API-Key: API key for the LLM provider
+
     Request body:
     {
         "steps": [
@@ -94,8 +119,7 @@ def execute_agent_chain():
                 "use_previous_output": true
             }
         ],
-        "provider": "openai",
-        "api_key": "sk-..."
+        "provider": "openai"
     }
 
     Returns:
@@ -110,17 +134,40 @@ def execute_agent_chain():
         if not steps:
             return jsonify({'error': 'steps array is required'}), 400
 
+        # SECURITY: Limit chain steps to prevent resource exhaustion and cost abuse
+        if len(steps) > MAX_CHAIN_STEPS:
+            return jsonify({
+                'error': f'Too many steps. Maximum allowed: {MAX_CHAIN_STEPS}',
+                'provided': len(steps)
+            }), 400
+
+        # SECURITY: Validate each step has required fields
+        available_agents = list_agents()
+        for i, step in enumerate(steps):
+            if not isinstance(step, dict):
+                return jsonify({'error': f'Step {i} must be an object'}), 400
+            step_agent = step.get('agent_type')
+            if not step_agent:
+                return jsonify({'error': f'Step {i} missing agent_type'}), 400
+            if step_agent not in available_agents:
+                return jsonify({'error': f'Step {i} has invalid agent_type: {step_agent}'}), 400
+
         provider_name = data.get('provider', 'openai')
-        api_key = data.get('api_key', '')
+        # Get API key from header instead of request body for security
+        api_key = request.headers.get('X-LLM-API-Key', '')
 
         if not api_key:
-            return jsonify({'error': 'api_key is required'}), 400
+            return jsonify({'error': 'X-LLM-API-Key header is required'}), 400
 
-        # Execute the chain
+        # SECURITY: Get current user for task ownership (IDOR protection)
+        current_user_id = get_jwt_identity()
+
+        # Execute the chain with user_id for ownership tracking
         results = agent_service.execute_chain(
             steps=steps,
             provider_name=provider_name,
-            api_key=api_key
+            api_key=api_key,
+            user_id=current_user_id
         )
 
         return jsonify({
@@ -136,6 +183,7 @@ def execute_agent_chain():
 
 
 @agents_bp.route('/agents/task/<task_id>', methods=['GET'])
+@limiter.limit("60 per minute")
 @jwt_required()
 def get_task_status(task_id: str):
     """Get status of a specific agent task.
@@ -144,9 +192,17 @@ def get_task_status(task_id: str):
         AgentTask details
     """
     try:
+        from flask_jwt_extended import get_jwt_identity
+        current_user_id = get_jwt_identity()
+
         task = agent_service.get_task(task_id)
         if not task:
             return jsonify({'error': 'Task not found'}), 404
+
+        # SECURITY: Verify user owns this task (IDOR protection)
+        # Deny access if user_id is None (task without ownership) or doesn't match
+        if task.user_id is None or str(task.user_id) != str(current_user_id):
+            return jsonify({'error': 'Access denied'}), 403
 
         return jsonify({
             'task': task.to_dict()
@@ -158,22 +214,31 @@ def get_task_status(task_id: str):
 
 
 @agents_bp.route('/agents/history', methods=['GET'])
+@limiter.limit("30 per minute")
 @jwt_required()
 def get_task_history():
-    """Get recent task history.
+    """Get recent task history for current user.
 
     Query params:
-    - limit: Max number of tasks (default 50)
+    - limit: Max number of tasks (default 50, max 100)
     - agent_type: Filter by agent type
 
     Returns:
-        List of recent tasks
+        List of recent tasks owned by the current user
     """
     try:
-        limit = request.args.get('limit', 50, type=int)
+        # SECURITY: Cap limit to prevent resource exhaustion
+        limit = min(request.args.get('limit', 50, type=int), 100)
         agent_type = request.args.get('agent_type')
 
-        tasks = agent_service.get_task_history(limit=limit, agent_type=agent_type)
+        # SECURITY: Get current user for filtering (IDOR protection)
+        current_user_id = get_jwt_identity()
+
+        tasks = agent_service.get_task_history(
+            limit=limit,
+            agent_type=agent_type,
+            user_id=current_user_id  # Filter by user
+        )
 
         return jsonify({
             'tasks': [task.to_dict() for task in tasks],
@@ -186,6 +251,8 @@ def get_task_history():
 
 
 @agents_bp.route('/agents/types', methods=['GET'])
+@limiter.limit("60 per minute")
+@jwt_required()
 def list_agent_types():
     """List available agent types and their capabilities.
 
@@ -228,6 +295,8 @@ def list_agent_types():
 
 
 @agents_bp.route('/agents/providers', methods=['GET'])
+@limiter.limit("60 per minute")
+@jwt_required()
 def list_llm_providers():
     """List available LLM providers.
 
@@ -265,6 +334,8 @@ def list_llm_providers():
 
 
 @agents_bp.route('/agents/status', methods=['GET'])
+@limiter.limit("60 per minute")
+@jwt_required()
 def get_agent_service_status():
     """Get agent service status.
 

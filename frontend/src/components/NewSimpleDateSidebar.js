@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
+// SECURITY: Helper to get auth token for API calls
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
   const [timeline, setTimeline] = useState({});
   const [loading, setLoading] = useState(true);
@@ -10,7 +16,10 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
     const loadTimeline = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/documents/timeline?group_by=month');
+        // SECURITY: Include auth headers for consistency
+        const response = await fetch('/api/documents/timeline?group_by=month', {
+          headers: getAuthHeaders()
+        });
         if (!response.ok) throw new Error('Failed to fetch timeline');
         
         const data = await response.json();

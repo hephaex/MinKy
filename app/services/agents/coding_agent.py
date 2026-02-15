@@ -8,6 +8,26 @@ from .base_agent import BaseAgent, AgentTask, AgentType, TaskStatus
 
 logger = logging.getLogger(__name__)
 
+# SECURITY: Patterns that may indicate prompt injection attempts
+PROMPT_INJECTION_PATTERNS = [
+    r'ignore\s+(previous|above|all)\s+instructions',
+    r'disregard\s+(previous|above|all)',
+    r'forget\s+(previous|above|all)',
+    r'system\s*:\s*',
+    r'<\s*system\s*>',
+    r'\[\s*INST\s*\]',
+    r'</?\s*prompt\s*>',
+    r'new\s+instructions?\s*:',
+    r'override\s+system',
+    r'bypass\s+security',
+]
+
+# SECURITY: Maximum input lengths to prevent abuse
+MAX_CODE_LENGTH = 50000  # 50KB
+MAX_REQUIREMENTS_LENGTH = 5000
+MAX_CONTEXT_LENGTH = 3000
+MAX_ERROR_MESSAGE_LENGTH = 2000
+
 
 @register_agent('coding')
 class CodingAgent(BaseAgent):
@@ -53,6 +73,43 @@ Output Format:
         """Return the coding agent system prompt."""
         return self.SYSTEM_PROMPT
 
+    # SECURITY: Allowed task types whitelist
+    ALLOWED_TASK_TYPES = frozenset({'generate', 'review', 'debug', 'explain', 'refactor'})
+    # SECURITY: Allowed languages whitelist (common programming languages)
+    ALLOWED_LANGUAGES = frozenset({
+        'python', 'javascript', 'typescript', 'java', 'c', 'cpp', 'c++',
+        'csharp', 'c#', 'go', 'rust', 'ruby', 'php', 'swift', 'kotlin',
+        'scala', 'sql', 'html', 'css', 'bash', 'shell', 'powershell',
+        'r', 'matlab', 'perl', 'lua', 'elixir', 'haskell', 'text'
+    })
+
+    def _sanitize_input(self, text: str, max_length: int, field_name: str) -> str:
+        """SECURITY: Sanitize user input to prevent prompt injection.
+
+        - Truncates to max_length
+        - Detects suspicious patterns
+        - Removes control characters
+        """
+        if not isinstance(text, str):
+            return ''
+
+        # Truncate to max length
+        text = text[:max_length]
+
+        # Remove control characters (except newlines and tabs)
+        text = ''.join(c for c in text if c.isprintable() or c in '\n\t')
+
+        # Check for prompt injection patterns
+        for pattern in PROMPT_INJECTION_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                logger.warning(
+                    f"SECURITY: Potential prompt injection detected in {field_name}"
+                )
+                # Remove the suspicious pattern
+                text = re.sub(pattern, '[REDACTED]', text, flags=re.IGNORECASE)
+
+        return text
+
     def execute(self, task: AgentTask) -> AgentTask:
         """Execute a coding task.
 
@@ -71,13 +128,54 @@ Output Format:
 
         try:
             input_data = task.input_data
-            code = input_data.get('code', '')
+
+            # SECURITY: Validate and sanitize all user inputs
+            code = self._sanitize_input(
+                input_data.get('code', ''),
+                MAX_CODE_LENGTH,
+                'code'
+            )
+
             task_type = input_data.get('task_type', 'generate')
-            requirements = input_data.get('requirements', '')
-            language = input_data.get('language', 'python')
-            context = input_data.get('context', '')
-            error_message = input_data.get('error_message', '')
+            # SECURITY: Validate task_type against whitelist
+            if task_type not in self.ALLOWED_TASK_TYPES:
+                task.mark_failed(f"Invalid task_type. Must be one of: {', '.join(sorted(self.ALLOWED_TASK_TYPES))}")
+                return task
+
+            requirements = self._sanitize_input(
+                input_data.get('requirements', ''),
+                MAX_REQUIREMENTS_LENGTH,
+                'requirements'
+            )
+
+            language = input_data.get('language', 'python').lower()
+            # SECURITY: Validate language against whitelist
+            if language not in self.ALLOWED_LANGUAGES:
+                language = 'text'  # Safe fallback
+
+            context = self._sanitize_input(
+                input_data.get('context', ''),
+                MAX_CONTEXT_LENGTH,
+                'context'
+            )
+
+            error_message = self._sanitize_input(
+                input_data.get('error_message', ''),
+                MAX_ERROR_MESSAGE_LENGTH,
+                'error_message'
+            )
+
             previous_output = input_data.get('previous_output', {})
+            # SECURITY: Sanitize previous output if it contains code
+            if isinstance(previous_output, dict) and 'code' in previous_output:
+                previous_output = {
+                    **previous_output,
+                    'code': self._sanitize_input(
+                        str(previous_output.get('code', ''))[:1000],
+                        1000,
+                        'previous_output.code'
+                    )
+                }
 
             # Build the coding prompt
             prompt = self._build_prompt(

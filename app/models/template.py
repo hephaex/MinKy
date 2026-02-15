@@ -1,10 +1,25 @@
-from datetime import datetime, timezone
+import re
 from app import db
+from app.utils.datetime_utils import utc_now
 
 
-def utc_now():
-    """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
+def _safe_format(template: str, variables: dict) -> str:
+    """Safely format template with only simple string substitution.
+
+    Prevents template injection by only allowing alphanumeric variable names
+    and string values, blocking access to object attributes.
+    """
+    if not variables or not template:
+        return template
+
+    result = template
+    for key, value in variables.items():
+        # Only allow alphanumeric keys (prevent __class__ etc.)
+        if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', str(key)):
+            # Only substitute non-callable values
+            safe_value = str(value) if not callable(value) else ''
+            result = result.replace('{' + str(key) + '}', safe_value)
+    return result
 
 
 class DocumentTemplate(db.Model):
@@ -37,24 +52,12 @@ class DocumentTemplate(db.Model):
         self.is_public = is_public
     
     def render_title(self, variables=None):
-        """Render title template with variables"""
-        if not variables:
-            return self.title_template
-        
-        try:
-            return self.title_template.format(**variables)
-        except KeyError:
-            return self.title_template
-    
+        """Render title template with variables (safe from injection)"""
+        return _safe_format(self.title_template, variables)
+
     def render_content(self, variables=None):
-        """Render content template with variables"""
-        if not variables:
-            return self.content_template
-        
-        try:
-            return self.content_template.format(**variables)
-        except KeyError:
-            return self.content_template
+        """Render content template with variables (safe from injection)"""
+        return _safe_format(self.content_template, variables)
     
     def get_template_variables(self):
         """Extract template variables from title and content"""

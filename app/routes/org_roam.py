@@ -17,6 +17,34 @@ from app import db
 
 org_roam_bp = Blueprint('org_roam', __name__)
 
+# Safe directories for org-roam imports (configurable via env)
+ALLOWED_IMPORT_DIRS = os.getenv('ORG_ROAM_ALLOWED_DIRS', '').split(',')
+ALLOWED_IMPORT_DIRS = [d.strip() for d in ALLOWED_IMPORT_DIRS if d.strip()]
+
+
+def is_path_within_allowed_dirs(path: str) -> bool:
+    """Check if path is within allowed import directories"""
+    if not ALLOWED_IMPORT_DIRS:
+        return False
+
+    # Normalize and resolve to absolute path
+    try:
+        abs_path = os.path.abspath(os.path.realpath(path))
+    except (ValueError, OSError):
+        return False
+
+    for allowed_dir in ALLOWED_IMPORT_DIRS:
+        try:
+            allowed_abs = os.path.abspath(os.path.realpath(allowed_dir))
+            # Check if path is within allowed directory
+            if abs_path == allowed_abs or abs_path.startswith(allowed_abs + os.sep):
+                return True
+        except (ValueError, OSError):
+            continue
+
+    return False
+
+
 class OrgRoamImportSchema(Schema):
     import_as_private = fields.Bool(load_default=True)
     preserve_links = fields.Bool(load_default=True)
@@ -98,6 +126,13 @@ def upload_org_roam_files():
     if not files or files[0].filename == '':
         return jsonify({'error': 'No files selected'}), 400
 
+    # SECURITY: Limit maximum number of files per upload to prevent DoS
+    MAX_FILES_PER_UPLOAD = 20
+    if len(files) > MAX_FILES_PER_UPLOAD:
+        return jsonify({
+            'error': f'Too many files. Maximum {MAX_FILES_PER_UPLOAD} files per upload.'
+        }), 400
+
     settings = _get_import_settings_from_form()
 
     try:
@@ -128,30 +163,80 @@ def upload_org_roam_files():
 
     except Exception as e:
         current_app.logger.error(f"Org-roam upload failed: {str(e)}")
-        return jsonify({'error': 'Upload failed', 'details': str(e)}), 500
+        return jsonify({'error': 'Upload failed'}), 500
 
 def _extract_zip_file(zip_path: str, extract_dir: str) -> list:
     """ZIP 파일에서 org 파일들 추출"""
+    # SECURITY: ZIP bomb protection constants
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB per file
+    MAX_TOTAL_SIZE = 100 * 1024 * 1024  # 100MB total
+    MAX_FILES_IN_ARCHIVE = 500  # Maximum files in archive
+
     org_files = []
-    
+    total_extracted_size = 0
+    files_extracted = 0
+
     try:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            # SECURITY: Check total uncompressed size before extraction
+            total_uncompressed = sum(f.file_size for f in zip_ref.filelist if not f.is_dir())
+            if total_uncompressed > MAX_TOTAL_SIZE:
+                raise ValueError(f"ZIP archive too large: {total_uncompressed // (1024*1024)}MB exceeds {MAX_TOTAL_SIZE // (1024*1024)}MB limit")
+
+            # SECURITY: Check file count
+            org_file_count = sum(1 for f in zip_ref.filelist if f.filename.endswith('.org') and not f.is_dir())
+            if org_file_count > MAX_FILES_IN_ARCHIVE:
+                raise ValueError(f"Too many files in archive: {org_file_count} exceeds {MAX_FILES_IN_ARCHIVE} limit")
+
             for file_info in zip_ref.filelist:
                 if file_info.filename.endswith('.org') and not file_info.is_dir():
+                    # SECURITY: Check individual file size
+                    if file_info.file_size > MAX_FILE_SIZE:
+                        current_app.logger.warning(f"Skipping oversized file: {file_info.filename} ({file_info.file_size} bytes)")
+                        continue
+
+                    # SECURITY: Check cumulative extracted size
+                    if total_extracted_size + file_info.file_size > MAX_TOTAL_SIZE:
+                        current_app.logger.warning(f"Stopping extraction: would exceed total size limit")
+                        break
+
                     # 안전한 파일명으로 변경
                     safe_filename = secure_filename(os.path.basename(file_info.filename))
+                    if not safe_filename:
+                        continue
+
                     extract_path = os.path.join(extract_dir, safe_filename)
-                    
-                    # 파일 추출
+
+                    # SECURITY: Verify extract path is within allowed directory
+                    real_extract_path = os.path.realpath(extract_path)
+                    real_extract_dir = os.path.realpath(extract_dir)
+                    if not real_extract_path.startswith(real_extract_dir + os.sep):
+                        current_app.logger.warning(f"Path traversal attempt blocked in ZIP: {safe_filename}")
+                        continue
+
+                    # 파일 추출 with size limit enforcement
                     with zip_ref.open(file_info) as source, open(extract_path, 'wb') as target:
-                        target.write(source.read())
-                    
+                        # SECURITY: Read in chunks to enforce size limit
+                        bytes_read = 0
+                        while True:
+                            chunk = source.read(8192)
+                            if not chunk:
+                                break
+                            bytes_read += len(chunk)
+                            if bytes_read > MAX_FILE_SIZE:
+                                target.close()
+                                os.remove(extract_path)
+                                raise ValueError(f"File {file_info.filename} exceeded size limit during extraction")
+                            target.write(chunk)
+
+                    total_extracted_size += bytes_read
+                    files_extracted += 1
                     org_files.append(extract_path)
-    
+
     except Exception as e:
         current_app.logger.error(f"Failed to extract ZIP file: {e}")
         raise
-    
+
     return org_files
 
 def _parse_org_file(parser, org_file):
@@ -179,10 +264,11 @@ def _create_document_from_org(org_doc, user_id, import_as_private, preserve_link
         is_public=not import_as_private
     )
 
+    # SECURITY: Do NOT store server file paths in user-accessible metadata
     document.document_metadata = {
         'org_roam_id': org_doc.get('id'),
         'org_filename': org_doc['filename'],
-        'org_file_path': org_doc.get('file_path', ''),
+        # org_file_path removed - prevents information disclosure of server paths
         'roam_tags': org_doc.get('roam_tags', []),
         'roam_aliases': org_doc.get('roam_aliases', []),
         'language': org_doc['language'],
@@ -288,7 +374,8 @@ def _import_org_files(org_files: list, user_id: int, import_as_private: bool,
 
             except Exception as e:
                 results['failed'] += 1
-                results['errors'].append(f"Failed to import {os.path.basename(org_file)}: {str(e)}")
+                # SECURITY: Generic error message to user, detailed logging internally
+                results['errors'].append(f"Failed to import {os.path.basename(org_file)}")
                 current_app.logger.error(f"Import error for {org_file}: {e}")
 
         db.session.commit()
@@ -324,7 +411,18 @@ def import_org_roam_directory():
     directory_path = data.get('directory_path')
     if not directory_path:
         return jsonify({'error': 'directory_path required'}), 400
-    
+
+    # Validate path is within allowed directories
+    if not ALLOWED_IMPORT_DIRS:
+        return jsonify({
+            'error': 'No allowed import directories configured. Set ORG_ROAM_ALLOWED_DIRS environment variable.'
+        }), 400
+
+    if not is_path_within_allowed_dirs(directory_path):
+        return jsonify({
+            'error': 'Directory path not within allowed import directories'
+        }), 403
+
     # 데이터 검증
     schema = OrgRoamImportSchema()
     try:
@@ -353,7 +451,7 @@ def import_org_roam_directory():
         
     except Exception as e:
         current_app.logger.error(f"Directory import failed: {str(e)}")
-        return jsonify({'error': 'Directory import failed', 'details': str(e)}), 500
+        return jsonify({'error': 'Directory import failed'}), 500
 
 @org_roam_bp.route('/org-roam/documents', methods=['GET'])
 @jwt_required()
@@ -367,8 +465,8 @@ def get_org_roam_documents():
     if not user:
         return jsonify({'error': 'User not found'}), 404
     
-    page = int(request.args.get('page', 1))
-    per_page = min(int(request.args.get('per_page', 20)), 100)
+    page = request.args.get('page', 1, type=int)
+    per_page = min(request.args.get('per_page', 20, type=int), 100)
     
     try:
         # org-roam 메타데이터가 있는 문서들만 검색
@@ -401,7 +499,7 @@ def get_org_roam_documents():
         
     except Exception as e:
         current_app.logger.error(f"Failed to get org-roam documents: {str(e)}")
-        return jsonify({'error': 'Failed to get documents', 'details': str(e)}), 500
+        return jsonify({'error': 'Failed to get documents'}), 500
 
 @org_roam_bp.route('/org-roam/documents/<int:document_id>/links', methods=['GET'])
 @jwt_required()
@@ -444,13 +542,24 @@ def get_document_links(document_id):
                     Document.document_metadata['org_filename'].astext == backlink['source_filename']
                 ).first()
             
-            enhanced_backlink = {
-                'link_info': backlink,
-                'document_exists': source_doc is not None,
-                'document_id': source_doc.id if source_doc else None,
-                'document_title': source_doc.title if source_doc else backlink.get('source_title'),
-                'accessible': source_doc.can_view(current_user_id) if source_doc else False
-            }
+            # SECURITY: Only expose document details if user has access
+            if source_doc and source_doc.can_view(current_user_id):
+                enhanced_backlink = {
+                    'link_info': backlink,
+                    'document_exists': True,
+                    'document_id': source_doc.id,
+                    'document_title': source_doc.title,
+                    'accessible': True
+                }
+            else:
+                # Hide details of inaccessible documents to prevent enumeration
+                enhanced_backlink = {
+                    'link_info': {'link_text': backlink.get('link_text', '')},
+                    'document_exists': source_doc is not None,
+                    'document_id': None,
+                    'document_title': None,
+                    'accessible': False
+                }
             enhanced_backlinks.append(enhanced_backlink)
         
         # 아웃바운드 링크 정보 보강
@@ -469,13 +578,24 @@ def get_document_links(document_id):
                     Document.document_metadata['org_filename'].astext == outbound_link['target_filename']
                 ).first()
             
-            enhanced_outbound_link = {
-                'link_info': outbound_link,
-                'document_exists': target_doc is not None,
-                'document_id': target_doc.id if target_doc else None,
-                'document_title': target_doc.title if target_doc else outbound_link.get('target_title'),
-                'accessible': target_doc.can_view(current_user_id) if target_doc else False
-            }
+            # SECURITY: Only expose document details if user has access
+            if target_doc and target_doc.can_view(current_user_id):
+                enhanced_outbound_link = {
+                    'link_info': outbound_link,
+                    'document_exists': True,
+                    'document_id': target_doc.id,
+                    'document_title': target_doc.title,
+                    'accessible': True
+                }
+            else:
+                # Hide details of inaccessible documents to prevent enumeration
+                enhanced_outbound_link = {
+                    'link_info': {'link_text': outbound_link.get('link_text', '')},
+                    'document_exists': target_doc is not None,
+                    'document_id': None,
+                    'document_title': None,
+                    'accessible': False
+                }
             enhanced_outbound_links.append(enhanced_outbound_link)
         
         return jsonify({
@@ -494,7 +614,7 @@ def get_document_links(document_id):
         
     except Exception as e:
         current_app.logger.error(f"Failed to get document links: {str(e)}")
-        return jsonify({'error': 'Failed to get document links', 'details': str(e)}), 500
+        return jsonify({'error': 'Failed to get document links'}), 500
 
 @org_roam_bp.route('/org-roam/statistics', methods=['GET'])
 @jwt_required()
@@ -574,4 +694,4 @@ def get_org_roam_statistics():
         
     except Exception as e:
         current_app.logger.error(f"Failed to get org-roam statistics: {str(e)}")
-        return jsonify({'error': 'Failed to get statistics', 'details': str(e)}), 500
+        return jsonify({'error': 'Failed to get statistics'}), 500

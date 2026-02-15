@@ -1,15 +1,18 @@
-from datetime import datetime, timezone
 from app import db
-
-
-def utc_now():
-    """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
+from app.utils.datetime_utils import utc_now
+from app.models.user import User
 
 
 class Comment(db.Model):
     __tablename__ = 'comments'
-    
+    __table_args__ = (
+        db.Index('idx_comments_document_id', 'document_id'),
+        db.Index('idx_comments_user_id', 'user_id'),
+        db.Index('idx_comments_parent_id', 'parent_id'),
+        db.Index('idx_comments_created_at', 'created_at'),
+        db.Index('idx_comments_document_active', 'document_id', 'is_deleted'),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     content = db.Column(db.Text, nullable=False)
     document_id = db.Column(db.Integer, db.ForeignKey('documents.id'), nullable=False)
@@ -31,19 +34,46 @@ class Comment(db.Model):
         self.parent_id = parent_id
     
     def can_edit(self, user_id):
-        return self.user_id == user_id and not self.is_deleted
-    
+        """Check if user can edit this comment.
+
+        SECURITY: Allows comment owner and admins to edit.
+        """
+        if self.is_deleted:
+            return False
+        if self.user_id == user_id:
+            return True
+        # SECURITY: Admin override for moderation
+        if user_id:
+            user = User.query.get(user_id)
+            if user and user.is_admin:
+                return True
+        return False
+
     def can_delete(self, user_id):
-        return self.user_id == user_id and not self.is_deleted
+        """Check if user can delete this comment.
+
+        SECURITY: Allows comment owner and admins to delete.
+        """
+        if self.is_deleted:
+            return False
+        if self.user_id == user_id:
+            return True
+        # SECURITY: Admin override for moderation
+        if user_id:
+            user = User.query.get(user_id)
+            if user and user.is_admin:
+                return True
+        return False
     
     def soft_delete(self):
         self.is_deleted = True
         self.content = "[This comment has been deleted]"
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = utc_now()
     
-    def get_replies(self):
+    def get_replies(self, limit: int = 100):
+        """Get replies to this comment, limited for safety."""
         return Comment.query.filter_by(parent_id=self.id, is_deleted=False)\
-            .order_by(Comment.created_at.asc()).all()
+            .order_by(Comment.created_at.asc()).limit(limit).all()
     
     def to_dict(self, include_replies=True):
         data = {
@@ -80,8 +110,12 @@ class Rating(db.Model):
     user = db.relationship('User', backref='ratings')
     document = db.relationship('Document', backref='ratings')
     
-    # Unique constraint to prevent multiple ratings from same user
-    __table_args__ = (db.UniqueConstraint('document_id', 'user_id', name='unique_user_document_rating'),)
+    # Unique constraint and indexes
+    __table_args__ = (
+        db.UniqueConstraint('document_id', 'user_id', name='unique_user_document_rating'),
+        db.Index('idx_ratings_document_id', 'document_id'),
+        db.Index('idx_ratings_user_id', 'user_id'),
+    )
     
     def __init__(self, document_id, user_id, rating):
         self.document_id = document_id
@@ -101,8 +135,8 @@ class Rating(db.Model):
     
     @staticmethod
     def get_document_rating_stats(document_id):
-        """Get rating statistics for a document"""
-        ratings = db.session.query(Rating.rating).filter_by(document_id=document_id).all()
+        """Get rating statistics for a document (max 10000 ratings for safety)"""
+        ratings = db.session.query(Rating.rating).filter_by(document_id=document_id).limit(10000).all()
         
         if not ratings:
             return {

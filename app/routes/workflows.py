@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
+from sqlalchemy.orm import joinedload
 from app.models.document import Document
 from app.models.user import User
 from app.models.workflow import DocumentWorkflow, WorkflowTemplate, WorkflowAction, WorkflowStatus
@@ -83,12 +84,21 @@ def perform_workflow_action(document_id):
     """Perform an action on a document workflow"""
     current_user_id = get_current_user_id()
     user = get_current_user()
-    
+
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
-    Document.query.get_or_404(document_id)  # Validate document exists
+    # SECURITY: Check user is active
+    if not user.is_active:
+        return jsonify({'error': 'User account is inactive'}), 403
 
+    document = Document.query.get_or_404(document_id)
+
+    # SECURITY: Check user has access to document before any workflow operations
+    if not document.can_view(current_user_id):
+        return jsonify({'error': 'Access denied'}), 403
+
+    # SECURITY: Author-only actions require edit permission
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Request body required'}), 400
@@ -108,10 +118,26 @@ def perform_workflow_action(document_id):
         action = WorkflowAction(action_str)
     except ValueError:
         return jsonify({'error': f'Invalid action: {action_str}'}), 400
-    
+
+    # SECURITY: Author-only actions require edit permission
+    # NOTE: Use correct enum values from WorkflowAction (SUBMIT_FOR_REVIEW, not SUBMIT)
+    AUTHOR_ONLY_ACTIONS = [WorkflowAction.SUBMIT_FOR_REVIEW, WorkflowAction.REQUEST_CHANGES, WorkflowAction.WITHDRAW]
+    if action in AUTHOR_ONLY_ACTIONS and not document.can_edit(current_user_id):
+        return jsonify({'error': 'Access denied: edit permission required'}), 403
+
+    # SECURITY: Reviewer-only actions require being assigned reviewer or admin
+    REVIEWER_ONLY_ACTIONS = [WorkflowAction.START_REVIEW, WorkflowAction.APPROVE, WorkflowAction.REJECT]
+    if action in REVIEWER_ONLY_ACTIONS:
+        workflow_check = DocumentWorkflow.query.filter_by(document_id=document_id).first()
+        if workflow_check and workflow_check.assigned_reviewer_id != current_user_id and not user.is_admin:
+            return jsonify({'error': 'Access denied: reviewer permission required'}), 403
+
     try:
-        workflow = DocumentWorkflow.query.filter_by(document_id=document_id).first()
-        
+        # SECURITY: Use database-level locking to prevent race conditions
+        workflow = DocumentWorkflow.query.filter_by(
+            document_id=document_id
+        ).with_for_update(nowait=False).first()
+
         if not workflow:
             # Create workflow if it doesn't exist
             workflow = DocumentWorkflow(
@@ -120,8 +146,26 @@ def perform_workflow_action(document_id):
                 requires_approval=True
             )
             db.session.add(workflow)
-            db.session.commit()
-        
+            db.session.flush()  # Get ID without committing
+
+        # SECURITY: Validate state transitions before performing action
+        # NOTE: Use correct enum values from WorkflowAction model
+        VALID_TRANSITIONS = {
+            WorkflowStatus.DRAFT: {WorkflowAction.SUBMIT_FOR_REVIEW, WorkflowAction.WITHDRAW},
+            WorkflowStatus.PENDING_REVIEW: {WorkflowAction.START_REVIEW, WorkflowAction.WITHDRAW},
+            WorkflowStatus.IN_REVIEW: {WorkflowAction.APPROVE, WorkflowAction.REJECT, WorkflowAction.REQUEST_CHANGES},
+            WorkflowStatus.APPROVED: {WorkflowAction.PUBLISH},
+            WorkflowStatus.REJECTED: {WorkflowAction.SUBMIT_FOR_REVIEW, WorkflowAction.WITHDRAW},
+            WorkflowStatus.PUBLISHED: {WorkflowAction.ARCHIVE},
+            WorkflowStatus.ARCHIVED: set(),
+        }
+
+        allowed_actions = VALID_TRANSITIONS.get(workflow.current_status, set())
+        if action not in allowed_actions:
+            return jsonify({
+                'error': f'Invalid state transition: {action.value} not allowed from {workflow.current_status.value}'
+            }), 400
+
         # Perform the action
         workflow.perform_action(action, current_user_id, comment)
         
@@ -156,29 +200,32 @@ def get_pending_workflows():
         return jsonify({'error': 'User not found'}), 404
     
     try:
-        # Get workflows assigned to current user for review
-        pending_workflows = DocumentWorkflow.query.filter(
+        # Get workflows assigned to current user for review (eager load document)
+        pending_workflows = DocumentWorkflow.query.options(
+            joinedload(DocumentWorkflow.document)
+        ).filter(
             DocumentWorkflow.assigned_reviewer_id == current_user_id,
             DocumentWorkflow.current_status.in_([
                 WorkflowStatus.PENDING_REVIEW,
                 WorkflowStatus.IN_REVIEW
             ])
-        ).join(Document).order_by(DocumentWorkflow.assigned_at.asc()).all()
-        
-        # Get workflows where user is author and need attention
-        author_workflows = DocumentWorkflow.query.filter(
+        ).order_by(DocumentWorkflow.assigned_at.asc()).all()
+
+        # Get workflows where user is author and need attention (eager load document)
+        author_workflows = DocumentWorkflow.query.options(
+            joinedload(DocumentWorkflow.document)
+        ).join(Document).filter(
+            Document.user_id == current_user_id,
             DocumentWorkflow.current_status.in_([
                 WorkflowStatus.REJECTED,
                 WorkflowStatus.APPROVED
             ])
-        ).join(Document).filter(
-            Document.user_id == current_user_id
         ).order_by(DocumentWorkflow.updated_at.desc()).limit(10).all()
         
         workflows_data = []
         for workflow in pending_workflows:
             workflow_dict = workflow.to_dict()
-            workflow_dict['document'] = workflow.document.to_dict()
+            workflow_dict['document'] = workflow.document.to_dict_lite()
             workflow_dict['available_actions'] = workflow.get_available_actions(current_user_id)
             workflow_dict['priority'] = 'high' if workflow.due_date and workflow.due_date < datetime.now(timezone.utc) else 'normal'
             workflows_data.append(workflow_dict)
@@ -363,19 +410,23 @@ def assign_workflow_template(document_id, template_id):
         return jsonify({'error': 'Access denied'}), 403
     
     try:
-        workflow = DocumentWorkflow.query.filter_by(document_id=document_id).first()
-        
+        # SECURITY: Use FOR UPDATE lock to prevent race conditions
+        workflow = DocumentWorkflow.query.filter_by(
+            document_id=document_id
+        ).with_for_update(nowait=False).first()
+
         if not workflow:
             workflow = DocumentWorkflow(
                 document_id=document_id,
                 current_status=WorkflowStatus.DRAFT
             )
             db.session.add(workflow)
-        
+            db.session.flush()  # Get ID without committing
+
         # Can only assign template if workflow is in draft status
         if workflow.current_status != WorkflowStatus.DRAFT:
             return jsonify({'error': 'Cannot assign template to document not in draft status'}), 400
-        
+
         workflow.workflow_template_id = template_id
         workflow.requires_approval = template.requires_approval
         

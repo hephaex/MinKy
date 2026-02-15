@@ -50,6 +50,7 @@ class TagCreate(BaseModel):
         return v.upper()
 
     model_config = {
+        "extra": "forbid",  # SECURITY: Reject unknown fields
         "json_schema_extra": {
             "examples": [
                 {

@@ -5,6 +5,12 @@ import Pagination from './Pagination';
 import { formatDateTime, formatDateRange as formatDateRangeUtil } from '../utils/dateUtils';
 import './DocumentsByDate.css';
 
+// SECURITY: Helper to get auth token for API calls
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
   const [state, setState] = useState({
     documents: [],
@@ -20,8 +26,10 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
     
     try {
       setState(prev => ({ ...prev, loading: true }));
+      // SECURITY: Include auth headers for consistency
       const response = await fetch(
-        `/api/documents/by-date?date_key=${encodeURIComponent(dateKey)}&page=${page}&per_page=10`
+        `/api/documents/by-date?date_key=${encodeURIComponent(dateKey)}&page=${page}&per_page=10`,
+        { headers: getAuthHeaders() }
       );
       if (!response.ok) throw new Error('Failed to fetch documents');
       

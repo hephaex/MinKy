@@ -57,8 +57,8 @@ const LLM_PROVIDERS = [
 ];
 
 const LLM_MODELS = {
-  openai: ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo'],
-  anthropic: ['claude-3-haiku', 'claude-3-sonnet', 'claude-3-opus'],
+  openai: ['gpt-4o', 'gpt-4-turbo', 'gpt-4'],
+  anthropic: ['claude-sonnet-4', 'claude-opus-4'],
   google: ['gemini-pro', 'gemini-pro-vision'],
   local: ['llama2', 'llama3', 'mistral', 'codellama', 'custom'],
 };

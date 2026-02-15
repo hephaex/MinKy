@@ -11,7 +11,7 @@ import bleach
 import logging
 from datetime import datetime, timezone
 from app.utils.auto_tag import detect_auto_tags, merge_tags
-from app.utils.obsidian_parser import ObsidianParser
+from app.utils.obsidian_parser import ObsidianParser, extract_author_from_frontmatter
 from app.utils.backup_manager import create_document_backup, update_document_backup
 
 logger = logging.getLogger(__name__)
@@ -47,34 +47,9 @@ def process_obsidian_content(markdown_content, backup_dir=None):
     }
 
 
-def extract_author_from_frontmatter(frontmatter):
-    """Extract author from frontmatter, handling various formats"""
-    if not frontmatter:
-        return None
-
-    author = frontmatter.get('author')
-    if not author:
-        return None
-
-    if isinstance(author, list):
-        if len(author) > 0:
-            author = author[0]
-        else:
-            return None
-
-    if isinstance(author, str):
-        author = author.strip()
-        if author.startswith('[[') and author.endswith(']]'):
-            author = author[2:-2]
-        author = author.strip('"\'')
-        return author if author else None
-
-    return None
-
-
 @documents_bp.route('/documents', methods=['POST'])
 @limiter.limit("30 per hour")
-@jwt_required(optional=True)
+@jwt_required()
 def create_document():
     try:
         data = request.get_json()
@@ -170,11 +145,17 @@ def create_document():
 
 
 @documents_bp.route('/documents', methods=['GET'])
+@limiter.limit("60 per minute")
 @jwt_required(optional=True)
 def list_documents():
     try:
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
+
+        # SECURITY: Enforce pagination bounds to prevent resource exhaustion
+        page = max(1, page)
+        per_page = max(1, min(per_page, 100))
+
         search = request.args.get('search', '')
         include_private = request.args.get('include_private', 'false').lower() == 'true'
 
@@ -188,7 +169,8 @@ def list_documents():
             include_private=include_private and current_user_id is not None,
             tags=tags_filter if tags_filter else None
         )
-        documents = [doc.to_dict() for doc in pagination.items]
+        # Use lite serialization for list views to avoid N+1 queries
+        documents = [doc.to_dict_lite() for doc in pagination.items]
 
         return jsonify({
             'documents': documents,
@@ -210,6 +192,7 @@ def list_documents():
 
 
 @documents_bp.route('/documents/<int:document_id>', methods=['GET'])
+@limiter.limit("120 per minute")  # SECURITY: Add rate limiting to prevent enumeration
 @jwt_required(optional=True)
 def get_document(document_id):
     from werkzeug.exceptions import HTTPException
@@ -231,7 +214,7 @@ def get_document(document_id):
 
 @documents_bp.route('/documents/<int:document_id>', methods=['PUT'])
 @limiter.limit("60 per hour")
-@jwt_required(optional=True)
+@jwt_required()
 def update_document(document_id):
     try:
         document = get_or_404(Document, document_id)
@@ -319,7 +302,7 @@ def update_document(document_id):
 
 @documents_bp.route('/documents/<int:document_id>', methods=['DELETE'])
 @limiter.limit("30 per hour")
-@jwt_required(optional=True)
+@jwt_required()
 def delete_document(document_id):
     try:
         document = get_or_404(Document, document_id)

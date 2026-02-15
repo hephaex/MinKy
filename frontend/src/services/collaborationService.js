@@ -1,6 +1,11 @@
 import { io } from 'socket.io-client';
 import { logError, logWarning } from '../utils/logger';
 
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
+
+// Helper to get auth token
+const getAuthToken = () => localStorage.getItem('token');
+
 class CollaborationService {
   constructor() {
     this.socket = null;
@@ -17,9 +22,14 @@ class CollaborationService {
       return;
     }
 
-    this.socket = io('http://localhost:5001', {
+    // SECURITY: Include auth token in WebSocket connection
+    const token = getAuthToken();
+    this.socket = io(SOCKET_URL, {
       transports: ['websocket'],
-      autoConnect: true
+      autoConnect: true,
+      auth: {
+        token: token
+      }
     });
 
     this.socket.on('connect', () => {

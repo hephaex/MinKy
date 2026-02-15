@@ -1,154 +1,59 @@
 import re
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 import logging
 from app.models.document import Document
 from app.utils.backup_manager import backup_manager
-from app.utils.obsidian_parser import ObsidianParser
+from app.utils.obsidian_parser import ObsidianParser, extract_author_from_frontmatter
 from app.utils.auto_tag import detect_auto_tags
+from app.utils.backup_filename_parser import BackupFilenameParser
 from app import db
 
 logger = logging.getLogger(__name__)
 
-def extract_author_from_frontmatter(frontmatter):
-    """Extract author from frontmatter, handling various formats"""
-    if not frontmatter:
-        return None
-    
-    author = frontmatter.get('author')
-    if not author:
-        return None
-    
-    # Handle different author formats
-    if isinstance(author, list):
-        # If author is a list, take the first item
-        if len(author) > 0:
-            author = author[0]
-        else:
-            return None
-    
-    # If it's a string, clean it up
-    if isinstance(author, str):
-        # Remove Obsidian-style wiki links: [[name]] -> name
-        author = author.strip()
-        if author.startswith('[[') and author.endswith(']]'):
-            author = author[2:-2]
-        # Remove quotes if present
-        author = author.strip('"\'')
-        return author if author else None
-    
-    return None
 
 class BackupSyncManager:
     """백업 파일과 DB 동기화 관리 클래스"""
-    
+
     def __init__(self):
         self.obsidian_parser = ObsidianParser()
         self.backup_dir = backup_manager.backup_root_dir
-    
-    def _try_pattern_with_time(self, filename: str) -> Optional[Dict]:
-        """Try parsing YYYYMMDD_title_HHMMSS.md pattern"""
-        pattern = r'^(\d{8})_(.+)_(\d{6})\.md$'
-        match = re.match(pattern, filename)
-
-        if match:
-            date_str, title_part, time_str = match.groups()
-            try:
-                date_obj = datetime.strptime(date_str + time_str, '%Y%m%d%H%M%S')
-                return {
-                    'filename': filename,
-                    'date': date_obj,
-                    'title_part': title_part,
-                    'original_date_str': date_str,
-                    'original_time_str': time_str
-                }
-            except ValueError:
-                pass
-        return None
-
-    def _try_pattern_date_only(self, filename: str) -> Optional[Dict]:
-        """Try parsing YYYYMMDD_title.md pattern"""
-        pattern = r'^(\d{8})_(.+)\.md$'
-        match = re.match(pattern, filename)
-
-        if match:
-            date_str, title_part = match.groups()
-            try:
-                date_obj = datetime.strptime(date_str, '%Y%m%d')
-                return {
-                    'filename': filename,
-                    'date': date_obj,
-                    'title_part': title_part,
-                    'original_date_str': date_str,
-                    'original_time_str': '000000'
-                }
-            except ValueError:
-                pass
-        return None
-
-    def _try_pattern_hyphenated(self, filename: str) -> Optional[Dict]:
-        """Try parsing YYYY-MM-DD_title.md pattern"""
-        pattern = r'^(\d{4}-\d{2}-\d{2})_(.+)\.md$'
-        match = re.match(pattern, filename)
-
-        if match:
-            date_str, title_part = match.groups()
-            try:
-                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-                return {
-                    'filename': filename,
-                    'date': date_obj,
-                    'title_part': title_part,
-                    'original_date_str': date_str.replace('-', ''),
-                    'original_time_str': '000000'
-                }
-            except ValueError:
-                pass
-        return None
-
-    def _try_pattern_generic(self, filename: str) -> Optional[Dict]:
-        """Try parsing generic markdown file using file modification time"""
-        title_part = filename[:-3]
-        file_path = self.backup_dir / filename
-
-        if file_path.exists():
-            file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-            return {
-                'filename': filename,
-                'date': file_mtime,
-                'title_part': title_part,
-                'original_date_str': file_mtime.strftime('%Y%m%d'),
-                'original_time_str': file_mtime.strftime('%H%M%S')
-            }
-        return None
+        self.filename_parser = BackupFilenameParser(self.backup_dir)
 
     def parse_backup_filename(self, filename: str) -> Optional[Dict]:
         """백업 파일명에서 정보 추출: 다양한 패턴 지원"""
-        try:
-            if not filename.lower().endswith('.md'):
-                return None
-
-            result = (
-                self._try_pattern_with_time(filename) or
-                self._try_pattern_date_only(filename) or
-                self._try_pattern_hyphenated(filename) or
-                self._try_pattern_generic(filename)
-            )
-
-            if not result:
-                logger.warning(f"Could not parse filename: {filename}")
-
-            return result
-
-        except Exception as e:
-            logger.error(f"Failed to parse backup filename {filename}: {e}")
-            return None
+        return self.filename_parser.parse(filename)
     
+    # Maximum file size for backup files (10 MB)
+    MAX_BACKUP_FILE_SIZE = 10 * 1024 * 1024
+
     def extract_document_info_from_backup(self, file_path: Path) -> Optional[Dict]:
         """백업 파일에서 문서 정보 추출"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            # SECURITY: Validate path is within backup directory and not a symlink
+            resolved_path = file_path.resolve()
+            backup_root = self.backup_dir.resolve()
+
+            try:
+                resolved_path.relative_to(backup_root)
+            except ValueError:
+                logger.warning(f"Path traversal attempt detected: {file_path}")
+                return None
+
+            # SECURITY: Reject symlinks to prevent arbitrary file read
+            if file_path.is_symlink():
+                logger.warning(f"Symlink detected and rejected: {file_path}")
+                return None
+
+            # SECURITY: Check file size before reading to prevent DoS
+            file_size = file_path.stat().st_size
+            if file_size > self.MAX_BACKUP_FILE_SIZE:
+                logger.warning(f"Backup file too large ({file_size} bytes): {file_path}")
+                return None
+
+            with open(resolved_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
             # 백업 파일 헤더에서 메타데이터 추출
@@ -294,19 +199,39 @@ class BackupSyncManager:
         
         return filtered_tags
     
-    def find_matching_document(self, backup_info: Dict) -> Optional[Document]:
-        """백업 파일과 매칭되는 DB 문서 찾기"""
+    def find_matching_document(self, backup_info: Dict, user_id: Optional[int] = None) -> Optional[Document]:
+        """백업 파일과 매칭되는 DB 문서 찾기 (사용자 권한 기반)
+
+        Args:
+            backup_info: 백업 파일 정보
+            user_id: 요청하는 사용자 ID (None이면 공개 문서만 검색)
+        """
         try:
+            from sqlalchemy import or_
+
+            # SECURITY: Build base query with authorization filter
+            def authorized_filter(query):
+                if user_id:
+                    return query.filter(
+                        or_(Document.is_public == True, Document.user_id == user_id)
+                    )
+                return query.filter(Document.is_public == True)
+
             # 1. 원본 문서 ID로 찾기 (백업 헤더에 기록된 경우)
             original_doc_id = backup_info['header_info'].get('document_id')
             if original_doc_id:
                 doc: Optional[Document] = db.session.get(Document, original_doc_id)
+                # SECURITY: Verify user has access to this document
                 if doc:
-                    return doc
+                    if user_id and (doc.is_public or doc.user_id == user_id):
+                        return doc
+                    elif not user_id and doc.is_public:
+                        return doc
 
-            # 2. 제목으로 찾기
+            # 2. 제목으로 찾기 (최대 100개까지만 검색 - 안전 제한)
             title = backup_info['title']
-            docs: List[Document] = Document.query.filter_by(title=title).all()
+            base_query = Document.query.filter_by(title=title)
+            docs: List[Document] = authorized_filter(base_query).limit(100).all()
             if len(docs) == 1:
                 return docs[0]
             elif len(docs) > 1:
@@ -314,17 +239,27 @@ class BackupSyncManager:
                 result: Document = max(docs, key=lambda d: d.updated_at or d.created_at)
                 return result
 
-            # 3. 콘텐츠 유사성으로 찾기 (간단한 해시 비교)
-            content_hash = hash(backup_info['markdown_content'][:500])  # 첫 500자로 해시
-            all_docs: List[Document] = Document.query.all()
-            for doc in all_docs:
+            # 3. 콘텐츠 유사성으로 찾기 - 배치 처리로 메모리 효율적
+            backup_content_start = backup_info['markdown_content'][:500]
+            backup_hash = hashlib.sha256(backup_content_start.encode('utf-8')).hexdigest()
+
+            # SECURITY: Only search authorized documents, with limit
+            MAX_CONTENT_SEARCH = 5000
+            search_query = authorized_filter(Document.query)
+            for i, doc in enumerate(search_query.yield_per(100)):
+                if i >= MAX_CONTENT_SEARCH:
+                    logger.warning("Content search limit reached in find_matching_document")
+                    break
                 if doc.markdown_content:
-                    doc_hash = hash(doc.markdown_content[:500])
-                    if doc_hash == content_hash:
-                        return doc
+                    doc_content_start = doc.markdown_content[:500]
+                    doc_hash = hashlib.sha256(doc_content_start.encode('utf-8')).hexdigest()
+                    if doc_hash == backup_hash:
+                        # Verify actual content match to prevent hash collision false positives
+                        if doc_content_start == backup_content_start:
+                            return doc
 
             return None
-            
+
         except Exception as e:
             logger.error(f"Failed to find matching document: {e}")
             return None
@@ -401,8 +336,9 @@ class BackupSyncManager:
         ai_tags = self._generate_ai_tags(backup_info['markdown_content'], backup_info['title'])
         all_tags = list(set(existing_tags + ai_tags))
 
-        for tag in document.tags.all():
-            document.tags.remove(tag)
+        # 태그 교체: 기존 태그 제거 후 새 태그 추가
+        # tags relationship uses selectin loading, iterate directly
+        document.tags.clear()
 
         if all_tags:
             document.add_tags(all_tags)
@@ -414,16 +350,45 @@ class BackupSyncManager:
 
     def _prepare_sync_result(self, action: str, document: Document, backup_info: Dict) -> Dict:
         """Prepare base sync result structure"""
+        # SECURITY: Only expose filename, not full server path
+        backup_filename = os.path.basename(backup_info.get('file_path', 'unknown'))
         return {
             'action': action,
             'document_id': document.id,
-            'backup_file': backup_info['file_path'],
+            'backup_file': backup_filename,
             'success': False
         }
 
-    def sync_document_from_backup(self, document: Document, backup_info: Dict, force_direction: str = 'auto') -> Dict:
-        """백업 파일과 문서 동기화"""
+    def sync_document_from_backup(self, document: Document, backup_info: Dict, force_direction: str = 'auto', user_id: Optional[int] = None) -> Dict:
+        """백업 파일과 문서 동기화
+
+        Args:
+            document: 동기화할 문서
+            backup_info: 백업 파일 정보
+            force_direction: 동기화 방향 ('auto', 'update_db', 'update_file')
+            user_id: 요청하는 사용자 ID (권한 확인용)
+        """
         try:
+            # SECURITY: Verify user has permission to modify this document
+            if user_id is not None:
+                if not document.can_edit(user_id):
+                    return {
+                        'action': 'error',
+                        'success': False,
+                        'message': 'Not authorized to modify this document',
+                        'document_id': document.id,
+                        'backup_file': backup_info['file_path']
+                    }
+            else:
+                # SECURITY: Reject sync operation without user_id to prevent unauthorized access
+                return {
+                    'action': 'error',
+                    'success': False,
+                    'message': 'User authentication required for sync operations',
+                    'document_id': document.id,
+                    'backup_file': os.path.basename(backup_info.get('file_path', 'unknown'))
+                }
+
             comparison = self.compare_document_versions(document, backup_info)
             action = comparison['recommendation'] if force_direction == 'auto' else force_direction
             result = self._prepare_sync_result(action, document, backup_info)
@@ -466,6 +431,15 @@ class BackupSyncManager:
     
     def create_document_from_backup(self, backup_info: Dict, user_id: Optional[int] = None) -> Dict:
         """백업 파일에서 새 문서 생성"""
+        # SECURITY: Require user_id for document creation
+        if user_id is None:
+            return {
+                'action': 'create',
+                'success': False,
+                'backup_file': os.path.basename(backup_info.get('file_path', 'unknown')),
+                'message': 'User authentication required to create documents'
+            }
+
         try:
             document = Document(
                 title=backup_info['title'],
@@ -507,7 +481,8 @@ class BackupSyncManager:
                 'action': 'create',
                 'success': True,
                 'document_id': document.id,
-                'backup_file': backup_info['file_path'],
+                # SECURITY: Only expose filename, not full server path
+                'backup_file': os.path.basename(backup_info.get('file_path', 'unknown')),
                 'message': f'New document created from backup: {document.title}'
             }
             
@@ -517,8 +492,10 @@ class BackupSyncManager:
             return {
                 'action': 'create',
                 'success': False,
-                'backup_file': backup_info['file_path'],
-                'message': f'Failed to create document: {str(e)}'
+                # SECURITY: Only expose filename, not full server path
+                'backup_file': os.path.basename(backup_info.get('file_path', 'unknown')),
+                # SECURITY: Generic error message, log details internally
+                'message': 'Failed to create document from backup'
             }
     
     def scan_backup_files(self) -> List[Dict[str, Any]]:
@@ -560,10 +537,10 @@ class BackupSyncManager:
             'details': []
         }
 
-    def _process_existing_document(self, existing_doc: Document, backup_info: Dict, dry_run: bool) -> Dict:
+    def _process_existing_document(self, existing_doc: Document, backup_info: Dict, dry_run: bool, user_id: Optional[int] = None) -> Dict:
         """Process sync for existing document"""
         if not dry_run:
-            return self.sync_document_from_backup(existing_doc, backup_info)
+            return self.sync_document_from_backup(existing_doc, backup_info, user_id=user_id)
 
         comparison = self.compare_document_versions(existing_doc, backup_info)
         return {
@@ -609,10 +586,11 @@ class BackupSyncManager:
         for backup_info in backup_files:
             try:
                 results['processed'] += 1
-                existing_doc = self.find_matching_document(backup_info)
+                # SECURITY: Pass user_id to filter documents by authorization
+                existing_doc = self.find_matching_document(backup_info, user_id=user_id)
 
                 if existing_doc:
-                    sync_result = self._process_existing_document(existing_doc, backup_info, dry_run)
+                    sync_result = self._process_existing_document(existing_doc, backup_info, dry_run, user_id=user_id)
                 else:
                     sync_result = self._process_new_document(backup_info, user_id, dry_run)
 

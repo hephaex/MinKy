@@ -8,6 +8,25 @@ from .base_agent import BaseAgent, AgentTask, AgentType, TaskStatus
 
 logger = logging.getLogger(__name__)
 
+# SECURITY: Patterns that may indicate prompt injection attempts
+PROMPT_INJECTION_PATTERNS = [
+    r'ignore\s+(previous|above|all)\s+instructions',
+    r'disregard\s+(previous|above|all)',
+    r'forget\s+(previous|above|all)',
+    r'system\s*:\s*',
+    r'<\s*system\s*>',
+    r'\[\s*INST\s*\]',
+    r'</?\s*prompt\s*>',
+    r'new\s+instructions?\s*:',
+    r'override\s+system',
+    r'you\s+are\s+now\s+a',
+]
+
+# SECURITY: Maximum input lengths to prevent abuse
+MAX_QUERY_LENGTH = 2000
+MAX_CONTENT_LENGTH = 10000
+MAX_CONTEXT_LENGTH = 3000
+
 
 @register_agent('research')
 class ResearchAgent(BaseAgent):
@@ -51,6 +70,36 @@ Output Format:
         """Return the research agent system prompt."""
         return self.SYSTEM_PROMPT
 
+    # SECURITY: Allowed task types whitelist
+    ALLOWED_TASK_TYPES = frozenset({'analyze', 'summarize', 'extract', 'compare', 'answer'})
+
+    def _sanitize_input(self, text: str, max_length: int, field_name: str) -> str:
+        """SECURITY: Sanitize user input to prevent prompt injection.
+
+        - Truncates to max_length
+        - Detects suspicious patterns
+        - Removes control characters
+        """
+        if not isinstance(text, str):
+            return ''
+
+        # Truncate to max length
+        text = text[:max_length]
+
+        # Remove control characters (except newlines and tabs)
+        text = ''.join(c for c in text if c.isprintable() or c in '\n\t')
+
+        # Check for prompt injection patterns
+        for pattern in PROMPT_INJECTION_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                logger.warning(
+                    f"SECURITY: Potential prompt injection detected in {field_name}"
+                )
+                # Remove the suspicious pattern
+                text = re.sub(pattern, '[REDACTED]', text, flags=re.IGNORECASE)
+
+        return text
+
     def execute(self, task: AgentTask) -> AgentTask:
         """Execute a research task.
 
@@ -67,11 +116,43 @@ Output Format:
 
         try:
             input_data = task.input_data
-            query = input_data.get('query', '')
-            content = input_data.get('content', '')
+
+            # SECURITY: Validate and sanitize all user inputs
+            query = self._sanitize_input(
+                input_data.get('query', ''),
+                MAX_QUERY_LENGTH,
+                'query'
+            )
+
             task_type = input_data.get('task_type', 'analyze')
-            context = input_data.get('context', '')
+            # SECURITY: Validate task_type against whitelist
+            if task_type not in self.ALLOWED_TASK_TYPES:
+                task.mark_failed(f"Invalid task_type. Must be one of: {', '.join(sorted(self.ALLOWED_TASK_TYPES))}")
+                return task
+
+            content = self._sanitize_input(
+                input_data.get('content', ''),
+                MAX_CONTENT_LENGTH,
+                'content'
+            )
+
+            context = self._sanitize_input(
+                input_data.get('context', ''),
+                MAX_CONTEXT_LENGTH,
+                'context'
+            )
+
             previous_output = input_data.get('previous_output', {})
+            # SECURITY: Sanitize previous output summary if present
+            if isinstance(previous_output, dict) and 'summary' in previous_output:
+                previous_output = {
+                    **previous_output,
+                    'summary': self._sanitize_input(
+                        str(previous_output.get('summary', ''))[:500],
+                        500,
+                        'previous_output.summary'
+                    )
+                }
 
             # Build the research prompt
             prompt = self._build_prompt(query, content, task_type, context, previous_output)
@@ -108,8 +189,9 @@ Output Format:
             task.mark_completed(result)
 
         except Exception as e:
-            logger.error(f"Research agent execution failed: {e}")
-            task.mark_failed(str(e))
+            # SECURITY: Log full error internally, return generic message to user
+            logger.error(f"Research agent execution failed: {e}", exc_info=True)
+            task.mark_failed("Research task failed. Please try again.")
 
         return task
 

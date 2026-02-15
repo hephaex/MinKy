@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timezone
 import numpy as np
 from collections import defaultdict, Counter
+from sklearn.metrics.pairwise import cosine_similarity
 from app.models.document import Document
 
 logger = logging.getLogger(__name__)

@@ -5,9 +5,11 @@ Provides endpoints for machine learning-powered document analytics
 
 from flask import Blueprint, request, jsonify, Response
 from flask_jwt_extended import jwt_required
+from sqlalchemy import or_
 from app.services.ml_analytics_service import ml_analytics_service
 from app.models.document import Document
 from app.utils.auth import get_optional_user_id
+from app.utils.constants import MAX_ANALYTICS_DAYS
 from app import limiter
 import logging
 
@@ -15,7 +17,12 @@ logger = logging.getLogger(__name__)
 
 ml_analytics_bp = Blueprint('ml_analytics', __name__)
 
+# SECURITY: Whitelist for valid scope values
+VALID_SCOPES = frozenset({'user', 'public'})
+
 @ml_analytics_bp.route('/ml-analytics/status', methods=['GET'])
+@limiter.limit("60 per minute")  # SECURITY: Rate limiting
+@jwt_required(optional=True)  # SECURITY: Add JWT for logging/tracking purposes
 def get_ml_analytics_status() -> Response | tuple[Response, int]:
     """
     Get ML analytics service status and capabilities
@@ -52,6 +59,7 @@ def get_ml_analytics_status() -> Response | tuple[Response, int]:
         }), 500
 
 @ml_analytics_bp.route('/ml-analytics/document/<int:document_id>/insights', methods=['GET'])
+@limiter.limit("30 per minute")  # SECURITY: Rate limiting for ML-intensive operation
 @jwt_required(optional=True)
 def get_document_insights(document_id: int) -> Response | tuple[Response, int]:
     """
@@ -112,10 +120,17 @@ def get_corpus_insights() -> Response | tuple[Response, int]:
             }), 503
         
         user_id = get_optional_user_id()
-        
+
         # Get query parameters
         scope = request.args.get('scope', 'user')  # 'user' or 'public'
-        
+
+        # SECURITY: Validate scope parameter against whitelist
+        if scope not in VALID_SCOPES:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid scope. Must be one of: {", ".join(VALID_SCOPES)}'
+            }), 400
+
         # Determine which documents to analyze
         analysis_user_id = None
         if scope == 'user' and user_id:
@@ -125,7 +140,7 @@ def get_corpus_insights() -> Response | tuple[Response, int]:
         else:
             # Default to user's documents if authenticated, public otherwise
             analysis_user_id = user_id
-        
+
         # Generate corpus insights
         insights = ml_analytics_service.get_corpus_insights(analysis_user_id)
         
@@ -149,6 +164,7 @@ def get_corpus_insights() -> Response | tuple[Response, int]:
         }), 500
 
 @ml_analytics_bp.route('/ml-analytics/document/<int:document_id>/similar', methods=['GET'])
+@limiter.limit("30 per minute")  # SECURITY: Rate limiting for ML-intensive operation
 @jwt_required(optional=True)
 def get_similar_documents(document_id: int) -> Response | tuple[Response, int]:
     """
@@ -175,17 +191,29 @@ def get_similar_documents(document_id: int) -> Response | tuple[Response, int]:
         
         # Get similarity analysis
         similarity_data = ml_analytics_service._get_document_similarities(document)
-        
+
         if 'error' in similarity_data:
             return jsonify({
                 'success': False,
                 'error': similarity_data['error']
             }), 400
-        
+
+        # SECURITY: Filter similar documents by authorization to prevent IDOR
+        # Only return documents the user can access
+        filtered_similar = []
+        for sim_doc in similarity_data.get('similar_documents', []):
+            sim_doc_id = sim_doc.get('id')
+            if sim_doc_id:
+                actual_doc = Document.query.get(sim_doc_id)
+                if actual_doc:
+                    # Check if user can access this document
+                    if actual_doc.is_public or (user_id and actual_doc.user_id == user_id):
+                        filtered_similar.append(sim_doc)
+
         return jsonify({
             'success': True,
             'document_id': document_id,
-            'similar_documents': similarity_data['similar_documents']
+            'similar_documents': filtered_similar
         })
         
     except Exception as e:
@@ -196,6 +224,7 @@ def get_similar_documents(document_id: int) -> Response | tuple[Response, int]:
         }), 500
 
 @ml_analytics_bp.route('/ml-analytics/document/<int:document_id>/sentiment', methods=['GET'])
+@limiter.limit("30 per minute")  # SECURITY: Rate limiting
 @jwt_required(optional=True)
 def get_document_sentiment(document_id: int) -> Response | tuple[Response, int]:
     """
@@ -231,6 +260,7 @@ def get_document_sentiment(document_id: int) -> Response | tuple[Response, int]:
         }), 500
 
 @ml_analytics_bp.route('/ml-analytics/document/<int:document_id>/recommendations', methods=['GET'])
+@limiter.limit("30 per minute")  # SECURITY: Rate limiting
 @jwt_required(optional=True)
 def get_document_recommendations(document_id: int) -> Response | tuple[Response, int]:
     """
@@ -285,7 +315,20 @@ def perform_document_clustering() -> Response | tuple[Response, int]:
         data = request.get_json() or {}
         scope = data.get('scope', 'user')
         max_documents = data.get('max_documents', 100)
-        
+
+        # SECURITY: Validate scope parameter against whitelist
+        if scope not in VALID_SCOPES:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid scope. Must be one of: {", ".join(VALID_SCOPES)}'
+            }), 400
+
+        # SECURITY: Validate max_documents to prevent resource exhaustion
+        MAX_ML_DOCUMENTS = 500
+        if not isinstance(max_documents, int):
+            max_documents = 100
+        max_documents = max(1, min(max_documents, MAX_ML_DOCUMENTS))
+
         # Get documents for clustering
         query = Document.query
         if scope == 'user' and user_id:
@@ -350,7 +393,20 @@ def perform_topic_modeling() -> Response | tuple[Response, int]:
         data = request.get_json() or {}
         scope = data.get('scope', 'user')
         max_documents = data.get('max_documents', 100)
-        
+
+        # SECURITY: Validate scope parameter against whitelist
+        if scope not in VALID_SCOPES:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid scope. Must be one of: {", ".join(VALID_SCOPES)}'
+            }), 400
+
+        # SECURITY: Validate max_documents to prevent resource exhaustion
+        MAX_ML_DOCUMENTS = 500
+        if not isinstance(max_documents, int):
+            max_documents = 100
+        max_documents = max(1, min(max_documents, MAX_ML_DOCUMENTS))
+
         # Get documents for topic modeling
         query = Document.query
         if scope == 'user' and user_id:
@@ -396,6 +452,7 @@ def perform_topic_modeling() -> Response | tuple[Response, int]:
         }), 500
 
 @ml_analytics_bp.route('/ml-analytics/trends', methods=['GET'])
+@limiter.limit("10 per hour")  # SECURITY: Stricter rate limit for resource-intensive trend analysis
 @jwt_required(optional=True)
 def get_document_trends() -> Response | tuple[Response, int]:
     """
@@ -403,11 +460,21 @@ def get_document_trends() -> Response | tuple[Response, int]:
     """
     try:
         user_id = get_optional_user_id()
-        
+
         # Get query parameters
         scope = request.args.get('scope', 'user')
-        days = int(request.args.get('days', 30))
-        
+        days = request.args.get('days', 30, type=int)
+
+        # SECURITY: Validate scope parameter against whitelist
+        if scope not in VALID_SCOPES:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid scope. Must be one of: {", ".join(VALID_SCOPES)}'
+            }), 400
+
+        # SECURITY: Validate days parameter bounds
+        days = max(1, min(days, MAX_ANALYTICS_DAYS))
+
         # Get documents for trend analysis
         query = Document.query
         if scope == 'user' and user_id:
@@ -427,8 +494,9 @@ def get_document_trends() -> Response | tuple[Response, int]:
             start_date = datetime.now(timezone.utc) - timedelta(days=days)
             query = query.filter(Document.created_at >= start_date)
 
-        # Add limit to prevent loading excessive data
-        max_documents = 2000
+        # SECURITY: Limit documents to prevent DoS via resource exhaustion
+        # Reduced from 2000 to 500 to match other ML-intensive endpoints
+        max_documents = 500
         documents = query.limit(max_documents).all()
         
         if not documents:

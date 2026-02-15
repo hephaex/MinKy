@@ -1,12 +1,31 @@
+import os
+import json
 from flask import Blueprint, request, current_app
 from flask_jwt_extended import jwt_required
+from app import limiter
 from app.models.notification import Notification, NotificationPreference
 from app.utils.auth import get_current_user_id, get_current_user
 from app.utils.responses import success_response, error_response
 from app.services.notification_service import NotificationService
 from marshmallow import Schema, fields, ValidationError
+import logging
+
+logger = logging.getLogger(__name__)
 
 notifications_bp = Blueprint('notifications', __name__)
+
+
+def _log_notification_operation(operation: str, user_id: int, notification_id: int = None,
+                                details: dict = None) -> None:
+    """SECURITY: Audit log notification operations for compliance."""
+    log_entry = {
+        'operation': operation,
+        'user_id': user_id,
+        'notification_id': notification_id,
+        'ip_address': request.remote_addr if request else None,
+        'details': details or {}
+    }
+    logger.info(f"AUDIT_NOTIFICATION: {json.dumps(log_entry)}")
 
 class NotificationPreferenceSchema(Schema):
     document_comments = fields.Bool()
@@ -21,6 +40,7 @@ class NotificationPreferenceSchema(Schema):
     digest_frequency = fields.Str(validate=lambda x: x in ['none', 'daily', 'weekly'])
 
 @notifications_bp.route('/notifications', methods=['GET'])
+@limiter.limit("60 per minute")
 @jwt_required()
 def get_notifications():
     """Get notifications for the current user"""
@@ -31,8 +51,8 @@ def get_notifications():
         return error_response('User not found', 404)
 
     # Get query parameters
-    limit = min(int(request.args.get('limit', 50)), 100)  # Max 100 notifications
-    offset = int(request.args.get('offset', 0))
+    limit = min(request.args.get('limit', 50, type=int), 100)  # Max 100 notifications
+    offset = max(request.args.get('offset', 0, type=int), 0)  # Ensure non-negative
     unread_only = request.args.get('unread_only', 'false').lower() == 'true'
 
     try:
@@ -61,6 +81,7 @@ def get_notifications():
         return error_response('Failed to fetch notifications', 500)
 
 @notifications_bp.route('/notifications/<int:notification_id>/read', methods=['POST'])
+@limiter.limit("60 per minute")
 @jwt_required()
 def mark_notification_read(notification_id):
     """Mark a specific notification as read"""
@@ -77,6 +98,10 @@ def mark_notification_read(notification_id):
 
     try:
         notification.mark_as_read()
+
+        # SECURITY: Audit log notification read
+        _log_notification_operation('read', current_user_id, notification_id)
+
         return success_response({
             'message': 'Notification marked as read',
             'notification': notification.to_dict()
@@ -87,6 +112,7 @@ def mark_notification_read(notification_id):
         return error_response('Failed to mark notification as read', 500)
 
 @notifications_bp.route('/notifications/read-all', methods=['POST'])
+@limiter.limit("10 per minute")
 @jwt_required()
 def mark_all_notifications_read():
     """Mark all notifications as read for the current user"""
@@ -95,6 +121,9 @@ def mark_all_notifications_read():
     try:
         Notification.mark_all_read(current_user_id)
         summary = NotificationService.get_notification_summary(current_user_id)
+
+        # SECURITY: Audit log bulk read operation
+        _log_notification_operation('read_all', current_user_id)
 
         return success_response({
             'message': 'All notifications marked as read',
@@ -106,6 +135,7 @@ def mark_all_notifications_read():
         return error_response('Failed to mark notifications as read', 500)
 
 @notifications_bp.route('/notifications/<int:notification_id>', methods=['DELETE'])
+@limiter.limit("30 per minute")
 @jwt_required()
 def delete_notification(notification_id):
     """Delete a specific notification"""
@@ -122,6 +152,10 @@ def delete_notification(notification_id):
 
     try:
         notification.soft_delete()
+
+        # SECURITY: Audit log notification deletion
+        _log_notification_operation('delete', current_user_id, notification_id)
+
         return success_response(message='Notification deleted')
 
     except Exception as e:
@@ -129,6 +163,7 @@ def delete_notification(notification_id):
         return error_response('Failed to delete notification', 500)
 
 @notifications_bp.route('/notifications/summary', methods=['GET'])
+@limiter.limit("60 per minute")  # SECURITY: Rate limiting
 @jwt_required()
 def get_notification_summary():
     """Get notification summary for the current user"""
@@ -143,6 +178,7 @@ def get_notification_summary():
         return error_response('Failed to get notification summary', 500)
 
 @notifications_bp.route('/notifications/preferences', methods=['GET'])
+@limiter.limit("60 per minute")  # SECURITY: Rate limiting
 @jwt_required()
 def get_notification_preferences():
     """Get notification preferences for the current user"""
@@ -157,6 +193,7 @@ def get_notification_preferences():
         return error_response('Failed to get notification preferences', 500)
 
 @notifications_bp.route('/notifications/preferences', methods=['PUT'])
+@limiter.limit("30 per minute")
 @jwt_required()
 def update_notification_preferences():
     """Update notification preferences for the current user"""
@@ -176,14 +213,29 @@ def update_notification_preferences():
     try:
         preferences = NotificationPreference.get_or_create_preferences(current_user_id)
 
-        # Update preferences
+        # SECURITY: Use explicit allowlist for preference fields
+        ALLOWED_PREFERENCE_FIELDS = {
+            'document_comments', 'document_ratings', 'document_shares',
+            'document_updates', 'mentions', 'follows', 'template_usage',
+            'email_notifications', 'push_notifications', 'digest_frequency'
+        }
+
+        # Update preferences with allowlist validation
         for key, value in validated_data.items():
-            setattr(preferences, key, value)
+            if key in ALLOWED_PREFERENCE_FIELDS:
+                setattr(preferences, key, value)
 
         from app import db
         from datetime import datetime, timezone
         preferences.updated_at = datetime.now(timezone.utc)
         db.session.commit()
+
+        # SECURITY: Audit log preference update
+        _log_notification_operation(
+            'update_preferences',
+            current_user_id,
+            details={'fields_updated': list(validated_data.keys())}
+        )
 
         return success_response({
             'message': 'Notification preferences updated',
@@ -195,13 +247,15 @@ def update_notification_preferences():
         return error_response('Failed to update notification preferences', 500)
 
 @notifications_bp.route('/notifications/test', methods=['POST'])
+@limiter.limit("5 per minute")
 @jwt_required()
 def create_test_notification():
     """Create a test notification (for testing purposes)"""
     current_user_id = get_current_user_id()
 
     # Only allow in development/testing environments
-    if current_app.config.get('ENV') == 'production':
+    flask_env = os.getenv('FLASK_ENV', 'production')
+    if flask_env == 'production':
         return error_response('Test notifications not allowed in production', 403)
 
     data = request.get_json()
@@ -229,6 +283,7 @@ def create_test_notification():
         return error_response('Failed to create test notification', 500)
 
 @notifications_bp.route('/notifications/bulk-actions', methods=['POST'])
+@limiter.limit("10 per minute")
 @jwt_required()
 def bulk_notification_actions():
     """Perform bulk actions on notifications"""
@@ -243,6 +298,21 @@ def bulk_notification_actions():
 
     if not action or not notification_ids:
         return error_response('action and notification_ids required', 400)
+
+    # SECURITY: Limit bulk operation size to prevent resource exhaustion
+    MAX_BULK_IDS = 100
+    if not isinstance(notification_ids, list):
+        return error_response('notification_ids must be a list', 400)
+    if len(notification_ids) > MAX_BULK_IDS:
+        return error_response(f'Too many notification IDs (max {MAX_BULK_IDS})', 400)
+
+    # SECURITY: Validate each notification_id is a positive integer
+    validated_ids = []
+    for nid in notification_ids:
+        if not isinstance(nid, int) or nid < 1:
+            return error_response('Each notification_id must be a positive integer', 400)
+        validated_ids.append(nid)
+    notification_ids = validated_ids
 
     if action not in ['read', 'delete']:
         return error_response('Invalid action. Must be "read" or "delete"', 400)
@@ -269,6 +339,13 @@ def bulk_notification_actions():
             message = f"Deleted {len(notifications)} notifications"
 
         summary = NotificationService.get_notification_summary(current_user_id)
+
+        # SECURITY: Audit log bulk action
+        _log_notification_operation(
+            f'bulk_{action}',
+            current_user_id,
+            details={'count': len(notifications), 'notification_ids': notification_ids}
+        )
 
         return success_response({
             'message': message,

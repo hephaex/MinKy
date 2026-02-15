@@ -1,37 +1,48 @@
 import logging
+import re
 from typing import Dict, List, Optional, Any
 from opensearchpy import OpenSearch, RequestsHttpConnection
 from opensearchpy.exceptions import NotFoundError
 from app.utils.korean_text import KoreanTextProcessor
+from app.services.opensearch_mappings import (
+    get_document_index_settings,
+    get_org_roam_index_settings
+)
 
 logger = logging.getLogger(__name__)
 
 class OpenSearchService:
     """OpenSearch 기반 다국어 검색 서비스"""
     
-    def __init__(self, host='localhost', port=9200, use_ssl=False, 
-                 username=None, password=None):
+    def __init__(self, host='localhost', port=9200, use_ssl=False,
+                 username=None, password=None, verify_certs=None):
         """
         OpenSearch 클라이언트 초기화
-        
+
         Args:
             host: OpenSearch 호스트
             port: OpenSearch 포트
             use_ssl: SSL 사용 여부
             username: 인증 사용자명
             password: 인증 비밀번호
+            verify_certs: SSL 인증서 검증 여부 (기본값: 환경변수 또는 True)
         """
+        import os
         self.korean_processor = KoreanTextProcessor()
-        
+
         auth = None
         if username and password:
             auth = (username, password)
-        
+
+        # SSL 인증서 검증 설정 (보안: 기본값 True)
+        if verify_certs is None:
+            verify_certs = os.getenv('OPENSEARCH_VERIFY_CERTS', 'true').lower() == 'true'
+
         self.client = OpenSearch(
             hosts=[{'host': host, 'port': port}],
             http_auth=auth,
             use_ssl=use_ssl,
-            verify_certs=False,  # 개발 환경에서는 False
+            verify_certs=verify_certs,
             connection_class=RequestsHttpConnection
         )
         
@@ -48,134 +59,8 @@ class OpenSearchService:
     
     def create_document_index(self):
         """문서용 인덱스 생성 (한국어 분석기 포함)"""
-        
-        index_settings = {
-            "settings": {
-                "number_of_shards": 1,
-                "number_of_replicas": 0,
-                "analysis": {
-                    "tokenizer": {
-                        "korean_tokenizer": {
-                            "type": "nori_tokenizer",
-                            "decompound_mode": "mixed"
-                        }
-                    },
-                    "analyzer": {
-                        "korean_analyzer": {
-                            "type": "custom",
-                            "tokenizer": "korean_tokenizer",
-                            "filter": [
-                                "lowercase",
-                                "nori_part_of_speech",
-                                "nori_readingform"
-                            ]
-                        },
-                        "mixed_analyzer": {
-                            "type": "custom",
-                            "tokenizer": "standard",
-                            "filter": [
-                                "lowercase",
-                                "asciifolding"
-                            ]
-                        }
-                    },
-                    "filter": {
-                        "nori_part_of_speech": {
-                            "type": "nori_part_of_speech",
-                            "stoptags": [
-                                "E", "IC", "J", "MAG", "MAJ", 
-                                "MM", "SP", "SSC", "SSO", "SC"
-                            ]
-                        }
-                    }
-                }
-            },
-            "mappings": {
-                "properties": {
-                    "id": {
-                        "type": "integer"
-                    },
-                    "title": {
-                        "type": "text",
-                        "fields": {
-                            "korean": {
-                                "type": "text",
-                                "analyzer": "korean_analyzer"
-                            },
-                            "mixed": {
-                                "type": "text",
-                                "analyzer": "mixed_analyzer"
-                            },
-                            "keyword": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "content": {
-                        "type": "text",
-                        "fields": {
-                            "korean": {
-                                "type": "text",
-                                "analyzer": "korean_analyzer"
-                            },
-                            "mixed": {
-                                "type": "text",
-                                "analyzer": "mixed_analyzer"
-                            }
-                        }
-                    },
-                    "author": {
-                        "type": "text",
-                        "fields": {
-                            "keyword": {
-                                "type": "keyword"
-                            }
-                        }
-                    },
-                    "tags": {
-                        "type": "keyword"
-                    },
-                    "language": {
-                        "type": "keyword"
-                    },
-                    "user_id": {
-                        "type": "integer"
-                    },
-                    "is_public": {
-                        "type": "boolean"
-                    },
-                    "is_published": {
-                        "type": "boolean"
-                    },
-                    "created_at": {
-                        "type": "date"
-                    },
-                    "updated_at": {
-                        "type": "date"
-                    },
-                    "published_at": {
-                        "type": "date"
-                    },
-                    "keywords": {
-                        "type": "nested",
-                        "properties": {
-                            "word": {"type": "keyword"},
-                            "pos": {"type": "keyword"},
-                            "count": {"type": "integer"}
-                        }
-                    },
-                    "metadata": {
-                        "type": "object",
-                        "enabled": True
-                    },
-                    "search_vector": {
-                        "type": "text",
-                        "analyzer": "korean_analyzer"
-                    }
-                }
-            }
-        }
-        
+        index_settings = get_document_index_settings()
+
         try:
             if self.client.indices.exists(index=self.document_index):
                 logger.info(f"Index {self.document_index} already exists")
@@ -194,64 +79,8 @@ class OpenSearchService:
     
     def create_org_roam_index(self):
         """org-roam 문서용 특별 인덱스 생성"""
-        
-        index_settings = {
-            "settings": {
-                "number_of_shards": 1,
-                "number_of_replicas": 0,
-                "analysis": {
-                    "analyzer": {
-                        "korean_analyzer": {
-                            "type": "custom",
-                            "tokenizer": "nori_tokenizer",
-                            "filter": ["lowercase", "nori_part_of_speech"]
-                        }
-                    }
-                }
-            },
-            "mappings": {
-                "properties": {
-                    "id": {"type": "integer"},
-                    "org_roam_id": {"type": "keyword"},
-                    "title": {
-                        "type": "text",
-                        "fields": {
-                            "korean": {"type": "text", "analyzer": "korean_analyzer"},
-                            "keyword": {"type": "keyword"}
-                        }
-                    },
-                    "content": {
-                        "type": "text",
-                        "analyzer": "korean_analyzer"
-                    },
-                    "filename": {"type": "keyword"},
-                    "file_path": {"type": "keyword"},
-                    "roam_tags": {"type": "keyword"},
-                    "roam_aliases": {"type": "keyword"},
-                    "tags": {"type": "keyword"},
-                    "language": {"type": "keyword"},
-                    "backlinks": {
-                        "type": "nested",
-                        "properties": {
-                            "source_title": {"type": "text"},
-                            "source_filename": {"type": "keyword"},
-                            "link_text": {"type": "text"}
-                        }
-                    },
-                    "outbound_links": {
-                        "type": "nested",
-                        "properties": {
-                            "target_title": {"type": "text"},
-                            "target_filename": {"type": "keyword"},
-                            "link_text": {"type": "text"}
-                        }
-                    },
-                    "created_at": {"type": "date"},
-                    "modified_at": {"type": "date"}
-                }
-            }
-        }
-        
+        index_settings = get_org_roam_index_settings()
+
         try:
             if self.client.indices.exists(index=self.org_roam_index):
                 logger.info(f"Index {self.org_roam_index} already exists")
@@ -293,10 +122,23 @@ class OpenSearchService:
             logger.error(f"Failed to index document {document_data.get('id')}: {e}")
             return False
     
+    # SECURITY: Pagination limits to prevent resource exhaustion
+    MAX_PAGE_SIZE = 100
+    MAX_PAGE_NUMBER = 1000
+
     def search_documents(self, query: str, filters: Optional[Dict] = None,
                         page: int = 1, per_page: int = 20,
                         user_id: Optional[int] = None) -> Dict:
         """문서 검색 (한국어 지원)"""
+
+        # SECURITY: Validate and bound pagination parameters
+        if not isinstance(page, int) or page < 1:
+            page = 1
+        page = min(page, self.MAX_PAGE_NUMBER)
+
+        if not isinstance(per_page, int) or per_page < 1:
+            per_page = 20
+        per_page = min(per_page, self.MAX_PAGE_SIZE)
 
         # 검색 쿼리 구성
         must_clauses: List[Dict[str, Any]] = []
@@ -441,26 +283,37 @@ class OpenSearchService:
             }
             
         except Exception as e:
-            logger.error(f"Search failed: {e}")
+            # SECURITY: Log detailed error but return generic message
+            logger.error(f"Search failed: {e}", exc_info=True)
             return {
                 'documents': [],
                 'total': 0,
                 'page': page,
                 'per_page': per_page,
                 'pages': 0,
-                'error': str(e)
+                'error': 'Search failed. Please try again later.'
             }
     
+    # SECURITY: Maximum limit for tag suggestions
+    MAX_TAG_SUGGESTIONS = 50
+
     def suggest_tags(self, query: str, limit: int = 10) -> List[str]:
         """태그 자동완성 제안"""
         try:
+            # SECURITY: Validate and bound limit parameter
+            if not isinstance(limit, int) or limit < 1:
+                limit = 10
+            limit = min(limit, self.MAX_TAG_SUGGESTIONS)
+
+            # Escape regex metacharacters to prevent regex injection
+            escaped_query = re.escape(query)
             search_body = {
                 "size": 0,
                 "aggs": {
                     "tag_suggestions": {
                         "terms": {
                             "field": "tags",
-                            "include": f".*{query}.*",
+                            "include": f".*{escaped_query}.*",
                             "size": limit
                         }
                     }
@@ -483,10 +336,14 @@ class OpenSearchService:
             logger.error(f"Tag suggestion failed: {e}")
             return []
     
-    def get_document_statistics(self) -> Dict:
-        """문서 통계 정보"""
+    def get_document_statistics(self, user_id: Optional[int] = None) -> Dict:
+        """문서 통계 정보 (with access control)
+
+        Args:
+            user_id: Filter statistics to documents accessible by this user
+        """
         try:
-            stats_body = {
+            stats_body: Dict[str, Any] = {
                 "size": 0,
                 "aggs": {
                     "total_docs": {"value_count": {"field": "id"}},
@@ -501,7 +358,25 @@ class OpenSearchService:
                     }
                 }
             }
-            
+
+            # SECURITY: Apply access control filter to statistics
+            if user_id is not None:
+                # User can see public docs + their own private docs
+                stats_body["query"] = {
+                    "bool": {
+                        "should": [
+                            {"term": {"is_public": True}},
+                            {"term": {"user_id": user_id}}
+                        ],
+                        "minimum_should_match": 1
+                    }
+                }
+            else:
+                # Unauthenticated: only public documents
+                stats_body["query"] = {
+                    "term": {"is_public": True}
+                }
+
             response = self.client.search(
                 index=self.document_index,
                 body=stats_body
@@ -579,11 +454,12 @@ class OpenSearchService:
             }
             
         except Exception as e:
-            logger.error(f"Bulk indexing failed: {e}")
+            # SECURITY: Log detailed error but return generic message
+            logger.error(f"Bulk indexing failed: {e}", exc_info=True)
             return {
                 'success_count': 0,
                 'failed_count': len(documents),
-                'error': str(e)
+                'error': 'Indexing failed. Please try again later.'
             }
     
     def health_check(self) -> Dict:
@@ -608,8 +484,9 @@ class OpenSearchService:
             }
             
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
-            return {'status': 'error', 'error': str(e)}
+            # SECURITY: Log detailed error but return generic message
+            logger.error(f"Health check failed: {e}", exc_info=True)
+            return {'status': 'error', 'error': 'Health check failed.'}
 
 # 전역 인스턴스 (설정에 따라 초기화)
 opensearch_service = None
@@ -617,14 +494,28 @@ opensearch_service = None
 def initialize_opensearch(config: Dict):
     """OpenSearch 서비스 초기화"""
     global opensearch_service
-    
+
     try:
+        username = config.get('username')
+        password = config.get('password')
+        use_ssl = config.get('use_ssl', False)
+
+        # Validate credentials are either both provided or both None
+        if (username and not password) or (password and not username):
+            logger.error("OpenSearch credentials incomplete - need both username and password")
+            return False
+
+        # Security warning: credentials without SSL is insecure
+        if username and password and not use_ssl:
+            logger.warning("OpenSearch credentials provided without SSL - connection may be insecure")
+
         opensearch_service = OpenSearchService(
             host=config.get('host', 'localhost'),
             port=config.get('port', 9200),
-            use_ssl=config.get('use_ssl', False),
-            username=config.get('username'),
-            password=config.get('password')
+            use_ssl=use_ssl,
+            username=username,
+            password=password,
+            verify_certs=config.get('verify_certs')
         )
         
         # 인덱스 생성

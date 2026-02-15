@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import './DateSidebar.css';
 
+// Helper to get auth token for API calls
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
   const [state, setState] = useState({
     timeline: {},
@@ -14,7 +20,10 @@ const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
     const fetchTimeline = async () => {
       try {
         setState(prev => ({ ...prev, loading: true }));
-        const response = await fetch(`/api/documents/timeline?group_by=${state.groupBy}`);
+        // SECURITY: Include auth headers for consistency
+        const response = await fetch(`/api/documents/timeline?group_by=${state.groupBy}`, {
+          headers: getAuthHeaders()
+        });
         if (!response.ok) throw new Error('Failed to fetch timeline');
         
         const data = await response.json();

@@ -21,7 +21,11 @@ const MLAnalytics = ({ documentId, showCorpusAnalysis = false }) => {
 
   const loadMLStatus = async () => {
     try {
-      const response = await fetch('/api/ml-analytics/status');
+      // SECURITY: Include auth headers for consistency
+      const token = authService.getToken();
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+      const response = await fetch('/api/ml-analytics/status', { headers });
       const data = await response.json();
       setMlStatus(data.status);
     } catch (err) {

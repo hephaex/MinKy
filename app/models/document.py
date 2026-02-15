@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
 from app import db
+from app.utils.datetime_utils import utc_now
 import markdown
 import bleach
 from app.models.tag import document_tags
@@ -33,13 +33,16 @@ ALLOWED_ATTRIBUTES = {
 }
 
 
-def utc_now():
-    """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
-
-
 class Document(db.Model):
     __tablename__ = 'documents'
+    __table_args__ = (
+        db.Index('idx_documents_user_id', 'user_id'),
+        db.Index('idx_documents_is_public', 'is_public'),
+        db.Index('idx_documents_user_visibility', 'user_id', 'is_public'),
+        db.Index('idx_documents_updated_at', 'updated_at'),
+        db.Index('idx_documents_created_at', 'created_at'),
+        db.Index('idx_documents_category_id', 'category_id'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
@@ -57,7 +60,8 @@ class Document(db.Model):
     document_metadata = db.Column(db.JSON, nullable=True)  # 확장 가능한 메타데이터 저장
     
     # Relationships
-    tags = db.relationship('Tag', secondary=document_tags, backref='documents', lazy='dynamic')
+    # Use 'selectin' for efficient batch loading when accessing tags
+    tags = db.relationship('Tag', secondary=document_tags, backref=db.backref('documents', lazy='dynamic'), lazy='selectin')
     
     def __init__(self, title, markdown_content, author=None, user_id=None, is_public=True, document_metadata=None):
         self.title = title
@@ -104,7 +108,7 @@ class Document(db.Model):
             self.html_content = self.convert_markdown_to_html()
         if author:
             self.author = author
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = utc_now()
     
     def create_version(self, change_summary=None, created_by=None):
         """Create a version of current document state"""
@@ -226,8 +230,34 @@ class Document(db.Model):
             return False
         return self.user_id == user_id
     
-    def to_dict(self):
+    def to_dict_lite(self):
+        """Lightweight serialization for list views - avoids N+1 queries.
+
+        Use this for paginated lists where full stats aren't needed.
+        """
         return {
+            'id': self.id,
+            'title': self.title,
+            'author': self.author,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'user_id': self.user_id,
+            'category_id': self.category_id,
+            'is_public': self.is_public,
+            'is_published': self.is_published,
+            'published_at': self.published_at.isoformat() if self.published_at else None,
+            'tag_names': [tag.name for tag in self.tags],
+        }
+
+    def to_dict(self, include_stats=True, stats=None):
+        """Full serialization with optional pre-computed stats.
+
+        Args:
+            include_stats: If False, skip expensive stat queries
+            stats: Optional dict with pre-computed stats:
+                   {'comment_count': N, 'version_count': N, 'latest_version': N, 'rating_stats': {...}}
+        """
+        result = {
             'id': self.id,
             'title': self.title,
             'author': self.author,
@@ -248,10 +278,22 @@ class Document(db.Model):
             'published_at': self.published_at.isoformat() if self.published_at else None,
             'metadata': self.document_metadata,
             'owner': self.owner.to_dict() if self.owner else None,
-            'tags': [tag.to_dict() for tag in self.tags],
-            'tag_names': self.get_tag_names(),
-            'comment_count': self.get_comment_count(),
-            'rating_stats': self.get_rating_stats(),
-            'version_count': self.get_version_count(),
-            'latest_version': self.get_latest_version_number()
+            'tags': [{'id': t.id, 'name': t.name, 'slug': t.slug, 'color': t.color} for t in self.tags],
+            'tag_names': [tag.name for tag in self.tags],
         }
+
+        if include_stats:
+            if stats:
+                # Use pre-computed stats
+                result['comment_count'] = stats.get('comment_count', 0)
+                result['rating_stats'] = stats.get('rating_stats', {'average': 0, 'count': 0})
+                result['version_count'] = stats.get('version_count', 0)
+                result['latest_version'] = stats.get('latest_version', 0)
+            else:
+                # Compute stats (expensive - avoid in list views)
+                result['comment_count'] = self.get_comment_count()
+                result['rating_stats'] = self.get_rating_stats()
+                result['version_count'] = self.get_version_count()
+                result['latest_version'] = self.get_latest_version_number()
+
+        return result

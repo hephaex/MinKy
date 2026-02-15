@@ -1,12 +1,8 @@
 from app import db
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from enum import Enum
 from sqlalchemy import Index
-
-
-def utc_now():
-    """Return current UTC time as timezone-aware datetime."""
-    return datetime.now(timezone.utc)
+from app.utils.datetime_utils import utc_now
 
 
 class NotificationType(Enum):
@@ -77,7 +73,18 @@ class Notification(db.Model):
         db.session.commit()
     
     def to_dict(self):
-        """Convert notification to dictionary"""
+        """Convert notification to dictionary.
+
+        SECURITY: Actor info limited to prevent PII exposure.
+        """
+        # SECURITY: Only expose minimal actor info (id and username)
+        actor_info = None
+        if self.actor:
+            actor_info = {
+                'id': self.actor.id,
+                'username': self.actor.username
+            }
+
         return {
             'id': self.id,
             'type': self.type.value,
@@ -86,7 +93,7 @@ class Notification(db.Model):
             'document_id': self.document_id,
             'comment_id': self.comment_id,
             'actor_id': self.actor_id,
-            'actor': self.actor.to_dict() if self.actor else None,
+            'actor': actor_info,
             'document': {
                 'id': self.document.id,
                 'title': self.document.title
