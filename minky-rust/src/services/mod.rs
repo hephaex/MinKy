@@ -1,3 +1,5 @@
+mod ai_service;
+mod analytics_service;
 mod attachment_service;
 mod audit_service;
 mod auth_service;
@@ -5,10 +7,13 @@ mod category_service;
 mod comment_service;
 mod document_service;
 mod notification_service;
+mod search_service;
 mod tag_service;
 mod version_service;
 mod workflow_service;
 
+pub use ai_service::*;
+pub use analytics_service::*;
 pub use attachment_service::*;
 pub use audit_service::*;
 pub use auth_service::*;
@@ -16,6 +21,7 @@ pub use category_service::*;
 pub use comment_service::*;
 pub use document_service::*;
 pub use notification_service::*;
+pub use search_service::*;
 pub use tag_service::*;
 pub use version_service::*;
 pub use workflow_service::*;

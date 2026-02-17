@@ -1,3 +1,5 @@
+mod ai;
+mod analytics;
 mod attachments;
 mod auth;
 mod categories;
@@ -5,6 +7,7 @@ mod comments;
 mod documents;
 mod health;
 mod notifications;
+mod search;
 mod tags;
 mod versions;
 mod workflows;
@@ -26,4 +29,7 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/attachments", attachments::routes())
         .nest("/versions", versions::routes())
         .nest("/notifications", notifications::routes())
+        .nest("/ai", ai::routes())
+        .nest("/search", search::routes())
+        .nest("/analytics", analytics::routes())
 }
