@@ -66,6 +66,10 @@ async-trait = "0.1"
 # Security
 secrecy = { version = "0.10", features = ["serde"] }
 rand = "0.8"
+sha2 = "0.10"
+
+# Text Processing
+regex = "1.11"
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -26,6 +26,8 @@ pub struct Config {
     pub openai_api_key: Option<SecretString>,
 
     pub anthropic_api_key: Option<SecretString>,
+
+    pub git_repo_path: Option<String>,
 }
 
 fn default_host() -> String {
