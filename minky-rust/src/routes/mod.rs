@@ -16,6 +16,7 @@ mod notifications;
 mod ocr;
 mod search;
 mod security;
+mod skills;
 mod sync;
 mod tags;
 mod templates;
@@ -54,4 +55,5 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/timeline", timeline::router())
         .nest("/sync", sync::router())
         .nest("/korean", korean::router())
+        .nest("/skills", skills::router())
 }
