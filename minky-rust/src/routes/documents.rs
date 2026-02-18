@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    routing::{delete, get, post, put},
+    routing::get,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ use crate::{error::AppResult, AppState};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_documents).post(create_document))
-        .route("/:id", get(get_document).put(update_document).delete(delete_document))
+        .route("/{id}", get(get_document).put(update_document).delete(delete_document))
 }
 
 #[derive(Debug, Deserialize)]

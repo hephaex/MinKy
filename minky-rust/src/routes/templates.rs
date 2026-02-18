@@ -19,11 +19,11 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_templates))
         .route("/", post(create_template))
-        .route("/:id", get(get_template))
-        .route("/:id", put(update_template))
-        .route("/:id", delete(delete_template))
-        .route("/:id/preview", post(preview_template))
-        .route("/:id/apply", post(apply_template))
+        .route("/{id}", get(get_template))
+        .route("/{id}", put(update_template))
+        .route("/{id}", delete(delete_template))
+        .route("/{id}/preview", post(preview_template))
+        .route("/{id}/apply", post(apply_template))
 }
 
 #[derive(Debug, Serialize)]

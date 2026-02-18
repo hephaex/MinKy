@@ -1,9 +1,8 @@
 use axum::{
-    body::Bytes,
     extract::{Multipart, Path, State},
     http::{header, StatusCode},
     response::IntoResponse,
-    routing::{delete, get, post},
+    routing::get,
     Json, Router,
 };
 use serde::Serialize;
@@ -12,16 +11,16 @@ use uuid::Uuid;
 
 use crate::{
     error::{AppError, AppResult},
-    models::{validate_upload, AttachmentWithUploader, CreateAttachment, MAX_FILE_SIZE},
+    models::{validate_upload, AttachmentWithUploader, CreateAttachment},
     services::AttachmentService,
     AppState,
 };
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/document/:document_id", get(list_attachments).post(upload_attachment))
-        .route("/:id", get(download_attachment).delete(delete_attachment))
-        .route("/:id/info", get(get_attachment_info))
+        .route("/document/{document_id}", get(list_attachments).post(upload_attachment))
+        .route("/{id}", get(download_attachment).delete(delete_attachment))
+        .route("/{id}/info", get(get_attachment_info))
 }
 
 #[derive(Debug, Serialize)]

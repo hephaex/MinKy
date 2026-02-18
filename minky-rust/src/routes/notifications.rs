@@ -16,9 +16,9 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_notifications))
         .route("/count", get(get_unread_count))
-        .route("/:id/read", put(mark_as_read))
+        .route("/{id}/read", put(mark_as_read))
         .route("/read-all", post(mark_all_as_read))
-        .route("/:id", delete(delete_notification))
+        .route("/{id}", delete(delete_notification))
 }
 
 #[derive(Debug, Deserialize)]

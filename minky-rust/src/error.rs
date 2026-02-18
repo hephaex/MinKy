@@ -27,6 +27,12 @@ pub enum AppError {
     #[error("Rate limit exceeded")]
     RateLimited,
 
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+
+    #[error("External service error: {0}")]
+    ExternalService(String),
+
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
 
@@ -43,6 +49,14 @@ impl IntoResponse for AppError {
             AppError::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
             AppError::RateLimited => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
+            AppError::Configuration(msg) => {
+                tracing::error!("Configuration error: {}", msg);
+                (StatusCode::INTERNAL_SERVER_ERROR, "Configuration error".to_string())
+            }
+            AppError::ExternalService(msg) => {
+                tracing::error!("External service error: {}", msg);
+                (StatusCode::BAD_GATEWAY, msg.clone())
+            }
             AppError::Database(e) => {
                 tracing::error!("Database error: {:?}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string())
@@ -63,4 +77,7 @@ impl IntoResponse for AppError {
 }
 
 /// Type alias for Results with AppError
-pub type AppResult<T> = Result<T, AppError>;
+pub type AppResult<T> = std::result::Result<T, AppError>;
+
+/// Convenient Result type alias
+pub type Result<T> = std::result::Result<T, AppError>;

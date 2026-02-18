@@ -18,7 +18,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", post(start_export))
         .route("/download", get(download_export))
-        .route("/status/:id", get(get_export_status))
+        .route("/status/{id}", get(get_export_status))
         .route("/import", post(start_import))
 }
 

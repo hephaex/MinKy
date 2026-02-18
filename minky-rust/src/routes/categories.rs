@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    routing::{delete, get, post, put},
+    routing::get,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_categories).post(create_category))
         .route("/tree", get(list_categories_tree))
-        .route("/:id", get(get_category).put(update_category).delete(delete_category))
+        .route("/{id}", get(get_category).put(update_category).delete(delete_category))
 }
 
 #[derive(Debug, Deserialize)]

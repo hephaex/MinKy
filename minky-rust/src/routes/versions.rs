@@ -15,11 +15,11 @@ use crate::{
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/document/:document_id", get(list_versions).post(create_version))
-        .route("/:id", get(get_version))
-        .route("/document/:document_id/latest", get(get_latest_version))
-        .route("/document/:document_id/restore/:version_number", post(restore_version))
-        .route("/document/:document_id/compare", get(compare_versions))
+        .route("/document/{document_id}", get(list_versions).post(create_version))
+        .route("/{id}", get(get_version))
+        .route("/document/{document_id}/latest", get(get_latest_version))
+        .route("/document/{document_id}/restore/{version_number}", post(restore_version))
+        .route("/document/{document_id}/compare", get(compare_versions))
 }
 
 #[derive(Debug, Serialize)]

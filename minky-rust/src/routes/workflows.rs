@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    routing::{get, post, put},
+    routing::{get, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -16,12 +16,12 @@ use crate::{
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/document/:document_id", get(get_workflow_by_document).post(create_workflow))
-        .route("/:id", get(get_workflow).put(update_assignment))
-        .route("/:id/status", put(update_status))
-        .route("/:id/history", get(get_history))
+        .route("/document/{document_id}", get(get_workflow_by_document).post(create_workflow))
+        .route("/{id}", get(get_workflow).put(update_assignment))
+        .route("/{id}/status", put(update_status))
+        .route("/{id}/history", get(get_history))
         .route("/assigned", get(list_assigned))
-        .route("/status/:status", get(list_by_status))
+        .route("/status/{status}", get(list_by_status))
         .route("/overdue", get(list_overdue))
 }
 

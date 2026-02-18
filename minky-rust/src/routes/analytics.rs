@@ -20,7 +20,7 @@ pub fn routes() -> Router<AppState> {
         .route("/overview", get(get_overview))
         .route("/dashboard", get(get_dashboard))
         .route("/documents/top", get(get_top_documents))
-        .route("/documents/:id/content", get(analyze_document_content))
+        .route("/documents/{id}/content", get(analyze_document_content))
         .route("/users/active", get(get_active_users))
         .route("/categories", get(get_category_stats))
         .route("/tags", get(get_tag_stats))

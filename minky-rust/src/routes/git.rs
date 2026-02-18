@@ -22,7 +22,7 @@ pub fn routes() -> Router<AppState> {
         .route("/log", get(get_log))
         .route("/branches", get(list_branches))
         .route("/branches", post(create_branch))
-        .route("/branches/:name/checkout", post(checkout_branch))
+        .route("/branches/{name}/checkout", post(checkout_branch))
         .route("/commit", post(commit))
         .route("/push", post(push))
         .route("/pull", post(pull))

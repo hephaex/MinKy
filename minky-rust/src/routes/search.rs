@@ -15,7 +15,6 @@ use crate::{
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(search))
-        .route("/semantic", post(semantic_search))
         .route("/autocomplete", get(autocomplete))
         .route("/reindex", post(reindex_all))
 }

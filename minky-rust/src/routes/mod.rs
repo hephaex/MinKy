@@ -7,13 +7,16 @@ mod auth;
 mod categories;
 mod comments;
 mod documents;
+mod embeddings;
 mod export;
 mod git;
+mod harness;
 mod health;
 mod korean;
 mod ml;
 mod notifications;
 mod ocr;
+mod rag;
 mod search;
 mod security;
 mod skills;
@@ -21,6 +24,7 @@ mod sync;
 mod tags;
 mod templates;
 mod timeline;
+mod understanding;
 mod versions;
 mod workflows;
 
@@ -33,7 +37,7 @@ pub fn api_routes() -> Router<AppState> {
     Router::new()
         .merge(health::routes())
         .nest("/auth", auth::routes())
-        .nest("/documents", documents::routes())
+        .nest("/documents", documents::routes().merge(understanding::routes()))
         .nest("/tags", tags::routes())
         .nest("/categories", categories::routes())
         .nest("/comments", comments::routes())
@@ -42,7 +46,7 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/versions", versions::routes())
         .nest("/notifications", notifications::routes())
         .nest("/ai", ai::routes())
-        .nest("/search", search::routes())
+        .nest("/search", search::routes().merge(rag::router()))
         .nest("/analytics", analytics::routes())
         .nest("/admin", admin::routes())
         .nest("/export", export::routes())
@@ -56,4 +60,6 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/sync", sync::router())
         .nest("/korean", korean::router())
         .nest("/skills", skills::router())
+        .nest("/harness", harness::router())
+        .nest("/embeddings", embeddings::router())
 }
