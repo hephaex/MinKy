@@ -1,4 +1,5 @@
 mod admin;
+mod agents;
 mod ai;
 mod analytics;
 mod attachments;
@@ -9,11 +10,16 @@ mod documents;
 mod export;
 mod git;
 mod health;
+mod korean;
+mod ml;
 mod notifications;
+mod ocr;
 mod search;
 mod security;
+mod sync;
 mod tags;
 mod templates;
+mod timeline;
 mod versions;
 mod workflows;
 
@@ -42,4 +48,10 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/templates", templates::routes())
         .nest("/git", git::routes())
         .nest("/security", security::routes())
+        .nest("/agents", agents::router())
+        .nest("/ocr", ocr::router())
+        .nest("/ml", ml::router())
+        .nest("/timeline", timeline::router())
+        .nest("/sync", sync::router())
+        .nest("/korean", korean::router())
 }

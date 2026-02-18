@@ -1,0 +1,154 @@
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// AI Agent types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentType {
+    Summarizer,
+    Classifier,
+    Translator,
+    QA,
+    CodeReviewer,
+    Writer,
+    Researcher,
+    Custom,
+}
+
+/// Agent status
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentStatus {
+    #[default]
+    Idle,
+    Running,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+/// Agent definition
+#[derive(Debug, Serialize)]
+pub struct Agent {
+    pub id: i32,
+    pub name: String,
+    pub description: Option<String>,
+    pub agent_type: AgentType,
+    pub system_prompt: String,
+    pub model: String,
+    pub temperature: f32,
+    pub max_tokens: i32,
+    pub tools: Vec<AgentTool>,
+    pub is_active: bool,
+    pub created_by: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Agent tool/capability
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentTool {
+    pub name: String,
+    pub description: String,
+    pub parameters: Option<serde_json::Value>,
+}
+
+/// Create agent request
+#[derive(Debug, Deserialize)]
+pub struct CreateAgent {
+    pub name: String,
+    pub description: Option<String>,
+    pub agent_type: AgentType,
+    pub system_prompt: String,
+    pub model: Option<String>,
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<i32>,
+    pub tools: Option<Vec<AgentTool>>,
+}
+
+/// Update agent request
+#[derive(Debug, Deserialize)]
+pub struct UpdateAgent {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub system_prompt: Option<String>,
+    pub model: Option<String>,
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<i32>,
+    pub tools: Option<Vec<AgentTool>>,
+    pub is_active: Option<bool>,
+}
+
+/// Agent execution request
+#[derive(Debug, Deserialize)]
+pub struct ExecuteAgentRequest {
+    pub input: String,
+    pub context: Option<serde_json::Value>,
+    pub document_ids: Option<Vec<uuid::Uuid>>,
+    pub stream: Option<bool>,
+}
+
+/// Agent execution task
+#[derive(Debug, Serialize)]
+pub struct AgentTask {
+    pub id: String,
+    pub agent_id: i32,
+    pub user_id: i32,
+    pub status: AgentStatus,
+    pub input: String,
+    pub output: Option<String>,
+    pub error: Option<String>,
+    pub tokens_used: Option<i32>,
+    pub execution_time_ms: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Agent execution result
+#[derive(Debug, Serialize)]
+pub struct AgentResult {
+    pub task_id: String,
+    pub output: String,
+    pub tokens_used: i32,
+    pub execution_time_ms: i64,
+    pub tool_calls: Vec<ToolCall>,
+}
+
+/// Tool call record
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub tool_name: String,
+    pub input: serde_json::Value,
+    pub output: serde_json::Value,
+    pub execution_time_ms: i64,
+}
+
+/// Agent conversation message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentMessage {
+    pub role: MessageRole,
+    pub content: String,
+    pub tool_calls: Option<Vec<ToolCall>>,
+}
+
+/// Message role
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MessageRole {
+    System,
+    User,
+    Assistant,
+    Tool,
+}
+
+/// Agent conversation
+#[derive(Debug, Serialize)]
+pub struct AgentConversation {
+    pub id: String,
+    pub agent_id: i32,
+    pub user_id: i32,
+    pub messages: Vec<AgentMessage>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
