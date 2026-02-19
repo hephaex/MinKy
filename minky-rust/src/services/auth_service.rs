@@ -181,6 +181,10 @@ mod tests {
             openai_api_key: None,
             anthropic_api_key: None,
             git_repo_path: None,
+            slack_client_id: None,
+            slack_client_secret: None,
+            slack_redirect_uri: None,
+            slack_signing_secret: None,
         }
     }
 
@@ -288,6 +292,10 @@ mod tests {
             openai_api_key: None,
             anthropic_api_key: None,
             git_repo_path: None,
+            slack_client_id: None,
+            slack_client_secret: None,
+            slack_redirect_uri: None,
+            slack_signing_secret: None,
         };
         let other_svc = AuthService::new(other_pool, other_config);
 
@@ -326,6 +334,10 @@ mod tests {
             openai_api_key: None,
             anthropic_api_key: None,
             git_repo_path: None,
+            slack_client_id: None,
+            slack_client_secret: None,
+            slack_redirect_uri: None,
+            slack_signing_secret: None,
         };
         let svc = AuthService::new(pool, config);
 

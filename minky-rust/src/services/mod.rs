@@ -22,6 +22,7 @@ mod rag_service;
 mod search_service;
 mod security_service;
 mod skill_service;
+pub mod slack_oauth_service;
 pub mod slack_service;
 mod sync_service;
 mod tag_service;

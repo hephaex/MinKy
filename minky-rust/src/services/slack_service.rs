@@ -522,4 +522,176 @@ mod tests {
             extracted_at: chrono::Utc::now(),
         }
     }
+
+    // Additional is_thread_worth_analysing edge cases
+
+    #[test]
+    fn test_worth_analysing_exactly_min_replies_passes() {
+        // min_replies = 1, so we need at least 2 messages (1 root + 1 reply)
+        let messages = vec![
+            make_message("1", "alice", &"a".repeat(60), Some("ts1")),
+            make_message("2", "bob", &"b".repeat(60), Some("ts1")),
+        ];
+        assert!(SlackService::is_thread_worth_analysing(&messages, 1, 50));
+    }
+
+    #[test]
+    fn test_worth_analysing_exactly_min_chars_passes() {
+        // 3 chars per message * 2 messages = 6, min_chars = 6
+        let messages = vec![
+            make_message("1", "alice", "abc", Some("ts1")),
+            make_message("2", "bob", "def", Some("ts1")),
+        ];
+        assert!(SlackService::is_thread_worth_analysing(&messages, 1, 6));
+    }
+
+    #[test]
+    fn test_worth_analysing_one_less_than_min_chars_fails() {
+        let messages = vec![
+            make_message("1", "alice", "abc", Some("ts1")),
+            make_message("2", "bob", "de", Some("ts1")),
+        ];
+        // total = 5, min_chars = 6
+        assert!(!SlackService::is_thread_worth_analysing(&messages, 1, 6));
+    }
+
+    #[test]
+    fn test_worth_analysing_three_distinct_users_passes() {
+        let messages = vec![
+            make_message("1", "alice", &"x".repeat(50), Some("ts1")),
+            make_message("2", "bob",   &"y".repeat(50), Some("ts1")),
+            make_message("3", "carol", &"z".repeat(50), Some("ts1")),
+        ];
+        assert!(SlackService::is_thread_worth_analysing(&messages, 2, 50));
+    }
+
+    // Additional build_conversation_prompt tests
+
+    #[test]
+    fn test_build_prompt_single_message() {
+        let msg = make_message("1", "alice", "hello world", None);
+        let prompt = SlackService::build_conversation_prompt(&[msg]);
+        assert_eq!(prompt, "[alice]: hello world");
+    }
+
+    #[test]
+    fn test_build_prompt_preserves_message_order() {
+        let messages = vec![
+            make_message("1", "a", "first", None),
+            make_message("2", "b", "second", None),
+            make_message("3", "c", "third", None),
+        ];
+        let prompt = SlackService::build_conversation_prompt(&messages);
+        let lines: Vec<&str> = prompt.split('\n').collect();
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].contains("first"));
+        assert!(lines[1].contains("second"));
+        assert!(lines[2].contains("third"));
+    }
+
+    // Additional classify_status tests
+
+    #[test]
+    fn test_classify_status_empty_summary_is_failed() {
+        let mut k = sample_knowledge();
+        k.summary = String::new();
+        assert_eq!(SlackService::classify_status(&k), ExtractionStatus::Failed);
+    }
+
+    #[test]
+    fn test_classify_status_exactly_threshold_confidence_is_pending() {
+        let mut k = sample_knowledge();
+        k.confidence = 0.3; // exactly at skip boundary
+        // 0.3 is NOT below 0.3, so it should be Pending
+        assert_eq!(SlackService::classify_status(&k), ExtractionStatus::Pending);
+    }
+
+    #[test]
+    fn test_classify_status_just_below_threshold_is_skipped() {
+        let mut k = sample_knowledge();
+        k.confidence = 0.29;
+        assert_eq!(SlackService::classify_status(&k), ExtractionStatus::Skipped);
+    }
+
+    // Additional apply_filter tests
+
+    #[test]
+    fn test_apply_filter_no_filter_returns_all() {
+        let messages: Vec<_> = (0..5)
+            .map(|i| make_message(&i.to_string(), "alice", "text", None))
+            .collect();
+        let filter = MessageFilter::default();
+        let result = SlackService::apply_filter(&messages, &filter);
+        assert_eq!(result.len(), 5);
+    }
+
+    #[test]
+    fn test_apply_filter_by_user_id() {
+        let messages = vec![
+            make_message("1", "U_alice", "hi", None),
+            make_message("2", "U_bob", "hello", None),
+            make_message("3", "U_alice", "bye", None),
+        ];
+        let filter = MessageFilter {
+            user_id: Some("U_alice".to_string()),
+            ..Default::default()
+        };
+        let result = SlackService::apply_filter(&messages, &filter);
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|m| m.user_id == "U_alice"));
+    }
+
+    #[test]
+    fn test_apply_filter_by_platform() {
+        let mut slack_msg = make_message("1", "alice", "msg", None);
+        slack_msg.platform = MessagingPlatform::Slack;
+        let mut teams_msg = make_message("2", "bob", "msg", None);
+        teams_msg.platform = MessagingPlatform::Teams;
+
+        let filter = MessageFilter {
+            platform: Some(MessagingPlatform::Slack),
+            ..Default::default()
+        };
+        let all_messages = [slack_msg, teams_msg];
+        let result = SlackService::apply_filter(&all_messages, &filter);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].platform, MessagingPlatform::Slack);
+    }
+
+    // Additional ConversationStats tests
+
+    #[test]
+    fn test_stats_no_thread_ts_each_message_is_own_thread() {
+        let messages = vec![
+            make_message("1", "alice", "q", None),
+            make_message("2", "bob", "a", None),
+        ];
+        let stats = ConversationStats::compute(&messages);
+        // Each message without thread_ts is its own "thread" keyed by id
+        assert_eq!(stats.thread_count, 2);
+    }
+
+    #[test]
+    fn test_stats_avg_length_calculated_correctly() {
+        let messages = vec![
+            make_message("1", "alice", "q", Some("ts1")),
+            make_message("2", "bob", "a", Some("ts1")),
+            make_message("3", "carol", "q2", Some("ts2")),
+            make_message("4", "dave", "a2", Some("ts2")),
+        ];
+        let stats = ConversationStats::compute(&messages);
+        assert_eq!(stats.thread_count, 2);
+        assert!((stats.avg_thread_length - 2.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_stats_unique_users_counted_correctly() {
+        let messages = vec![
+            make_message("1", "alice", "a", Some("ts1")),
+            make_message("2", "alice", "b", Some("ts1")),
+            make_message("3", "bob", "c", Some("ts1")),
+        ];
+        let stats = ConversationStats::compute(&messages);
+        assert_eq!(stats.unique_users, 2);
+    }
 }

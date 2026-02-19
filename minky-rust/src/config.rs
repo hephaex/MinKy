@@ -28,6 +28,18 @@ pub struct Config {
     pub anthropic_api_key: Option<SecretString>,
 
     pub git_repo_path: Option<String>,
+
+    /// Slack app client ID (for OAuth 2.0 flow)
+    pub slack_client_id: Option<String>,
+
+    /// Slack app client secret (for OAuth 2.0 token exchange)
+    pub slack_client_secret: Option<SecretString>,
+
+    /// Slack OAuth redirect URI
+    pub slack_redirect_uri: Option<String>,
+
+    /// Slack signing secret (for webhook signature verification)
+    pub slack_signing_secret: Option<SecretString>,
 }
 
 fn default_host() -> String {
@@ -80,6 +92,10 @@ mod tests {
             openai_api_key: None,
             anthropic_api_key: None,
             git_repo_path: None,
+            slack_client_id: None,
+            slack_client_secret: None,
+            slack_redirect_uri: None,
+            slack_signing_secret: None,
         }
     }
 
@@ -100,5 +116,73 @@ mod tests {
         let secret = "hello-world-secret";
         let config = make_config(secret);
         assert_eq!(config.jwt_secret_bytes().len(), secret.len());
+    }
+
+    #[test]
+    fn test_slack_client_id_defaults_to_none() {
+        let config = make_config("secret");
+        assert!(config.slack_client_id.is_none());
+    }
+
+    #[test]
+    fn test_slack_client_secret_defaults_to_none() {
+        let config = make_config("secret");
+        assert!(config.slack_client_secret.is_none());
+    }
+
+    #[test]
+    fn test_slack_redirect_uri_defaults_to_none() {
+        let config = make_config("secret");
+        assert!(config.slack_redirect_uri.is_none());
+    }
+
+    #[test]
+    fn test_slack_signing_secret_defaults_to_none() {
+        let config = make_config("secret");
+        assert!(config.slack_signing_secret.is_none());
+    }
+
+    #[test]
+    fn test_config_with_slack_client_id() {
+        let mut config = make_config("secret");
+        config.slack_client_id = Some("my-app-id".to_string());
+        assert_eq!(config.slack_client_id.as_deref(), Some("my-app-id"));
+    }
+
+    #[test]
+    fn test_config_with_slack_redirect_uri() {
+        let mut config = make_config("secret");
+        config.slack_redirect_uri = Some("https://example.com/callback".to_string());
+        assert_eq!(
+            config.slack_redirect_uri.as_deref(),
+            Some("https://example.com/callback")
+        );
+    }
+
+    #[test]
+    fn test_config_slack_client_id_is_none_when_not_set() {
+        let config = make_config("test");
+        // Ensure slack fields do not interfere with jwt_secret_bytes
+        assert_eq!(config.jwt_secret_bytes(), b"test");
+        assert!(config.slack_client_id.is_none());
+    }
+
+    #[test]
+    fn test_config_all_optional_fields_can_be_none() {
+        let config = make_config("s");
+        assert!(config.opensearch_url.is_none());
+        assert!(config.openai_api_key.is_none());
+        assert!(config.anthropic_api_key.is_none());
+        assert!(config.git_repo_path.is_none());
+        assert!(config.slack_client_id.is_none());
+        assert!(config.slack_client_secret.is_none());
+        assert!(config.slack_redirect_uri.is_none());
+        assert!(config.slack_signing_secret.is_none());
+    }
+
+    #[test]
+    fn test_config_default_port_is_8000() {
+        let config = make_config("s");
+        assert_eq!(config.port, 8000);
     }
 }

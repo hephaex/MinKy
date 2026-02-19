@@ -316,4 +316,125 @@ mod tests {
         assert_eq!(service.config.min_chars, 200);
         assert_eq!(service.config.max_tokens, 2048);
     }
+
+    #[test]
+    fn test_extraction_config_clone() {
+        let config = ExtractionConfig {
+            anthropic_api_key: Some("key".to_string()),
+            ..Default::default()
+        };
+        let cloned = config.clone();
+        assert_eq!(cloned.anthropic_api_key, config.anthropic_api_key);
+        assert_eq!(cloned.min_replies, config.min_replies);
+    }
+
+    #[test]
+    fn test_extraction_config_min_replies_default() {
+        let config = ExtractionConfig::default();
+        assert!(config.min_replies >= 1);
+    }
+
+    #[test]
+    fn test_extraction_config_min_chars_default_positive() {
+        let config = ExtractionConfig::default();
+        assert!(config.min_chars > 0);
+    }
+
+    #[test]
+    fn test_extraction_config_max_tokens_default_positive() {
+        let config = ExtractionConfig::default();
+        assert!(config.max_tokens > 0);
+    }
+
+    #[test]
+    fn test_build_system_prompt_contains_insights_key() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        assert!(prompt.contains("\"insights\""));
+    }
+
+    #[test]
+    fn test_build_system_prompt_contains_technologies_key() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        assert!(prompt.contains("\"technologies\""));
+    }
+
+    #[test]
+    fn test_build_system_prompt_contains_relevant_for_key() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        assert!(prompt.contains("\"relevant_for\""));
+    }
+
+    #[test]
+    fn test_build_system_prompt_contains_problem_solved_key() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        assert!(prompt.contains("\"problem_solved\""));
+    }
+
+    #[test]
+    fn test_build_system_prompt_mentions_product_manager_role() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        assert!(prompt.contains("product-manager"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_mentions_data_scientist_role() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        assert!(prompt.contains("data-scientist"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_mentions_frontend_engineer_role() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        assert!(prompt.contains("frontend-engineer"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_instructs_actionable_insights() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        assert!(prompt.contains("actionable"));
+    }
+
+    #[test]
+    fn test_extraction_config_custom_model_stored() {
+        let config = ExtractionConfig {
+            model: "claude-opus-4-20250131".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(config.model, "claude-opus-4-20250131");
+    }
+
+    #[test]
+    fn test_extraction_config_custom_max_tokens_stored() {
+        let config = ExtractionConfig {
+            max_tokens: 4096,
+            ..Default::default()
+        };
+        assert_eq!(config.max_tokens, 4096);
+    }
+
+    #[test]
+    fn test_extraction_config_no_api_key_means_none() {
+        let config = ExtractionConfig::default();
+        assert!(config.anthropic_api_key.is_none());
+    }
+
+    #[test]
+    fn test_build_system_prompt_length_is_reasonable() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        // Should be substantial but not excessively long
+        assert!(prompt.len() > 100);
+        assert!(prompt.len() < 5000);
+    }
+
+    #[test]
+    fn test_build_system_prompt_starts_with_role_description() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        assert!(prompt.starts_with("You are"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_contains_return_only_json_instruction() {
+        let prompt = ConversationExtractionService::build_system_prompt();
+        assert!(prompt.contains("Return ONLY") || prompt.contains("valid JSON"));
+    }
 }

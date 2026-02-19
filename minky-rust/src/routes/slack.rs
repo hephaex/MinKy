@@ -5,7 +5,8 @@
 //!   GET  /api/slack/extract/{id}     – Get extraction result by conversation ID
 //!   POST /api/slack/confirm          – Confirm or reject extracted knowledge
 //!   GET  /api/slack/summary          – Extraction activity summary
-//!   GET  /api/slack/oauth/callback   – Slack OAuth 2.0 callback
+//!   GET  /api/slack/oauth/callback   – Slack OAuth 2.0 callback (full token exchange)
+//!   POST /api/slack/webhook          – Receive Slack Events API payloads
 
 use axum::{
     extract::{Path, Query, State},
@@ -21,8 +22,9 @@ use crate::{
         ConfirmKnowledgeRequest, ExtractedKnowledge, ExtractionStatus, ExtractionSummary,
         MessageFilter, PlatformMessage,
     },
-    services::conversation_extraction_service::{
-        ConversationExtractionService, ExtractionConfig,
+    services::{
+        conversation_extraction_service::{ConversationExtractionService, ExtractionConfig},
+        slack_oauth_service::{SlackOAuthConfig, SlackOAuthService},
     },
     AppState,
 };
@@ -114,7 +116,6 @@ pub struct SlackWebhookPayload {
     pub team_id: Option<String>,
 
     /// Full event object (present for `event_callback`).
-    #[allow(dead_code)]
     pub event: Option<serde_json::Value>,
 }
 
@@ -130,8 +131,115 @@ pub struct SummaryQuery {
 #[derive(Debug, Deserialize)]
 pub struct OAuthCallbackParams {
     pub code: Option<String>,
+    #[allow(dead_code)]
     pub state: Option<String>,
     pub error: Option<String>,
+}
+
+/// Webhook event routing decision for processing
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub enum WebhookAction {
+    /// url_verification challenge echoed back
+    UrlVerification,
+    /// event_callback – knowledge extraction queued
+    KnowledgeExtractionQueued { team_id: String, event_type: String },
+    /// event_callback – event type not relevant for knowledge extraction
+    EventIgnored { event_type: String },
+    /// Unknown top-level webhook type
+    UnknownType { webhook_type: String },
+}
+
+// ---------------------------------------------------------------------------
+// Pure business logic helpers (no I/O – unit-testable)
+// ---------------------------------------------------------------------------
+
+/// Determine what action to take for an incoming Slack webhook payload.
+///
+/// Returns a `WebhookAction` that describes how the handler should respond.
+/// This function is pure (no I/O) so it can be exhaustively unit-tested.
+pub fn classify_webhook_action(payload: &SlackWebhookPayload) -> WebhookAction {
+    match payload.event_type.as_str() {
+        "url_verification" => WebhookAction::UrlVerification,
+
+        "event_callback" => {
+            let team_id = payload
+                .team_id
+                .clone()
+                .unwrap_or_else(|| "unknown".to_string());
+
+            // Determine the inner event type
+            let inner_type = payload
+                .event
+                .as_ref()
+                .and_then(|e| e.get("type"))
+                .and_then(|t| t.as_str())
+                .unwrap_or("unknown")
+                .to_string();
+
+            // Only queue extraction for message events
+            if inner_type == "message" || inner_type == "app_mention" {
+                WebhookAction::KnowledgeExtractionQueued {
+                    team_id,
+                    event_type: inner_type,
+                }
+            } else {
+                WebhookAction::EventIgnored {
+                    event_type: inner_type,
+                }
+            }
+        }
+
+        other => WebhookAction::UnknownType {
+            webhook_type: other.to_string(),
+        },
+    }
+}
+
+/// Extract conversation messages from a Slack `event_callback` payload.
+///
+/// Returns `None` if the event does not contain message data.
+pub fn extract_messages_from_event(
+    payload: &SlackWebhookPayload,
+) -> Option<(String, Vec<PlatformMessage>)> {
+    use crate::models::{MessagingPlatform, MessageReaction};
+    use chrono::Utc;
+
+    let event = payload.event.as_ref()?;
+    let team_id = payload.team_id.as_deref().unwrap_or("unknown");
+
+    let channel_id = event.get("channel")?.as_str()?.to_string();
+    let user_id = event.get("user")?.as_str().unwrap_or("unknown").to_string();
+    let text = event.get("text")?.as_str().unwrap_or("").to_string();
+    let ts = event.get("ts")?.as_str().unwrap_or("0").to_string();
+    let thread_ts = event
+        .get("thread_ts")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let conversation_id = format!(
+        "{}/{}",
+        channel_id,
+        thread_ts.as_deref().unwrap_or(&ts)
+    );
+
+    let message = PlatformMessage {
+        id: ts.clone(),
+        platform: MessagingPlatform::Slack,
+        workspace_id: team_id.to_string(),
+        channel_id: channel_id.clone(),
+        channel_name: None,
+        user_id,
+        username: None,
+        text,
+        thread_ts,
+        reply_count: 0,
+        reactions: Vec::<MessageReaction>::new(),
+        attachments: Vec::new(),
+        posted_at: Utc::now(),
+        captured_at: Utc::now(),
+    };
+
+    Some((conversation_id, vec![message]))
 }
 
 // ---------------------------------------------------------------------------
@@ -245,10 +353,10 @@ async fn get_extraction(
 /// Slack OAuth 2.0 redirect handler.
 ///
 /// After the user approves the Slack app, Slack redirects here with a
-/// temporary `code`.  We exchange it for a bot token and store the workspace
-/// credentials.
+/// temporary `code`.  We exchange it for a bot token and persist the
+/// workspace credentials to `platform_configs`.
 async fn oauth_callback(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Query(params): Query<OAuthCallbackParams>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, (StatusCode, Json<serde_json::Value>)> {
     if let Some(error) = params.error {
@@ -263,15 +371,46 @@ async fn oauth_callback(
         ))
     })?;
 
-    // TODO: exchange `code` for a bot token via https://slack.com/api/oauth.v2.access
-    // and persist the workspace credentials to the database.
-    //
-    // For now, acknowledge the callback so the flow can be tested end-to-end
-    // without real Slack credentials.
+    // Build OAuth config from application settings
+    let (client_id, client_secret) = match (
+        state.config.slack_client_id.as_deref(),
+        state.config.slack_client_secret.as_ref(),
+    ) {
+        (Some(id), Some(secret)) => {
+            use secrecy::ExposeSecret;
+            (id.to_string(), secret.expose_secret().to_string())
+        }
+        _ => {
+            return Err(into_error_response(AppError::Configuration(
+                "SLACK_CLIENT_ID and SLACK_CLIENT_SECRET must be configured".to_string(),
+            )));
+        }
+    };
+
+    let mut oauth_config = SlackOAuthConfig::new(client_id, client_secret);
+    if let Some(redirect_uri) = state.config.slack_redirect_uri.as_deref() {
+        oauth_config = oauth_config.with_redirect_uri(redirect_uri);
+    }
+
+    let oauth_service = SlackOAuthService::new(oauth_config);
+
+    // Exchange code for bot token
+    let oauth_resp = oauth_service
+        .exchange_code(&code)
+        .await
+        .map_err(into_error_response)?;
+
+    // Persist workspace credentials
+    let credentials =
+        SlackOAuthService::save_workspace_credentials(&state.db, &oauth_resp)
+            .await
+            .map_err(into_error_response)?;
+
     let response = serde_json::json!({
-        "message": "OAuth callback received. Token exchange not yet implemented.",
-        "code_received": !code.is_empty(),
-        "state": params.state,
+        "message": "Slack workspace connected successfully.",
+        "workspace_id": credentials.workspace_id,
+        "workspace_name": credentials.workspace_name,
+        "platform_config_id": credentials.platform_config_id,
     });
 
     Ok(ApiResponse::ok(response))
@@ -285,38 +424,81 @@ async fn oauth_callback(
 /// 1. `url_verification` – Slack verifies the endpoint by sending a challenge.
 ///    We must echo back the `challenge` value.
 /// 2. `event_callback`   – An actual event (message posted, reaction added, etc.)
-///    We process the payload asynchronously.
+///    For `message` and `app_mention` events, spawns a background task to
+///    attempt knowledge extraction.
 ///
 /// Security: Slack signs every request with `X-Slack-Signature`.
-/// Full signature verification is a TODO (requires the signing secret stored
-/// in `platform_configs`).  The handler currently accepts all payloads so the
-/// endpoint URL can be verified during Slack app setup.
+/// Full signature verification requires the signing secret from `platform_configs`.
+/// A TODO is left for signature validation before production use.
 async fn slack_webhook(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(payload): Json<SlackWebhookPayload>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    match payload.event_type.as_str() {
-        // Slack URL verification challenge – must reply within 3 seconds
-        "url_verification" => {
+    use secrecy::ExposeSecret;
+
+    match classify_webhook_action(&payload) {
+        WebhookAction::UrlVerification => {
             let challenge = payload.challenge.unwrap_or_default();
             Ok(Json(serde_json::json!({ "challenge": challenge })))
         }
 
-        // Real event – queue for async processing
-        "event_callback" => {
-            // TODO: validate X-Slack-Signature header
-            // TODO: enqueue to background worker for knowledge extraction
+        WebhookAction::KnowledgeExtractionQueued { team_id, event_type } => {
+            // TODO: validate X-Slack-Signature header using slack_signing_secret
+
             tracing::info!(
-                team_id = payload.team_id.as_deref().unwrap_or("unknown"),
-                "Received Slack event_callback"
+                team_id = %team_id,
+                event_type = %event_type,
+                "Received Slack event_callback – queuing knowledge extraction"
             );
 
+            // Extract messages from the event payload
+            if let Some((conversation_id, messages)) = extract_messages_from_event(&payload) {
+                let api_key = state
+                    .config
+                    .anthropic_api_key
+                    .as_ref()
+                    .map(|k| k.expose_secret().to_owned());
+
+                // Spawn background task – acknowledge Slack immediately
+                tokio::spawn(async move {
+                    let config = ExtractionConfig {
+                        anthropic_api_key: api_key,
+                        ..Default::default()
+                    };
+                    let service = ConversationExtractionService::new(config);
+                    let filter = MessageFilter::default();
+
+                    match service.extract(&conversation_id, &messages, &filter).await {
+                        Ok(result) => {
+                            tracing::info!(
+                                conversation_id = %conversation_id,
+                                status = %result.status,
+                                confidence = result.knowledge.confidence,
+                                "Knowledge extraction completed"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                conversation_id = %conversation_id,
+                                error = %e,
+                                "Knowledge extraction skipped or failed"
+                            );
+                        }
+                    }
+                });
+            }
+
             // Acknowledge immediately (Slack requires < 3s response)
-            Ok(Json(serde_json::json!({ "ok": true })))
+            Ok(Json(serde_json::json!({ "ok": true, "queued": true })))
         }
 
-        other => {
-            tracing::warn!(event_type = other, "Unknown Slack webhook type");
+        WebhookAction::EventIgnored { event_type } => {
+            tracing::debug!(event_type = %event_type, "Ignoring non-message Slack event");
+            Ok(Json(serde_json::json!({ "ok": true, "queued": false })))
+        }
+
+        WebhookAction::UnknownType { webhook_type } => {
+            tracing::warn!(webhook_type = %webhook_type, "Unknown Slack webhook type");
             Ok(Json(serde_json::json!({ "ok": true })))
         }
     }
@@ -343,6 +525,8 @@ pub fn router() -> Router<AppState> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ---- Deserialization tests ----
 
     #[test]
     fn test_extract_knowledge_request_default_filter() {
@@ -408,5 +592,164 @@ mod tests {
         let json = r#"{"type":"event_callback","team_id":"T1"}"#;
         let payload: SlackWebhookPayload = serde_json::from_str(json).unwrap();
         assert!(payload.challenge.is_none());
+    }
+
+    // ---- classify_webhook_action tests ----
+
+    #[test]
+    fn test_classify_url_verification() {
+        let payload = SlackWebhookPayload {
+            event_type: "url_verification".to_string(),
+            challenge: Some("xyz".to_string()),
+            team_id: None,
+            event: None,
+        };
+        assert_eq!(classify_webhook_action(&payload), WebhookAction::UrlVerification);
+    }
+
+    #[test]
+    fn test_classify_event_callback_message_queued() {
+        let payload = SlackWebhookPayload {
+            event_type: "event_callback".to_string(),
+            challenge: None,
+            team_id: Some("T123".to_string()),
+            event: Some(serde_json::json!({
+                "type": "message",
+                "channel": "C001",
+                "user": "U001",
+                "text": "Hello team",
+                "ts": "1700000000.000"
+            })),
+        };
+        let action = classify_webhook_action(&payload);
+        assert!(matches!(
+            action,
+            WebhookAction::KnowledgeExtractionQueued { .. }
+        ));
+    }
+
+    #[test]
+    fn test_classify_event_callback_app_mention_queued() {
+        let payload = SlackWebhookPayload {
+            event_type: "event_callback".to_string(),
+            challenge: None,
+            team_id: Some("T123".to_string()),
+            event: Some(serde_json::json!({"type": "app_mention", "text": "@bot help"})),
+        };
+        let action = classify_webhook_action(&payload);
+        assert!(matches!(
+            action,
+            WebhookAction::KnowledgeExtractionQueued { .. }
+        ));
+    }
+
+    #[test]
+    fn test_classify_event_callback_reaction_ignored() {
+        let payload = SlackWebhookPayload {
+            event_type: "event_callback".to_string(),
+            challenge: None,
+            team_id: Some("T123".to_string()),
+            event: Some(serde_json::json!({"type": "reaction_added", "reaction": "thumbsup"})),
+        };
+        let action = classify_webhook_action(&payload);
+        assert!(matches!(action, WebhookAction::EventIgnored { .. }));
+    }
+
+    #[test]
+    fn test_classify_unknown_webhook_type() {
+        let payload = SlackWebhookPayload {
+            event_type: "block_actions".to_string(),
+            challenge: None,
+            team_id: None,
+            event: None,
+        };
+        let action = classify_webhook_action(&payload);
+        assert!(matches!(action, WebhookAction::UnknownType { .. }));
+    }
+
+    #[test]
+    fn test_classify_event_callback_no_team_id_still_queued() {
+        let payload = SlackWebhookPayload {
+            event_type: "event_callback".to_string(),
+            challenge: None,
+            team_id: None,
+            event: Some(serde_json::json!({"type": "message", "text": "hi"})),
+        };
+        let action = classify_webhook_action(&payload);
+        if let WebhookAction::KnowledgeExtractionQueued { team_id, .. } = action {
+            assert_eq!(team_id, "unknown");
+        } else {
+            panic!("Expected KnowledgeExtractionQueued");
+        }
+    }
+
+    // ---- extract_messages_from_event tests ----
+
+    #[test]
+    fn test_extract_messages_from_event_basic() {
+        let payload = SlackWebhookPayload {
+            event_type: "event_callback".to_string(),
+            challenge: None,
+            team_id: Some("T001".to_string()),
+            event: Some(serde_json::json!({
+                "type": "message",
+                "channel": "C001",
+                "user": "U001",
+                "text": "Hello world",
+                "ts": "1700000000.000"
+            })),
+        };
+        let result = extract_messages_from_event(&payload);
+        assert!(result.is_some());
+        let (conv_id, messages) = result.unwrap();
+        assert!(conv_id.starts_with("C001/"));
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].text, "Hello world");
+    }
+
+    #[test]
+    fn test_extract_messages_from_event_with_thread_ts() {
+        let payload = SlackWebhookPayload {
+            event_type: "event_callback".to_string(),
+            challenge: None,
+            team_id: Some("T001".to_string()),
+            event: Some(serde_json::json!({
+                "type": "message",
+                "channel": "C001",
+                "user": "U002",
+                "text": "Reply in thread",
+                "ts": "1700000001.000",
+                "thread_ts": "1700000000.000"
+            })),
+        };
+        let result = extract_messages_from_event(&payload);
+        assert!(result.is_some());
+        let (conv_id, messages) = result.unwrap();
+        assert_eq!(conv_id, "C001/1700000000.000");
+        assert!(messages[0].thread_ts.is_some());
+    }
+
+    #[test]
+    fn test_extract_messages_from_event_no_event_returns_none() {
+        let payload = SlackWebhookPayload {
+            event_type: "event_callback".to_string(),
+            challenge: None,
+            team_id: Some("T001".to_string()),
+            event: None,
+        };
+        let result = extract_messages_from_event(&payload);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_extract_messages_from_event_no_channel_returns_none() {
+        let payload = SlackWebhookPayload {
+            event_type: "event_callback".to_string(),
+            challenge: None,
+            team_id: Some("T001".to_string()),
+            event: Some(serde_json::json!({"type": "message", "text": "no channel field"})),
+        };
+        let result = extract_messages_from_event(&payload);
+        assert!(result.is_none());
     }
 }
