@@ -21,6 +21,7 @@ mod rag;
 mod search;
 mod security;
 mod skills;
+mod slack;
 mod sync;
 mod tags;
 mod templates;
@@ -64,4 +65,5 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/harness", harness::router())
         .nest("/knowledge", knowledge::router())
         .nest("/embeddings", embeddings::router())
+        .nest("/slack", slack::router())
 }

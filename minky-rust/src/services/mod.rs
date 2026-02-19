@@ -7,6 +7,7 @@ mod audit_service;
 mod auth_service;
 mod category_service;
 mod comment_service;
+pub mod conversation_extraction_service;
 mod document_service;
 mod embedding_service;
 mod export_service;
