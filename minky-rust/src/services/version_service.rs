@@ -217,3 +217,55 @@ pub struct VersionDiff {
     pub deletions: i32,
     pub total_changes: i32,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compare_identical_content() {
+        let diff = VersionService::compare_versions("hello\nworld", "hello\nworld");
+        assert_eq!(diff.additions, 0);
+        assert_eq!(diff.deletions, 0);
+        assert_eq!(diff.total_changes, 0);
+    }
+
+    #[test]
+    fn test_compare_empty_to_content() {
+        let diff = VersionService::compare_versions("", "line1\nline2");
+        assert_eq!(diff.additions, 2);
+        assert_eq!(diff.deletions, 0);
+        assert_eq!(diff.total_changes, 2);
+    }
+
+    #[test]
+    fn test_compare_content_to_empty() {
+        let diff = VersionService::compare_versions("line1\nline2", "");
+        assert_eq!(diff.additions, 0);
+        assert_eq!(diff.deletions, 2);
+        assert_eq!(diff.total_changes, 2);
+    }
+
+    #[test]
+    fn test_compare_modified_lines() {
+        let diff = VersionService::compare_versions("old line\nsame", "new line\nsame");
+        assert_eq!(diff.additions, 1);
+        assert_eq!(diff.deletions, 1);
+        assert_eq!(diff.total_changes, 2);
+    }
+
+    #[test]
+    fn test_compare_added_lines() {
+        // new content has more lines
+        let diff = VersionService::compare_versions("line1", "line1\nline2\nline3");
+        assert_eq!(diff.additions, 2);
+        assert_eq!(diff.deletions, 0);
+        assert_eq!(diff.total_changes, 2);
+    }
+
+    #[test]
+    fn test_compare_total_equals_sum() {
+        let diff = VersionService::compare_versions("a\nb\nc", "a\nx\ny\nz");
+        assert_eq!(diff.total_changes, diff.additions + diff.deletions);
+    }
+}
