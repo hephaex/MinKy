@@ -1,0 +1,174 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  rust-check:
+    name: Rust Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: minky-rust
+    outputs:
+      test-count: ${{ steps.test-count.outputs.count }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            minky-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check format
+        run: cargo fmt -- --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Test
+        id: test-run
+        run: cargo test 2>&1 | tee /tmp/rust-test-output.txt
+
+      - name: Extract test count
+        id: test-count
+        run: |
+          COUNT=$(grep -E "^test result: ok\." /tmp/rust-test-output.txt | \
+            grep -oE "[0-9]+ passed" | \
+            awk '{sum += $1} END {print sum}')
+          echo "count=${COUNT:-0}" >> "$GITHUB_OUTPUT"
+          echo "Rust test count: ${COUNT:-0}"
+
+  frontend-check:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    outputs:
+      test-count: ${{ steps.test-count.outputs.count }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint || true
+
+      - name: Build
+        run: CI=true npm run build
+
+      - name: Test
+        id: test-run
+        run: CI=true npm test -- --watchAll=false --passWithNoTests 2>&1 | tee /tmp/frontend-test-output.txt
+
+      - name: Extract test count
+        id: test-count
+        run: |
+          COUNT=$(grep -oE "Tests:[[:space:]]+[0-9]+ passed" /tmp/frontend-test-output.txt | \
+            grep -oE "[0-9]+" | tail -1)
+          echo "count=${COUNT:-0}" >> "$GITHUB_OUTPUT"
+          echo "Frontend test count: ${COUNT:-0}"
+
+  pr-comment:
+    name: PR Status Comment
+    runs-on: ubuntu-latest
+    needs: [rust-check, frontend-check]
+    if: always()
+
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const rustStatus = '${{ needs.rust-check.result }}';
+            const frontendStatus = '${{ needs.frontend-check.result }}';
+            const rustCount = '${{ needs.rust-check.outputs.test-count }}';
+            const frontendCount = '${{ needs.frontend-check.outputs.test-count }}';
+
+            const getEmoji = (status) => {
+              if (status === 'success') return '✅';
+              if (status === 'failure') return '❌';
+              return '⏭️';
+            };
+
+            const allPassed = rustStatus === 'success' && frontendStatus === 'success';
+
+            const testSummary = (rustCount || frontendCount)
+              ? `\n### Test Counts\n| Suite | Tests |\n|-------|-------|\n| Rust | ${rustCount || 'N/A'} |\n| Frontend | ${frontendCount || 'N/A'} |`
+              : '';
+
+            const comment = `## PR Check Results
+
+| Check | Status |
+|-------|--------|
+| Rust Build & Test | ${getEmoji(rustStatus)} ${rustStatus} |
+| Frontend Build & Test | ${getEmoji(frontendStatus)} ${frontendStatus} |
+
+### Overall: ${allPassed ? 'All checks passed!' : 'Some checks failed'}
+
+${!allPassed ? 'Please fix the failing checks before merging.' : 'Ready to merge!'}${testSummary}
+
+---
+*Automated check by GitHub Actions*`;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('PR Check Results')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
