@@ -5,6 +5,56 @@
 
 ---
 
+## 🔄 현재 진행 상황 (2026-02-19) - Slack 연동 모델 + Document 헬퍼 + Docker
+
+### 9차 세션: 3개 작업 병렬 완료 (2026-02-19)
+
+**작업 1: Slack/Teams 연동 모델 및 서비스 설계**
+
+| 파일 | 내용 |
+|---|---|
+| `minky-rust/src/models/slack.rs` | MessagingPlatform(Slack/Teams/Discord), PlatformMessage, ExtractedKnowledge(is_high_quality, to_markdown), ExtractionStatus, MessageFilter(effective_limit), Conversation, ExtractionSummary |
+| `minky-rust/src/services/slack_service.rs` | SlackService 순수 함수 6개 (is_thread_worth_analysing, build_conversation_prompt, parse_extraction_response, apply_filter, classify_status), ConversationStats::compute |
+
+- `parse_extraction_response`: markdown fence 제거 + JSON 파싱 + confidence clamp(0..1)
+- `apply_filter`: platform/channel/user/since/limit 복합 필터
+- `classify_status`: title/summary 비어있으면 Failed, confidence<0.3이면 Skipped, 확인됐으면 Completed
+- `ConversationStats`: thread_ts 기반 그루핑, unique_users, avg_thread_length
+- 총 45개 신규 테스트 (models 18 + service 27)
+
+**작업 2: Document 모델 순수 헬퍼 추가 및 테스트**
+
+| 메서드 | 설명 |
+|---|---|
+| `Document::is_indexable()` | 제목 비어있거나 content < 10자면 false |
+| `Document::to_index_text()` | `title\n\ncontent` 형식, 공백 trim |
+| `Document::is_readable_by(user_id)` | is_public 또는 소유자 확인 |
+| `Document::is_writable_by(user_id)` | 소유자만 |
+| `CreateDocument::effective_is_public()` | None -> false 기본값 |
+| `CreateDocument::validate()` | title/content 비어있으면 Err |
+| `UpdateDocument::has_changes()` | 모든 필드 None이면 false |
+
+- 17개 신규 테스트
+
+**작업 3: Rust 전용 멀티스테이지 Dockerfile**
+
+- `minky-rust/Dockerfile`: builder(rust:1.82-slim) + runtime(debian:bookworm-slim)
+- 의존성 레이어 캐싱 (더미 main.rs로 cargo build 후 실제 소스 복사)
+- 비루트 유저(minky, uid 1001), HEALTHCHECK, 포트 8000
+- release 프로파일 (LTO, codegen-units=1, strip)
+
+**빌드 및 테스트 결과**
+- Rust Build: 0 errors, 0 clippy warnings
+- Rust Unit Tests: 386/386 passed (+61개)
+- Rust Integration Tests: 15/15 passed
+- Doc Tests: 1/1 passed
+- 전체 Rust 테스트: 340 -> **402개** (+62개)
+
+**커밋 목록 (9차 세션)**
+- `d62e4277` - feat: Add Slack/Teams knowledge extraction model, document model helpers, and Rust Dockerfile
+
+---
+
 ## 🔄 현재 진행 상황 (2026-02-19) - 지식 그래프 백엔드 API + 통합 테스트 구조 구축
 
 ### 8차 세션: 3개 작업 병렬 완료 (2026-02-19)
