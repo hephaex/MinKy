@@ -458,35 +458,48 @@ impl EmbeddingService {
 
     /// Split text into chunks for embedding
     pub fn chunk_text(&self, text: &str) -> Vec<ChunkData> {
-        let words: Vec<&str> = text.split_whitespace().collect();
-        let mut chunks = Vec::new();
-        let mut current_offset = 0;
-
-        let chunk_size = self.config.chunk_size;
-        let overlap = self.config.chunk_overlap;
-
-        let mut i = 0;
-        while i < words.len() {
-            let end = (i + chunk_size).min(words.len());
-            let chunk_words = &words[i..end];
-            let chunk_text = chunk_words.join(" ");
-
-            let start_offset = current_offset;
-            let end_offset = start_offset + chunk_text.len() as i32;
-
-            chunks.push(ChunkData {
-                text: chunk_text.clone(),
-                start_offset,
-                end_offset,
-                metadata: None,
-            });
-
-            current_offset = end_offset - (overlap * 5) as i32; // Approximate overlap in chars
-            i += chunk_size - overlap;
-        }
-
-        chunks
+        chunk_text_with_config(text, self.config.chunk_size, self.config.chunk_overlap)
     }
+}
+
+/// Split text into overlapping word chunks.
+/// Pure function with no external dependencies, extracting it enables unit testing.
+pub fn chunk_text_with_config(text: &str, chunk_size: usize, chunk_overlap: usize) -> Vec<ChunkData> {
+    if text.is_empty() || chunk_size == 0 {
+        return Vec::new();
+    }
+
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.is_empty() {
+        return Vec::new();
+    }
+
+    let mut chunks = Vec::new();
+    let mut current_offset: i32 = 0;
+    let step = if chunk_overlap < chunk_size { chunk_size - chunk_overlap } else { 1 };
+
+    let mut i = 0;
+    while i < words.len() {
+        let end = (i + chunk_size).min(words.len());
+        let chunk_words = &words[i..end];
+        let chunk_text = chunk_words.join(" ");
+
+        let start_offset = current_offset;
+        let end_offset = start_offset + chunk_text.len() as i32;
+
+        chunks.push(ChunkData {
+            text: chunk_text.clone(),
+            start_offset,
+            end_offset,
+            metadata: None,
+        });
+
+        // Approximate overlap in characters (5 chars/word average)
+        current_offset = end_offset - (chunk_overlap * 5) as i32;
+        i += step;
+    }
+
+    chunks
 }
 
 // Internal types for database queries
@@ -532,19 +545,51 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_chunk_text() {
-        let config = EmbeddingConfig {
-            chunk_size: 10,
-            chunk_overlap: 2,
-            ..Default::default()
-        };
-        let pool = todo!(); // Need test database
-        let service = EmbeddingService::new(pool, config);
-
+    fn test_chunk_text_basic() {
         let text = "This is a test sentence with multiple words for chunking purposes.";
-        let chunks = service.chunk_text(text);
+        let chunks = chunk_text_with_config(text, 10, 2);
 
         assert!(!chunks.is_empty());
-        assert!(chunks[0].text.len() > 0);
+        assert!(!chunks[0].text.is_empty());
+    }
+
+    #[test]
+    fn test_chunk_text_empty() {
+        let chunks = chunk_text_with_config("", 10, 2);
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn test_chunk_text_single_word() {
+        let chunks = chunk_text_with_config("hello", 10, 2);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].text, "hello");
+    }
+
+    #[test]
+    fn test_chunk_text_respects_chunk_size() {
+        // chunk_size=3 words, no overlap
+        let text = "one two three four five six";
+        let chunks = chunk_text_with_config(text, 3, 0);
+
+        // With chunk_size=3 and 6 words and no overlap, expect 2 chunks
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].text, "one two three");
+        assert_eq!(chunks[1].text, "four five six");
+    }
+
+    #[test]
+    fn test_chunk_text_offsets_are_sequential() {
+        let text = "one two three four five six";
+        let chunks = chunk_text_with_config(text, 3, 0);
+
+        assert!(chunks[0].start_offset >= 0);
+        assert!(chunks[0].end_offset > chunks[0].start_offset);
+    }
+
+    #[test]
+    fn test_chunk_text_whitespace_only() {
+        let chunks = chunk_text_with_config("   ", 10, 2);
+        assert!(chunks.is_empty());
     }
 }

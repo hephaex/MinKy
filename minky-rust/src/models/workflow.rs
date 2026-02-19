@@ -131,3 +131,64 @@ pub fn get_valid_transitions(current: &WorkflowStatus) -> Vec<WorkflowStatus> {
 pub fn is_valid_transition(from: &WorkflowStatus, to: &WorkflowStatus) -> bool {
     get_valid_transitions(from).contains(to)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_workflow_status_display() {
+        assert_eq!(WorkflowStatus::Draft.to_string(), "draft");
+        assert_eq!(WorkflowStatus::PendingReview.to_string(), "pending_review");
+        assert_eq!(WorkflowStatus::InReview.to_string(), "in_review");
+        assert_eq!(WorkflowStatus::Approved.to_string(), "approved");
+        assert_eq!(WorkflowStatus::Rejected.to_string(), "rejected");
+        assert_eq!(WorkflowStatus::Published.to_string(), "published");
+        assert_eq!(WorkflowStatus::Archived.to_string(), "archived");
+    }
+
+    #[test]
+    fn test_valid_transitions_from_draft() {
+        let transitions = get_valid_transitions(&WorkflowStatus::Draft);
+        assert!(transitions.contains(&WorkflowStatus::PendingReview));
+        assert!(transitions.contains(&WorkflowStatus::Archived));
+        assert!(!transitions.contains(&WorkflowStatus::Approved));
+        assert!(!transitions.contains(&WorkflowStatus::Published));
+    }
+
+    #[test]
+    fn test_valid_transitions_from_in_review() {
+        let transitions = get_valid_transitions(&WorkflowStatus::InReview);
+        assert!(transitions.contains(&WorkflowStatus::Approved));
+        assert!(transitions.contains(&WorkflowStatus::Rejected));
+        assert!(transitions.contains(&WorkflowStatus::PendingReview));
+        assert!(!transitions.contains(&WorkflowStatus::Published));
+        assert!(!transitions.contains(&WorkflowStatus::Draft));
+    }
+
+    #[test]
+    fn test_is_valid_transition() {
+        assert!(is_valid_transition(&WorkflowStatus::Draft, &WorkflowStatus::PendingReview));
+        assert!(is_valid_transition(&WorkflowStatus::PendingReview, &WorkflowStatus::InReview));
+        assert!(is_valid_transition(&WorkflowStatus::InReview, &WorkflowStatus::Approved));
+        assert!(is_valid_transition(&WorkflowStatus::Approved, &WorkflowStatus::Published));
+        assert!(is_valid_transition(&WorkflowStatus::Published, &WorkflowStatus::Archived));
+    }
+
+    #[test]
+    fn test_is_invalid_transition() {
+        // Cannot skip stages
+        assert!(!is_valid_transition(&WorkflowStatus::Draft, &WorkflowStatus::Approved));
+        assert!(!is_valid_transition(&WorkflowStatus::Draft, &WorkflowStatus::Published));
+        assert!(!is_valid_transition(&WorkflowStatus::Draft, &WorkflowStatus::InReview));
+        // Cannot un-archive directly to non-draft
+        assert!(!is_valid_transition(&WorkflowStatus::Archived, &WorkflowStatus::Published));
+        assert!(!is_valid_transition(&WorkflowStatus::Archived, &WorkflowStatus::Approved));
+    }
+
+    #[test]
+    fn test_workflow_status_default() {
+        let status = WorkflowStatus::default();
+        assert_eq!(status, WorkflowStatus::Draft);
+    }
+}

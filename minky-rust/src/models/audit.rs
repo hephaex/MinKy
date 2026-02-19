@@ -95,3 +95,43 @@ pub struct CreateAuditLog {
     pub ip_address: Option<String>,
     pub user_agent: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_audit_action_display() {
+        assert_eq!(AuditAction::Create.to_string(), "create");
+        assert_eq!(AuditAction::Read.to_string(), "read");
+        assert_eq!(AuditAction::Update.to_string(), "update");
+        assert_eq!(AuditAction::Delete.to_string(), "delete");
+        assert_eq!(AuditAction::Login.to_string(), "login");
+        assert_eq!(AuditAction::Logout.to_string(), "logout");
+        assert_eq!(AuditAction::LoginFailed.to_string(), "login_failed");
+        assert_eq!(AuditAction::Export.to_string(), "export");
+        assert_eq!(AuditAction::Import.to_string(), "import");
+        assert_eq!(AuditAction::Share.to_string(), "share");
+        assert_eq!(AuditAction::AdminAction.to_string(), "admin_action");
+    }
+
+    #[test]
+    fn test_resource_type_display() {
+        assert_eq!(ResourceType::Document.to_string(), "document");
+        assert_eq!(ResourceType::User.to_string(), "user");
+        assert_eq!(ResourceType::Tag.to_string(), "tag");
+        assert_eq!(ResourceType::Category.to_string(), "category");
+        assert_eq!(ResourceType::Comment.to_string(), "comment");
+        assert_eq!(ResourceType::Attachment.to_string(), "attachment");
+        assert_eq!(ResourceType::Workflow.to_string(), "workflow");
+        assert_eq!(ResourceType::System.to_string(), "system");
+    }
+
+    #[test]
+    fn test_audit_action_format_string() {
+        // Verify Display works correctly in format strings
+        let action = AuditAction::Create;
+        let formatted = format!("Action: {}", action);
+        assert_eq!(formatted, "Action: create");
+    }
+}
