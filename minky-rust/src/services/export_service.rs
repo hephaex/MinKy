@@ -283,3 +283,108 @@ impl ExportService {
         Ok(id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn make_service() -> ExportService {
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        ExportService::new(pool)
+    }
+
+    fn make_doc(title: &str, content: &str) -> ExportedDocument {
+        ExportedDocument {
+            id: uuid::Uuid::new_v4(),
+            title: title.to_string(),
+            content: content.to_string(),
+            category_name: None,
+            tags: vec![],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            metadata: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_to_json_empty_list_produces_array() {
+        let svc = make_service();
+        let json = svc.to_json(&[]).unwrap();
+        assert_eq!(json.trim(), "[]");
+    }
+
+    #[tokio::test]
+    async fn test_to_json_contains_title() {
+        let svc = make_service();
+        let doc = make_doc("My Title", "Some content");
+        let json = svc.to_json(&[doc]).unwrap();
+        assert!(json.contains("My Title"), "JSON should contain document title");
+    }
+
+    #[tokio::test]
+    async fn test_to_csv_contains_header_row() {
+        let svc = make_service();
+        let csv = svc.to_csv(&[]).unwrap();
+        assert!(csv.starts_with("id,title,content"), "CSV should start with header");
+    }
+
+    #[tokio::test]
+    async fn test_to_csv_contains_document_data() {
+        let svc = make_service();
+        let doc = make_doc("CSV Title", "CSV content");
+        let csv = svc.to_csv(&[doc]).unwrap();
+        assert!(csv.contains("CSV Title"), "CSV should contain document title");
+        assert!(csv.contains("CSV content"), "CSV should contain document content");
+    }
+
+    #[tokio::test]
+    async fn test_to_csv_escapes_double_quotes() {
+        let svc = make_service();
+        let doc = make_doc("Title with \"quotes\"", "Content");
+        let csv = svc.to_csv(&[doc]).unwrap();
+        // CSV double-quote escaping: " becomes ""
+        assert!(csv.contains("\"\"quotes\"\""), "Double quotes should be escaped in CSV");
+    }
+
+    #[tokio::test]
+    async fn test_to_markdown_empty_list_returns_empty_string() {
+        let svc = make_service();
+        let md = svc.to_markdown(&[]).unwrap();
+        assert_eq!(md, "", "Empty document list should produce empty markdown");
+    }
+
+    #[tokio::test]
+    async fn test_to_markdown_contains_h1_title() {
+        let svc = make_service();
+        let doc = make_doc("Markdown Title", "body text");
+        let md = svc.to_markdown(&[doc]).unwrap();
+        assert!(md.contains("# Markdown Title"), "Markdown should contain H1 title");
+    }
+
+    #[tokio::test]
+    async fn test_to_markdown_contains_category_when_set() {
+        let svc = make_service();
+        let mut doc = make_doc("Doc", "content");
+        doc.category_name = Some("Engineering".to_string());
+        let md = svc.to_markdown(&[doc]).unwrap();
+        assert!(md.contains("**Category:** Engineering"), "Markdown should include category");
+    }
+
+    #[tokio::test]
+    async fn test_to_markdown_contains_tags_when_set() {
+        let svc = make_service();
+        let mut doc = make_doc("Doc", "content");
+        doc.tags = vec!["rust".to_string(), "backend".to_string()];
+        let md = svc.to_markdown(&[doc]).unwrap();
+        assert!(md.contains("**Tags:** rust, backend"), "Markdown should include tags");
+    }
+
+    #[tokio::test]
+    async fn test_to_markdown_skips_tags_when_empty() {
+        let svc = make_service();
+        let doc = make_doc("Doc", "content");
+        let md = svc.to_markdown(&[doc]).unwrap();
+        assert!(!md.contains("**Tags:**"), "Markdown should not include Tags line when empty");
+    }
+}
