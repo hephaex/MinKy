@@ -30,7 +30,7 @@
 5. [ ] RAG 파이프라인 E2E 테스트 (API 키/크레딧 필요)
    - ANTHROPIC_API_KEY 설정 필요 (문서 이해 분석)
    - OpenAI 크레딧 보충 필요 (임베딩, 시맨틱 검색)
-6. [ ] documents CRUD DB 연동 구현 (현재 stub 상태)
+6. [x] documents CRUD DB 연동 구현 (2026-02-19 완료)
 
 **코드 품질 개선 (2026-02-19):**
 - [x] Rust clippy 경고 80개 → 0개 (type alias, Display impl, derive, allow)

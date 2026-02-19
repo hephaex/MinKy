@@ -51,6 +51,22 @@
 - `api.get('/documents/${id}')` -> `documentService.getDocument(id)` 변경
 - DocumentView.test.js: 5/5 테스트 모두 통과 (이전에 1개 실패)
 
+**4. Documents CRUD DB 연동 구현 완료**
+- `routes/documents.rs`: stub -> 실제 DB 연동으로 전환
+- 구현된 기능:
+  - GET /api/documents (페이지네이션, 검색, 카테고리 필터)
+  - POST /api/documents (문서 생성)
+  - GET /api/documents/{id} (단건 조회 + view_count 증가)
+  - PUT /api/documents/{id} (부분 업데이트, COALESCE 패턴)
+  - DELETE /api/documents/{id} (삭제, 404 처리)
+- E2E 테스트 통과:
+  - POST: title, content, is_public 저장 확인
+  - GET list: 페이지네이션 메타데이터 포함
+  - GET single: view_count 증가 확인
+  - PUT: 제목/내용 업데이트, updated_at 갱신 확인
+  - DELETE: 삭제 후 404 반환 확인
+  - Search: `?search=RAG` 쿼리 동작 확인
+
 ## 🔄 현재 진행 상황 (2026-02-19) - E2E 테스트 완료
 
 ### E2E 테스트 세션 결과 (2026-02-19)
