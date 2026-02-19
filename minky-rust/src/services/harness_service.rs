@@ -979,3 +979,90 @@ impl HarnessService {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use secrecy::SecretString;
+
+    fn make_service() -> HarnessService {
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        let config = Config {
+            host: "127.0.0.1".to_string(),
+            port: 8000,
+            database_url: "postgres://localhost/test_db".to_string(),
+            database_max_connections: 5,
+            jwt_secret: SecretString::from("test-secret"),
+            jwt_expiration_hours: 24,
+            opensearch_url: None,
+            openai_api_key: None,
+            anthropic_api_key: None,
+            git_repo_path: None,
+        };
+        HarnessService::new(pool, config)
+    }
+
+    // --- parse_diff_stats ---
+
+    #[tokio::test]
+    async fn test_parse_diff_stats_empty_returns_zeros() {
+        let svc = make_service();
+        let (files, ins, dels) = svc.parse_diff_stats("");
+        assert_eq!(files, 0);
+        assert_eq!(ins, 0);
+        assert_eq!(dels, 0);
+    }
+
+    #[tokio::test]
+    async fn test_parse_diff_stats_single_file_with_insertions() {
+        let svc = make_service();
+        // harness parser expects words without trailing commas
+        let output = "1 file changed 3 insertions(+) 1 deletion(-)";
+        let (files, ins, dels) = svc.parse_diff_stats(output);
+        assert_eq!(files, 1);
+        assert_eq!(ins, 3);
+        assert_eq!(dels, 1);
+    }
+
+    #[tokio::test]
+    async fn test_parse_diff_stats_multiple_files_with_stats() {
+        let svc = make_service();
+        // Summary line uses space-separated tokens (no commas)
+        let output = "2 files changed 4 insertions(+) 3 deletions(-)";
+        let (files, ins, dels) = svc.parse_diff_stats(output);
+        assert_eq!(files, 2);
+        assert_eq!(ins, 4);
+        assert_eq!(dels, 3);
+    }
+
+    #[tokio::test]
+    async fn test_parse_diff_stats_insertions_only() {
+        let svc = make_service();
+        let output = "1 file changed 10 insertions(+)";
+        let (files, ins, dels) = svc.parse_diff_stats(output);
+        assert_eq!(files, 1);
+        assert_eq!(ins, 10);
+        assert_eq!(dels, 0);
+    }
+
+    #[tokio::test]
+    async fn test_parse_diff_stats_deletions_only() {
+        let svc = make_service();
+        let output = "1 file changed 5 deletions(-)";
+        let (files, ins, dels) = svc.parse_diff_stats(output);
+        assert_eq!(files, 1);
+        assert_eq!(ins, 0);
+        assert_eq!(dels, 5);
+    }
+
+    #[tokio::test]
+    async fn test_parse_diff_stats_no_changed_line_returns_zeros() {
+        let svc = make_service();
+        // diff --stat output without a summary line
+        let output = "src/main.rs | 3 +++";
+        let (files, ins, dels) = svc.parse_diff_stats(output);
+        assert_eq!(files, 0);
+        assert_eq!(ins, 0);
+        assert_eq!(dels, 0);
+    }
+}
