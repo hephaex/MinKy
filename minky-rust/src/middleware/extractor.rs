@@ -126,6 +126,44 @@ where
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_user(role: &str) -> AuthUser {
+        AuthUser {
+            id: 1,
+            email: "test@example.com".to_string(),
+            role: role.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_is_admin_returns_true_for_admin_role() {
+        let user = make_user("admin");
+        assert!(user.is_admin());
+    }
+
+    #[test]
+    fn test_is_admin_returns_false_for_user_role() {
+        let user = make_user("user");
+        assert!(!user.is_admin());
+    }
+
+    #[test]
+    fn test_is_admin_returns_false_for_empty_role() {
+        let user = make_user("");
+        assert!(!user.is_admin());
+    }
+
+    #[test]
+    fn test_is_admin_is_case_sensitive() {
+        // "Admin" (capital A) is not the same as "admin"
+        let user = make_user("Admin");
+        assert!(!user.is_admin(), "Role check should be case-sensitive");
+    }
+}
+
 /// Request metadata for audit logging
 #[derive(Debug, Clone, Serialize)]
 pub struct RequestMeta {

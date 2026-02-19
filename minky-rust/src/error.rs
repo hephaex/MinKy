@@ -81,3 +81,56 @@ pub type AppResult<T> = std::result::Result<T, AppError>;
 
 /// Convenient Result type alias
 pub type Result<T> = std::result::Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_unauthorized_display_message() {
+        let err = AppError::Unauthorized;
+        assert_eq!(err.to_string(), "Authentication required");
+    }
+
+    #[test]
+    fn test_forbidden_display_message() {
+        let err = AppError::Forbidden;
+        assert_eq!(err.to_string(), "Access denied");
+    }
+
+    #[test]
+    fn test_not_found_includes_resource_name() {
+        let err = AppError::NotFound("document".to_string());
+        assert!(err.to_string().contains("document"), "NotFound message should include resource name");
+    }
+
+    #[test]
+    fn test_validation_includes_message() {
+        let err = AppError::Validation("email is required".to_string());
+        assert!(err.to_string().contains("email is required"));
+    }
+
+    #[test]
+    fn test_conflict_includes_message() {
+        let err = AppError::Conflict("username already taken".to_string());
+        assert!(err.to_string().contains("username already taken"));
+    }
+
+    #[test]
+    fn test_rate_limited_display_message() {
+        let err = AppError::RateLimited;
+        assert_eq!(err.to_string(), "Rate limit exceeded");
+    }
+
+    #[test]
+    fn test_configuration_includes_detail() {
+        let err = AppError::Configuration("missing API key".to_string());
+        assert!(err.to_string().contains("missing API key"));
+    }
+
+    #[test]
+    fn test_external_service_includes_detail() {
+        let err = AppError::ExternalService("timeout".to_string());
+        assert!(err.to_string().contains("timeout"));
+    }
+}
