@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// AI Agent types
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,4 +150,14 @@ pub struct AgentConversation {
     pub messages: Vec<AgentMessage>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_agent_status_default_is_idle() {
+        assert!(matches!(AgentStatus::default(), AgentStatus::Idle));
+    }
 }

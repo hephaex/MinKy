@@ -93,3 +93,13 @@ pub struct TemplateQuery {
     pub search: Option<String>,
     pub is_public: Option<bool>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_variable_type_default_is_text() {
+        assert!(matches!(VariableType::default(), VariableType::Text));
+    }
+}

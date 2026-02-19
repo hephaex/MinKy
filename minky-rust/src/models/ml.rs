@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Document cluster
 #[derive(Debug, Serialize)]
@@ -211,4 +210,14 @@ pub enum AnomalyType {
     TopicMismatch,
     StyleDeviation,
     TemporalAnomaly,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clustering_algorithm_default_is_kmeans() {
+        assert!(matches!(ClusteringAlgorithm::default(), ClusteringAlgorithm::KMeans));
+    }
 }
