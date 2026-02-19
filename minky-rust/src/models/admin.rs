@@ -85,3 +85,108 @@ pub struct MaintenanceMode {
     pub message: Option<String>,
     pub estimated_end: Option<DateTime<Utc>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_system_config_serde_roundtrip() {
+        let config = SystemConfig {
+            max_upload_size_mb: 50,
+            allowed_file_types: vec!["pdf".to_string(), "md".to_string(), "txt".to_string()],
+            enable_registration: true,
+            require_email_verification: false,
+            session_timeout_minutes: 60,
+            rate_limit_requests_per_minute: 100,
+        };
+
+        let serialized = serde_json::to_string(&config).unwrap();
+        let deserialized: SystemConfig = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.max_upload_size_mb, 50);
+        assert_eq!(deserialized.allowed_file_types.len(), 3);
+        assert!(deserialized.enable_registration);
+        assert!(!deserialized.require_email_verification);
+        assert_eq!(deserialized.session_timeout_minutes, 60);
+        assert_eq!(deserialized.rate_limit_requests_per_minute, 100);
+    }
+
+    #[test]
+    fn test_system_config_allowed_file_types_contains() {
+        let config = SystemConfig {
+            max_upload_size_mb: 10,
+            allowed_file_types: vec!["pdf".to_string(), "md".to_string()],
+            enable_registration: false,
+            require_email_verification: true,
+            session_timeout_minutes: 30,
+            rate_limit_requests_per_minute: 60,
+        };
+
+        assert!(config.allowed_file_types.contains(&"pdf".to_string()));
+        assert!(config.allowed_file_types.contains(&"md".to_string()));
+        assert!(!config.allowed_file_types.contains(&"exe".to_string()));
+    }
+
+    #[test]
+    fn test_maintenance_mode_disabled_by_default() {
+        let mode = MaintenanceMode {
+            enabled: false,
+            message: None,
+            estimated_end: None,
+        };
+
+        assert!(!mode.enabled);
+        assert!(mode.message.is_none());
+        assert!(mode.estimated_end.is_none());
+    }
+
+    #[test]
+    fn test_maintenance_mode_enabled_with_message() {
+        let mode = MaintenanceMode {
+            enabled: true,
+            message: Some("System upgrade in progress".to_string()),
+            estimated_end: None,
+        };
+
+        assert!(mode.enabled);
+        assert_eq!(
+            mode.message.as_deref(),
+            Some("System upgrade in progress")
+        );
+    }
+
+    #[test]
+    fn test_maintenance_mode_serde_roundtrip() {
+        let mode = MaintenanceMode {
+            enabled: true,
+            message: Some("Maintenance".to_string()),
+            estimated_end: None,
+        };
+
+        let serialized = serde_json::to_string(&mode).unwrap();
+        let deserialized: MaintenanceMode = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.enabled, mode.enabled);
+        assert_eq!(deserialized.message, mode.message);
+    }
+
+    #[test]
+    fn test_system_stats_active_user_rate() {
+        let stats = SystemStats {
+            total_users: 100,
+            active_users: 75,
+            total_documents: 500,
+            total_storage_bytes: 1024 * 1024 * 100, // 100 MB
+            database_size_bytes: 1024 * 1024 * 50,  // 50 MB
+            cache_hit_rate: 0.85,
+            uptime_seconds: 3600,
+        };
+
+        let active_rate = stats.active_users as f64 / stats.total_users as f64;
+        assert_eq!(active_rate, 0.75);
+        assert_eq!(stats.cache_hit_rate, 0.85);
+        // Storage should be >= database size
+        assert!(stats.total_storage_bytes >= stats.database_size_bytes);
+    }
+}

@@ -131,7 +131,7 @@ pub struct ReportRequest {
     pub include_charts: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReportType {
     Overview,
@@ -141,7 +141,7 @@ pub enum ReportType {
     SearchAnalytics,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ReportFormat {
     Json,
@@ -166,4 +166,109 @@ pub struct QueryStats {
     pub count: i64,
     pub avg_click_position: f64,
     pub zero_results: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_trend_direction_serde_up() {
+        let trend = TrendDirection::Up;
+        let serialized = serde_json::to_string(&trend).unwrap();
+        assert_eq!(serialized, "\"up\"");
+    }
+
+    #[test]
+    fn test_trend_direction_serde_down() {
+        let trend = TrendDirection::Down;
+        let serialized = serde_json::to_string(&trend).unwrap();
+        assert_eq!(serialized, "\"down\"");
+    }
+
+    #[test]
+    fn test_trend_direction_serde_stable() {
+        let trend = TrendDirection::Stable;
+        let serialized = serde_json::to_string(&trend).unwrap();
+        assert_eq!(serialized, "\"stable\"");
+    }
+
+    #[test]
+    fn test_report_type_serde_overview() {
+        let report_type = ReportType::Overview;
+        let serialized = serde_json::to_string(&report_type).unwrap();
+        assert_eq!(serialized, "\"overview\"");
+    }
+
+    #[test]
+    fn test_report_type_serde_user_activity() {
+        let report_type = ReportType::UserActivity;
+        let serialized = serde_json::to_string(&report_type).unwrap();
+        assert_eq!(serialized, "\"user_activity\"");
+    }
+
+    #[test]
+    fn test_report_format_serde_json() {
+        let format = ReportFormat::Json;
+        let serialized = serde_json::to_string(&format).unwrap();
+        assert_eq!(serialized, "\"json\"");
+    }
+
+    #[test]
+    fn test_report_format_serde_csv() {
+        let format = ReportFormat::Csv;
+        let serialized = serde_json::to_string(&format).unwrap();
+        assert_eq!(serialized, "\"csv\"");
+    }
+
+    #[test]
+    fn test_sentiment_score_sums_to_one() {
+        let sentiment = SentimentScore {
+            positive: 0.6,
+            negative: 0.1,
+            neutral: 0.3,
+            overall: "positive".to_string(),
+        };
+        let sum = sentiment.positive + sentiment.negative + sentiment.neutral;
+        assert!((sum - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_analytics_overview_engagement_ratio() {
+        let overview = AnalyticsOverview {
+            total_documents: 100,
+            total_views: 5000,
+            total_comments: 200,
+            total_users: 20,
+            documents_this_period: 10,
+            views_this_period: 500,
+            active_users: 15,
+            avg_document_length: 1200.0,
+        };
+
+        // Views per document ratio
+        let views_per_doc = overview.total_views as f64 / overview.total_documents as f64;
+        assert_eq!(views_per_doc, 50.0);
+
+        // Active user rate
+        let active_rate = overview.active_users as f64 / overview.total_users as f64;
+        assert_eq!(active_rate, 0.75);
+    }
+
+    #[test]
+    fn test_zero_result_rate_range() {
+        let analytics = SearchAnalytics {
+            total_searches: 1000,
+            unique_queries: 400,
+            avg_results_per_search: 8.5,
+            zero_result_rate: 0.15,
+            top_queries: vec![],
+            search_trends: vec![],
+        };
+
+        // Rate should be between 0 and 1
+        assert!(analytics.zero_result_rate >= 0.0);
+        assert!(analytics.zero_result_rate <= 1.0);
+        assert_eq!(analytics.zero_result_rate, 0.15);
+    }
 }

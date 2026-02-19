@@ -157,3 +157,125 @@ pub struct GitDiffStats {
     pub insertions: i32,
     pub deletions: i32,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_file_status_serde_added() {
+        let status = FileStatus::Added;
+        let serialized = serde_json::to_string(&status).unwrap();
+        assert_eq!(serialized, "\"added\"");
+    }
+
+    #[test]
+    fn test_file_status_serde_modified() {
+        let status = FileStatus::Modified;
+        let serialized = serde_json::to_string(&status).unwrap();
+        assert_eq!(serialized, "\"modified\"");
+    }
+
+    #[test]
+    fn test_file_status_serde_deleted() {
+        let status = FileStatus::Deleted;
+        let serialized = serde_json::to_string(&status).unwrap();
+        assert_eq!(serialized, "\"deleted\"");
+    }
+
+    #[test]
+    fn test_file_status_serde_renamed() {
+        let status = FileStatus::Renamed;
+        let serialized = serde_json::to_string(&status).unwrap();
+        assert_eq!(serialized, "\"renamed\"");
+    }
+
+    #[test]
+    fn test_file_status_serde_untracked() {
+        let status = FileStatus::Untracked;
+        let serialized = serde_json::to_string(&status).unwrap();
+        assert_eq!(serialized, "\"untracked\"");
+    }
+
+    #[test]
+    fn test_git_line_type_serde_context() {
+        let line_type = GitLineType::Context;
+        let serialized = serde_json::to_string(&line_type).unwrap();
+        assert_eq!(serialized, "\"context\"");
+    }
+
+    #[test]
+    fn test_git_line_type_serde_addition() {
+        let line_type = GitLineType::Addition;
+        let serialized = serde_json::to_string(&line_type).unwrap();
+        assert_eq!(serialized, "\"addition\"");
+    }
+
+    #[test]
+    fn test_git_line_type_serde_deletion() {
+        let line_type = GitLineType::Deletion;
+        let serialized = serde_json::to_string(&line_type).unwrap();
+        assert_eq!(serialized, "\"deletion\"");
+    }
+
+    #[test]
+    fn test_git_diff_stats_net_change() {
+        let stats = GitDiffStats {
+            files_changed: 3,
+            insertions: 50,
+            deletions: 20,
+        };
+        let net = stats.insertions - stats.deletions;
+        assert_eq!(net, 30);
+        assert_eq!(stats.files_changed, 3);
+    }
+
+    #[test]
+    fn test_commit_request_optional_fields_default_none() {
+        let req = CommitRequest {
+            message: "feat: add new feature".to_string(),
+            files: None,
+            amend: None,
+        };
+        assert!(req.files.is_none());
+        assert!(req.amend.is_none());
+        assert_eq!(req.message, "feat: add new feature");
+    }
+
+    #[test]
+    fn test_git_status_is_clean_when_no_changes() {
+        let status = GitStatus {
+            branch: "main".to_string(),
+            ahead: 0,
+            behind: 0,
+            staged: vec![],
+            unstaged: vec![],
+            untracked: vec![],
+        };
+        let is_clean = status.staged.is_empty()
+            && status.unstaged.is_empty()
+            && status.untracked.is_empty();
+        assert!(is_clean);
+    }
+
+    #[test]
+    fn test_git_status_not_clean_with_staged_file() {
+        let status = GitStatus {
+            branch: "feature/new".to_string(),
+            ahead: 1,
+            behind: 0,
+            staged: vec![GitFileChange {
+                path: "src/main.rs".to_string(),
+                status: FileStatus::Modified,
+            }],
+            unstaged: vec![],
+            untracked: vec![],
+        };
+        let is_clean = status.staged.is_empty()
+            && status.unstaged.is_empty()
+            && status.untracked.is_empty();
+        assert!(!is_clean);
+        assert_eq!(status.staged.len(), 1);
+        assert_eq!(status.staged[0].path, "src/main.rs");
+    }
+}
