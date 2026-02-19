@@ -18,16 +18,23 @@
 - ✅ 프론트엔드 채팅 UI
 - ✅ API 문서화
 
-**통합 테스트 결과 (2026-02-19):**
+**E2E 테스트 결과 (2026-02-19):**
 1. [x] PostgreSQL 데이터베이스 마이그레이션 실행
    - pgvector 0.8.0 소스 빌드 및 설치 완료
-   - minky_rust_db 생성 및 3개 마이그레이션 적용 완료
+   - minky_rust_db 생성 및 4개 마이그레이션 적용 완료 (004: search_history 추가)
    - Axum 0.8 라우트 문법 수정 (/:param -> /{param})
-   - 빌드: 0 errors, 6 warnings
-2. [ ] OpenAI API 키 설정 (.env) - 사용자 API 키 필요
+   - 빌드: 0 errors, 0 warnings (경고 80개 모두 제거 완료)
+2. [ ] OpenAI API 크레딧 부족 - 새 API 키 또는 크레딧 보충 필요
 3. [x] Rust 서버 기동 확인 (/api/health 응답 정상)
-4. [ ] 전체 RAG 파이프라인 E2E 테스트 (API 키 필요)
-5. [ ] 프론트엔드-백엔드 통합 테스트 (포트 설정 필요)
+4. [x] 프론트엔드-백엔드 통합 테스트 완료 (포트 8000으로 업데이트)
+5. [ ] RAG 파이프라인 E2E 테스트 (API 키/크레딧 필요)
+   - ANTHROPIC_API_KEY 설정 필요 (문서 이해 분석)
+   - OpenAI 크레딧 보충 필요 (임베딩, 시맨틱 검색)
+6. [ ] documents CRUD DB 연동 구현 (현재 stub 상태)
+
+**코드 품질 개선 (2026-02-19):**
+- [x] Rust clippy 경고 80개 → 0개 (type alias, Display impl, derive, allow)
+- [x] Frontend 테스트 228/228 통과 (DocumentView 버그 수정)
 
 **사용 방법:**
 ```

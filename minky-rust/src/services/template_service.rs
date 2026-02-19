@@ -7,6 +7,23 @@ use crate::models::{
     TemplateVariable, UpdateTemplate,
 };
 
+/// Raw DB row type for template queries
+type TemplateRow = (
+    i32,
+    String,
+    Option<String>,
+    String,
+    Option<i32>,
+    Option<String>,
+    Option<serde_json::Value>,
+    bool,
+    i64,
+    i32,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
+
 /// Template service
 pub struct TemplateService {
     db: PgPool,
@@ -27,21 +44,7 @@ impl TemplateService {
         let limit = query.limit.unwrap_or(20).min(100);
         let offset = (page - 1) * limit;
 
-        let rows: Vec<(
-            i32,
-            String,
-            Option<String>,
-            String,
-            Option<i32>,
-            Option<String>,
-            Option<serde_json::Value>,
-            bool,
-            i64,
-            i32,
-            Option<String>,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<TemplateRow> = sqlx::query_as(
             r#"
             SELECT
                 t.id,
@@ -107,21 +110,7 @@ impl TemplateService {
 
     /// Get template by ID
     pub async fn get_template(&self, user_id: i32, template_id: i32) -> Result<Option<Template>> {
-        let row: Option<(
-            i32,
-            String,
-            Option<String>,
-            String,
-            Option<i32>,
-            Option<String>,
-            Option<serde_json::Value>,
-            bool,
-            i64,
-            i32,
-            Option<String>,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let row: Option<TemplateRow> = sqlx::query_as(
             r#"
             SELECT
                 t.id,
@@ -178,7 +167,7 @@ impl TemplateService {
         let variables_json = create
             .variables
             .as_ref()
-            .map(|v| serde_json::to_value(v))
+            .map(serde_json::to_value)
             .transpose()?;
 
         let row: (i32,) = sqlx::query_as(

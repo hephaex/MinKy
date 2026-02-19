@@ -20,6 +20,8 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}", get(get_category).put(update_category).delete(delete_category))
 }
 
+/// Category list query parameters (flat field used when hierarchy filtering is implemented)
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
     pub flat: Option<bool>,

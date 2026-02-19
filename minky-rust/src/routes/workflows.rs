@@ -57,6 +57,8 @@ async fn get_workflow_by_document(
     }))
 }
 
+/// Create workflow request (document_id used when DB is connected)
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateWorkflowRequest {
     pub document_id: Uuid,

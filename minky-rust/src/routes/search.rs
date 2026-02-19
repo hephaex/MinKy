@@ -12,6 +12,18 @@ use crate::{
     AppState,
 };
 
+/// Raw DB row type for document reindex query
+type DocumentRow = (
+    String,
+    String,
+    String,
+    Option<i32>,
+    i32,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+    i32,
+);
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(search))
@@ -30,7 +42,7 @@ async fn search(
     Query(query): Query<SearchQuery>,
 ) -> AppResult<Json<SearchResponseBody>> {
     let search_service = SearchService::new(&state.config).await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
     let response = search_service.search(query).await?;
 
@@ -40,25 +52,30 @@ async fn search(
     }))
 }
 
+/// Semantic search request (future feature: OpenSearch integration)
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct SemanticSearchRequest {
     pub query: String,
     pub limit: Option<i32>,
 }
 
+/// Semantic search response (future feature: OpenSearch integration)
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 pub struct SemanticSearchResponse {
     pub success: bool,
     pub data: Vec<SearchHit>,
 }
 
+#[allow(dead_code)]
 async fn semantic_search(
     State(state): State<AppState>,
     Json(payload): Json<SemanticSearchRequest>,
 ) -> AppResult<Json<SemanticSearchResponse>> {
     let ai_service = AIService::new(state.config.clone());
     let search_service = SearchService::new(&state.config).await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
     // Generate embedding for query
     let embedding_response = ai_service.generate_embedding(&payload.query).await?;
@@ -90,11 +107,11 @@ async fn autocomplete(
     Query(query): Query<AutocompleteQuery>,
 ) -> AppResult<Json<AutocompleteResponse>> {
     let search_service = SearchService::new(&state.config).await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
     let limit = query.limit.unwrap_or(10).min(20);
     let suggestions = search_service.autocomplete(&query.q, limit).await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
     Ok(Json(AutocompleteResponse {
         success: true,
@@ -116,14 +133,14 @@ async fn reindex_all(
     let _user_id = 1;
 
     let search_service = SearchService::new(&state.config).await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
     // Create index if not exists
     search_service.create_index().await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
     // Fetch all documents from database and index them
-    let documents: Vec<(String, String, String, Option<i32>, i32, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>, i32)> = sqlx::query_as(
+    let documents: Vec<DocumentRow> = sqlx::query_as(
         r#"
         SELECT
             d.id::text,
@@ -158,7 +175,7 @@ async fn reindex_all(
         .collect();
 
     let count = search_service.bulk_index(search_documents).await
-        .map_err(|e| AppError::Internal(e))?;
+        .map_err(AppError::Internal)?;
 
     Ok(Json(ReindexResponse {
         success: true,

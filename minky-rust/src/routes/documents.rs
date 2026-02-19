@@ -15,6 +15,8 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}", get(get_document).put(update_document).delete(delete_document))
 }
 
+/// Query parameters for document listing (fields used when DB stub is replaced)
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
     pub page: Option<i32>,
@@ -66,6 +68,8 @@ async fn list_documents(
     }))
 }
 
+/// Create document request (content/category_id used when DB stub is replaced)
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateDocumentRequest {
     #[validate(length(min = 1, max = 500, message = "Title must be 1-500 characters"))]
@@ -118,6 +122,8 @@ async fn get_document(
     }))
 }
 
+/// Update document request (content/category_id used when DB stub is replaced)
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateDocumentRequest {
     #[validate(length(min = 1, max = 500, message = "Title must be 1-500 characters"))]

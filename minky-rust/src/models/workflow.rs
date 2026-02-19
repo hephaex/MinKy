@@ -1,13 +1,15 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sqlx::FromRow;
+use std::fmt;
 use uuid::Uuid;
 
 /// Workflow status enumeration
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "workflow_status", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum WorkflowStatus {
+    #[default]
     Draft,
     PendingReview,
     InReview,
@@ -17,23 +19,19 @@ pub enum WorkflowStatus {
     Archived,
 }
 
-impl Default for WorkflowStatus {
-    fn default() -> Self {
-        Self::Draft
-    }
-}
 
-impl ToString for WorkflowStatus {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Draft => "draft".to_string(),
-            Self::PendingReview => "pending_review".to_string(),
-            Self::InReview => "in_review".to_string(),
-            Self::Approved => "approved".to_string(),
-            Self::Rejected => "rejected".to_string(),
-            Self::Published => "published".to_string(),
-            Self::Archived => "archived".to_string(),
-        }
+impl fmt::Display for WorkflowStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Draft => "draft",
+            Self::PendingReview => "pending_review",
+            Self::InReview => "in_review",
+            Self::Approved => "approved",
+            Self::Rejected => "rejected",
+            Self::Published => "published",
+            Self::Archived => "archived",
+        };
+        write!(f, "{}", s)
     }
 }
 

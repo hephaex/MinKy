@@ -9,6 +9,9 @@ use crate::models::{
     WorkflowAnalytics,
 };
 
+/// Raw DB row type for document metrics queries
+type DocumentMetricsRow = (String, String, i64, i64, i64, Option<DateTime<Utc>>, DateTime<Utc>);
+
 /// Analytics service for metrics and reporting
 pub struct AnalyticsService {
     db: PgPool,
@@ -86,7 +89,7 @@ impl AnalyticsService {
 
     /// Get top viewed documents
     pub async fn get_top_documents(&self, limit: i32) -> Result<Vec<DocumentMetrics>> {
-        let rows: Vec<(String, String, i64, i64, i64, Option<DateTime<Utc>>, DateTime<Utc>)> = sqlx::query_as(
+        let rows: Vec<DocumentMetricsRow> = sqlx::query_as(
             r#"
             SELECT
                 d.id::text,
@@ -285,7 +288,7 @@ impl AnalyticsService {
 
     /// Get recent documents
     async fn get_recent_documents(&self, limit: i32) -> Result<Vec<DocumentMetrics>> {
-        let rows: Vec<(String, String, i64, i64, i64, Option<DateTime<Utc>>, DateTime<Utc>)> = sqlx::query_as(
+        let rows: Vec<DocumentMetricsRow> = sqlx::query_as(
             r#"
             SELECT
                 d.id::text,

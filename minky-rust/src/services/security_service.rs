@@ -4,10 +4,60 @@ use rand::Rng;
 use sqlx::PgPool;
 
 use crate::models::{
-    ApiKey, ApiKeyWithSecret, BlockIpRequest, CreateApiKeyRequest, IpBlock, LoginAttempt,
-    RateLimitStatus, SecurityEvent, SecurityEventType, SecurityReport, SecuritySettings,
+    ApiKey, ApiKeyWithSecret, BlockIpRequest, CreateApiKeyRequest, IpBlock, SecurityEvent, SecurityEventType, SecurityReport, SecuritySettings,
     SessionInfo, Severity,
 };
+
+/// Raw DB row type for security event queries
+type SecurityEventRow = (
+    i64,
+    String,
+    String,
+    Option<i32>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<serde_json::Value>,
+    chrono::DateTime<chrono::Utc>,
+);
+
+/// Raw DB row type for ip block queries
+type IpBlockRow = (
+    i64,
+    String,
+    String,
+    Option<i32>,
+    chrono::DateTime<chrono::Utc>,
+    Option<chrono::DateTime<chrono::Utc>>,
+    bool,
+);
+
+/// Raw DB row type for API key queries
+type ApiKeyRow = (
+    i64,
+    String,
+    String,
+    i32,
+    serde_json::Value,
+    Option<chrono::DateTime<chrono::Utc>>,
+    Option<chrono::DateTime<chrono::Utc>>,
+    chrono::DateTime<chrono::Utc>,
+    bool,
+);
+
+/// Raw DB row type for session info queries
+type SessionInfoRow = (
+    String,
+    i32,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
 
 /// Security service
 pub struct SecurityService {
@@ -20,6 +70,7 @@ impl SecurityService {
     }
 
     /// Log security event
+    #[allow(clippy::too_many_arguments)]
     pub async fn log_event(
         &self,
         event_type: SecurityEventType,
@@ -62,19 +113,7 @@ impl SecurityService {
     ) -> Result<Vec<SecurityEvent>> {
         let offset = (page - 1) * limit;
 
-        let rows: Vec<(
-            i64,
-            String,
-            String,
-            Option<i32>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<serde_json::Value>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<SecurityEventRow> = sqlx::query_as(
             r#"
             SELECT
                 e.id,
@@ -184,15 +223,7 @@ impl SecurityService {
 
     /// Get blocked IPs
     pub async fn get_blocked_ips(&self) -> Result<Vec<IpBlock>> {
-        let rows: Vec<(
-            i64,
-            String,
-            String,
-            Option<i32>,
-            chrono::DateTime<chrono::Utc>,
-            Option<chrono::DateTime<chrono::Utc>>,
-            bool,
-        )> = sqlx::query_as(
+        let rows: Vec<IpBlockRow> = sqlx::query_as(
             r#"
             SELECT id, ip_address, reason, blocked_by, blocked_at, expires_at, is_permanent
             FROM ip_blocks
@@ -262,17 +293,7 @@ impl SecurityService {
 
     /// List API keys for user
     pub async fn list_api_keys(&self, user_id: i32) -> Result<Vec<ApiKey>> {
-        let rows: Vec<(
-            i64,
-            String,
-            String,
-            i32,
-            serde_json::Value,
-            Option<chrono::DateTime<chrono::Utc>>,
-            Option<chrono::DateTime<chrono::Utc>>,
-            chrono::DateTime<chrono::Utc>,
-            bool,
-        )> = sqlx::query_as(
+        let rows: Vec<ApiKeyRow> = sqlx::query_as(
             r#"
             SELECT id, name, key_prefix, user_id, permissions, last_used_at, expires_at, created_at, is_active
             FROM api_keys
@@ -322,16 +343,7 @@ impl SecurityService {
         user_id: i32,
         current_session_id: Option<&str>,
     ) -> Result<Vec<SessionInfo>> {
-        let rows: Vec<(
-            String,
-            i32,
-            String,
-            String,
-            Option<String>,
-            Option<String>,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<SessionInfoRow> = sqlx::query_as(
             r#"
             SELECT id, user_id, ip_address, user_agent, device_type, location, created_at, last_active_at
             FROM user_sessions

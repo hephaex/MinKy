@@ -5,35 +5,96 @@
 
 ---
 
-## 🔄 현재 진행 상황 (2026-02-19) - 통합 테스트 완료
+## 🔄 현재 진행 상황 (2026-02-19) - 코드 품질 개선 완료
 
-### 통합 테스트 세션 결과
+### 코드 품질 개선 세션 결과 (2026-02-19 - 2차)
 
-**1. pgvector 설치 및 마이그레이션**
-- pgvector 0.8.0 PostgreSQL 14용 소스 빌드 및 설치 완료
-- `minky_rust_db` 신규 데이터베이스 생성
-- 3개 마이그레이션 적용 완료 (001_initial_schema, 002_workflows, 003_pgvector_embeddings)
-- 모든 테이블 생성 확인: documents, document_embeddings, chunk_embeddings, document_understanding, embedding_queue 등
+**1. Rust Clippy 경고 전량 제거 (80개 → 0개)**
 
-**2. Rust 백엔드 라우트 버그 수정**
-- Axum 0.8 호환성 수정: `/:param` -> `/{param}` (15개 파일)
-- search.rs와 rag.rs 간 `/semantic` 경로 충돌 해결
-- 빌드: 0 errors, 6 warnings (pre-existing)
+| 경고 유형 | 수정 전 | 수정 후 | 방법 |
+|---|---|---|---|
+| very complex type | 27개 | 0개 | type alias 도입 |
+| redundant closure | 24개 | 0개 | cargo clippy --fix |
+| derivable_impls | 9개 | 0개 | #[derive(Default)] |
+| direct impl ToString | 4개 | 0개 | fmt::Display 구현 |
+| dead code | 9개 | 0개 | #[allow(dead_code)] 또는 제거 |
+| 기타 | 7개 | 0개 | suppress/수정 |
 
-**3. 서버 기동 테스트**
+**수정된 파일 목록:**
+- `src/models/audit.rs` - AuditAction, ResourceType: ToString -> Display
+- `src/models/notification.rs` - NotificationType: ToString -> Display
+- `src/models/workflow.rs` - WorkflowStatus: ToString -> Display
+- `src/models/timeline.rs` - TimelineQuery: #[derive(Default)] 추가
+- `src/routes/search.rs` - DocumentRow type alias, dead_code allow
+- `src/routes/auth.rs` - RefreshRequest: dead_code allow
+- `src/routes/categories.rs` - ListQuery: dead_code allow
+- `src/routes/documents.rs` - ListQuery, CreateDocumentRequest, UpdateDocumentRequest: dead_code allow
+- `src/routes/workflows.rs` - CreateWorkflowRequest: dead_code allow
+- `src/services/admin_service.rs` - UserAdminRow, AuditLogRow type alias
+- `src/services/agent_service.rs` - AgentRow, AgentTaskRow type alias
+- `src/services/analytics_service.rs` - DocumentMetricsRow type alias
+- `src/services/export_service.rs` - ExportedDocumentRow type alias
+- `src/services/harness_service.rs` - HarnessRow, HarnessSummaryRow type alias
+- `src/services/ml_service.rs` - DocumentClusterRow type alias
+- `src/services/security_service.rs` - SecurityEventRow, IpBlockRow, ApiKeyRow, SessionInfoRow type alias; log_event suppress
+- `src/services/skill_service.rs` - SkillRow, SkillHistoryRow type alias
+- `src/services/sync_service.rs` - SyncConfigRow, SyncHistoryRow, SyncConflictRow type alias
+- `src/services/template_service.rs` - TemplateRow type alias
+- `src/services/timeline_service.rs` - TimelineEventRow type alias, Default impl 제거
+- `src/services/workflow_service.rs` - to_string() in format! 제거
+
+**2. 빌드 상태**
+- Rust Backend: ✅ 0 warnings, 0 errors
+- Frontend Tests: ✅ 228 passed, 0 failed (이전 1 failed -> 모두 통과)
+
+**3. Frontend 버그 수정 (DocumentView.js)**
+- `api.get('/documents/${id}')` -> `documentService.getDocument(id)` 변경
+- DocumentView.test.js: 5/5 테스트 모두 통과 (이전에 1개 실패)
+
+## 🔄 현재 진행 상황 (2026-02-19) - E2E 테스트 완료
+
+### E2E 테스트 세션 결과 (2026-02-19)
+
+**1. Rust 서버 기동**
+- `minky-rust/target/debug/minky` 실행 (포트 8000)
+- `.env` 로드 성공: DATABASE_URL, JWT_SECRET, OPENAI_API_KEY
 - `GET /api/health` -> `{"status":"ok","version":"0.1.0","database":"healthy"}` ✅
-- `GET /api/categories` -> `{"success":true,"data":[]}` ✅
-- `GET /api/documents` -> pagination 응답 정상 ✅
-- `GET /api/embeddings/stats` -> 통계 응답 정상 ✅
-- `POST /api/search/ask` -> OpenAI API 키 없어 오류 (예상된 동작) ✅
 
-**4. 환경 설정**
-- `minky-rust/.env` 생성 (DATABASE_URL, JWT_SECRET 설정)
-- OpenAI API 키 미설정 (사용자 입력 필요)
+**2. DB 마이그레이션 추가**
+- `migrations/004_search_history.sql` 생성 및 적용 (sqlx migrate run)
+- search_history 테이블 없어서 GET /api/search/history 오류 -> 수정 완료
+- 마이그레이션 상태: 4/4 적용 완료
+
+**3. E2E API 테스트 결과**
+
+| 엔드포인트 | 메서드 | 결과 | 비고 |
+|---|---|---|---|
+| /api/health | GET | ✅ | 서버/DB 정상 |
+| /api/documents | GET | ✅ | 빈 목록 (stub) |
+| /api/categories | GET | ✅ | 빈 목록 |
+| /api/embeddings/stats | GET | ✅ | 통계 정상 (문서 2개) |
+| /api/search/history | GET | ✅ | 빈 히스토리 |
+| /api/documents/{id}/understand | POST | 실패 | ANTHROPIC_API_KEY 미설정 |
+| /api/embeddings/document/{id} | POST | 실패 | OpenAI 크레딧 초과 |
+| /api/embeddings/search | POST | 실패 | OpenAI 크레딧 초과 |
+| /api/search/semantic | POST | 실패 | OpenAI 크레딧 초과 |
+| /api/search/ask | POST | 실패 | OpenAI 크레딧 초과 |
+
+**4. 프론트엔드 수정**
+- `frontend/src/services/api.js`: 포트 5001 -> 8000 변경 ✅
+- `frontend/src/services/collaborationService.js`: 포트 5001 -> 8000 변경 ✅
+- `frontend/src/components/Header.js`: Knowledge 메뉴 링크 추가 ✅
+- 프론트엔드 빌드: ✅ 성공 (warnings only)
+
+**5. 프론트엔드 개발 서버 기동**
+- http://localhost:3000 정상 응답 ✅
+- API 기본 URL: http://localhost:8000/api ✅
 
 **남은 작업:**
-- OpenAI/Anthropic API 키를 `minky-rust/.env`에 추가 후 RAG 파이프라인 E2E 테스트
-- 프론트엔드 API URL 포트 8000으로 업데이트 (현재 5001/5000)
+- ANTHROPIC_API_KEY를 `minky-rust/.env`에 추가 (문서 이해 분석)
+- OpenAI API 크레딧 보충 (임베딩 생성, RAG 검색)
+- documents CRUD 라우트 DB 연동 구현 (현재 TODO stub)
+- 실제 임베딩 데이터로 E2E 테스트 완료
 
 ---
 

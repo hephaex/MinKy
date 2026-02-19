@@ -71,6 +71,8 @@ async fn register(
     }))
 }
 
+/// Refresh token request (used when token refresh is implemented)
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct RefreshRequest {
     pub refresh_token: String,

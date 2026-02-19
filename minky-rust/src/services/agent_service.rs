@@ -1,16 +1,47 @@
 use anyhow::Result;
-use chrono::Utc;
 use sqlx::PgPool;
 
 use crate::{
     config::Config,
     error::{AppError, AppResult},
     models::{
-        Agent, AgentConversation, AgentMessage, AgentResult, AgentStatus, AgentTask, AgentTool,
-        AgentType, CreateAgent, ExecuteAgentRequest, MessageRole, ToolCall, UpdateAgent,
+        Agent, AgentMessage, AgentResult, AgentStatus, AgentTask, AgentTool,
+        AgentType, CreateAgent, ExecuteAgentRequest, MessageRole, UpdateAgent,
     },
     services::AIService,
 };
+
+/// Raw DB row type for agent queries
+type AgentRow = (
+    i32,
+    String,
+    Option<String>,
+    String,
+    String,
+    String,
+    f32,
+    i32,
+    Option<serde_json::Value>,
+    bool,
+    i32,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
+
+/// Raw DB row type for agent task queries
+type AgentTaskRow = (
+    String,
+    i32,
+    i32,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<i32>,
+    Option<i64>,
+    chrono::DateTime<chrono::Utc>,
+    Option<chrono::DateTime<chrono::Utc>>,
+);
 
 /// Agent service for AI agent management
 pub struct AgentService {
@@ -25,21 +56,7 @@ impl AgentService {
 
     /// List all agents
     pub async fn list_agents(&self, user_id: i32) -> Result<Vec<Agent>> {
-        let rows: Vec<(
-            i32,
-            String,
-            Option<String>,
-            String,
-            String,
-            String,
-            f32,
-            i32,
-            Option<serde_json::Value>,
-            bool,
-            i32,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<AgentRow> = sqlx::query_as(
             r#"
             SELECT id, name, description, agent_type, system_prompt, model, temperature, max_tokens, tools, is_active, created_by, created_at, updated_at
             FROM agents
@@ -80,21 +97,7 @@ impl AgentService {
 
     /// Get agent by ID
     pub async fn get_agent(&self, agent_id: i32) -> Result<Option<Agent>> {
-        let row: Option<(
-            i32,
-            String,
-            Option<String>,
-            String,
-            String,
-            String,
-            f32,
-            i32,
-            Option<serde_json::Value>,
-            bool,
-            i32,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let row: Option<AgentRow> = sqlx::query_as(
             r#"
             SELECT id, name, description, agent_type, system_prompt, model, temperature, max_tokens, tools, is_active, created_by, created_at, updated_at
             FROM agents
@@ -134,7 +137,7 @@ impl AgentService {
         let tools_json = create
             .tools
             .as_ref()
-            .map(|t| serde_json::to_value(t))
+            .map(serde_json::to_value)
             .transpose()?;
 
         let agent_type_str = serde_json::to_string(&create.agent_type)?;
@@ -244,14 +247,14 @@ impl AgentService {
     /// Execute agent
     pub async fn execute_agent(
         &self,
-        user_id: i32,
+        _user_id: i32,
         agent_id: i32,
         request: ExecuteAgentRequest,
     ) -> AppResult<AgentResult> {
         let agent = self
             .get_agent(agent_id)
             .await
-            .map_err(|e| AppError::Internal(e))?
+            .map_err(AppError::Internal)?
             .ok_or_else(|| AppError::NotFound("Agent not found".to_string()))?;
 
         if !agent.is_active {
@@ -262,8 +265,7 @@ impl AgentService {
         let start_time = std::time::Instant::now();
 
         // Build messages
-        let messages = vec![
-            AgentMessage {
+        let _messages = [AgentMessage {
                 role: MessageRole::System,
                 content: agent.system_prompt.clone(),
                 tool_calls: None,
@@ -272,8 +274,7 @@ impl AgentService {
                 role: MessageRole::User,
                 content: request.input.clone(),
                 tool_calls: None,
-            },
-        ];
+            }];
 
         // Call AI service
         let ai_service = AIService::new(self.config.clone());
@@ -298,19 +299,7 @@ impl AgentService {
 
     /// Get agent tasks
     pub async fn get_tasks(&self, user_id: i32, agent_id: Option<i32>) -> Result<Vec<AgentTask>> {
-        let rows: Vec<(
-            String,
-            i32,
-            i32,
-            String,
-            String,
-            Option<String>,
-            Option<String>,
-            Option<i32>,
-            Option<i64>,
-            chrono::DateTime<chrono::Utc>,
-            Option<chrono::DateTime<chrono::Utc>>,
-        )> = sqlx::query_as(
+        let rows: Vec<AgentTaskRow> = sqlx::query_as(
             r#"
             SELECT id, agent_id, user_id, status, input, output, error, tokens_used, execution_time_ms, created_at, completed_at
             FROM agent_tasks

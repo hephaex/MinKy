@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::FromRow;
+use std::fmt;
 
 /// Audit log model representing the audit_logs table
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -34,21 +35,22 @@ pub enum AuditAction {
     AdminAction,
 }
 
-impl ToString for AuditAction {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Create => "create".to_string(),
-            Self::Read => "read".to_string(),
-            Self::Update => "update".to_string(),
-            Self::Delete => "delete".to_string(),
-            Self::Login => "login".to_string(),
-            Self::Logout => "logout".to_string(),
-            Self::LoginFailed => "login_failed".to_string(),
-            Self::Export => "export".to_string(),
-            Self::Import => "import".to_string(),
-            Self::Share => "share".to_string(),
-            Self::AdminAction => "admin_action".to_string(),
-        }
+impl fmt::Display for AuditAction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Create => "create",
+            Self::Read => "read",
+            Self::Update => "update",
+            Self::Delete => "delete",
+            Self::Login => "login",
+            Self::Logout => "logout",
+            Self::LoginFailed => "login_failed",
+            Self::Export => "export",
+            Self::Import => "import",
+            Self::Share => "share",
+            Self::AdminAction => "admin_action",
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -66,18 +68,19 @@ pub enum ResourceType {
     System,
 }
 
-impl ToString for ResourceType {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Document => "document".to_string(),
-            Self::User => "user".to_string(),
-            Self::Tag => "tag".to_string(),
-            Self::Category => "category".to_string(),
-            Self::Comment => "comment".to_string(),
-            Self::Attachment => "attachment".to_string(),
-            Self::Workflow => "workflow".to_string(),
-            Self::System => "system".to_string(),
-        }
+impl fmt::Display for ResourceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Document => "document",
+            Self::User => "user",
+            Self::Tag => "tag",
+            Self::Category => "category",
+            Self::Comment => "comment",
+            Self::Attachment => "attachment",
+            Self::Workflow => "workflow",
+            Self::System => "system",
+        };
+        write!(f, "{}", s)
     }
 }
 

@@ -1,13 +1,51 @@
 use anyhow::Result;
 use chrono::Utc;
 use sqlx::PgPool;
-use std::collections::HashMap;
 
 use crate::models::{
-    ConflictResolution, ConflictType, CreateSyncConfig, FileSyncStatus, ResolveConflictRequest,
-    SyncConfig, SyncConflict, SyncDirection, SyncError, SyncFileInfo, SyncHistoryEntry, SyncJob,
+    ConflictType, CreateSyncConfig, ResolveConflictRequest,
+    SyncConfig, SyncConflict, SyncHistoryEntry, SyncJob,
     SyncProvider, SyncStats, SyncStatus,
 };
+
+/// Raw DB row type for sync config queries
+type SyncConfigRow = (
+    i32,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<serde_json::Value>,
+    String,
+    bool,
+    i32,
+    bool,
+    bool,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
+
+/// Raw DB row type for sync history queries
+type SyncHistoryRow = (
+    i64,
+    i32,
+    String,
+    i32,
+    i32,
+    i64,
+    i64,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
+
+/// Raw DB row type for sync conflict queries
+type SyncConflictRow = (
+    String,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+    String,
+    Option<String>,
+);
 
 /// Sync service for document synchronization
 pub struct SyncService {
@@ -21,21 +59,7 @@ impl SyncService {
 
     /// List sync configurations
     pub async fn list_configs(&self, user_id: i32) -> Result<Vec<SyncConfig>> {
-        let rows: Vec<(
-            i32,
-            String,
-            String,
-            String,
-            Option<String>,
-            Option<serde_json::Value>,
-            String,
-            bool,
-            i32,
-            bool,
-            bool,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<SyncConfigRow> = sqlx::query_as(
             r#"
             SELECT id, name, provider, remote_path, local_path, credentials, sync_direction,
                    auto_sync, sync_interval_minutes, include_attachments, is_active,
@@ -71,21 +95,7 @@ impl SyncService {
 
     /// Get sync configuration
     pub async fn get_config(&self, config_id: i32) -> Result<Option<SyncConfig>> {
-        let row: Option<(
-            i32,
-            String,
-            String,
-            String,
-            Option<String>,
-            Option<serde_json::Value>,
-            String,
-            bool,
-            i32,
-            bool,
-            bool,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let row: Option<SyncConfigRow> = sqlx::query_as(
             r#"
             SELECT id, name, provider, remote_path, local_path, credentials, sync_direction,
                    auto_sync, sync_interval_minutes, include_attachments, is_active,
@@ -192,17 +202,7 @@ impl SyncService {
 
     /// Get sync history
     pub async fn get_history(&self, config_id: i32, limit: i32) -> Result<Vec<SyncHistoryEntry>> {
-        let rows: Vec<(
-            i64,
-            i32,
-            String,
-            i32,
-            i32,
-            i64,
-            i64,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<SyncHistoryRow> = sqlx::query_as(
             r#"
             SELECT id, config_id, status, files_synced, files_failed, bytes_transferred,
                    EXTRACT(EPOCH FROM (completed_at - started_at))::bigint as duration,
@@ -236,13 +236,7 @@ impl SyncService {
 
     /// Get pending conflicts
     pub async fn get_conflicts(&self, config_id: i32) -> Result<Vec<SyncConflict>> {
-        let rows: Vec<(
-            String,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-            String,
-            Option<String>,
-        )> = sqlx::query_as(
+        let rows: Vec<SyncConflictRow> = sqlx::query_as(
             r#"
             SELECT file_path, local_modified, remote_modified, conflict_type, resolution
             FROM sync_conflicts

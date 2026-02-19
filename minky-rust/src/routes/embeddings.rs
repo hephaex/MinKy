@@ -106,7 +106,7 @@ async fn create_document_embedding(
     service
         .create_document_embedding(req)
         .await
-        .map(|embedding| ApiResponse::ok(embedding))
+        .map(ApiResponse::ok)
         .map_err(into_error_response)
 }
 
@@ -127,7 +127,7 @@ async fn create_chunk_embeddings(
     service
         .create_chunk_embeddings(payload)
         .await
-        .map(|chunks| ApiResponse::ok(chunks))
+        .map(ApiResponse::ok)
         .map_err(into_error_response)
 }
 
@@ -175,7 +175,7 @@ async fn semantic_search(
     service
         .semantic_search(payload)
         .await
-        .map(|results| ApiResponse::ok(results))
+        .map(ApiResponse::ok)
         .map_err(into_error_response)
 }
 
@@ -193,7 +193,7 @@ async fn find_similar_documents(
     service
         .find_similar_documents(document_id, limit)
         .await
-        .map(|results| ApiResponse::ok(results))
+        .map(ApiResponse::ok)
         .map_err(into_error_response)
 }
 
@@ -208,7 +208,7 @@ async fn get_stats(
     service
         .get_stats()
         .await
-        .map(|stats| ApiResponse::ok(stats))
+        .map(ApiResponse::ok)
         .map_err(into_error_response)
 }
 
@@ -225,7 +225,7 @@ async fn queue_document(
     service
         .queue_document(document_id, payload.priority)
         .await
-        .map(|entry| ApiResponse::ok(entry))
+        .map(ApiResponse::ok)
         .map_err(into_error_response)
 }
 

@@ -1,15 +1,24 @@
 use anyhow::Result;
 use chrono::Utc;
 use sqlx::PgPool;
-use std::collections::HashMap;
 
 use crate::models::{
-    AnomalyResult, AnomalyType, ClusterAssignment, ClusteredDocument, ClusteringAlgorithm,
-    ClusteringJob, ClusteringMetrics, ClusteringRequest, ClusteringResult, DocumentCluster,
-    DocumentSimilarity, DocumentTopics, JobStatus, SimilarDocumentsRequest, Topic,
-    TopicAlgorithm, TopicAssignment, TopicKeyword, TopicModelingRequest, TrendAnalysis,
-    TrendDirection, TrendingKeyword, TrendingTopic,
+    AnomalyResult, AnomalyType, ClusteredDocument,
+    ClusteringJob, ClusteringRequest, ClusteringResult, DocumentCluster,
+    DocumentSimilarity, DocumentTopics, JobStatus, SimilarDocumentsRequest, Topic, TopicAssignment, TopicKeyword, TopicModelingRequest, TrendAnalysis, TrendingKeyword, TrendingTopic,
 };
+
+/// Raw DB row type for document cluster queries
+type DocumentClusterRow = (
+    i32,
+    String,
+    Option<String>,
+    Vec<f32>,
+    i64,
+    Vec<String>,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
 
 /// ML Analytics service
 pub struct MlService {
@@ -47,16 +56,7 @@ impl MlService {
 
     /// Get document clusters
     pub async fn get_clusters(&self) -> Result<Vec<DocumentCluster>> {
-        let rows: Vec<(
-            i32,
-            String,
-            Option<String>,
-            Vec<f32>,
-            i64,
-            Vec<String>,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<DocumentClusterRow> = sqlx::query_as(
             r#"
             SELECT id, name, description, centroid, document_count, keywords, created_at, updated_at
             FROM document_clusters
@@ -162,7 +162,7 @@ impl MlService {
     }
 
     /// Start topic modeling
-    pub async fn start_topic_modeling(&self, request: TopicModelingRequest) -> Result<String> {
+    pub async fn start_topic_modeling(&self, _request: TopicModelingRequest) -> Result<String> {
         let job_id = uuid::Uuid::new_v4().to_string();
         // TODO: Queue topic modeling job
         Ok(job_id)

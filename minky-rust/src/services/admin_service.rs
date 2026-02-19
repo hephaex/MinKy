@@ -1,11 +1,38 @@
 use anyhow::Result;
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use sqlx::PgPool;
 
 use crate::models::{
     AuditLogEntry, BackupInfo, CreateBackupRequest, MaintenanceMode, SystemConfig, SystemStats,
     UpdateUserAdmin, UserAdmin,
 };
+
+/// Raw DB row type for user admin queries
+type UserAdminRow = (
+    i32,
+    String,
+    String,
+    String,
+    bool,
+    chrono::DateTime<chrono::Utc>,
+    Option<chrono::DateTime<chrono::Utc>>,
+    i64,
+    i64,
+);
+
+/// Raw DB row type for audit log queries
+type AuditLogRow = (
+    i64,
+    Option<i32>,
+    Option<String>,
+    String,
+    String,
+    Option<String>,
+    Option<serde_json::Value>,
+    Option<String>,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+);
 
 /// Admin service for system management
 pub struct AdminService {
@@ -58,7 +85,7 @@ impl AdminService {
     pub async fn list_users(&self, page: i32, limit: i32) -> Result<Vec<UserAdmin>> {
         let offset = (page - 1) * limit;
 
-        let rows: Vec<(i32, String, String, String, bool, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, i64, i64)> = sqlx::query_as(
+        let rows: Vec<UserAdminRow> = sqlx::query_as(
             r#"
             SELECT
                 u.id,
@@ -115,7 +142,7 @@ impl AdminService {
         }
 
         // Fetch updated user
-        let row: (i32, String, String, String, bool, chrono::DateTime<chrono::Utc>, Option<chrono::DateTime<chrono::Utc>>, i64, i64) = sqlx::query_as(
+        let row: UserAdminRow = sqlx::query_as(
             r#"
             SELECT
                 u.id,
@@ -168,7 +195,7 @@ impl AdminService {
     ) -> Result<Vec<AuditLogEntry>> {
         let offset = (page - 1) * limit;
 
-        let rows: Vec<(i64, Option<i32>, Option<String>, String, String, Option<String>, Option<serde_json::Value>, Option<String>, Option<String>, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+        let rows: Vec<AuditLogRow> = sqlx::query_as(
             r#"
             SELECT
                 a.id,

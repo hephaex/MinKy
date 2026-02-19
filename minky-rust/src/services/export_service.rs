@@ -3,9 +3,21 @@ use chrono::Utc;
 use sqlx::PgPool;
 
 use crate::models::{
-    ExportFormat, ExportJob, ExportRequest, ExportStatus, ExportedDocument, ImportError,
+    ExportJob, ExportRequest, ExportStatus, ExportedDocument, ImportError,
     ImportJob, ImportRequest,
 };
+
+/// Raw DB row type for exported document queries
+type ExportedDocumentRow = (
+    uuid::Uuid,
+    String,
+    String,
+    Option<String>,
+    Option<Vec<String>>,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+    Option<serde_json::Value>,
+);
 
 /// Export/Import service
 pub struct ExportService {
@@ -58,7 +70,7 @@ impl ExportService {
     }
 
     /// Get export job status
-    pub async fn get_export_status(&self, job_id: &str) -> Result<Option<ExportJob>> {
+    pub async fn get_export_status(&self, _job_id: &str) -> Result<Option<ExportJob>> {
         // TODO: Get from job queue/storage
         Ok(None)
     }
@@ -104,16 +116,7 @@ impl ExportService {
 
         query.push_str(" GROUP BY d.id, d.title, d.content, c.name, d.created_at, d.updated_at, d.metadata ORDER BY d.created_at DESC");
 
-        let rows: Vec<(
-            uuid::Uuid,
-            String,
-            String,
-            Option<String>,
-            Option<Vec<String>>,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-            Option<serde_json::Value>,
-        )> = sqlx::query_as(&query)
+        let rows: Vec<ExportedDocumentRow> = sqlx::query_as(&query)
             .bind(user_id)
             .fetch_all(&self.db)
             .await?;
@@ -189,7 +192,7 @@ impl ExportService {
         &self,
         user_id: i32,
         _request: ImportRequest,
-        content: &str,
+        _content: &str,
     ) -> Result<ImportJob> {
         let job_id = uuid::Uuid::new_v4().to_string();
 

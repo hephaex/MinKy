@@ -38,7 +38,7 @@ pub enum TimelineEventType {
 }
 
 /// Timeline query parameters
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct TimelineQuery {
     pub page: Option<i32>,
     pub limit: Option<i32>,

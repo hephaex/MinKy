@@ -1,12 +1,25 @@
 use anyhow::Result;
-use chrono::{Datelike, Duration, NaiveDate, Utc};
+use chrono::{Duration, NaiveDate, Utc};
 use sqlx::PgPool;
 
 use crate::models::{
-    ActiveDocumentInfo, ActiveUserInfo, ActivityHeatmap, ContributorInfo, DailyActivity,
-    DocumentHistory, EventTypeCount, HeatmapCell, TimelineEvent, TimelineEventType, TimelineQuery,
+    ActivityHeatmap, ContributorInfo, DailyActivity,
+    DocumentHistory, HeatmapCell, TimelineEvent, TimelineEventType, TimelineQuery,
     TimelineResponse, TimelineStats, UserActivityStream,
 };
+
+/// Raw DB row type for timeline event queries
+type TimelineEventRow = (
+    String,
+    String,
+    Option<uuid::Uuid>,
+    Option<String>,
+    i32,
+    String,
+    String,
+    Option<serde_json::Value>,
+    chrono::DateTime<chrono::Utc>,
+);
 
 /// Timeline service for activity tracking
 pub struct TimelineService {
@@ -24,17 +37,7 @@ impl TimelineService {
         let limit = query.limit.unwrap_or(50).min(200);
         let offset = (page - 1) * limit;
 
-        let rows: Vec<(
-            String,
-            String,
-            Option<uuid::Uuid>,
-            Option<String>,
-            i32,
-            String,
-            String,
-            Option<serde_json::Value>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<TimelineEventRow> = sqlx::query_as(
             r#"
             SELECT
                 e.id,
@@ -419,17 +422,3 @@ impl TimelineService {
     }
 }
 
-impl Default for TimelineQuery {
-    fn default() -> Self {
-        Self {
-            page: None,
-            limit: None,
-            event_types: None,
-            document_id: None,
-            user_id: None,
-            category_id: None,
-            date_from: None,
-            date_to: None,
-        }
-    }
-}

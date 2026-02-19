@@ -7,13 +7,49 @@ use crate::{
     config::Config,
     error::{AppError, AppResult},
     models::{
-        builtin_prompts, ChangeType, CodeChange, CreateSkill, ExecuteSkillRequest, OutputFormat,
-        Priority, Skill, SkillCapability, SkillContext, SkillExecutionHistory, SkillExecutionOptions,
+        builtin_prompts, CodeChange, CreateSkill, ExecuteSkillRequest,
+        Priority, Skill, SkillCapability, SkillExecutionHistory,
         SkillRegistry, SkillResult, SkillStats, SkillSuggestion, SkillTrigger, SkillType,
         SkillSuggestionType, TriggerType, UpdateSkill,
     },
     services::AIService,
 };
+
+/// Raw DB row type for skill queries
+type SkillRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    Option<serde_json::Value>,
+    Option<serde_json::Value>,
+    Option<serde_json::Value>,
+    Option<serde_json::Value>,
+    String,
+    f32,
+    i32,
+    bool,
+    i32,
+    chrono::DateTime<chrono::Utc>,
+    chrono::DateTime<chrono::Utc>,
+);
+
+/// Raw DB row type for skill execution history queries
+/// Columns: execution_id, skill_id, skill_type, user_id, input_summary, output_summary,
+///          success, tokens_used, execution_time_ms, created_at
+type SkillHistoryRow = (
+    String,
+    String,
+    String,
+    i32,
+    String,
+    String,
+    bool,
+    i32,
+    i64,
+    chrono::DateTime<chrono::Utc>,
+);
 
 /// Skill service for managing and executing development skills
 pub struct SkillService {
@@ -233,7 +269,7 @@ impl SkillService {
         let skill = if let Some(skill_id) = &request.skill_id {
             self.get_skill(skill_id)
                 .await
-                .map_err(|e| AppError::Internal(e))?
+                .map_err(AppError::Internal)?
                 .ok_or_else(|| AppError::NotFound("Skill not found".to_string()))?
         } else if let Some(skill_type) = &request.skill_type {
             self.get_skill_by_type(skill_type)
@@ -322,7 +358,7 @@ impl SkillService {
 
     fn parse_output(&self, output: &str, skill: &Skill) -> (Vec<SkillSuggestion>, Vec<CodeChange>) {
         let mut suggestions = Vec::new();
-        let mut code_changes = Vec::new();
+        let code_changes = Vec::new();
 
         // Simple parsing - in production, use more sophisticated parsing
         let lines: Vec<&str> = output.lines().collect();
@@ -449,24 +485,7 @@ impl SkillService {
 
     /// List custom skills from database
     async fn list_custom_skills(&self) -> Result<Vec<Skill>> {
-        let rows: Vec<(
-            String,
-            String,
-            String,
-            String,
-            String,
-            Option<serde_json::Value>,
-            Option<serde_json::Value>,
-            Option<serde_json::Value>,
-            Option<serde_json::Value>,
-            String,
-            f32,
-            i32,
-            bool,
-            i32,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<SkillRow> = sqlx::query_as(
             r#"
             SELECT id, name, skill_type, description, system_prompt, input_schema, output_schema,
                    triggers, capabilities, model, temperature, max_tokens, is_active, priority,
@@ -503,24 +522,7 @@ impl SkillService {
     }
 
     async fn get_custom_skill(&self, skill_id: &str) -> Result<Option<Skill>> {
-        let row: Option<(
-            String,
-            String,
-            String,
-            String,
-            String,
-            Option<serde_json::Value>,
-            Option<serde_json::Value>,
-            Option<serde_json::Value>,
-            Option<serde_json::Value>,
-            String,
-            f32,
-            i32,
-            bool,
-            i32,
-            chrono::DateTime<chrono::Utc>,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let row: Option<SkillRow> = sqlx::query_as(
             r#"
             SELECT id, name, skill_type, description, system_prompt, input_schema, output_schema,
                    triggers, capabilities, model, temperature, max_tokens, is_active, priority,
@@ -557,8 +559,8 @@ impl SkillService {
     pub async fn create_skill(&self, user_id: i32, create: CreateSkill) -> Result<Skill> {
         let skill_id = uuid::Uuid::new_v4().to_string();
         let skill_type_str = serde_json::to_string(&create.skill_type)?;
-        let triggers_json = create.triggers.as_ref().map(|t| serde_json::to_value(t)).transpose()?;
-        let capabilities_json = create.capabilities.as_ref().map(|c| serde_json::to_value(c)).transpose()?;
+        let triggers_json = create.triggers.as_ref().map(serde_json::to_value).transpose()?;
+        let capabilities_json = create.capabilities.as_ref().map(serde_json::to_value).transpose()?;
 
         sqlx::query(
             r#"
@@ -673,18 +675,7 @@ impl SkillService {
 
     /// Get execution history
     pub async fn get_history(&self, user_id: i32, limit: i32) -> Result<Vec<SkillExecutionHistory>> {
-        let rows: Vec<(
-            String,
-            String,
-            String,
-            i32,
-            String,
-            String,
-            bool,
-            i32,
-            i64,
-            chrono::DateTime<chrono::Utc>,
-        )> = sqlx::query_as(
+        let rows: Vec<SkillHistoryRow> = sqlx::query_as(
             r#"
             SELECT execution_id, skill_id, skill_type, user_id, input_summary, output_summary,
                    success, tokens_used, execution_time_ms, created_at

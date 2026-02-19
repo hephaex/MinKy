@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::FromRow;
+use std::fmt;
 
 /// Notification model representing the notifications table
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -28,15 +29,16 @@ pub enum NotificationType {
     SystemAlert,
 }
 
-impl ToString for NotificationType {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Comment => "comment".to_string(),
-            Self::Mention => "mention".to_string(),
-            Self::DocumentShare => "document_share".to_string(),
-            Self::WorkflowUpdate => "workflow_update".to_string(),
-            Self::SystemAlert => "system_alert".to_string(),
-        }
+impl fmt::Display for NotificationType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Self::Comment => "comment",
+            Self::Mention => "mention",
+            Self::DocumentShare => "document_share",
+            Self::WorkflowUpdate => "workflow_update",
+            Self::SystemAlert => "system_alert",
+        };
+        write!(f, "{}", s)
     }
 }
 

@@ -104,8 +104,8 @@ impl WorkflowService {
         if !is_valid_transition(&current_status, &data.status) {
             return Err(AppError::Validation(format!(
                 "Cannot transition from '{}' to '{}'",
-                current_status.to_string(),
-                data.status.to_string()
+                current_status,
+                data.status
             )));
         }
 

@@ -8,7 +8,7 @@ import DOMPurify from 'dompurify';
 import { logError } from '../utils/logger';
 import { formatDateTime } from '../utils/dateUtils';
 import { extractFrontmatter, processInternalLinks, processHashtags } from '../utils/obsidianRenderer';
-import api from '../services/api';
+import api, { documentService } from '../services/api';
 import './DocumentView.css';
 
 const DocumentView = () => {
@@ -63,8 +63,7 @@ const DocumentView = () => {
     const fetchDocument = async () => {
       try {
         setLoading(true);
-        const response = await api.get(`/documents/${id}`);
-        const data = response.data;
+        const data = await documentService.getDocument(id);
         setDocument(data);
         
         // 옵시디언 스타일 콘텐츠 처리
