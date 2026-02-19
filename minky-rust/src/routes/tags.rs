@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     routing::get,
     Json, Router,
 };
@@ -8,6 +9,7 @@ use validator::Validate;
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{CreateTag, TagWithCount, UpdateTag},
     services::TagService,
     AppState,
@@ -25,12 +27,12 @@ pub struct TagListResponse {
     pub data: Vec<TagWithCount>,
 }
 
-async fn list_tags(State(state): State<AppState>) -> AppResult<Json<TagListResponse>> {
-    // TODO: Extract user_id from JWT
-    let user_id = 1;
-
+async fn list_tags(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+) -> AppResult<Json<TagListResponse>> {
     let service = TagService::new(state.db.clone());
-    let tags = service.list(user_id).await?;
+    let tags = service.list(auth_user.id).await?;
 
     Ok(Json(TagListResponse {
         success: true,
@@ -46,12 +48,11 @@ pub struct TagResponse {
 
 async fn get_tag(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<TagResponse>> {
-    let user_id = 1;
-
     let service = TagService::new(state.db.clone());
-    let tag = service.get(id, user_id).await?;
+    let tag = service.get(id, auth_user.id).await?;
 
     Ok(Json(TagResponse {
         success: true,
@@ -73,25 +74,31 @@ pub struct CreateTagRequest {
 
 async fn create_tag(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(payload): Json<CreateTagRequest>,
-) -> AppResult<Json<TagResponse>> {
-    let user_id = 1;
+) -> AppResult<(StatusCode, Json<TagResponse>)> {
+    payload
+        .validate()
+        .map_err(|e| crate::error::AppError::Validation(e.to_string()))?;
 
     let service = TagService::new(state.db.clone());
     let tag = service
-        .create(user_id, CreateTag { name: payload.name })
+        .create(auth_user.id, CreateTag { name: payload.name })
         .await?;
 
-    Ok(Json(TagResponse {
-        success: true,
-        data: TagWithCount {
-            id: tag.id,
-            name: tag.name,
-            user_id: tag.user_id,
-            document_count: 0,
-            created_at: tag.created_at,
-        },
-    }))
+    Ok((
+        StatusCode::CREATED,
+        Json(TagResponse {
+            success: true,
+            data: TagWithCount {
+                id: tag.id,
+                name: tag.name,
+                user_id: tag.user_id,
+                document_count: 0,
+                created_at: tag.created_at,
+            },
+        }),
+    ))
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -102,14 +109,17 @@ pub struct UpdateTagRequest {
 
 async fn update_tag(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateTagRequest>,
 ) -> AppResult<Json<TagResponse>> {
-    let user_id = 1;
+    payload
+        .validate()
+        .map_err(|e| crate::error::AppError::Validation(e.to_string()))?;
 
     let service = TagService::new(state.db.clone());
     let tag = service
-        .update(id, user_id, UpdateTag { name: payload.name })
+        .update(id, auth_user.id, UpdateTag { name: payload.name })
         .await?;
 
     Ok(Json(TagResponse {
@@ -132,12 +142,11 @@ pub struct DeleteResponse {
 
 async fn delete_tag(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<DeleteResponse>> {
-    let user_id = 1;
-
     let service = TagService::new(state.db.clone());
-    service.delete(id, user_id).await?;
+    service.delete(id, auth_user.id).await?;
 
     Ok(Json(DeleteResponse {
         success: true,

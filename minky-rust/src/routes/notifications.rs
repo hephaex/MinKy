@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::Notification,
     services::NotificationService,
     AppState,
@@ -37,20 +38,19 @@ pub struct NotificationListResponse {
 
 async fn list_notifications(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Query(query): Query<ListQuery>,
 ) -> AppResult<Json<NotificationListResponse>> {
-    let user_id = 1; // TODO: Extract from JWT
-
     let service = NotificationService::new(state.db.clone());
     let notifications = service
         .list(
-            user_id,
+            auth_user.id,
             query.include_read.unwrap_or(true),
             query.limit.unwrap_or(50),
             query.offset.unwrap_or(0),
         )
         .await?;
-    let unread_count = service.get_unread_count(user_id).await?;
+    let unread_count = service.get_unread_count(auth_user.id).await?;
 
     Ok(Json(NotificationListResponse {
         success: true,
@@ -65,11 +65,12 @@ pub struct UnreadCountResponse {
     pub count: i64,
 }
 
-async fn get_unread_count(State(state): State<AppState>) -> AppResult<Json<UnreadCountResponse>> {
-    let user_id = 1;
-
+async fn get_unread_count(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+) -> AppResult<Json<UnreadCountResponse>> {
     let service = NotificationService::new(state.db.clone());
-    let count = service.get_unread_count(user_id).await?;
+    let count = service.get_unread_count(auth_user.id).await?;
 
     Ok(Json(UnreadCountResponse {
         success: true,
@@ -85,12 +86,11 @@ pub struct NotificationResponse {
 
 async fn mark_as_read(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<NotificationResponse>> {
-    let user_id = 1;
-
     let service = NotificationService::new(state.db.clone());
-    let notification = service.mark_as_read(id, user_id).await?;
+    let notification = service.mark_as_read(id, auth_user.id).await?;
 
     Ok(Json(NotificationResponse {
         success: true,
@@ -104,11 +104,12 @@ pub struct MarkAllReadResponse {
     pub count: i64,
 }
 
-async fn mark_all_as_read(State(state): State<AppState>) -> AppResult<Json<MarkAllReadResponse>> {
-    let user_id = 1;
-
+async fn mark_all_as_read(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+) -> AppResult<Json<MarkAllReadResponse>> {
     let service = NotificationService::new(state.db.clone());
-    let count = service.mark_all_as_read(user_id).await?;
+    let count = service.mark_all_as_read(auth_user.id).await?;
 
     Ok(Json(MarkAllReadResponse {
         success: true,
@@ -124,12 +125,11 @@ pub struct DeleteResponse {
 
 async fn delete_notification(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<DeleteResponse>> {
-    let user_id = 1;
-
     let service = NotificationService::new(state.db.clone());
-    service.delete(id, user_id).await?;
+    service.delete(id, auth_user.id).await?;
 
     Ok(Json(DeleteResponse {
         success: true,

@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     routing::{get, post, put},
     Json, Router,
 };
@@ -9,6 +10,7 @@ use validator::Validate;
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{CommentWithAuthor, CreateComment, UpdateComment},
     services::CommentService,
     AppState,
@@ -70,14 +72,17 @@ pub struct CommentData {
 
 async fn create_comment(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(payload): Json<CreateCommentRequest>,
-) -> AppResult<Json<CommentResponse>> {
-    let user_id = 1;
+) -> AppResult<(StatusCode, Json<CommentResponse>)> {
+    payload
+        .validate()
+        .map_err(|e| crate::error::AppError::Validation(e.to_string()))?;
 
     let service = CommentService::new(state.db.clone());
     let comment = service
         .create(
-            user_id,
+            auth_user.id,
             CreateComment {
                 content: payload.content,
                 document_id: payload.document_id,
@@ -86,18 +91,21 @@ async fn create_comment(
         )
         .await?;
 
-    Ok(Json(CommentResponse {
-        success: true,
-        data: CommentData {
-            id: comment.id,
-            content: comment.content,
-            document_id: comment.document_id,
-            user_id: comment.user_id,
-            parent_id: comment.parent_id,
-            created_at: comment.created_at,
-            updated_at: comment.updated_at,
-        },
-    }))
+    Ok((
+        StatusCode::CREATED,
+        Json(CommentResponse {
+            success: true,
+            data: CommentData {
+                id: comment.id,
+                content: comment.content,
+                document_id: comment.document_id,
+                user_id: comment.user_id,
+                parent_id: comment.parent_id,
+                created_at: comment.created_at,
+                updated_at: comment.updated_at,
+            },
+        }),
+    ))
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -108,14 +116,17 @@ pub struct UpdateCommentRequest {
 
 async fn update_comment(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateCommentRequest>,
 ) -> AppResult<Json<CommentResponse>> {
-    let user_id = 1;
+    payload
+        .validate()
+        .map_err(|e| crate::error::AppError::Validation(e.to_string()))?;
 
     let service = CommentService::new(state.db.clone());
     let comment = service
-        .update(id, user_id, UpdateComment { content: payload.content })
+        .update(id, auth_user.id, UpdateComment { content: payload.content })
         .await?;
 
     Ok(Json(CommentResponse {
@@ -140,13 +151,11 @@ pub struct DeleteResponse {
 
 async fn delete_comment(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<DeleteResponse>> {
-    let user_id = 1;
-    let is_admin = false;
-
     let service = CommentService::new(state.db.clone());
-    service.delete(id, user_id, is_admin).await?;
+    service.delete(id, auth_user.id, auth_user.is_admin()).await?;
 
     Ok(Json(DeleteResponse {
         success: true,

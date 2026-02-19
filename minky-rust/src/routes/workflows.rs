@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     routing::{get, put},
     Json, Router,
 };
@@ -9,6 +10,7 @@ use validator::Validate;
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{CreateWorkflow, UpdateWorkflowAssignment, UpdateWorkflowStatus, Workflow, WorkflowHistory, WorkflowStatus},
     services::WorkflowService,
     AppState,
@@ -57,11 +59,8 @@ async fn get_workflow_by_document(
     }))
 }
 
-/// Create workflow request (document_id used when DB is connected)
-#[allow(dead_code)]
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateWorkflowRequest {
-    pub document_id: Uuid,
     pub assigned_to: Option<i32>,
     pub due_date: Option<chrono::DateTime<chrono::Utc>>,
     #[validate(range(min = 0, max = 10))]
@@ -72,15 +71,18 @@ pub struct CreateWorkflowRequest {
 
 async fn create_workflow(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
     Json(payload): Json<CreateWorkflowRequest>,
-) -> AppResult<Json<WorkflowResponse>> {
-    let user_id = 1; // TODO: Extract from JWT
+) -> AppResult<(StatusCode, Json<WorkflowResponse>)> {
+    payload
+        .validate()
+        .map_err(|e| crate::error::AppError::Validation(e.to_string()))?;
 
     let service = WorkflowService::new(state.db.clone());
     let workflow = service
         .create(
-            user_id,
+            auth_user.id,
             CreateWorkflow {
                 document_id,
                 assigned_to: payload.assigned_to,
@@ -91,10 +93,13 @@ async fn create_workflow(
         )
         .await?;
 
-    Ok(Json(WorkflowResponse {
-        success: true,
-        data: workflow,
-    }))
+    Ok((
+        StatusCode::CREATED,
+        Json(WorkflowResponse {
+            success: true,
+            data: workflow,
+        }),
+    ))
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -106,16 +111,19 @@ pub struct UpdateStatusRequest {
 
 async fn update_status(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateStatusRequest>,
 ) -> AppResult<Json<WorkflowResponse>> {
-    let user_id = 1;
+    payload
+        .validate()
+        .map_err(|e| crate::error::AppError::Validation(e.to_string()))?;
 
     let service = WorkflowService::new(state.db.clone());
     let workflow = service
         .update_status(
             id,
-            user_id,
+            auth_user.id,
             UpdateWorkflowStatus {
                 status: payload.status,
                 comment: payload.comment,
@@ -144,6 +152,10 @@ async fn update_assignment(
     Path(id): Path<i32>,
     Json(payload): Json<UpdateAssignmentRequest>,
 ) -> AppResult<Json<WorkflowResponse>> {
+    payload
+        .validate()
+        .map_err(|e| crate::error::AppError::Validation(e.to_string()))?;
+
     let service = WorkflowService::new(state.db.clone());
     let workflow = service
         .update_assignment(
@@ -188,11 +200,12 @@ pub struct WorkflowListResponse {
     pub data: Vec<Workflow>,
 }
 
-async fn list_assigned(State(state): State<AppState>) -> AppResult<Json<WorkflowListResponse>> {
-    let user_id = 1;
-
+async fn list_assigned(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+) -> AppResult<Json<WorkflowListResponse>> {
     let service = WorkflowService::new(state.db.clone());
-    let workflows = service.list_assigned(user_id).await?;
+    let workflows = service.list_assigned(auth_user.id).await?;
 
     Ok(Json(WorkflowListResponse {
         success: true,

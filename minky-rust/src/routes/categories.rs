@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
+    http::StatusCode,
     routing::get,
     Json, Router,
 };
@@ -8,6 +9,7 @@ use validator::Validate;
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{CategoryTree, CategoryWithCount, CreateCategory, UpdateCategory},
     services::CategoryService,
     AppState,
@@ -20,10 +22,10 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}", get(get_category).put(update_category).delete(delete_category))
 }
 
-/// Category list query parameters (flat field used when hierarchy filtering is implemented)
-#[allow(dead_code)]
+/// Category list query parameters
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
+    #[allow(dead_code)]
     pub flat: Option<bool>,
 }
 
@@ -35,12 +37,11 @@ pub struct CategoryListResponse {
 
 async fn list_categories(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Query(_query): Query<ListQuery>,
 ) -> AppResult<Json<CategoryListResponse>> {
-    let user_id = 1;
-
     let service = CategoryService::new(state.db.clone());
-    let categories = service.list_flat(user_id).await?;
+    let categories = service.list_flat(auth_user.id).await?;
 
     Ok(Json(CategoryListResponse {
         success: true,
@@ -54,11 +55,12 @@ pub struct CategoryTreeResponse {
     pub data: Vec<CategoryTree>,
 }
 
-async fn list_categories_tree(State(state): State<AppState>) -> AppResult<Json<CategoryTreeResponse>> {
-    let user_id = 1;
-
+async fn list_categories_tree(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+) -> AppResult<Json<CategoryTreeResponse>> {
     let service = CategoryService::new(state.db.clone());
-    let tree = service.list_tree(user_id).await?;
+    let tree = service.list_tree(auth_user.id).await?;
 
     Ok(Json(CategoryTreeResponse {
         success: true,
@@ -74,12 +76,11 @@ pub struct CategoryResponse {
 
 async fn get_category(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<CategoryResponse>> {
-    let user_id = 1;
-
     let service = CategoryService::new(state.db.clone());
-    let category = service.get(id, user_id).await?;
+    let category = service.get(id, auth_user.id).await?;
 
     Ok(Json(CategoryResponse {
         success: true,
@@ -102,14 +103,17 @@ pub struct CreateCategoryRequest {
 
 async fn create_category(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(payload): Json<CreateCategoryRequest>,
-) -> AppResult<Json<CategoryResponse>> {
-    let user_id = 1;
+) -> AppResult<(StatusCode, Json<CategoryResponse>)> {
+    payload
+        .validate()
+        .map_err(|e| crate::error::AppError::Validation(e.to_string()))?;
 
     let service = CategoryService::new(state.db.clone());
     let category = service
         .create(
-            user_id,
+            auth_user.id,
             CreateCategory {
                 name: payload.name,
                 parent_id: payload.parent_id,
@@ -117,16 +121,19 @@ async fn create_category(
         )
         .await?;
 
-    Ok(Json(CategoryResponse {
-        success: true,
-        data: CategoryWithCount {
-            id: category.id,
-            name: category.name,
-            parent_id: category.parent_id,
-            user_id: category.user_id,
-            document_count: 0,
-        },
-    }))
+    Ok((
+        StatusCode::CREATED,
+        Json(CategoryResponse {
+            success: true,
+            data: CategoryWithCount {
+                id: category.id,
+                name: category.name,
+                parent_id: category.parent_id,
+                user_id: category.user_id,
+                document_count: 0,
+            },
+        }),
+    ))
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -138,16 +145,19 @@ pub struct UpdateCategoryRequest {
 
 async fn update_category(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateCategoryRequest>,
 ) -> AppResult<Json<CategoryResponse>> {
-    let user_id = 1;
+    payload
+        .validate()
+        .map_err(|e| crate::error::AppError::Validation(e.to_string()))?;
 
     let service = CategoryService::new(state.db.clone());
     let category = service
         .update(
             id,
-            user_id,
+            auth_user.id,
             UpdateCategory {
                 name: payload.name,
                 parent_id: payload.parent_id,
@@ -175,12 +185,11 @@ pub struct DeleteResponse {
 
 async fn delete_category(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<DeleteResponse>> {
-    let user_id = 1;
-
     let service = CategoryService::new(state.db.clone());
-    service.delete(id, user_id).await?;
+    service.delete(id, auth_user.id).await?;
 
     Ok(Json(DeleteResponse {
         success: true,
