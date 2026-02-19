@@ -6,22 +6,22 @@ mod attachments;
 mod auth;
 mod categories;
 mod comments;
-mod documents;
-mod embeddings;
+pub mod documents;
+pub mod embeddings;
 mod export;
 mod git;
 mod harness;
-mod health;
-mod knowledge;
+pub mod health;
+pub mod knowledge;
 mod korean;
 mod ml;
 mod notifications;
 mod ocr;
-mod rag;
+pub mod rag;
 mod search;
 mod security;
 mod skills;
-mod slack;
+pub mod slack;
 mod sync;
 mod tags;
 mod templates;
@@ -66,4 +66,5 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/knowledge", knowledge::router())
         .nest("/embeddings", embeddings::router())
         .nest("/slack", slack::router())
+        .merge(crate::openapi::router())
 }

@@ -190,4 +190,112 @@ mod tests {
     fn test_sync_status_default_is_pending() {
         assert!(matches!(SyncStatus::default(), SyncStatus::Pending));
     }
+
+    #[test]
+    fn test_sync_direction_default_is_bidirectional() {
+        assert!(matches!(SyncDirection::default(), SyncDirection::Bidirectional));
+    }
+
+    #[test]
+    fn test_sync_status_serde_roundtrip_all_variants() {
+        let variants = [
+            SyncStatus::Pending,
+            SyncStatus::Idle,
+            SyncStatus::Syncing,
+            SyncStatus::Completed,
+            SyncStatus::Failed,
+            SyncStatus::Conflict,
+        ];
+        for status in &variants {
+            let json = serde_json::to_string(status).unwrap();
+            let back: SyncStatus = serde_json::from_str(&json).unwrap();
+            // Verify roundtrip by re-serialising
+            assert_eq!(serde_json::to_string(&back).unwrap(), json);
+        }
+    }
+
+    #[test]
+    fn test_sync_provider_serde_lowercase() {
+        let provider = SyncProvider::S3;
+        let json = serde_json::to_value(&provider).unwrap();
+        assert_eq!(json, "s3");
+    }
+
+    #[test]
+    fn test_sync_provider_google_drive_lowercase() {
+        let provider = SyncProvider::GoogleDrive;
+        let json = serde_json::to_value(&provider).unwrap();
+        assert_eq!(json, "googledrive");
+    }
+
+    #[test]
+    fn test_sync_provider_web_dav() {
+        let provider = SyncProvider::WebDAV;
+        let json = serde_json::to_value(&provider).unwrap();
+        assert_eq!(json, "webdav");
+    }
+
+    #[test]
+    fn test_sync_direction_push_serde() {
+        let dir = SyncDirection::Push;
+        let json = serde_json::to_value(&dir).unwrap();
+        assert_eq!(json, "push");
+    }
+
+    #[test]
+    fn test_conflict_type_both_modified_snake_case() {
+        let ct = ConflictType::BothModified;
+        let json = serde_json::to_value(&ct).unwrap();
+        assert_eq!(json, "both_modified");
+    }
+
+    #[test]
+    fn test_conflict_type_deleted_locally_snake_case() {
+        let ct = ConflictType::DeletedLocally;
+        let json = serde_json::to_value(&ct).unwrap();
+        assert_eq!(json, "deleted_locally");
+    }
+
+    #[test]
+    fn test_conflict_resolution_use_local_snake_case() {
+        let cr = ConflictResolution::UseLocal;
+        let json = serde_json::to_value(&cr).unwrap();
+        assert_eq!(json, "use_local");
+    }
+
+    #[test]
+    fn test_conflict_resolution_use_remote_snake_case() {
+        let cr = ConflictResolution::UseRemote;
+        let json = serde_json::to_value(&cr).unwrap();
+        assert_eq!(json, "use_remote");
+    }
+
+    #[test]
+    fn test_file_sync_status_synced_lowercase() {
+        let s = FileSyncStatus::Synced;
+        let json = serde_json::to_value(&s).unwrap();
+        assert_eq!(json, "synced");
+    }
+
+    #[test]
+    fn test_resolve_conflict_request_deserialize() {
+        let json = r#"{"file_path": "/docs/readme.md", "resolution": "use_local"}"#;
+        let req: ResolveConflictRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.file_path, "/docs/readme.md");
+        assert!(matches!(req.resolution, ConflictResolution::UseLocal));
+    }
+
+    #[test]
+    fn test_create_sync_config_optional_fields_absent() {
+        let json = r#"{
+            "name": "My S3 backup",
+            "provider": "s3",
+            "remote_path": "s3://my-bucket/docs"
+        }"#;
+        let config: CreateSyncConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.name, "My S3 backup");
+        assert!(config.local_path.is_none());
+        assert!(config.sync_direction.is_none());
+        assert!(config.auto_sync.is_none());
+    }
 }

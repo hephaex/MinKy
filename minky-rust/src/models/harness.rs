@@ -488,4 +488,140 @@ mod tests {
     fn test_harness_status_default_is_pending() {
         assert_eq!(HarnessStatus::default(), HarnessStatus::Pending);
     }
+
+    #[test]
+    fn test_harness_phase_default_is_init() {
+        assert_eq!(HarnessPhase::default(), HarnessPhase::Init);
+    }
+
+    #[test]
+    fn test_harness_status_serde_snake_case() {
+        let status = HarnessStatus::Executing;
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json, "executing");
+    }
+
+    #[test]
+    fn test_harness_status_all_variants_snake_case() {
+        let pairs = [
+            (HarnessStatus::Pending, "pending"),
+            (HarnessStatus::Analyzing, "analyzing"),
+            (HarnessStatus::Planning, "planning"),
+            (HarnessStatus::Executing, "executing"),
+            (HarnessStatus::Verifying, "verifying"),
+            (HarnessStatus::Committing, "committing"),
+            (HarnessStatus::Completed, "completed"),
+            (HarnessStatus::Failed, "failed"),
+            (HarnessStatus::Cancelled, "cancelled"),
+        ];
+        for (status, expected) in &pairs {
+            let json = serde_json::to_value(status).unwrap();
+            assert_eq!(json, *expected, "HarnessStatus::{status:?} should serialize as {expected}");
+        }
+    }
+
+    #[test]
+    fn test_harness_phase_all_variants_snake_case() {
+        let pairs = [
+            (HarnessPhase::Init, "init"),
+            (HarnessPhase::Analysis, "analysis"),
+            (HarnessPhase::Planning, "planning"),
+            (HarnessPhase::Execution, "execution"),
+            (HarnessPhase::Verification, "verification"),
+            (HarnessPhase::Commit, "commit"),
+            (HarnessPhase::Close, "close"),
+            (HarnessPhase::Done, "done"),
+        ];
+        for (phase, expected) in &pairs {
+            let json = serde_json::to_value(phase).unwrap();
+            assert_eq!(json, *expected, "HarnessPhase::{phase:?} should serialize as {expected}");
+        }
+    }
+
+    #[test]
+    fn test_phase_status_serde() {
+        let pairs = [
+            (PhaseStatus::Pending, "pending"),
+            (PhaseStatus::Running, "running"),
+            (PhaseStatus::Success, "success"),
+            (PhaseStatus::Failed, "failed"),
+            (PhaseStatus::Skipped, "skipped"),
+        ];
+        for (status, expected) in &pairs {
+            let json = serde_json::to_value(status).unwrap();
+            assert_eq!(json, *expected);
+        }
+    }
+
+    #[test]
+    fn test_agent_role_serde_snake_case() {
+        let role = AgentRole::SecurityAuditor;
+        let json = serde_json::to_value(&role).unwrap();
+        assert_eq!(json, "security_auditor");
+    }
+
+    #[test]
+    fn test_finding_category_serde_snake_case() {
+        let cat = FindingCategory::Refactoring;
+        let json = serde_json::to_value(&cat).unwrap();
+        assert_eq!(json, "refactoring");
+    }
+
+    #[test]
+    fn test_recommended_action_create_file_snake_case() {
+        let action = RecommendedAction::CreateFile;
+        let json = serde_json::to_value(&action).unwrap();
+        assert_eq!(json, "create_file");
+    }
+
+    #[test]
+    fn test_step_action_write_test_snake_case() {
+        let action = StepAction::WriteTest;
+        let json = serde_json::to_value(&action).unwrap();
+        assert_eq!(json, "write_test");
+    }
+
+    #[test]
+    fn test_harness_options_all_none_by_default() {
+        let opts = HarnessOptions::default();
+        assert!(opts.auto_commit.is_none());
+        assert!(opts.create_pr.is_none());
+        assert!(opts.dry_run.is_none());
+        assert!(opts.reviewers.is_none());
+    }
+
+    #[test]
+    fn test_file_change_type_serde_lowercase() {
+        let pairs = [
+            (FileChangeType::Added, "added"),
+            (FileChangeType::Modified, "modified"),
+            (FileChangeType::Deleted, "deleted"),
+            (FileChangeType::Renamed, "renamed"),
+        ];
+        for (ct, expected) in &pairs {
+            let json = serde_json::to_value(ct).unwrap();
+            assert_eq!(json, *expected);
+        }
+    }
+
+    #[test]
+    fn test_harness_prompts_are_non_empty() {
+        use harness_prompts::*;
+        assert!(!ISSUE_ANALYZER.is_empty());
+        assert!(!CODE_ANALYZER.is_empty());
+        assert!(!ARCHITECT.is_empty());
+        assert!(!PLANNER.is_empty());
+        assert!(!DEVELOPER.is_empty());
+        assert!(!REVIEWER.is_empty());
+        assert!(!TESTER.is_empty());
+        assert!(!VERIFIER.is_empty());
+    }
+
+    #[test]
+    fn test_start_harness_request_no_options() {
+        let json = r#"{"issue_number": 42}"#;
+        let req: StartHarnessRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.issue_number, 42);
+        assert!(req.options.is_none());
+    }
 }

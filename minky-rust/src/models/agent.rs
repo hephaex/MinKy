@@ -160,4 +160,89 @@ mod tests {
     fn test_agent_status_default_is_idle() {
         assert!(matches!(AgentStatus::default(), AgentStatus::Idle));
     }
+
+    #[test]
+    fn test_agent_status_serde_all_variants() {
+        let variants = [
+            (AgentStatus::Idle, "idle"),
+            (AgentStatus::Running, "running"),
+            (AgentStatus::Completed, "completed"),
+            (AgentStatus::Failed, "failed"),
+            (AgentStatus::Cancelled, "cancelled"),
+        ];
+        for (status, expected) in &variants {
+            let json = serde_json::to_value(status).unwrap();
+            assert_eq!(json, *expected);
+        }
+    }
+
+    #[test]
+    fn test_agent_type_serde_snake_case() {
+        let t = AgentType::CodeReviewer;
+        let json = serde_json::to_value(&t).unwrap();
+        assert_eq!(json, "code_reviewer");
+    }
+
+    #[test]
+    fn test_agent_type_qa_snake_case() {
+        let t = AgentType::QA;
+        let json = serde_json::to_value(&t).unwrap();
+        assert_eq!(json, "q_a");
+    }
+
+    #[test]
+    fn test_agent_type_custom_roundtrip() {
+        let t = AgentType::Custom;
+        let json = serde_json::to_string(&t).unwrap();
+        let back: AgentType = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back, AgentType::Custom));
+    }
+
+    #[test]
+    fn test_message_role_lowercase() {
+        let roles = [
+            (MessageRole::System, "system"),
+            (MessageRole::User, "user"),
+            (MessageRole::Assistant, "assistant"),
+            (MessageRole::Tool, "tool"),
+        ];
+        for (role, expected) in &roles {
+            let json = serde_json::to_value(role).unwrap();
+            assert_eq!(json, *expected);
+        }
+    }
+
+    #[test]
+    fn test_agent_tool_serde_roundtrip() {
+        let tool = AgentTool {
+            name: "search".to_string(),
+            description: "Search the knowledge base".to_string(),
+            parameters: Some(serde_json::json!({"query": "string"})),
+        };
+        let json = serde_json::to_string(&tool).unwrap();
+        let back: AgentTool = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.name, "search");
+        assert!(back.parameters.is_some());
+    }
+
+    #[test]
+    fn test_execute_agent_request_defaults() {
+        let json = r#"{"input": "Summarize this document"}"#;
+        let req: ExecuteAgentRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.input, "Summarize this document");
+        assert!(req.context.is_none());
+        assert!(req.document_ids.is_none());
+        assert!(req.stream.is_none());
+    }
+
+    #[test]
+    fn test_agent_message_no_tool_calls() {
+        let msg = AgentMessage {
+            role: MessageRole::User,
+            content: "What is RAG?".to_string(),
+            tool_calls: None,
+        };
+        assert!(matches!(msg.role, MessageRole::User));
+        assert!(msg.tool_calls.is_none());
+    }
 }

@@ -8,6 +8,50 @@ use crate::models::{
     TimelineResponse, TimelineStats, UserActivityStream,
 };
 
+// ---------------------------------------------------------------------------
+// Pure helpers (no I/O – unit-testable)
+// ---------------------------------------------------------------------------
+
+/// Compute the current streak (consecutive days with activity) from an
+/// ordered list of active days (most-recent first).
+///
+/// Rules:
+/// - If the list is empty, streak = 0.
+/// - If the most-recent active day is neither today nor yesterday, streak = 0.
+/// - Otherwise, count consecutive days going backward.
+pub fn compute_streak_from_days(active_days: &[NaiveDate], today: NaiveDate) -> i32 {
+    if active_days.is_empty() {
+        return 0;
+    }
+
+    let most_recent = active_days[0];
+    if most_recent != today && most_recent != today - Duration::days(1) {
+        return 0;
+    }
+
+    let mut streak = 1i32;
+    for i in 0..active_days.len() - 1 {
+        let current = active_days[i];
+        let next = active_days[i + 1];
+        if current - next == Duration::days(1) {
+            streak += 1;
+        } else {
+            break;
+        }
+    }
+    streak
+}
+
+/// Compute the heatmap level (0–4) for a cell given the max value across all cells.
+/// Returns 0 when `max_value` is 0 (avoid division by zero).
+pub fn compute_heatmap_level(cell_value: i64, max_value: i64) -> i32 {
+    if max_value == 0 {
+        return 0;
+    }
+    let level = ((cell_value as f32 / max_value as f32) * 4.0).ceil() as i32;
+    level.min(4)
+}
+
 /// Raw DB row type for timeline event queries
 type TimelineEventRow = (
     String,
@@ -209,13 +253,10 @@ impl TimelineService {
 
         let data: Vec<HeatmapCell> = rows
             .into_iter()
-            .map(|r| {
-                let level = ((r.1 as f32 / max_value as f32) * 4.0).ceil() as i32;
-                HeatmapCell {
-                    date: r.0.date_naive(),
-                    value: r.1,
-                    level: level.min(4),
-                }
+            .map(|r| HeatmapCell {
+                date: r.0.date_naive(),
+                value: r.1,
+                level: compute_heatmap_level(r.1, max_value),
             })
             .collect();
 
@@ -291,29 +332,9 @@ impl TimelineService {
         .fetch_all(&self.db)
         .await?;
 
-        if rows.is_empty() {
-            return Ok(0);
-        }
-
-        let mut streak = 1;
         let today = Utc::now().date_naive();
-
-        for i in 0..rows.len() - 1 {
-            let current = rows[i].0.date_naive();
-            let next = rows[i + 1].0.date_naive();
-
-            if i == 0 && current != today && current != today - Duration::days(1) {
-                return Ok(0);
-            }
-
-            if current - next == Duration::days(1) {
-                streak += 1;
-            } else {
-                break;
-            }
-        }
-
-        Ok(streak)
+        let active_days: Vec<NaiveDate> = rows.iter().map(|r| r.0.date_naive()).collect();
+        Ok(compute_streak_from_days(&active_days, today))
     }
 
     /// Get document history
@@ -419,6 +440,123 @@ impl TimelineService {
             most_active_users: vec![],
             most_active_documents: vec![],
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDate;
+
+    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    }
+
+    // ---- compute_streak_from_days tests ----
+
+    #[test]
+    fn test_streak_empty_days_returns_zero() {
+        let today = d(2026, 2, 19);
+        assert_eq!(compute_streak_from_days(&[], today), 0);
+    }
+
+    #[test]
+    fn test_streak_single_day_today() {
+        let today = d(2026, 2, 19);
+        let days = vec![today];
+        assert_eq!(compute_streak_from_days(&days, today), 1);
+    }
+
+    #[test]
+    fn test_streak_single_day_yesterday() {
+        let today = d(2026, 2, 19);
+        let yesterday = today - Duration::days(1);
+        let days = vec![yesterday];
+        assert_eq!(compute_streak_from_days(&days, today), 1);
+    }
+
+    #[test]
+    fn test_streak_single_day_two_days_ago_returns_zero() {
+        let today = d(2026, 2, 19);
+        let two_days_ago = today - Duration::days(2);
+        let days = vec![two_days_ago];
+        assert_eq!(compute_streak_from_days(&days, today), 0);
+    }
+
+    #[test]
+    fn test_streak_consecutive_5_days() {
+        let today = d(2026, 2, 19);
+        let days: Vec<NaiveDate> = (0..5).map(|i| today - Duration::days(i)).collect();
+        assert_eq!(compute_streak_from_days(&days, today), 5);
+    }
+
+    #[test]
+    fn test_streak_break_in_sequence() {
+        let today = d(2026, 2, 19);
+        // Today, yesterday, then a gap (2026-02-16, skipping 2026-02-17)
+        let days = vec![
+            today,
+            today - Duration::days(1),
+            today - Duration::days(3), // gap
+            today - Duration::days(4),
+        ];
+        assert_eq!(compute_streak_from_days(&days, today), 2);
+    }
+
+    #[test]
+    fn test_streak_starting_yesterday_consecutive() {
+        let today = d(2026, 2, 19);
+        let days: Vec<NaiveDate> = (1..=4).map(|i| today - Duration::days(i)).collect();
+        assert_eq!(compute_streak_from_days(&days, today), 4);
+    }
+
+    #[test]
+    fn test_streak_ten_consecutive_days() {
+        let today = d(2026, 2, 19);
+        let days: Vec<NaiveDate> = (0..10).map(|i| today - Duration::days(i)).collect();
+        assert_eq!(compute_streak_from_days(&days, today), 10);
+    }
+
+    // ---- compute_heatmap_level tests ----
+
+    #[test]
+    fn test_heatmap_level_max_value_zero_returns_zero() {
+        assert_eq!(compute_heatmap_level(0, 0), 0);
+    }
+
+    #[test]
+    fn test_heatmap_level_equals_max_returns_4() {
+        assert_eq!(compute_heatmap_level(10, 10), 4);
+    }
+
+    #[test]
+    fn test_heatmap_level_quarter_returns_1() {
+        // 2.5/10 = 0.25 * 4 = 1.0.ceil() = 1
+        assert_eq!(compute_heatmap_level(25, 100), 1);
+    }
+
+    #[test]
+    fn test_heatmap_level_half_returns_2() {
+        // 50/100 = 0.5 * 4 = 2.0.ceil() = 2
+        assert_eq!(compute_heatmap_level(50, 100), 2);
+    }
+
+    #[test]
+    fn test_heatmap_level_three_quarters_returns_3() {
+        // 75/100 = 0.75 * 4 = 3.0.ceil() = 3
+        assert_eq!(compute_heatmap_level(75, 100), 3);
+    }
+
+    #[test]
+    fn test_heatmap_level_one_of_hundred_returns_1() {
+        // 1/100 = 0.01 * 4 = 0.04.ceil() = 1
+        assert_eq!(compute_heatmap_level(1, 100), 1);
+    }
+
+    #[test]
+    fn test_heatmap_level_never_exceeds_4() {
+        // Very large value with small max should cap at 4
+        assert_eq!(compute_heatmap_level(1000, 1), 4);
     }
 }
 

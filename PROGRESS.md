@@ -5,7 +5,60 @@
 
 ---
 
-## 🔄 현재 진행 상황 (2026-02-19) - 테스트 500개 달성 + OAuth 실구현 + Webhook 파이프라인
+## 현재 진행 상황 (2026-02-19) - 테스트 592개 달성 + API 문서화 + OpenAPI 스펙
+
+### 13차 세션: 3개 작업 병렬 완료 (2026-02-19)
+
+**작업 1: API 문서 최신화 (신규 2개 파일)**
+
+| 파일 | 내용 |
+|---|---|
+| `Docs/api/slack.md` (신규) | Slack/Teams 통합 API 전체 문서 (6개 엔드포인트, 요청/응답 예시, DB 스키마, 에러 코드) |
+| `Docs/api/knowledge.md` (신규) | 지식 그래프/팀 전문성 API 전체 문서 (2개 엔드포인트, 그래프 빌드 알고리즘, 프론트엔드 연동 예시) |
+
+- Slack API: extract, extract/{id}, confirm, summary, oauth/callback, webhook 6개 엔드포인트 상세 문서화
+- Knowledge API: graph (5개 쿼리 파라미터), team (ExpertiseLevel 분류 기준) 문서화
+- 그래프 빌드 알고리즘 (pgvector cosine distance LATERAL JOIN) SQL 예시 포함
+- DB 스키마: platform_configs, platform_messages, extraction_jobs, extracted_knowledge 테이블 문서화
+
+**작업 2: Rust 테스트 커버리지 500 -> 592개 (+92개)**
+
+| 파일 | 추가 테스트 | 내용 |
+|---|---|---|
+| `models/tag.rs` | +8 | CreateTag/UpdateTag serde, 유니코드 이름, DocumentTag 필드, 빈 문자열 허용 |
+| `models/websocket.rs` | +15 | WsMessage Ping/Subscribe roundtrip, type 태그 snake_case, EventType 직렬화, UserStatus lowercase, CursorPosition, Error 타입 |
+| `models/sync.rs` | +15 | SyncDirection default, Provider serde, ConflictType/Resolution snake_case, FileSyncStatus, CreateSyncConfig optional 필드 |
+| `models/template.rs` | +10 | VariableType all variants serde, TemplateVariable required/optional, CreateTemplate/UpdateTemplate/ApplyTemplateRequest |
+| `models/agent.rs` | +10 | AgentStatus all variants, AgentType snake_case, MessageRole lowercase, AgentTool roundtrip, ExecuteAgentRequest/AgentMessage |
+| `models/harness.rs` | +18 | HarnessPhase default, 전 상태/단계 snake_case, PhaseStatus, AgentRole, FindingCategory, RecommendedAction, StepAction, FileChangeType, 프롬프트 비어있지 않음, StartHarnessRequest |
+| `services/timeline_service.rs` | +16 | compute_streak_from_days (8개: empty, today, yesterday, gap, 5일, break, 10일 등), compute_heatmap_level (8개: zero max, max=4, 25%/50%/75%, 1/100, 초과 cap) |
+
+- `services/timeline_service.rs`: `compute_streak_from_days`, `compute_heatmap_level` 순수 함수 추출 (이전 인라인 로직 -> 재사용 가능한 함수)
+- `calculate_streak()` 메서드가 순수 함수를 활용하도록 리팩토링
+- `get_activity_heatmap()` 메서드가 `compute_heatmap_level()` 활용
+
+**작업 3: OpenAPI 3.0 스펙 엔드포인트 (`GET /api/docs/openapi.json`)**
+
+| 파일 | 내용 |
+|---|---|
+| `minky-rust/src/openapi.rs` (신규) | OpenAPI 3.0 JSON 스펙 + `/api/docs/openapi.json` 엔드포인트 + 15개 단위 테스트 |
+
+- 전체 API 경로 문서화: health, auth, documents (CRUD), understanding, embeddings, search/RAG, knowledge, slack (6개)
+- 컴포넌트 스키마: HealthResponse, LoginRequest, TokenResponse, CreateDocumentRequest, EmbeddingStats, RagAskRequest, KnowledgeGraphResponse, GraphNode, GraphEdge, SlackExtractRequest, PlatformMessage, MessageFilter, ConfirmKnowledgeRequest, SlackWebhookPayload
+- Bearer JWT 인증 스킴 정의
+- `GET /api/docs/openapi.json` 엔드포인트로 런타임에 스펙 제공
+- 15개 테스트: 버전, 경로 존재 확인, 스키마 구조, 태그, 서버 URL, node_type enum
+
+**빌드 및 테스트 결과**
+- Rust Build: 0 errors, 0 clippy warnings
+- Rust Unit Tests: **592/592 passed** (+92개)
+- Rust Integration Tests: 15/15 passed
+- Doc Tests: 1/1 passed
+- 총 Rust 테스트: 516 -> **608개** (unit 592 + integration 15 + doc 1)
+
+---
+
+## 현재 진행 상황 (2026-02-19) - 테스트 500개 달성 + OAuth 실구현 + Webhook 파이프라인
 
 ### 12차 세션: 3개 작업 병렬 완료 (2026-02-19)
 
