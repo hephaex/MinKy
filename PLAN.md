@@ -35,6 +35,9 @@
 **코드 품질 개선 (2026-02-19):**
 - [x] Rust clippy 경고 80개 → 0개 (type alias, Display impl, derive, allow)
 - [x] Frontend 테스트 228/228 통과 (DocumentView 버그 수정)
+- [x] Auth 라우트 실제 구현 (login, register, refresh, /me)
+- [x] Documents 인증 연동 (AuthUser 추출기로 user_id 교체)
+- [x] Rust 단위 테스트 27개 → 37개 (category tree, user model)
 
 **사용 방법:**
 ```

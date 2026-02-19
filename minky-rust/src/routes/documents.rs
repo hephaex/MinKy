@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
-use crate::{error::{AppError, AppResult}, AppState};
+use crate::{error::{AppError, AppResult}, middleware::AuthUser, AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -151,12 +151,12 @@ pub struct SingleResponse<T> {
 
 async fn create_document(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(payload): Json<CreateDocumentRequest>,
 ) -> AppResult<Json<SingleResponse<DocumentResponse>>> {
     payload.validate().map_err(|e| AppError::Validation(e.to_string()))?;
 
-    // Use user_id = 1 until auth middleware is wired up
-    let user_id: i32 = 1;
+    let user_id = auth_user.id;
     let is_public = payload.is_public.unwrap_or(false);
 
     let doc: DocumentResponse = sqlx::query_as(

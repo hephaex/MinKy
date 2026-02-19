@@ -5,16 +5,13 @@ use sqlx::FromRow;
 /// User role enumeration
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
 #[sqlx(type_name = "user_role", rename_all = "lowercase")]
+#[derive(Default)]
 pub enum UserRole {
+    #[default]
     User,
     Admin,
 }
 
-impl Default for UserRole {
-    fn default() -> Self {
-        Self::User
-    }
-}
 
 /// User model representing the users table
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -70,5 +67,71 @@ impl From<User> for UserResponse {
             is_active: user.is_active,
             created_at: user.created_at,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn make_user(id: i32, email: &str, role: UserRole, is_active: bool) -> User {
+        User {
+            id,
+            email: email.to_string(),
+            username: format!("user{}", id),
+            password_hash: "hashed".to_string(),
+            role,
+            is_active,
+            failed_login_attempts: 0,
+            locked_until: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn test_user_role_default_is_user() {
+        let role = UserRole::default();
+        assert_eq!(role, UserRole::User);
+    }
+
+    #[test]
+    fn test_user_response_from_user_maps_fields() {
+        let user = make_user(42, "alice@example.com", UserRole::User, true);
+        let response: UserResponse = user.into();
+
+        assert_eq!(response.id, 42);
+        assert_eq!(response.email, "alice@example.com");
+        assert_eq!(response.username, "user42");
+        assert_eq!(response.role, UserRole::User);
+        assert!(response.is_active);
+    }
+
+    #[test]
+    fn test_user_response_does_not_expose_password() {
+        let user = make_user(1, "bob@example.com", UserRole::Admin, true);
+        let response: UserResponse = user.into();
+
+        // UserResponse has no password_hash field — verify via serialization
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(!json.contains("password_hash"));
+        assert!(!json.contains("hashed"));
+    }
+
+    #[test]
+    fn test_user_response_admin_role() {
+        let user = make_user(2, "admin@example.com", UserRole::Admin, true);
+        let response: UserResponse = user.into();
+
+        assert_eq!(response.role, UserRole::Admin);
+    }
+
+    #[test]
+    fn test_user_response_inactive_user() {
+        let user = make_user(3, "inactive@example.com", UserRole::User, false);
+        let response: UserResponse = user.into();
+
+        assert!(!response.is_active);
     }
 }

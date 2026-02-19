@@ -5,6 +5,44 @@
 
 ---
 
+## 🔄 현재 진행 상황 (2026-02-19) - Auth 구현 및 추가 테스트 완료
+
+### Auth 라우트 구현 및 단위 테스트 추가 (2026-02-19 - 3차)
+
+**1. Auth 라우트 실제 구현 완료 (`routes/auth.rs`)**
+- `POST /api/auth/login`: 이메일/비밀번호 검증, JWT 발급, 계정 잠금 처리
+- `POST /api/auth/register`: 이메일 중복 체크, Argon2 해싱, 201 Created 반환
+- `POST /api/auth/refresh`: 리프레시 토큰 검증 후 새 토큰 발급
+- `GET /api/auth/me`: AuthUser 추출기 사용, 현재 사용자 정보 반환
+- 이전 placeholder stub -> 실제 AuthService/DB 연동으로 전환
+
+**2. Documents 라우트 인증 연동 (`routes/documents.rs`)**
+- `create_document`: 하드코딩된 `user_id = 1` -> `AuthUser` 추출기로 교체
+- `AuthUser` 추출기: JWT Bearer 토큰에서 사용자 ID 추출
+
+**3. 단위 테스트 추가 (27개 -> 37개, +10개)**
+
+`models/category.rs` - CategoryTree 순수 함수 테스트 5개:
+- `test_build_tree_empty`: 빈 목록 처리
+- `test_build_tree_flat_roots`: 최상위 카테고리 2개
+- `test_build_tree_with_children`: 부모-자식 관계
+- `test_build_tree_nested_hierarchy`: 3단계 깊이
+- `test_build_tree_preserves_document_count`: document_count 보존
+
+`models/user.rs` - UserRole, UserResponse 테스트 5개:
+- `test_user_role_default_is_user`: 기본값 UserRole::User
+- `test_user_response_from_user_maps_fields`: 필드 매핑 확인
+- `test_user_response_does_not_expose_password`: password_hash 노출 방지
+- `test_user_response_admin_role`: Admin 역할 변환
+- `test_user_response_inactive_user`: 비활성 사용자 변환
+
+**4. 빌드 및 테스트 결과**
+- Rust Build: 0 errors, 0 warnings
+- Rust Tests: 37/37 passed (이전 27개)
+- Frontend Tests: 228/228 passed
+
+---
+
 ## 🔄 현재 진행 상황 (2026-02-19) - 코드 품질 개선 완료
 
 ### 코드 품질 개선 세션 결과 (2026-02-19 - 2차)
