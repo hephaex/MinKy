@@ -293,4 +293,119 @@ mod tests {
         };
         assert!(req.has_changes());
     }
+
+    #[test]
+    fn test_has_changes_with_content_only_returns_true() {
+        let req = UpdateDocument {
+            title: None,
+            content: Some("new body".to_string()),
+            category_id: None,
+            is_public: None,
+        };
+        assert!(req.has_changes());
+    }
+
+    #[test]
+    fn test_has_changes_with_category_id_only_returns_true() {
+        let req = UpdateDocument {
+            title: None,
+            content: None,
+            category_id: Some(5),
+            is_public: None,
+        };
+        assert!(req.has_changes());
+    }
+
+    #[test]
+    fn test_to_index_text_format_is_title_newline_newline_content() {
+        let doc = sample_doc();
+        let text = doc.to_index_text();
+        let parts: Vec<&str> = text.splitn(3, '\n').collect();
+        assert_eq!(parts[0], "Test Document");
+        assert_eq!(parts[1], ""); // blank line between
+        assert!(parts[2].starts_with("This is"));
+    }
+
+    #[test]
+    fn test_is_indexable_content_exactly_nine_chars_returns_false() {
+        let mut doc = sample_doc();
+        doc.content = "123456789".to_string(); // 9 chars, < 10
+        assert!(!doc.is_indexable());
+    }
+
+    #[test]
+    fn test_is_readable_by_returns_false_for_zero_user_when_private() {
+        let mut doc = sample_doc(); // owner = 42
+        doc.is_public = false;
+        assert!(!doc.is_readable_by(0));
+    }
+
+    #[test]
+    fn test_is_writable_by_returns_false_for_zero_user() {
+        let doc = sample_doc(); // owner = 42
+        assert!(!doc.is_writable_by(0));
+    }
+
+    #[test]
+    fn test_validate_error_message_for_empty_title() {
+        let req = CreateDocument {
+            title: "  ".to_string(),
+            content: "some content".to_string(),
+            category_id: None,
+            is_public: None,
+        };
+        assert_eq!(req.validate().unwrap_err(), "title must not be empty");
+    }
+
+    #[test]
+    fn test_validate_error_message_for_empty_content() {
+        let req = CreateDocument {
+            title: "Title".to_string(),
+            content: "".to_string(),
+            category_id: None,
+            is_public: None,
+        };
+        assert_eq!(req.validate().unwrap_err(), "content must not be empty");
+    }
+
+    #[test]
+    fn test_effective_is_public_explicit_false() {
+        let req = CreateDocument {
+            title: "T".to_string(),
+            content: "C".to_string(),
+            category_id: None,
+            is_public: Some(false),
+        };
+        assert!(!req.effective_is_public());
+    }
+
+    #[test]
+    fn test_document_with_relations_serializes() {
+        let doc = sample_doc();
+        let dwr = DocumentWithRelations {
+            document: doc,
+            author_name: "Alice".to_string(),
+            category_name: Some("Tech".to_string()),
+            tags: vec!["rust".to_string(), "backend".to_string()],
+        };
+        let json = serde_json::to_string(&dwr).unwrap();
+        assert!(json.contains("\"author_name\":\"Alice\""));
+        assert!(json.contains("\"category_name\":\"Tech\""));
+        assert!(json.contains("\"rust\""));
+        // flatten: document fields should appear at top level
+        assert!(json.contains("\"title\":\"Test Document\""));
+    }
+
+    #[test]
+    fn test_document_with_relations_no_category_serializes_null() {
+        let doc = sample_doc();
+        let dwr = DocumentWithRelations {
+            document: doc,
+            author_name: "Bob".to_string(),
+            category_name: None,
+            tags: vec![],
+        };
+        let json = serde_json::to_string(&dwr).unwrap();
+        assert!(json.contains("\"category_name\":null"));
+    }
 }

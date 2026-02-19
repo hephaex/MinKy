@@ -134,4 +134,81 @@ mod tests {
 
         assert!(!response.is_active);
     }
+
+    #[test]
+    fn test_user_role_serde_variants() {
+        // UserRole uses default serde (PascalCase) – no rename attribute on the enum
+        let user_json = serde_json::to_string(&UserRole::User).unwrap();
+        let admin_json = serde_json::to_string(&UserRole::Admin).unwrap();
+        // Variants serialize as their Rust names
+        assert!(user_json.contains("User"));
+        assert!(admin_json.contains("Admin"));
+    }
+
+    #[test]
+    fn test_user_role_roundtrip() {
+        let roles = [UserRole::User, UserRole::Admin];
+        for role in &roles {
+            let json = serde_json::to_string(role).unwrap();
+            let back: UserRole = serde_json::from_str(&json).unwrap();
+            assert_eq!(role, &back);
+        }
+    }
+
+    #[test]
+    fn test_user_response_does_not_have_locked_until_field() {
+        let user = make_user(10, "locked@example.com", UserRole::User, false);
+        let response: UserResponse = user.into();
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(!json.contains("locked_until"));
+        assert!(!json.contains("failed_login_attempts"));
+    }
+
+    #[test]
+    fn test_create_user_stores_all_fields() {
+        let cu = CreateUser {
+            email: "new@example.com".to_string(),
+            username: "newuser".to_string(),
+            password: "secret123".to_string(),
+        };
+        assert_eq!(cu.email, "new@example.com");
+        assert_eq!(cu.username, "newuser");
+        assert_eq!(cu.password, "secret123");
+    }
+
+    #[test]
+    fn test_update_user_all_none_by_default() {
+        let uu = UpdateUser {
+            email: None,
+            username: None,
+            is_active: None,
+            role: None,
+        };
+        assert!(uu.email.is_none());
+        assert!(uu.username.is_none());
+        assert!(uu.is_active.is_none());
+        assert!(uu.role.is_none());
+    }
+
+    #[test]
+    fn test_user_response_created_at_matches_source() {
+        use chrono::Utc;
+        let now = Utc::now();
+        let user = User {
+            id: 99,
+            email: "time@example.com".to_string(),
+            username: "timeuser".to_string(),
+            password_hash: "hash".to_string(),
+            role: UserRole::User,
+            is_active: true,
+            failed_login_attempts: 0,
+            locked_until: None,
+            created_at: now,
+            updated_at: now,
+        };
+        let response: UserResponse = user.into();
+        assert_eq!(response.id, 99);
+        // Timestamps should be equal
+        assert_eq!(response.created_at, now);
+    }
 }
