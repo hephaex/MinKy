@@ -1,5 +1,4 @@
 use anyhow::Result;
-use serde_json::Value;
 use sqlx::PgPool;
 
 use crate::{

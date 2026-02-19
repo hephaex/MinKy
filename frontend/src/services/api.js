@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -157,6 +157,34 @@ export const tagService = {
   deleteTag: async (slug) => {
     const response = await api.delete(`/tags/${slug}`);
     return response.data.data || response.data;
+  },
+};
+
+export const searchService = {
+  ask: async (question, options = {}) => {
+    const response = await api.post('/search/ask', {
+      question,
+      max_results: options.maxResults || 5,
+      ...options,
+    });
+    return response.data;
+  },
+
+  semantic: async (query, options = {}) => {
+    const response = await api.post('/search/semantic', {
+      query,
+      limit: options.limit || 10,
+      threshold: options.threshold || 0.7,
+      ...options,
+    });
+    return response.data;
+  },
+
+  getSimilar: async (documentId, limit = 5) => {
+    const response = await api.get(`/embeddings/similar/${documentId}`, {
+      params: { limit },
+    });
+    return response.data;
   },
 };
 

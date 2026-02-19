@@ -20,6 +20,8 @@ import ImportPage from './pages/ImportPage';
 import DocumentsPage from './pages/DocumentsPage';
 import ExplorePage from './pages/ExplorePage';
 import ConfigPage from './pages/ConfigPage';
+import ChatPage from './pages/ChatPage';
+import KnowledgeSearch from './pages/KnowledgeSearch';
 import './App.css';
 
 function App() {
@@ -47,6 +49,8 @@ function App() {
                 <Route path="/documents" element={<DocumentsPage />} />
                 <Route path="/explore" element={<ExplorePage />} />
                 <Route path="/config" element={<ConfigPage />} />
+                <Route path="/chat" element={<ChatPage />} />
+                <Route path="/knowledge" element={<KnowledgeSearch />} />
               </Routes>
             </ErrorBoundary>
           </main>

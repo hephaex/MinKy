@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
-    routing::{get, post},
+    routing::get,
     Router,
 };
 use serde::Deserialize;
@@ -84,7 +84,7 @@ async fn get_heatmap(
     Query(query): Query<HeatmapQuery>,
 ) -> Result<Json<ActivityHeatmap>, (StatusCode, String)> {
     let service = TimelineService::new(state.db.clone());
-    let year = query.year.unwrap_or(chrono::Utc::now().year() as i32);
+    let year = query.year.unwrap_or(chrono::Utc::now().year());
 
     service
         .get_activity_heatmap(year)

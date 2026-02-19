@@ -1,6 +1,5 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use serde_json::Value;
 use sqlx::PgPool;
 
 use crate::models::{AuditAction, AuditLog, CreateAuditLog, ResourceType};

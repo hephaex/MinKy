@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 import { logError, logWarning } from '../utils/logger';
 
-const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5001';
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:8000';
 
 // Helper to get auth token
 const getAuthToken = () => localStorage.getItem('token');

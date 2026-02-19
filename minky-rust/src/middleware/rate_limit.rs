@@ -58,6 +58,54 @@ impl RateLimiter {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_check_allows_requests_under_limit() {
+        let limiter = RateLimiter::new(3, 60);
+        assert!(limiter.check("client1").await);
+        assert!(limiter.check("client1").await);
+        assert!(limiter.check("client1").await);
+    }
+
+    #[tokio::test]
+    async fn test_check_blocks_request_at_limit() {
+        let limiter = RateLimiter::new(2, 60);
+        assert!(limiter.check("client2").await);
+        assert!(limiter.check("client2").await);
+        // Third request should be blocked
+        assert!(!limiter.check("client2").await);
+    }
+
+    #[tokio::test]
+    async fn test_check_different_keys_are_independent() {
+        let limiter = RateLimiter::new(1, 60);
+        assert!(limiter.check("client_a").await);
+        // client_a is now at limit, but client_b should still be allowed
+        assert!(!limiter.check("client_a").await);
+        assert!(limiter.check("client_b").await);
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_does_not_panic_on_empty_state() {
+        let limiter = RateLimiter::new(10, 60);
+        // cleanup on empty state should be a no-op
+        limiter.cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_removes_all_entries_after_short_window() {
+        let limiter = RateLimiter::new(10, 0); // 0-second window expires instantly
+        limiter.check("cleanup_client").await;
+        // After window=0 all timestamps are immediately expired
+        limiter.cleanup().await;
+        // Now the key should have been removed; a fresh check should succeed
+        assert!(limiter.check("cleanup_client").await);
+    }
+}
+
 /// Rate limiting middleware
 pub async fn rate_limit_middleware(
     request: Request,

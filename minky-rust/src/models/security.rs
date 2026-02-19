@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::net::IpAddr;
 
 /// Security event
 #[derive(Debug, Serialize)]
@@ -45,9 +44,10 @@ pub enum SecurityEventType {
 }
 
 /// Severity levels
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
+    Info,
     Low,
     Medium,
     High,
