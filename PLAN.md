@@ -112,12 +112,21 @@
   - 노드: 문서/토픽/기술/사람/인사이트 타입별 색상
   - 줌/팬, 노드 클릭 상세 패널, 타입 필터, 검색
   - 라우트: /graph
-- [ ] 지식 그래프 백엔드 API (GET /api/knowledge/graph)
-  - 실제 문서 임베딩 유사도에서 그래프 생성
+- [x] 지식 그래프 백엔드 API (GET /api/knowledge/graph) ✅ (2026-02-19 완료)
   - pgvector 코사인 유사도 기반 엣지 생성
+  - Document Understanding 토픽/기술 노드 자동 생성
+  - GET /api/knowledge/graph (필터: threshold, max_edges, include_topics/technologies/insights)
+  - GET /api/knowledge/team (팀원 전문성 맵)
+- [x] 팀원 전문성 맵핑 모델/API ✅ (2026-02-19 완료)
+  - ExpertiseLevel (Beginner/Intermediate/Advanced/Expert)
+  - TeamExpertiseMap, UniqueExpert
+  - GET /api/knowledge/team 엔드포인트
+- [x] 통합 테스트 구조 구축 ✅ (2026-02-19 완료)
+  - tests/common/mod.rs - TestApp 헬퍼
+  - tests/health_test.rs - 4개 통합 테스트
+  - tests/knowledge_graph_model_test.rs - 11개 모델 테스트
 - [ ] Slack/Teams 연동
 - [ ] 대화에서 지식 자동 추출
-- [ ] 팀원 전문성 맵핑
 
 ---
 

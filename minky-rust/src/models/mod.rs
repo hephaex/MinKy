@@ -11,6 +11,7 @@ mod embedding;
 mod export;
 mod git;
 mod harness;
+pub mod knowledge_graph;
 mod korean;
 mod ml;
 mod notification;

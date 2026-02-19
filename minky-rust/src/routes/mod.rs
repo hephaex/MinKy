@@ -12,6 +12,7 @@ mod export;
 mod git;
 mod harness;
 mod health;
+mod knowledge;
 mod korean;
 mod ml;
 mod notifications;
@@ -61,5 +62,6 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/korean", korean::router())
         .nest("/skills", skills::router())
         .nest("/harness", harness::router())
+        .nest("/knowledge", knowledge::router())
         .nest("/embeddings", embeddings::router())
 }

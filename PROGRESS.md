@@ -5,6 +5,48 @@
 
 ---
 
+## 🔄 현재 진행 상황 (2026-02-19) - 지식 그래프 백엔드 API + 통합 테스트 구조 구축
+
+### 8차 세션: 3개 작업 병렬 완료 (2026-02-19)
+
+**작업 1: 지식 그래프 백엔드 API**
+
+| 파일 | 내용 |
+|---|---|
+| `minky-rust/src/models/knowledge_graph.rs` | NodeType, GraphNode, GraphEdge, KnowledgeGraph, KnowledgeGraphQuery, ExpertiseLevel, MemberExpertise, TeamExpertiseMap (8개 타입 + 3개 내부 Row 타입) |
+| `minky-rust/src/services/knowledge_graph_service.rs` | KnowledgeGraphService (build_graph, build_team_expertise_map), build_derived_nodes_pure (순수 함수), normalize_label |
+| `minky-rust/src/routes/knowledge.rs` | GET /api/knowledge/graph (필터 쿼리 파라미터 지원), GET /api/knowledge/team |
+
+- pgvector 코사인 유사도 기반 엣지 생성 (LATERAL JOIN)
+- Document Understanding 토픽/기술/인사이트 노드 자동 생성
+- 프론트엔드 KnowledgeGraphPage.jsx가 기대하는 `{nodes, edges}` 응답 형식 준수
+- 팀원 전문성 수준: Beginner(0-2) / Intermediate(3-7) / Advanced(8-15) / Expert(16+)
+
+**작업 2: 팀원 전문성 맵핑 모델/API**
+
+- `ExpertiseLevel` enum: from_doc_count() 로 자동 분류
+- `TeamExpertiseMap`: members + shared_areas + unique_experts
+- `GET /api/knowledge/team`: 팀원별 전문 영역, 공유 기술, 단독 전문가 식별
+
+**작업 3: 통합 테스트 구조 구축**
+
+| 파일 | 내용 |
+|---|---|
+| `tests/common/mod.rs` | TestApp (HTTP oneshot), assert_success!, assert_error! 매크로 |
+| `tests/health_test.rs` | 4개 통합 테스트 (200 OK, version, database status, 404) |
+| `tests/knowledge_graph_model_test.rs` | 11개 모델 테스트 (NodeType, ExpertiseLevel, GraphNode/Edge 직렬화) |
+
+**빌드 및 테스트 결과**
+- Rust Build: 0 errors, 0 clippy warnings
+- Rust Unit Tests: 325/325 passed (+16개: knowledge_graph 모델 8개 + 서비스 8개)
+- Rust Integration Tests: 15/15 passed (신규)
+- 전체 Rust 테스트: 340개
+
+**커밋 목록 (8차 세션)**
+- (진행 중)
+
+---
+
 ## 🔄 현재 진행 상황 (2026-02-19) - 단위 테스트 309개 / Phase 2 그래프 시각화 시작
 
 ### 7차 세션: 3개 작업 병렬 완료 (2026-02-19)
