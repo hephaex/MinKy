@@ -453,4 +453,70 @@ mod tests {
         assert!(stopwords.contains(&"는".to_string()));
         assert!(stopwords.contains(&"에".to_string()));
     }
+
+    // --- extract_keywords (needs KoreanService instance) ---
+
+    fn make_service() -> KoreanService {
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        KoreanService::new(pool)
+    }
+
+    #[tokio::test]
+    async fn test_extract_keywords_skips_stopwords() {
+        let svc = make_service();
+        // "의" and "는" are Korean stopwords and should be excluded
+        let result = svc.extract_keywords("의 는 기술 데이터", 10).unwrap();
+        let words: Vec<&str> = result.keywords.iter().map(|k| k.keyword.as_str()).collect();
+        assert!(!words.contains(&"의"), "'의' is a stopword and should be excluded");
+        assert!(!words.contains(&"는"), "'는' is a stopword and should be excluded");
+    }
+
+    #[tokio::test]
+    async fn test_extract_keywords_returns_at_most_limit() {
+        let svc = make_service();
+        let text = "기술 데이터 분석 학습 모델 알고리즘 시스템 네트워크 코드 함수 변수 클래스";
+        let result = svc.extract_keywords(text, 5).unwrap();
+        assert!(result.keywords.len() <= 5, "Should return at most 5 keywords");
+    }
+
+    #[tokio::test]
+    async fn test_extract_keywords_empty_text_returns_empty() {
+        let svc = make_service();
+        let result = svc.extract_keywords("", 10).unwrap();
+        assert!(result.keywords.is_empty(), "Empty text should yield no keywords");
+    }
+
+    #[tokio::test]
+    async fn test_extract_keywords_skips_single_char_words() {
+        let svc = make_service();
+        // Single-char words (1 char count) should be skipped (< 2 chars)
+        let result = svc.extract_keywords("a b c 기술", 10).unwrap();
+        let words: Vec<&str> = result.keywords.iter().map(|k| k.keyword.as_str()).collect();
+        assert!(!words.contains(&"a"), "Single-char word should be excluded");
+        assert!(!words.contains(&"b"), "Single-char word should be excluded");
+    }
+
+    // --- normalize_text ---
+
+    #[tokio::test]
+    async fn test_normalize_text_collapses_multiple_spaces() {
+        let svc = make_service();
+        let result = svc.normalize_text("hello   world").unwrap();
+        assert_eq!(result.normalized, "hello world", "Multiple spaces should collapse to one");
+    }
+
+    #[tokio::test]
+    async fn test_normalize_text_preserves_single_space() {
+        let svc = make_service();
+        let result = svc.normalize_text("hello world").unwrap();
+        assert_eq!(result.normalized, "hello world");
+        assert!(result.changes.is_empty(), "No change should be recorded if already normalized");
+    }
+
+    #[tokio::test]
+    async fn test_normalize_text_records_change_when_modified() {
+        let svc = make_service();
+        let result = svc.normalize_text("a  b").unwrap();
+        assert!(!result.changes.is_empty(), "A change should be recorded when spaces are collapsed");
+    }
 }
