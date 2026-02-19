@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{AppError, AppResult},
+    middleware::AdminUser,
     models::{AutocompleteSuggestion, SearchHit, SearchQuery, SearchResponse},
     services::{AIService, SearchService},
     AppState,
@@ -128,9 +129,8 @@ pub struct ReindexResponse {
 
 async fn reindex_all(
     State(state): State<AppState>,
+    _admin: AdminUser,
 ) -> AppResult<Json<ReindexResponse>> {
-    // TODO: Only allow admin users
-    let _user_id = 1;
 
     let search_service = SearchService::new(&state.config).await
         .map_err(AppError::Internal)?;
