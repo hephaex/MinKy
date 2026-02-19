@@ -5,6 +5,62 @@
 
 ---
 
+## 현재 진행 상황 (2026-02-19) - 테스트 655개 달성 + Frontend 280개 + CI 개선
+
+### 14차 세션: 3개 작업 병렬 완료 (2026-02-19)
+
+**작업 1: Rust 단위 테스트 608 -> 655개 (+47개)**
+
+| 파일 | 추가 테스트 | 내용 |
+|---|---|---|
+| `models/search.rs` | +11 | SortField/SortOrder 전 variants serde, SearchHit (카테고리 유/무), FacetCount, AutocompleteSuggestion, KoreanAnalysis/Token roundtrip, SearchDocument embedding 유/무 |
+| `models/ocr.rs` | +11 | OcrEngine 전 variants serde/roundtrip, OcrStatus 전 variants serde/roundtrip, BlockType 전 variants serde/roundtrip, BoundingBox 직렬화, OcrSettings serde, OcrRequest/ApplyOcrRequest 기본값 |
+| `models/document.rs` | +12 | UpdateDocument 모든 변경 경로, to_index_text 구분자 형식, 경계값 (9자 -> false), validate 에러 메시지 확인, DocumentWithRelations serde (카테고리 유/무, flatten) |
+| `models/export.rs` | +9 | ExportFormat 전 7개 variants, ExportStatus 전 4개 variants, MergeStrategy 기본값 및 전 variants, ExportRequest 기본값, ExportedDocument roundtrip, ImportError serde |
+| `models/user.rs` | +6 | UserRole serde roundtrip, UserResponse 민감 필드 제거 확인, CreateUser/UpdateUser 생성, 타임스탬프 보존 |
+
+**빌드 및 테스트 결과**
+- Rust Build: 0 errors, 0 clippy warnings
+- Rust Unit Tests: **639/639 passed** (+47개)
+- Rust Integration Tests: 4/4 passed
+- Knowledge Graph Tests: 11/11 passed
+- Doc Tests: 1/1 passed
+- 총 Rust 테스트: 608 -> **655개** (unit 639 + integration 4 + kg 11 + doc 1)
+
+**작업 2: Frontend 테스트 263 -> 280개 (+17개)**
+
+| 파일 | 내용 |
+|---|---|
+| `frontend/src/components/Chat/ChatContainer.test.jsx` (신규) | 17개 테스트 |
+
+ChatContainer 테스트 내용:
+- EmptyState 렌더링 (제목, 제안 목록)
+- 메시지 목록 렌더링 (user/assistant 모두)
+- 로딩 중 typing indicator 표시
+- 에러 표시 (role=alert)
+- className prop 전달
+- 접근성 (role=log)
+- ChatInput submit -> sendMessage 호출
+- 로딩 중 input disabled
+- ChatHistory New 버튼 -> createSession 호출
+- 다중 메시지 순서
+
+**작업 3: CI/CD 워크플로우 개선**
+
+| 파일 | 변경 내용 |
+|---|---|
+| `.github/workflows/pr-check.yml` (개선) | 테스트 카운트 job outputs 추출, PR 코멘트에 테스트 수 표시, cargo cache restore-keys 추가 |
+
+- `rust-check` job: `cargo test` 출력 파싱 -> `test-count` output
+- `frontend-check` job: `npm test` 출력 파싱 -> `test-count` output
+- `pr-comment` job: Rust/Frontend 테스트 수 테이블 표시
+
+**커밋 목록 (14차 세션)**
+- `7727f73c` - test: Expand Rust unit tests from 608 to 655 (models/search, ocr, document, export, user)
+- `e8fb8776` - test: Add ChatContainer tests and improve CI workflow
+
+---
+
 ## 현재 진행 상황 (2026-02-19) - 테스트 592개 달성 + API 문서화 + OpenAPI 스펙
 
 ### 13차 세션: 3개 작업 병렬 완료 (2026-02-19)

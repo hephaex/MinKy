@@ -229,4 +229,14 @@
   - openapi.rs - GET /api/docs/openapi.json
   - 전체 API 경로/스키마 문서화
 
-*Last updated: 2026-02-19 (13차 세션 - 테스트 592개 달성, API 문서화, OpenAPI 스펙)*
+- [x] **테스트 650개 목표** ✅ (2026-02-19 완료 - 655개 달성)
+  - models/search, ocr, document, export, user 테스트 확장 (+47개)
+  - Rust 총 655개 (unit 639 + integration 4 + kg 11 + doc 1)
+- [x] **Frontend ChatContainer 테스트** ✅ (2026-02-19 완료 - 280개 달성)
+  - ChatContainer.test.jsx 신규 17개 테스트
+  - Frontend 총 280개 (263 -> 280)
+- [x] **CI/CD 워크플로우 개선** ✅ (2026-02-19 완료)
+  - pr-check.yml: 테스트 카운트 job outputs, PR 코멘트 테스트 수 표시
+  - cargo cache restore-keys 추가
+
+*Last updated: 2026-02-19 (14차 세션 - 테스트 655개 달성, Frontend 280개, CI 개선)*
