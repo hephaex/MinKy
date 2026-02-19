@@ -134,4 +134,88 @@ mod tests {
         let formatted = format!("Action: {}", action);
         assert_eq!(formatted, "Action: create");
     }
+
+    #[test]
+    fn test_audit_action_serde_roundtrip() {
+        let actions = [
+            AuditAction::Create,
+            AuditAction::Read,
+            AuditAction::Update,
+            AuditAction::Delete,
+            AuditAction::Login,
+            AuditAction::Logout,
+            AuditAction::LoginFailed,
+            AuditAction::Export,
+            AuditAction::Import,
+            AuditAction::Share,
+            AuditAction::AdminAction,
+        ];
+        for action in &actions {
+            let json = serde_json::to_string(action).unwrap();
+            let back: AuditAction = serde_json::from_str(&json).unwrap();
+            // Re-serialized value should match original
+            let json2 = serde_json::to_string(&back).unwrap();
+            assert_eq!(json, json2);
+        }
+    }
+
+    #[test]
+    fn test_resource_type_serde_roundtrip() {
+        let types = [
+            ResourceType::Document,
+            ResourceType::User,
+            ResourceType::Tag,
+            ResourceType::Category,
+            ResourceType::Comment,
+            ResourceType::Attachment,
+            ResourceType::Workflow,
+            ResourceType::System,
+        ];
+        for rt in &types {
+            let json = serde_json::to_string(rt).unwrap();
+            let back: ResourceType = serde_json::from_str(&json).unwrap();
+            let json2 = serde_json::to_string(&back).unwrap();
+            assert_eq!(json, json2);
+        }
+    }
+
+    #[test]
+    fn test_audit_action_login_failed_serialises_snake_case() {
+        let json = serde_json::to_string(&AuditAction::LoginFailed).unwrap();
+        assert_eq!(json, "\"login_failed\"");
+    }
+
+    #[test]
+    fn test_audit_action_admin_action_serialises_snake_case() {
+        let json = serde_json::to_string(&AuditAction::AdminAction).unwrap();
+        assert_eq!(json, "\"admin_action\"");
+    }
+
+    #[test]
+    fn test_audit_action_create_serialises_lowercase() {
+        let json = serde_json::to_string(&AuditAction::Create).unwrap();
+        assert_eq!(json, "\"create\"");
+    }
+
+    #[test]
+    fn test_resource_type_document_serialises_lowercase() {
+        let json = serde_json::to_string(&ResourceType::Document).unwrap();
+        assert_eq!(json, "\"document\"");
+    }
+
+    #[test]
+    fn test_resource_type_system_serialises_lowercase() {
+        let json = serde_json::to_string(&ResourceType::System).unwrap();
+        assert_eq!(json, "\"system\"");
+    }
+
+    #[test]
+    fn test_audit_action_in_display_matches_serde() {
+        // Display and serde should produce the same string
+        let action = AuditAction::Share;
+        let display = action.to_string();
+        let json = serde_json::to_string(&action).unwrap();
+        // JSON includes quotes, display does not
+        assert_eq!(format!("\"{}\"", display), json);
+    }
 }

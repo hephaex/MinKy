@@ -149,5 +149,33 @@ mod tests {
         let config = AIModelConfig::default();
         assert!(!config.model.is_empty(), "default model name should not be empty");
     }
+
+    #[test]
+    fn test_llm_provider_serde_roundtrip() {
+        let providers = [LLMProvider::OpenAI, LLMProvider::Anthropic];
+        for p in &providers {
+            let json = serde_json::to_string(p).unwrap();
+            let back: LLMProvider = serde_json::from_str(&json).unwrap();
+            assert_eq!(p, &back);
+        }
+    }
+
+    #[test]
+    fn test_time_range_default_is_month() {
+        let range = TimeRange::default();
+        assert!(matches!(range, TimeRange::Month));
+    }
+
+    #[test]
+    fn test_chat_role_serde_user() {
+        let json = serde_json::to_string(&ChatRole::User).unwrap();
+        assert_eq!(json, "\"user\"");
+    }
+
+    #[test]
+    fn test_chat_role_serde_assistant() {
+        let json = serde_json::to_string(&ChatRole::Assistant).unwrap();
+        assert_eq!(json, "\"assistant\"");
+    }
 }
 

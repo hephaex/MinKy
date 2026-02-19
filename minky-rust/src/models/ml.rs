@@ -220,4 +220,87 @@ mod tests {
     fn test_clustering_algorithm_default_is_kmeans() {
         assert!(matches!(ClusteringAlgorithm::default(), ClusteringAlgorithm::KMeans));
     }
+
+    #[test]
+    fn test_clustering_algorithm_serde_roundtrip() {
+        let algorithms = [
+            ClusteringAlgorithm::KMeans,
+            ClusteringAlgorithm::DBSCAN,
+            ClusteringAlgorithm::Hierarchical,
+            ClusteringAlgorithm::Spectral,
+        ];
+        for alg in &algorithms {
+            let json = serde_json::to_string(alg).unwrap();
+            let back: ClusteringAlgorithm = serde_json::from_str(&json).unwrap();
+            assert!(matches!((alg, &back),
+                (ClusteringAlgorithm::KMeans, ClusteringAlgorithm::KMeans) |
+                (ClusteringAlgorithm::DBSCAN, ClusteringAlgorithm::DBSCAN) |
+                (ClusteringAlgorithm::Hierarchical, ClusteringAlgorithm::Hierarchical) |
+                (ClusteringAlgorithm::Spectral, ClusteringAlgorithm::Spectral)
+            ));
+        }
+    }
+
+    #[test]
+    fn test_job_status_default_is_pending() {
+        assert!(matches!(JobStatus::default(), JobStatus::Pending));
+    }
+
+    #[test]
+    fn test_job_status_serde_roundtrip() {
+        let statuses = [
+            JobStatus::Pending,
+            JobStatus::Running,
+            JobStatus::Completed,
+            JobStatus::Failed,
+        ];
+        for status in &statuses {
+            let json = serde_json::to_string(status).unwrap();
+            let back: JobStatus = serde_json::from_str(&json).unwrap();
+            assert!(matches!((status, &back),
+                (JobStatus::Pending, JobStatus::Pending) |
+                (JobStatus::Running, JobStatus::Running) |
+                (JobStatus::Completed, JobStatus::Completed) |
+                (JobStatus::Failed, JobStatus::Failed)
+            ));
+        }
+    }
+
+    #[test]
+    fn test_topic_algorithm_default_is_lda() {
+        assert!(matches!(TopicAlgorithm::default(), TopicAlgorithm::LDA));
+    }
+
+    #[test]
+    fn test_topic_algorithm_serde_roundtrip() {
+        let algorithms = [
+            TopicAlgorithm::LDA,
+            TopicAlgorithm::NMF,
+            TopicAlgorithm::BERTopic,
+        ];
+        for alg in &algorithms {
+            let json = serde_json::to_string(alg).unwrap();
+            let back: TopicAlgorithm = serde_json::from_str(&json).unwrap();
+            assert!(matches!((alg, &back),
+                (TopicAlgorithm::LDA, TopicAlgorithm::LDA) |
+                (TopicAlgorithm::NMF, TopicAlgorithm::NMF) |
+                (TopicAlgorithm::BERTopic, TopicAlgorithm::BERTopic)
+            ));
+        }
+    }
+
+    #[test]
+    fn test_topic_keyword_default_values() {
+        let kw = TopicKeyword::default();
+        assert!(kw.word.is_empty());
+        assert_eq!(kw.weight, 0.0);
+    }
+
+    #[test]
+    fn test_anomaly_type_serializes_snake_case() {
+        let json = serde_json::to_string(&AnomalyType::ContentOutlier).unwrap();
+        assert_eq!(json, "\"content_outlier\"");
+        let json2 = serde_json::to_string(&AnomalyType::LengthAnomaly).unwrap();
+        assert_eq!(json2, "\"length_anomaly\"");
+    }
 }

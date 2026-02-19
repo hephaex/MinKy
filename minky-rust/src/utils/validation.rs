@@ -104,4 +104,47 @@ mod tests {
     fn test_sanitize_title_empty() {
         assert_eq!(sanitize_title(""), "");
     }
+
+    #[test]
+    fn test_sanitize_html_single_quote() {
+        assert_eq!(sanitize_html("it's"), "it&#x27;s");
+    }
+
+    #[test]
+    fn test_sanitize_html_multiple_special_chars() {
+        let input = "<b>Tom & Jerry</b>";
+        let output = sanitize_html(input);
+        assert!(output.contains("&lt;b&gt;"));
+        assert!(output.contains("&amp;"));
+        assert!(output.contains("&lt;/b&gt;"));
+    }
+
+    #[test]
+    fn test_sanitize_html_preserves_normal_text() {
+        let plain = "Hello World 123";
+        assert_eq!(sanitize_html(plain), plain);
+    }
+
+    #[test]
+    fn test_sanitize_title_preserves_unicode() {
+        let title = "한국어 타이틀";
+        assert_eq!(sanitize_title(title), title);
+    }
+
+    #[test]
+    fn test_sanitize_title_removes_bell_char() {
+        // \x07 is BEL (control character) and should be removed
+        let title = "Title\x07Name";
+        assert_eq!(sanitize_title(title), "TitleName");
+    }
+
+    #[test]
+    fn test_sanitize_html_greater_than_sign() {
+        assert_eq!(sanitize_html("5 > 3"), "5 &gt; 3");
+    }
+
+    #[test]
+    fn test_sanitize_html_less_than_sign() {
+        assert_eq!(sanitize_html("3 < 5"), "3 &lt; 5");
+    }
 }

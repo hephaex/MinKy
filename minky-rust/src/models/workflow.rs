@@ -191,4 +191,58 @@ mod tests {
         let status = WorkflowStatus::default();
         assert_eq!(status, WorkflowStatus::Draft);
     }
+
+    #[test]
+    fn test_valid_transitions_from_pending_review() {
+        let transitions = get_valid_transitions(&WorkflowStatus::PendingReview);
+        assert!(transitions.contains(&WorkflowStatus::InReview));
+        assert!(transitions.contains(&WorkflowStatus::Draft));
+        assert!(transitions.contains(&WorkflowStatus::Archived));
+        assert!(!transitions.contains(&WorkflowStatus::Approved));
+    }
+
+    #[test]
+    fn test_valid_transitions_from_approved() {
+        let transitions = get_valid_transitions(&WorkflowStatus::Approved);
+        assert!(transitions.contains(&WorkflowStatus::Published));
+        assert!(transitions.contains(&WorkflowStatus::InReview));
+    }
+
+    #[test]
+    fn test_valid_transitions_from_published() {
+        let transitions = get_valid_transitions(&WorkflowStatus::Published);
+        assert!(transitions.contains(&WorkflowStatus::Archived));
+        assert_eq!(transitions.len(), 1, "Published can only transition to Archived");
+    }
+
+    #[test]
+    fn test_valid_transitions_from_archived() {
+        let transitions = get_valid_transitions(&WorkflowStatus::Archived);
+        assert!(transitions.contains(&WorkflowStatus::Draft));
+        assert_eq!(transitions.len(), 1, "Archived can only transition to Draft");
+    }
+
+    #[test]
+    fn test_valid_transitions_from_rejected() {
+        let transitions = get_valid_transitions(&WorkflowStatus::Rejected);
+        assert!(transitions.contains(&WorkflowStatus::Draft));
+        assert!(transitions.contains(&WorkflowStatus::Archived));
+    }
+
+    #[test]
+    fn test_workflow_status_display_all_variants() {
+        // Every variant should have a non-empty display string
+        let all = [
+            WorkflowStatus::Draft,
+            WorkflowStatus::PendingReview,
+            WorkflowStatus::InReview,
+            WorkflowStatus::Approved,
+            WorkflowStatus::Rejected,
+            WorkflowStatus::Published,
+            WorkflowStatus::Archived,
+        ];
+        for status in &all {
+            assert!(!status.to_string().is_empty());
+        }
+    }
 }

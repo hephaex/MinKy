@@ -86,4 +86,35 @@ mod tests {
     fn test_notification_type_display_system_alert() {
         assert_eq!(NotificationType::SystemAlert.to_string(), "system_alert");
     }
+
+    #[test]
+    fn test_notification_type_serde_roundtrip_comment() {
+        let json = serde_json::to_string(&NotificationType::Comment).unwrap();
+        assert_eq!(json, "\"comment\"");
+        let back: NotificationType = serde_json::from_str(&json).unwrap();
+        assert!(matches!(back, NotificationType::Comment));
+    }
+
+    #[test]
+    fn test_notification_type_serde_all_variants() {
+        let types = [
+            NotificationType::Comment,
+            NotificationType::Mention,
+            NotificationType::DocumentShare,
+            NotificationType::WorkflowUpdate,
+            NotificationType::SystemAlert,
+        ];
+        for t in &types {
+            let json = serde_json::to_string(t).unwrap();
+            let back: NotificationType = serde_json::from_str(&json).unwrap();
+            let json2 = serde_json::to_string(&back).unwrap();
+            assert_eq!(json, json2);
+        }
+    }
+
+    #[test]
+    fn test_notification_type_display_in_format_string() {
+        let msg = format!("New {}", NotificationType::Mention);
+        assert_eq!(msg, "New mention");
+    }
 }
