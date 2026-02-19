@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{CreateVersion, VersionWithAuthor},
     services::{VersionDiff, VersionService},
     AppState,
@@ -107,15 +108,14 @@ pub struct CreateVersionRequest {
 
 async fn create_version(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
     Json(payload): Json<CreateVersionRequest>,
 ) -> AppResult<Json<VersionResponse>> {
-    let user_id = 1; // TODO: Extract from JWT
-
     let service = VersionService::new(state.db.clone());
     let version = service
         .create(
-            user_id,
+            auth_user.id,
             CreateVersion {
                 document_id,
                 content: payload.content,
@@ -138,12 +138,11 @@ async fn create_version(
 
 async fn restore_version(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path((document_id, version_number)): Path<(Uuid, i32)>,
 ) -> AppResult<Json<VersionResponse>> {
-    let user_id = 1;
-
     let service = VersionService::new(state.db.clone());
-    let version = service.restore(document_id, version_number, user_id).await?;
+    let version = service.restore(document_id, version_number, auth_user.id).await?;
 
     Ok(Json(VersionResponse {
         success: true,

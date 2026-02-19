@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     error::{AppError, AppResult},
+    middleware::AuthUser,
     models::{validate_upload, AttachmentWithUploader, CreateAttachment},
     services::AttachmentService,
     AppState,
@@ -66,10 +67,10 @@ pub struct AttachmentData {
 
 async fn upload_attachment(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
     mut multipart: Multipart,
 ) -> AppResult<Json<AttachmentResponse>> {
-    let user_id = 1; // TODO: Extract from JWT
     let upload_dir = PathBuf::from("./uploads");
 
     // Ensure upload directory exists
@@ -103,7 +104,7 @@ async fn upload_attachment(
 
             // Validate upload
             validate_upload(&content_type, file_size)
-                .map_err(|e| AppError::Validation(e))?;
+                .map_err(AppError::Validation)?;
 
             // Generate storage filename
             let storage_filename = AttachmentService::generate_storage_filename(&original_filename);
@@ -117,7 +118,7 @@ async fn upload_attachment(
             // Create database record
             let attachment = service
                 .create(
-                    user_id,
+                    auth_user.id,
                     CreateAttachment {
                         filename: storage_filename,
                         original_filename: original_filename.clone(),
@@ -206,14 +207,13 @@ pub struct DeleteResponse {
 
 async fn delete_attachment(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<DeleteResponse>> {
-    let user_id = 1;
-    let is_admin = false;
     let upload_dir = PathBuf::from("./uploads");
 
     let service = AttachmentService::new(state.db.clone(), &upload_dir);
-    service.delete(id, user_id, is_admin).await?;
+    service.delete(id, auth_user.id, auth_user.is_admin()).await?;
 
     Ok(Json(DeleteResponse {
         success: true,
