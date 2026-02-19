@@ -36,10 +36,43 @@
 - `test_user_response_admin_role`: Admin 역할 변환
 - `test_user_response_inactive_user`: 비활성 사용자 변환
 
-**4. 빌드 및 테스트 결과**
+**4. 추가 AuthUser 연동 (5개 파일)**
+- `routes/tags.rs`: list_tags, get_tag, create_tag (+201 Created), update_tag, delete_tag
+- `routes/categories.rs`: list_categories, list_categories_tree, get_category, create_category (+201 Created), update_category, delete_category
+- `routes/comments.rs`: create_comment (+201 Created), update_comment, delete_comment (is_admin() 사용)
+- `routes/notifications.rs`: list, count, mark_as_read, mark_all_as_read, delete
+- `routes/workflows.rs`: create_workflow (+201 Created), update_status, list_assigned
+- `routes/versions.rs`: create_version, restore_version
+- `routes/attachments.rs`: upload_attachment, delete_attachment (is_admin() 사용)
+
+**5. 단위 테스트 추가 (37개 -> 67개, +30개)**
+
+`models/attachment.rs` - 14개 테스트:
+- validate_upload: valid MIME, unknown MIME rejection, empty file, oversized, max size
+- sanitize_filename: safe chars, spaces, traversal prevention, special chars
+- get_extension: pdf, no extension, multiple dots, hidden file
+
+`services/version_service.rs` - 6개 테스트:
+- compare_versions: identical, empty->content, content->empty, modified lines, added lines, total_changes invariant
+
+`models/comment.rs` - 4개 테스트:
+- build_tree: empty, top-level, with replies, nested 3-level
+
+`models/embedding.rs` - 8개 테스트 (기존 2개 -> 8개):
+- All 4 model dimensions, default model, all 4 API IDs
+- Cosine similarity: identical, orthogonal, opposite, zero vector, different lengths
+
+**6. 빌드 및 테스트 결과**
 - Rust Build: 0 errors, 0 warnings
-- Rust Tests: 37/37 passed (이전 27개)
+- Rust Tests: 67/67 passed (이전 27개, +40개)
 - Frontend Tests: 228/228 passed
+
+**7. 커밋 목록**
+- `f4522492` - feat: Implement auth routes and wire AuthUser into documents CRUD
+- `f8b771b0` - refactor: Wire AuthUser into tags, categories, comments, notifications, workflows
+- `9c9c1b24` - refactor: Wire AuthUser into versions and attachments routes
+- `73c8a3f7` - test: Add unit tests for attachment validation and version diff (37 -> 57 tests)
+- `29fab6e5` - test: Add unit tests for comment tree and embedding model (57 -> 67 tests)
 
 ---
 

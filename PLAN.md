@@ -37,7 +37,8 @@
 - [x] Frontend 테스트 228/228 통과 (DocumentView 버그 수정)
 - [x] Auth 라우트 실제 구현 (login, register, refresh, /me)
 - [x] Documents 인증 연동 (AuthUser 추출기로 user_id 교체)
-- [x] Rust 단위 테스트 27개 → 37개 (category tree, user model)
+- [x] Rust 단위 테스트 27개 → 67개 (category tree, user model, attachment, version diff, comment tree, embeddings)
+- [x] AuthUser 연동 (tags, categories, comments, notifications, workflows, versions, attachments)
 
 **사용 방법:**
 ```
