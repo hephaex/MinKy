@@ -136,8 +136,14 @@
 - [x] 대화에서 지식 자동 추출 파이프라인 ✅ (2026-02-19 완료)
   - services/conversation_extraction_service.rs (LLM 호출, quality gate, 파싱)
   - POST /api/slack/extract 엔드포인트
-- [ ] Slack Webhook 수신 핸들러 (실시간 이벤트)
-- [ ] OAuth 토큰 교환 DB 저장 (platform_configs 테이블)
+- [x] Slack Webhook 수신 핸들러 ✅ (2026-02-19 완료)
+  - POST /api/slack/webhook (url_verification + event_callback)
+  - SlackWebhookPayload 타입 정의
+- [x] platform_configs/extraction_jobs DB 마이그레이션 ✅ (2026-02-19 완료)
+  - migrations/005_slack_platform.sql
+  - platform_configs, platform_messages, extraction_jobs, extracted_knowledge 테이블
+- [ ] OAuth 토큰 교환 실구현 (Slack oauth.v2.access API 호출 + DB 저장)
+- [ ] Webhook 이벤트 → 자동 지식 추출 파이프라인 연결 (event_callback 처리)
 
 ---
 
