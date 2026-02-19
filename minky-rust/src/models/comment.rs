@@ -76,3 +76,74 @@ pub struct CommentFlat {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_comment(id: i32, content: &str, parent_id: Option<i32>) -> CommentFlat {
+        CommentFlat {
+            id,
+            content: content.to_string(),
+            document_id: Uuid::nil(),
+            user_id: 1,
+            author_name: "Author".to_string(),
+            parent_id,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn test_build_tree_empty() {
+        let tree = CommentWithAuthor::build_tree(vec![], None);
+        assert!(tree.is_empty());
+    }
+
+    #[test]
+    fn test_build_tree_top_level_comments() {
+        let comments = vec![
+            make_comment(1, "First comment", None),
+            make_comment(2, "Second comment", None),
+        ];
+        let tree = CommentWithAuthor::build_tree(comments, None);
+
+        assert_eq!(tree.len(), 2);
+        assert_eq!(tree[0].content, "First comment");
+        assert_eq!(tree[1].content, "Second comment");
+        assert!(tree[0].replies.is_empty());
+    }
+
+    #[test]
+    fn test_build_tree_with_replies() {
+        let comments = vec![
+            make_comment(1, "Top comment", None),
+            make_comment(2, "Reply to 1", Some(1)),
+            make_comment(3, "Another top", None),
+        ];
+        let tree = CommentWithAuthor::build_tree(comments, None);
+
+        assert_eq!(tree.len(), 2);
+        let top = tree.iter().find(|c| c.id == 1).unwrap();
+        assert_eq!(top.replies.len(), 1);
+        assert_eq!(top.replies[0].content, "Reply to 1");
+
+        let other = tree.iter().find(|c| c.id == 3).unwrap();
+        assert!(other.replies.is_empty());
+    }
+
+    #[test]
+    fn test_build_tree_nested_replies() {
+        let comments = vec![
+            make_comment(1, "Root", None),
+            make_comment(2, "Child of 1", Some(1)),
+            make_comment(3, "Child of 2", Some(2)),
+        ];
+        let tree = CommentWithAuthor::build_tree(comments, None);
+
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].replies.len(), 1);
+        assert_eq!(tree[0].replies[0].replies.len(), 1);
+        assert_eq!(tree[0].replies[0].replies[0].content, "Child of 2");
+    }
+}

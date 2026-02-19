@@ -12,8 +12,10 @@ use uuid::Uuid;
 /// Embedding model types supported by the system
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(type_name = "embedding_model", rename_all = "snake_case")]
+#[derive(Default)]
 pub enum EmbeddingModel {
     #[serde(rename = "openai_text_embedding_3_small")]
+    #[default]
     OpenaiTextEmbedding3Small,
     #[serde(rename = "openai_text_embedding_3_large")]
     OpenaiTextEmbedding3Large,
@@ -23,11 +25,6 @@ pub enum EmbeddingModel {
     VoyageCode2,
 }
 
-impl Default for EmbeddingModel {
-    fn default() -> Self {
-        Self::OpenaiTextEmbedding3Small
-    }
-}
 
 impl EmbeddingModel {
     /// Get the dimension size for this embedding model
@@ -226,15 +223,61 @@ mod tests {
     fn test_embedding_model_dimension() {
         assert_eq!(EmbeddingModel::OpenaiTextEmbedding3Small.dimension(), 1536);
         assert_eq!(EmbeddingModel::OpenaiTextEmbedding3Large.dimension(), 3072);
+        assert_eq!(EmbeddingModel::VoyageLarge2.dimension(), 1536);
+        assert_eq!(EmbeddingModel::VoyageCode2.dimension(), 1536);
     }
 
     #[test]
-    fn test_cosine_similarity() {
+    fn test_embedding_model_default() {
+        assert_eq!(EmbeddingModel::default(), EmbeddingModel::OpenaiTextEmbedding3Small);
+    }
+
+    #[test]
+    fn test_embedding_model_api_id() {
+        assert_eq!(
+            EmbeddingModel::OpenaiTextEmbedding3Small.api_model_id(),
+            "text-embedding-3-small"
+        );
+        assert_eq!(
+            EmbeddingModel::OpenaiTextEmbedding3Large.api_model_id(),
+            "text-embedding-3-large"
+        );
+        assert_eq!(EmbeddingModel::VoyageLarge2.api_model_id(), "voyage-large-2");
+        assert_eq!(EmbeddingModel::VoyageCode2.api_model_id(), "voyage-code-2");
+    }
+
+    #[test]
+    fn test_cosine_similarity_identical_vectors() {
         let a = vec![1.0, 0.0, 0.0];
         let b = vec![1.0, 0.0, 0.0];
         assert!((VectorOps::cosine_similarity(&a, &b) - 1.0).abs() < 0.0001);
+    }
 
+    #[test]
+    fn test_cosine_similarity_orthogonal_vectors() {
+        let a = vec![1.0, 0.0, 0.0];
         let c = vec![0.0, 1.0, 0.0];
         assert!((VectorOps::cosine_similarity(&a, &c) - 0.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_cosine_similarity_opposite_vectors() {
+        let a = vec![1.0, 0.0];
+        let b = vec![-1.0, 0.0];
+        assert!((VectorOps::cosine_similarity(&a, &b) - (-1.0)).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_cosine_similarity_zero_vector() {
+        let a = vec![0.0, 0.0, 0.0];
+        let b = vec![1.0, 2.0, 3.0];
+        assert_eq!(VectorOps::cosine_similarity(&a, &b), 0.0);
+    }
+
+    #[test]
+    fn test_cosine_similarity_different_lengths() {
+        let a = vec![1.0, 2.0];
+        let b = vec![1.0, 2.0, 3.0];
+        assert_eq!(VectorOps::cosine_similarity(&a, &b), 0.0);
     }
 }
