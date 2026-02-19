@@ -160,6 +160,32 @@ pub struct LoginAttempt {
     pub created_at: DateTime<Utc>,
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_severity_ordering_info_is_lowest() {
+        assert!(Severity::Info < Severity::Low);
+        assert!(Severity::Info < Severity::Medium);
+        assert!(Severity::Info < Severity::Critical);
+    }
+
+    #[test]
+    fn test_severity_ordering_critical_is_highest() {
+        assert!(Severity::Critical > Severity::High);
+        assert!(Severity::Critical > Severity::Medium);
+        assert!(Severity::Critical > Severity::Low);
+    }
+
+    #[test]
+    fn test_severity_ordering_full_chain() {
+        assert!(Severity::Low < Severity::Medium);
+        assert!(Severity::Medium < Severity::High);
+        assert!(Severity::High < Severity::Critical);
+    }
+}
+
 /// Security report
 #[derive(Debug, Serialize)]
 pub struct SecurityReport {

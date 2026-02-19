@@ -203,3 +203,13 @@ pub enum NormalizationType {
     NumberFormat,
     Punctuation,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_korean_search_mode_default_is_morpheme() {
+        assert!(matches!(KoreanSearchMode::default(), KoreanSearchMode::Morpheme));
+    }
+}

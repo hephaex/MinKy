@@ -182,3 +182,33 @@ pub struct SearchHistoryQuery {
 fn default_history_limit() -> i32 {
     20
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_top_k_is_five() {
+        assert_eq!(default_top_k(), 5);
+    }
+
+    #[test]
+    fn test_default_threshold_is_point_seven() {
+        assert!((default_threshold() - 0.7).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_default_search_limit_is_ten() {
+        assert_eq!(default_search_limit(), 10);
+    }
+
+    #[test]
+    fn test_default_search_threshold_is_point_six() {
+        assert!((default_search_threshold() - 0.6).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_default_history_limit_is_twenty() {
+        assert_eq!(default_history_limit(), 20);
+    }
+}
