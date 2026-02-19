@@ -5,7 +5,9 @@ use std::collections::HashMap;
 /// Development skill types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SkillType {
+    #[default]
     CodeReviewer,
     Debugger,
     Refactorer,
@@ -21,11 +23,6 @@ pub enum SkillType {
     Custom(String),
 }
 
-impl Default for SkillType {
-    fn default() -> Self {
-        Self::CodeReviewer
-    }
-}
 
 /// Skill definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -366,4 +363,63 @@ Provide benchmarks and optimization suggestions."#;
 5. Test fixtures and factories
 
 Aim for high coverage with meaningful assertions."#;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_skill_type_default_is_code_reviewer() {
+        assert_eq!(SkillType::default(), SkillType::CodeReviewer);
+    }
+
+    #[test]
+    fn test_builtin_prompts_code_reviewer_non_empty() {
+        assert!(!builtin_prompts::CODE_REVIEWER.is_empty());
+    }
+
+    #[test]
+    fn test_builtin_prompts_code_reviewer_mentions_code() {
+        assert!(
+            builtin_prompts::CODE_REVIEWER.to_lowercase().contains("code"),
+            "Code reviewer prompt should mention 'code'"
+        );
+    }
+
+    #[test]
+    fn test_builtin_prompts_debugger_mentions_error() {
+        assert!(
+            builtin_prompts::DEBUGGER.to_lowercase().contains("error"),
+            "Debugger prompt should mention 'error'"
+        );
+    }
+
+    #[test]
+    fn test_builtin_prompts_security_reviewer_mentions_security() {
+        assert!(
+            builtin_prompts::SECURITY_REVIEWER.to_lowercase().contains("security")
+            || builtin_prompts::SECURITY_REVIEWER.to_lowercase().contains("owasp"),
+            "Security reviewer prompt should mention security concepts"
+        );
+    }
+
+    #[test]
+    fn test_builtin_prompts_all_non_empty() {
+        let prompts = [
+            builtin_prompts::CODE_REVIEWER,
+            builtin_prompts::DEBUGGER,
+            builtin_prompts::REFACTORER,
+            builtin_prompts::ARCHITECT,
+            builtin_prompts::TDD_GUIDE,
+            builtin_prompts::DOC_WRITER,
+            builtin_prompts::PLANNER,
+            builtin_prompts::SECURITY_REVIEWER,
+            builtin_prompts::PERFORMANCE_ANALYZER,
+            builtin_prompts::TEST_GENERATOR,
+        ];
+        for (i, prompt) in prompts.iter().enumerate() {
+            assert!(!prompt.is_empty(), "Builtin prompt #{i} should not be empty");
+        }
+    }
 }
