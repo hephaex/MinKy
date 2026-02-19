@@ -96,6 +96,28 @@ pub struct ExtractKnowledgeResponse {
     pub message: String,
 }
 
+/// Slack Events API webhook payload (minimal).
+///
+/// Slack sends various shapes depending on `type`.  We capture only the
+/// fields needed for routing (`type`, `challenge`, `team_id`).  The full
+/// event is kept as raw JSON for downstream processing.
+#[derive(Debug, Deserialize)]
+pub struct SlackWebhookPayload {
+    /// Top-level type: `url_verification` or `event_callback`.
+    #[serde(rename = "type")]
+    pub event_type: String,
+
+    /// Present only for `url_verification` challenges.
+    pub challenge: Option<String>,
+
+    /// Workspace/team ID (present for `event_callback`).
+    pub team_id: Option<String>,
+
+    /// Full event object (present for `event_callback`).
+    #[allow(dead_code)]
+    pub event: Option<serde_json::Value>,
+}
+
 /// Query parameters for the summary endpoint.
 #[derive(Debug, Deserialize)]
 pub struct SummaryQuery {
@@ -255,6 +277,51 @@ async fn oauth_callback(
     Ok(ApiResponse::ok(response))
 }
 
+/// POST /api/slack/webhook
+///
+/// Receive Slack Events API payloads.
+///
+/// Slack sends two types of HTTP POST requests to this endpoint:
+/// 1. `url_verification` – Slack verifies the endpoint by sending a challenge.
+///    We must echo back the `challenge` value.
+/// 2. `event_callback`   – An actual event (message posted, reaction added, etc.)
+///    We process the payload asynchronously.
+///
+/// Security: Slack signs every request with `X-Slack-Signature`.
+/// Full signature verification is a TODO (requires the signing secret stored
+/// in `platform_configs`).  The handler currently accepts all payloads so the
+/// endpoint URL can be verified during Slack app setup.
+async fn slack_webhook(
+    State(_state): State<AppState>,
+    Json(payload): Json<SlackWebhookPayload>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    match payload.event_type.as_str() {
+        // Slack URL verification challenge – must reply within 3 seconds
+        "url_verification" => {
+            let challenge = payload.challenge.unwrap_or_default();
+            Ok(Json(serde_json::json!({ "challenge": challenge })))
+        }
+
+        // Real event – queue for async processing
+        "event_callback" => {
+            // TODO: validate X-Slack-Signature header
+            // TODO: enqueue to background worker for knowledge extraction
+            tracing::info!(
+                team_id = payload.team_id.as_deref().unwrap_or("unknown"),
+                "Received Slack event_callback"
+            );
+
+            // Acknowledge immediately (Slack requires < 3s response)
+            Ok(Json(serde_json::json!({ "ok": true })))
+        }
+
+        other => {
+            tracing::warn!(event_type = other, "Unknown Slack webhook type");
+            Ok(Json(serde_json::json!({ "ok": true })))
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -266,6 +333,7 @@ pub fn router() -> Router<AppState> {
         .route("/confirm", post(confirm_knowledge))
         .route("/summary", get(get_extraction_summary))
         .route("/oauth/callback", get(oauth_callback))
+        .route("/webhook", post(slack_webhook))
 }
 
 // ---------------------------------------------------------------------------
@@ -311,5 +379,34 @@ mod tests {
         let req: ConfirmKnowledgeRequest = serde_json::from_str(json).unwrap();
         assert!(req.confirmed);
         assert_eq!(req.extraction_id, "ext-001");
+    }
+
+    #[test]
+    fn test_slack_webhook_payload_url_verification() {
+        let json = r#"{"type":"url_verification","challenge":"abc123"}"#;
+        let payload: SlackWebhookPayload = serde_json::from_str(json).unwrap();
+        assert_eq!(payload.event_type, "url_verification");
+        assert_eq!(payload.challenge.as_deref(), Some("abc123"));
+        assert!(payload.team_id.is_none());
+    }
+
+    #[test]
+    fn test_slack_webhook_payload_event_callback() {
+        let json = r#"{
+            "type": "event_callback",
+            "team_id": "T01ABC",
+            "event": {"type": "message", "text": "hello"}
+        }"#;
+        let payload: SlackWebhookPayload = serde_json::from_str(json).unwrap();
+        assert_eq!(payload.event_type, "event_callback");
+        assert_eq!(payload.team_id.as_deref(), Some("T01ABC"));
+        assert!(payload.event.is_some());
+    }
+
+    #[test]
+    fn test_slack_webhook_payload_missing_challenge_defaults_to_none() {
+        let json = r#"{"type":"event_callback","team_id":"T1"}"#;
+        let payload: SlackWebhookPayload = serde_json::from_str(json).unwrap();
+        assert!(payload.challenge.is_none());
     }
 }
