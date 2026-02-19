@@ -43,7 +43,7 @@
 - 전체 Rust 테스트: 340개
 
 **커밋 목록 (8차 세션)**
-- (진행 중)
+- `4c01f4d4` - feat: Add knowledge graph backend API and integration test infrastructure
 
 ---
 
