@@ -783,4 +783,87 @@ mod tests {
         assert!(types.contains(&"topic"));
         assert!(types.contains(&"technology"));
     }
+
+    #[test]
+    fn test_openapi_spec_auth_endpoints_present() {
+        let spec = openapi_spec();
+        assert!(spec["paths"]["/auth/login"]["post"].is_object());
+        assert!(spec["paths"]["/auth/register"]["post"].is_object());
+    }
+
+    #[test]
+    fn test_openapi_spec_embeddings_endpoints_present() {
+        let spec = openapi_spec();
+        // POST to generate embedding for a document
+        assert!(spec["paths"]["/embeddings/documents/{id}"]["post"].is_object());
+        // GET similar documents by vector similarity
+        assert!(spec["paths"]["/embeddings/similar/{id}"]["get"].is_object());
+        // GET embedding stats
+        assert!(spec["paths"]["/embeddings/stats"]["get"].is_object());
+    }
+
+    #[test]
+    fn test_openapi_spec_understanding_endpoint_present() {
+        let spec = openapi_spec();
+        assert!(spec["paths"]["/documents/{id}/understand"]["post"].is_object());
+    }
+
+    #[test]
+    fn test_openapi_spec_graph_node_schema_structure() {
+        let spec = openapi_spec();
+        let node_schema = &spec["components"]["schemas"]["GraphNode"];
+        assert_eq!(node_schema["type"], "object");
+        assert!(node_schema["properties"]["id"].is_object());
+        assert!(node_schema["properties"]["label"].is_object());
+        assert!(node_schema["properties"]["node_type"].is_object());
+    }
+
+    #[test]
+    fn test_openapi_spec_graph_edge_schema_has_edge_types() {
+        let spec = openapi_spec();
+        let edge_types = &spec["components"]["schemas"]["GraphEdge"]["properties"]["edge_type"]["enum"];
+        let types: Vec<&str> = edge_types.as_array().unwrap().iter().filter_map(|v| v.as_str()).collect();
+        assert!(types.contains(&"similar"));
+        assert!(types.contains(&"has_topic"));
+        assert!(types.contains(&"authored_by"));
+    }
+
+    #[test]
+    fn test_openapi_spec_rag_request_schema_has_required_fields() {
+        let spec = openapi_spec();
+        let required = &spec["components"]["schemas"]["RagAskRequest"]["required"];
+        let fields: Vec<&str> = required.as_array().unwrap().iter().filter_map(|v| v.as_str()).collect();
+        assert!(fields.contains(&"question"));
+    }
+
+    #[test]
+    fn test_openapi_spec_platform_message_schema_has_required() {
+        let spec = openapi_spec();
+        let required = &spec["components"]["schemas"]["PlatformMessage"]["required"];
+        let fields: Vec<&str> = required.as_array().unwrap().iter().filter_map(|v| v.as_str()).collect();
+        assert!(fields.contains(&"id"));
+        assert!(fields.contains(&"platform"));
+        assert!(fields.contains(&"text"));
+    }
+
+    #[test]
+    fn test_openapi_spec_slack_webhook_schema_type_enum() {
+        let spec = openapi_spec();
+        let type_enum = &spec["components"]["schemas"]["SlackWebhookPayload"]["properties"]["type"]["enum"];
+        let types: Vec<&str> = type_enum.as_array().unwrap().iter().filter_map(|v| v.as_str()).collect();
+        assert!(types.contains(&"url_verification"));
+        assert!(types.contains(&"event_callback"));
+    }
+
+    #[test]
+    fn test_openapi_spec_has_contact_info() {
+        let spec = openapi_spec();
+        assert!(spec["info"]["contact"]["email"].as_str().unwrap().contains("@"));
+    }
+
+    #[test]
+    fn test_openapi_spec_has_license() {
+        let spec = openapi_spec();
+        assert_eq!(spec["info"]["license"]["name"], "MIT");
+    }
 }

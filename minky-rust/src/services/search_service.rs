@@ -411,6 +411,7 @@ impl SearchService {
 
     /// Autocomplete suggestions
     pub async fn autocomplete(&self, prefix: &str, limit: i32) -> Result<Vec<AutocompleteSuggestion>> {
+
         let search_body = json!({
             "suggest": {
                 "title-suggest": {
@@ -446,5 +447,177 @@ impl SearchService {
             .collect();
 
         Ok(suggestions)
+    }
+}
+
+/// Pure helper functions for search logic (testable without OpenSearch)
+/// Clamp a page number to minimum 1
+pub fn clamp_page(page: i64) -> i64 {
+    page.max(1)
+}
+
+/// Clamp a limit to the range [1, 100]
+pub fn clamp_limit(limit: i64) -> i64 {
+    limit.clamp(1, 100)
+}
+
+/// Calculate `from` offset from page and limit (0-indexed)
+pub fn calc_from(page: i64, limit: i64) -> i64 {
+    (clamp_page(page) - 1) * clamp_limit(limit)
+}
+
+/// Determine the sort field string for OpenSearch based on SortField variant
+pub fn sort_field_str(field: &SortField) -> &'static str {
+    match field {
+        SortField::Relevance => "_score",
+        SortField::CreatedAt => "created_at",
+        SortField::UpdatedAt => "updated_at",
+        SortField::Title => "title.keyword",
+        SortField::ViewCount => "view_count",
+    }
+}
+
+/// Determine the sort order string for OpenSearch based on SortOrder variant
+pub fn sort_order_str(order: &SortOrder) -> &'static str {
+    match order {
+        SortOrder::Asc => "asc",
+        SortOrder::Desc => "desc",
+    }
+}
+
+/// Extract text snippet from highlights (first entry, or empty)
+pub fn first_highlight(highlights: &[String]) -> String {
+    highlights.first().cloned().unwrap_or_default()
+}
+
+/// Truncate content to at most `max_chars` characters
+pub fn truncate_content(content: &str, max_chars: usize) -> String {
+    content.chars().take(max_chars).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clamp_page_zero_becomes_one() {
+        assert_eq!(clamp_page(0), 1);
+    }
+
+    #[test]
+    fn test_clamp_page_negative_becomes_one() {
+        assert_eq!(clamp_page(-5), 1);
+    }
+
+    #[test]
+    fn test_clamp_page_positive_unchanged() {
+        assert_eq!(clamp_page(3), 3);
+    }
+
+    #[test]
+    fn test_clamp_limit_over_max() {
+        assert_eq!(clamp_limit(200), 100);
+    }
+
+    #[test]
+    fn test_clamp_limit_zero_becomes_one() {
+        assert_eq!(clamp_limit(0), 1);
+    }
+
+    #[test]
+    fn test_clamp_limit_normal_unchanged() {
+        assert_eq!(clamp_limit(20), 20);
+    }
+
+    #[test]
+    fn test_calc_from_first_page() {
+        assert_eq!(calc_from(1, 20), 0);
+    }
+
+    #[test]
+    fn test_calc_from_second_page() {
+        assert_eq!(calc_from(2, 20), 20);
+    }
+
+    #[test]
+    fn test_calc_from_page_zero_treated_as_one() {
+        assert_eq!(calc_from(0, 20), 0);
+    }
+
+    #[test]
+    fn test_calc_from_large_page() {
+        assert_eq!(calc_from(5, 10), 40);
+    }
+
+    #[test]
+    fn test_sort_field_str_relevance() {
+        assert_eq!(sort_field_str(&SortField::Relevance), "_score");
+    }
+
+    #[test]
+    fn test_sort_field_str_created_at() {
+        assert_eq!(sort_field_str(&SortField::CreatedAt), "created_at");
+    }
+
+    #[test]
+    fn test_sort_field_str_updated_at() {
+        assert_eq!(sort_field_str(&SortField::UpdatedAt), "updated_at");
+    }
+
+    #[test]
+    fn test_sort_field_str_title() {
+        assert_eq!(sort_field_str(&SortField::Title), "title.keyword");
+    }
+
+    #[test]
+    fn test_sort_field_str_view_count() {
+        assert_eq!(sort_field_str(&SortField::ViewCount), "view_count");
+    }
+
+    #[test]
+    fn test_sort_order_str_asc() {
+        assert_eq!(sort_order_str(&SortOrder::Asc), "asc");
+    }
+
+    #[test]
+    fn test_sort_order_str_desc() {
+        assert_eq!(sort_order_str(&SortOrder::Desc), "desc");
+    }
+
+    #[test]
+    fn test_first_highlight_empty() {
+        let highlights: Vec<String> = vec![];
+        assert_eq!(first_highlight(&highlights), "");
+    }
+
+    #[test]
+    fn test_first_highlight_returns_first() {
+        let highlights = vec!["first".to_string(), "second".to_string()];
+        assert_eq!(first_highlight(&highlights), "first");
+    }
+
+    #[test]
+    fn test_truncate_content_shorter_than_max() {
+        let s = "hello";
+        assert_eq!(truncate_content(s, 100), "hello");
+    }
+
+    #[test]
+    fn test_truncate_content_exact_max() {
+        let s = "hello";
+        assert_eq!(truncate_content(s, 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_content_longer_than_max() {
+        let s = "hello world";
+        assert_eq!(truncate_content(s, 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_content_unicode() {
+        let s = "안녕하세요 세계";
+        let truncated = truncate_content(s, 3);
+        assert_eq!(truncated, "안녕하");
     }
 }

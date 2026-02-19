@@ -200,3 +200,143 @@ impl NotificationService {
         Ok(())
     }
 }
+
+/// Pure functions for building notification messages (testable without DB)
+/// Build the title for a comment notification
+pub fn build_comment_title(commenter_name: &str) -> String {
+    format!("{} commented on your document", commenter_name)
+}
+
+/// Build the message for a comment notification
+pub fn build_comment_message(document_title: &str) -> String {
+    format!("New comment on \"{}\"", document_title)
+}
+
+/// Build the title for a mention notification
+pub fn build_mention_title(mentioner_name: &str) -> String {
+    format!("{} mentioned you", mentioner_name)
+}
+
+/// Build JSON data payload for a comment notification
+pub fn build_comment_data(document_id: &str, commenter_name: &str) -> serde_json::Value {
+    serde_json::json!({
+        "document_id": document_id,
+        "commenter": commenter_name
+    })
+}
+
+/// Build JSON data payload for a mention notification
+pub fn build_mention_data(document_id: &str, mentioner_name: &str) -> serde_json::Value {
+    serde_json::json!({
+        "document_id": document_id,
+        "mentioner": mentioner_name
+    })
+}
+
+/// Determine whether notifications should be batched based on count
+pub fn should_batch_notifications(count: i64, threshold: i64) -> bool {
+    count >= threshold
+}
+
+/// Build a digest summary title for batched notifications
+pub fn build_digest_title(unread_count: i64) -> String {
+    if unread_count == 1 {
+        "You have 1 unread notification".to_string()
+    } else {
+        format!("You have {} unread notifications", unread_count)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_comment_title_includes_name() {
+        let title = build_comment_title("Alice");
+        assert_eq!(title, "Alice commented on your document");
+    }
+
+    #[test]
+    fn test_build_comment_title_empty_name() {
+        let title = build_comment_title("");
+        assert!(title.contains("commented on your document"));
+    }
+
+    #[test]
+    fn test_build_comment_message_includes_title() {
+        let msg = build_comment_message("Architecture Decision Record");
+        assert_eq!(msg, "New comment on \"Architecture Decision Record\"");
+    }
+
+    #[test]
+    fn test_build_comment_message_special_chars() {
+        let msg = build_comment_message("RFC: \"API Design\"");
+        assert!(msg.contains("RFC: \"API Design\""));
+    }
+
+    #[test]
+    fn test_build_mention_title_includes_name() {
+        let title = build_mention_title("Bob");
+        assert_eq!(title, "Bob mentioned you");
+    }
+
+    #[test]
+    fn test_build_comment_data_structure() {
+        let data = build_comment_data("doc-123", "Alice");
+        assert_eq!(data["document_id"], "doc-123");
+        assert_eq!(data["commenter"], "Alice");
+    }
+
+    #[test]
+    fn test_build_mention_data_structure() {
+        let data = build_mention_data("doc-456", "Bob");
+        assert_eq!(data["document_id"], "doc-456");
+        assert_eq!(data["mentioner"], "Bob");
+    }
+
+    #[test]
+    fn test_build_comment_data_no_extra_fields() {
+        let data = build_comment_data("doc-123", "Alice");
+        let obj = data.as_object().unwrap();
+        assert_eq!(obj.len(), 2, "comment data should have exactly 2 fields");
+    }
+
+    #[test]
+    fn test_build_mention_data_no_extra_fields() {
+        let data = build_mention_data("doc-123", "Bob");
+        let obj = data.as_object().unwrap();
+        assert_eq!(obj.len(), 2, "mention data should have exactly 2 fields");
+    }
+
+    #[test]
+    fn test_should_batch_below_threshold() {
+        assert!(!should_batch_notifications(4, 5));
+    }
+
+    #[test]
+    fn test_should_batch_at_threshold() {
+        assert!(should_batch_notifications(5, 5));
+    }
+
+    #[test]
+    fn test_should_batch_above_threshold() {
+        assert!(should_batch_notifications(100, 5));
+    }
+
+    #[test]
+    fn test_build_digest_title_singular() {
+        assert_eq!(build_digest_title(1), "You have 1 unread notification");
+    }
+
+    #[test]
+    fn test_build_digest_title_plural() {
+        assert_eq!(build_digest_title(5), "You have 5 unread notifications");
+    }
+
+    #[test]
+    fn test_build_digest_title_zero() {
+        let title = build_digest_title(0);
+        assert!(title.contains("0 unread notifications"));
+    }
+}

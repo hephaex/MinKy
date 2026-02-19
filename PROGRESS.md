@@ -5,6 +5,62 @@
 
 ---
 
+## 현재 진행 상황 (2026-02-19) - 테스트 707개 달성 + Frontend 304개 + E2E 28개
+
+### 15차 세션: 3개 작업 병렬 완료 (2026-02-19)
+
+**작업 1: Rust 단위 테스트 655 -> 707개 (+52개)**
+
+| 파일 | 추가 테스트 | 내용 |
+|---|---|---|
+| `services/notification_service.rs` | +15 | 순수 함수 추출 (build_comment_title, build_comment_message, build_mention_title, build_comment_data, build_mention_data, should_batch_notifications, build_digest_title) + 15개 테스트 |
+| `services/search_service.rs` | +20 | 순수 헬퍼 추출 (clamp_page, clamp_limit, calc_from, sort_field_str, sort_order_str, first_highlight, truncate_content) + 20개 테스트 |
+| `services/ml_service.rs` | +18 | 통계 함수 추출 (compute_mean, compute_std, compute_z_score, is_anomaly, clamp_similarity, clamp_result_limit) + 18개 테스트 |
+| `openapi.rs` | +10 | auth 엔드포인트, embeddings, understanding, schema 구조, edge_type enum, contact/license 테스트 확장 |
+
+- 모든 함수 순수(pure) 형태로 추출하여 DB/네트워크 없이 테스트 가능
+- clippy 0 warnings (empty_line_after_doc_comments, manual_clamp 수정)
+- 총 Rust: 655 -> **707개** (unit 691 + integration 4 + kg 11 + doc 1)
+
+**작업 2: Frontend 테스트 280 -> 304개 (+24개)**
+
+| 파일 | 내용 |
+|---|---|
+| `frontend/src/utils/dateUtils.test.js` (신규) | 24개 테스트 |
+
+dateUtils 테스트 내용:
+- formatDate: null/undefined/empty/유효ISO/Date객체/잘못된입력 처리
+- formatDateTime: null/undefined/empty/유효ISO/잘못된입력 처리
+- formatDateRange: null/undefined/empty/연도only/연월/전체날짜/불인식형식
+- formatRelativeTime: null/undefined/empty/최근날짜/오래된날짜/잘못된입력 폴백
+
+**작업 3: Playwright E2E 테스트 추가 (28개 all pass)**
+
+| 파일 | 테스트 | 내용 |
+|---|---|---|
+| `e2e/tests/knowledge.spec.js` (신규) | 11개 | Knowledge Search (5개) + Knowledge Graph (6개) |
+| `e2e/tests/chat.spec.js` (신규) | 8개 | Chat Interface (textarea, send, ARIA, 세션관리) |
+| `e2e/tests/navigation.spec.js` (개선) | 10개 | 신규 라우트 (/chat, /knowledge, /graph) + 기존 수정 |
+| `e2e/playwright.config.js` (개선) | - | Rust 백엔드(포트 8000) 웹서버 설정, actionTimeout 추가 |
+
+- chromium 기준 28개 all pass (8.0s)
+- Frontend(3000) + Rust backend(8000) 모두 실행 중 테스트
+
+**빌드 및 테스트 결과**
+- Rust Build: 0 errors, 0 clippy warnings
+- Rust Unit Tests: **707/707 passed** (+52개)
+- Rust Integration Tests: 4/4 passed
+- Knowledge Graph Tests: 11/11 passed
+- Doc Tests: 1/1 passed
+- 총 Rust 테스트: 655 -> **707개**
+- Frontend Tests: **304/304 passed** (+24개)
+- E2E Tests: **28/28 passed** (Playwright chromium)
+
+**커밋 목록 (15차 세션)**
+- (커밋 예정)
+
+---
+
 ## 현재 진행 상황 (2026-02-19) - 테스트 655개 달성 + Frontend 280개 + CI 개선
 
 ### 14차 세션: 3개 작업 병렬 완료 (2026-02-19)

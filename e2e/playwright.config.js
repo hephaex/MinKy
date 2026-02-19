@@ -30,7 +30,11 @@ module.exports = defineConfig({
     screenshot: 'only-on-failure',
     /* Video on failure */
     video: 'on-first-retry',
+    /* Default timeout for actions */
+    actionTimeout: 15000,
   },
+  /* Global test timeout */
+  timeout: 60000,
   /* Configure projects for major browsers */
   projects: [
     {
@@ -60,10 +64,10 @@ module.exports = defineConfig({
       timeout: 120 * 1000,
     },
     {
-      command: 'source ../venv/bin/activate && FLASK_ENV=testing python ../run.py',
-      url: 'http://localhost:5000/api/health',
+      command: 'cd ../minky-rust && cargo run --release 2>/dev/null',
+      url: 'http://localhost:8000/api/health',
       reuseExistingServer: !process.env.CI,
-      timeout: 120 * 1000,
+      timeout: 180 * 1000,
     },
   ],
 });

@@ -238,5 +238,20 @@
 - [x] **CI/CD 워크플로우 개선** ✅ (2026-02-19 완료)
   - pr-check.yml: 테스트 카운트 job outputs, PR 코멘트 테스트 수 표시
   - cargo cache restore-keys 추가
+- [x] **테스트 700개 목표** ✅ (2026-02-19 완료 - 707개 달성)
+  - notification_service: 순수 함수 추출 (15개 테스트)
+  - search_service: 순수 헬퍼 함수 추출 (20개 테스트)
+  - ml_service: 통계 함수 추출 (18개 테스트)
+  - openapi: 추가 테스트 (10개)
+  - Rust 총 707개 (unit 639+52 + integration 4 + kg 11 + doc 1)
+- [x] **Frontend 테스트 300개 목표** ✅ (2026-02-19 완료 - 304개 달성)
+  - dateUtils.test.js 신규 24개 테스트
+  - Frontend 총 304개 (280 -> 304)
+- [x] **Playwright E2E 테스트 추가** ✅ (2026-02-19 완료)
+  - knowledge.spec.js: Knowledge Search + Knowledge Graph (11개 테스트)
+  - chat.spec.js: Chat Interface (8개 테스트)
+  - navigation.spec.js: 라우트 추가 (10개 테스트)
+  - playwright.config.js: Rust 백엔드 웹서버 설정 업데이트
+  - 총 E2E 28개 all pass (chromium)
 
-*Last updated: 2026-02-19 (14차 세션 - 테스트 655개 달성, Frontend 280개, CI 개선)*
+*Last updated: 2026-02-19 (15차 세션 - 테스트 707개 달성, Frontend 304개, E2E 28개)*

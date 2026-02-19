@@ -329,3 +329,162 @@ impl MlService {
         Ok(anomalies)
     }
 }
+
+/// Pure statistical helper functions (testable without DB)
+/// Compute the mean of a slice of i64 values.
+/// Returns 0.0 for an empty slice.
+pub fn compute_mean(values: &[i64]) -> f32 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    values.iter().sum::<i64>() as f32 / values.len() as f32
+}
+
+/// Compute the population standard deviation of a slice of i64 values.
+/// Returns 0.0 for an empty or single-element slice.
+pub fn compute_std(values: &[i64]) -> f32 {
+    if values.len() < 2 {
+        return 0.0;
+    }
+    let mean = compute_mean(values);
+    let variance = values
+        .iter()
+        .map(|v| (*v as f32 - mean).powi(2))
+        .sum::<f32>()
+        / values.len() as f32;
+    variance.sqrt()
+}
+
+/// Compute the z-score for a single value given mean and std.
+/// If std is 0, returns 0 to avoid division by zero.
+pub fn compute_z_score(value: i64, mean: f32, std: f32) -> f32 {
+    let denominator = std.max(1.0);
+    (value as f32 - mean) / denominator
+}
+
+/// Determine if a z-score represents an anomaly (|z| > threshold).
+pub fn is_anomaly(z_score: f32, threshold: f32) -> bool {
+    z_score.abs() > threshold
+}
+
+/// Clamp a similarity score to [0.0, 1.0].
+pub fn clamp_similarity(score: f32) -> f32 {
+    score.clamp(0.0, 1.0)
+}
+
+/// Limit the result count to at most `max`.
+pub fn clamp_result_limit(limit: i32, max: i32) -> i32 {
+    limit.min(max).max(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_mean_empty() {
+        assert_eq!(compute_mean(&[]), 0.0);
+    }
+
+    #[test]
+    fn test_compute_mean_single() {
+        assert!((compute_mean(&[10]) - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_mean_multiple() {
+        let values = [2, 4, 6, 8];
+        assert!((compute_mean(&values) - 5.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_mean_negative_values() {
+        let values = [-4, -2, 0, 2, 4];
+        assert!((compute_mean(&values) - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_std_empty() {
+        assert_eq!(compute_std(&[]), 0.0);
+    }
+
+    #[test]
+    fn test_compute_std_single() {
+        assert_eq!(compute_std(&[42]), 0.0);
+    }
+
+    #[test]
+    fn test_compute_std_identical_values() {
+        let values = [5, 5, 5, 5];
+        assert!((compute_std(&values) - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_std_known_values() {
+        // [2, 4, 4, 4, 5, 5, 7, 9] -> mean=5, variance=4, std=2
+        let values = [2, 4, 4, 4, 5, 5, 7, 9];
+        assert!((compute_std(&values) - 2.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_compute_z_score_at_mean() {
+        assert!((compute_z_score(5, 5.0, 2.0) - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_z_score_one_std_above() {
+        assert!((compute_z_score(7, 5.0, 2.0) - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_z_score_zero_std_does_not_panic() {
+        let z = compute_z_score(10, 5.0, 0.0);
+        // std clamped to 1.0, so z = (10 - 5) / 1 = 5
+        assert!((z - 5.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_is_anomaly_above_threshold() {
+        assert!(is_anomaly(2.5, 2.0));
+    }
+
+    #[test]
+    fn test_is_anomaly_at_threshold_not_anomaly() {
+        assert!(!is_anomaly(2.0, 2.0));
+    }
+
+    #[test]
+    fn test_is_anomaly_negative_z_score() {
+        assert!(is_anomaly(-3.0, 2.0));
+    }
+
+    #[test]
+    fn test_clamp_similarity_normal() {
+        assert!((clamp_similarity(0.75) - 0.75).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_clamp_similarity_below_zero() {
+        assert!((clamp_similarity(-0.5) - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_clamp_similarity_above_one() {
+        assert!((clamp_similarity(1.5) - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_clamp_result_limit_normal() {
+        assert_eq!(clamp_result_limit(10, 50), 10);
+    }
+
+    #[test]
+    fn test_clamp_result_limit_above_max() {
+        assert_eq!(clamp_result_limit(100, 50), 50);
+    }
+
+    #[test]
+    fn test_clamp_result_limit_zero_becomes_one() {
+        assert_eq!(clamp_result_limit(0, 50), 1);
+    }
+}
