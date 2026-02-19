@@ -64,7 +64,7 @@ searchService/embeddingService 테스트 내용:
 - Benchmarks: 컴파일 완료 (실행 가능)
 
 **커밋 목록 (16차 세션)**
-- TBD
+- `099c55e2` - test: Expand tests to 778 Rust + 337 Frontend + criterion benchmarks (session 16)
 
 ---
 
