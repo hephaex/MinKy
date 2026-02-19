@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Sync provider
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,4 +180,14 @@ pub struct SyncStats {
     pub total_bytes_transferred: i64,
     pub last_sync: Option<DateTime<Utc>>,
     pub next_scheduled_sync: Option<DateTime<Utc>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sync_status_default_is_pending() {
+        assert!(matches!(SyncStatus::default(), SyncStatus::Pending));
+    }
 }

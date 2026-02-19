@@ -122,3 +122,23 @@ pub struct OcrSettings {
     pub max_file_size_mb: i32,
     pub supported_formats: Vec<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ocr_engine_default_is_tesseract() {
+        assert!(matches!(OcrEngine::default(), OcrEngine::Tesseract));
+    }
+
+    #[test]
+    fn test_ocr_status_default_is_pending() {
+        assert!(matches!(OcrStatus::default(), OcrStatus::Pending));
+    }
+
+    #[test]
+    fn test_block_type_text_variant_exists() {
+        let _ = BlockType::Text;
+    }
+}

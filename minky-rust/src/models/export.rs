@@ -108,3 +108,18 @@ pub struct ExportedDocument {
     pub updated_at: DateTime<Utc>,
     pub metadata: Option<serde_json::Value>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_export_format_default_is_json() {
+        assert!(matches!(ExportFormat::default(), ExportFormat::Json));
+    }
+
+    #[test]
+    fn test_export_status_default_is_pending() {
+        assert!(matches!(ExportStatus::default(), ExportStatus::Pending));
+    }
+}

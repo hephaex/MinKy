@@ -18,7 +18,9 @@ pub struct SearchQuery {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SortField {
+    #[default]
     Relevance,
     CreatedAt,
     UpdatedAt,
@@ -26,24 +28,16 @@ pub enum SortField {
     ViewCount,
 }
 
-impl Default for SortField {
-    fn default() -> Self {
-        Self::Relevance
-    }
-}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum SortOrder {
     Asc,
+    #[default]
     Desc,
 }
 
-impl Default for SortOrder {
-    fn default() -> Self {
-        Self::Desc
-    }
-}
 
 /// Search result item
 #[derive(Debug, Serialize)]
@@ -130,4 +124,19 @@ pub struct AutocompleteSuggestion {
     pub text: String,
     pub score: f32,
     pub document_count: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sort_field_default_is_relevance() {
+        assert!(matches!(SortField::default(), SortField::Relevance));
+    }
+
+    #[test]
+    fn test_sort_order_default_is_desc() {
+        assert!(matches!(SortOrder::default(), SortOrder::Desc));
+    }
 }
