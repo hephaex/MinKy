@@ -34,8 +34,7 @@ impl KoreanService {
 
         let morphemes: Vec<Morpheme> = tokens
             .iter()
-            .enumerate()
-            .map(|(idx, token)| {
+            .map(|token| {
                 let start = text.find(token).unwrap_or(0) as i32;
                 Morpheme {
                     surface: token.to_string(),
@@ -320,7 +319,7 @@ impl KoreanService {
 
         text.chars()
             .map(|c| {
-                if c >= '가' && c <= '힣' {
+                if ('가'..='힣').contains(&c) {
                     let code = c as u32 - '가' as u32;
                     let cho_idx = (code / 588) as usize;
                     CHOSUNG[cho_idx]
@@ -398,4 +397,60 @@ fn default_korean_stopwords() -> Vec<String> {
     .into_iter()
     .map(String::from)
     .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_chosung_only_true() {
+        assert!(is_chosung_only("ㄱㄴㄷ"));
+        assert!(is_chosung_only("ㅎ"));
+    }
+
+    #[test]
+    fn test_is_chosung_only_false() {
+        assert!(!is_chosung_only("가나다"));
+        assert!(!is_chosung_only("hello"));
+        assert!(!is_chosung_only("ㄱ나"));
+    }
+
+    #[test]
+    fn test_is_chosung_only_empty() {
+        // all() on empty iterator returns true
+        assert!(is_chosung_only(""));
+    }
+
+    #[test]
+    fn test_guess_pos_verb_endings() {
+        assert_eq!(guess_pos("먹다"), "VV");
+        assert_eq!(guess_pos("가요"), "VV");
+    }
+
+    #[test]
+    fn test_guess_pos_subject_marker() {
+        assert_eq!(guess_pos("학생이"), "JKS");
+        assert_eq!(guess_pos("고양이가"), "JKS");
+    }
+
+    #[test]
+    fn test_guess_pos_default_noun() {
+        assert_eq!(guess_pos("기술"), "NNG");
+        assert_eq!(guess_pos("데이터"), "NNG");
+    }
+
+    #[test]
+    fn test_default_korean_stopwords_not_empty() {
+        let stopwords = default_korean_stopwords();
+        assert!(!stopwords.is_empty());
+    }
+
+    #[test]
+    fn test_default_korean_stopwords_contains_common_particles() {
+        let stopwords = default_korean_stopwords();
+        assert!(stopwords.contains(&"의".to_string()));
+        assert!(stopwords.contains(&"는".to_string()));
+        assert!(stopwords.contains(&"에".to_string()));
+    }
 }
