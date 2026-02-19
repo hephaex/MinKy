@@ -5,6 +5,56 @@
 
 ---
 
+## 🔄 현재 진행 상황 (2026-02-19) - 테스트 500개 달성 + OAuth 실구현 + Webhook 파이프라인
+
+### 12차 세션: 3개 작업 병렬 완료 (2026-02-19)
+
+**작업 1: Slack OAuth 토큰 교환 실구현**
+
+| 파일 | 내용 |
+|---|---|
+| `minky-rust/src/services/slack_oauth_service.rs` (신규) | SlackOAuthService (exchange_code, save_workspace_credentials, get_workspace_credentials, build_auth_url, validate_state), SlackOAuthConfig, WorkspaceCredentials, SlackOAuthResponse/SlackTeam/SlackAuthedUser serde 타입 |
+| `minky-rust/src/config.rs` (확장) | slack_client_id, slack_client_secret, slack_redirect_uri, slack_signing_secret 필드 추가 |
+| `minky-rust/src/routes/slack.rs` (확장) | oauth_callback 핸들러 실구현: SlackOAuthService.exchange_code() 호출 + save_workspace_credentials() DB 저장 |
+
+- `exchange_code()`: Slack oauth.v2.access API POST (form params: client_id, client_secret, code, redirect_uri)
+- `save_workspace_credentials()`: platform_configs upsert (ON CONFLICT DO UPDATE)
+- `build_auth_url()`: 스코프 + state + redirect_uri 포함 authorization URL 생성
+- `validate_state()`: OAuth state 파라미터 CSRF 보호
+
+**작업 2: Webhook event_callback 자동 지식 추출 파이프라인 연결**
+
+| 파일 | 내용 |
+|---|---|
+| `minky-rust/src/routes/slack.rs` (확장) | classify_webhook_action() 순수 함수, extract_messages_from_event() 순수 함수, 개선된 slack_webhook() 핸들러 |
+
+- `classify_webhook_action()`: url_verification / KnowledgeExtractionQueued (message, app_mention) / EventIgnored / UnknownType
+- `extract_messages_from_event()`: Slack event payload -> PlatformMessage 변환 (channel, user, text, thread_ts)
+- `slack_webhook()`: message/app_mention 이벤트 시 `tokio::spawn`으로 ConversationExtractionService 비동기 실행
+- Slack 3초 응답 타임아웃 준수 (즉시 `{"ok": true, "queued": true}` 반환)
+
+**작업 3: 테스트 커버리지 500개 달성 (+50개)**
+
+| 파일 | 추가 테스트 | 내용 |
+|---|---|---|
+| `services/slack_oauth_service.rs` | +15 | config, build_auth_url, validate_state, serde roundtrip |
+| `routes/slack.rs` | +14 | classify_webhook_action (5가지 케이스), extract_messages (4케이스), 기존 테스트 유지 |
+| `services/slack_service.rs` | +20 | is_thread_worth_analysing 엣지 케이스, build_prompt 순서 보존, classify_status 경계값, apply_filter 다중 필드, ConversationStats |
+| `services/conversation_extraction_service.rs` | +19 | 시스템 프롬프트 스키마 완전성, config 기본값, 역할 레이블 |
+| `config.rs` | +9 | Slack 설정 필드 기본값, 옵션 필드 None 확인 |
+
+**빌드 및 테스트 결과**
+- Rust Build: 0 errors, 0 clippy warnings
+- Rust Unit Tests: **500/500 passed** (+50개)
+- Rust Integration Tests: 15/15 passed
+- Doc Tests: 1/1 passed
+- 총 Rust 테스트: 450 -> **516개** (unit 500 + integration 15 + doc 1)
+
+**커밋 목록 (12차 세션)**
+- `10494784` - feat: Implement Slack OAuth token exchange, webhook knowledge pipeline, and 500 test milestone
+
+---
+
 ## 🔄 현재 진행 상황 (2026-02-19) - 테스트 450개 달성 + Webhook + DB 마이그레이션
 
 ### 11차 세션: 테스트 목표 달성 (2026-02-19)

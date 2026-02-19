@@ -142,8 +142,12 @@
 - [x] platform_configs/extraction_jobs DB 마이그레이션 ✅ (2026-02-19 완료)
   - migrations/005_slack_platform.sql
   - platform_configs, platform_messages, extraction_jobs, extracted_knowledge 테이블
-- [ ] OAuth 토큰 교환 실구현 (Slack oauth.v2.access API 호출 + DB 저장)
-- [ ] Webhook 이벤트 → 자동 지식 추출 파이프라인 연결 (event_callback 처리)
+- [x] OAuth 토큰 교환 실구현 (Slack oauth.v2.access API 호출 + DB 저장) ✅ (2026-02-19 완료)
+  - SlackOAuthService: exchange_code, save_workspace_credentials, validate_state
+  - Config: slack_client_id, slack_client_secret, slack_redirect_uri, slack_signing_secret
+- [x] Webhook 이벤트 → 자동 지식 추출 파이프라인 연결 (event_callback 처리) ✅ (2026-02-19 완료)
+  - classify_webhook_action() 순수 함수
+  - tokio::spawn으로 비동기 ConversationExtractionService 실행
 
 ---
 
@@ -215,4 +219,4 @@
 
 ---
 
-*Last updated: 2026-02-19*
+*Last updated: 2026-02-19 (12차 세션 - 테스트 500개 달성, OAuth 실구현, Webhook 파이프라인 완성)*
