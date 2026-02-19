@@ -3,7 +3,7 @@ use chrono::Utc;
 use std::process::Command;
 
 use crate::models::{
-    ApplyOcrRequest, BlockType, BoundingBox, OcrEngine, OcrJob, OcrMetadata, OcrPage, OcrRequest,
+    BlockType, BoundingBox, OcrEngine, OcrJob, OcrMetadata, OcrPage, OcrRequest,
     OcrResult, OcrSettings, OcrStatus, TextBlock,
 };
 
@@ -193,5 +193,101 @@ impl OcrService {
 impl Default for OcrService {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_supported_format_pdf() {
+        let svc = OcrService::new();
+        assert!(svc.is_supported_format("document.pdf"));
+    }
+
+    #[test]
+    fn test_is_supported_format_png() {
+        let svc = OcrService::new();
+        assert!(svc.is_supported_format("image.PNG"), "Extension check should be case-insensitive");
+    }
+
+    #[test]
+    fn test_is_supported_format_jpg() {
+        let svc = OcrService::new();
+        assert!(svc.is_supported_format("photo.jpg"));
+    }
+
+    #[test]
+    fn test_is_supported_format_tiff() {
+        let svc = OcrService::new();
+        assert!(svc.is_supported_format("scan.tiff"));
+    }
+
+    #[test]
+    fn test_is_supported_format_unsupported_returns_false() {
+        let svc = OcrService::new();
+        assert!(!svc.is_supported_format("document.docx"), "Unsupported format should return false");
+    }
+
+    #[test]
+    fn test_is_supported_format_no_extension_returns_false() {
+        let svc = OcrService::new();
+        assert!(!svc.is_supported_format("Makefile"), "File without extension should return false");
+    }
+
+    #[test]
+    fn test_estimate_processing_time_small_file() {
+        let svc = OcrService::new();
+        // Under 1MB: (0 + 1) * 1000 = 1000ms
+        let estimate = svc.estimate_processing_time(512 * 1024);
+        assert_eq!(estimate, 1000);
+    }
+
+    #[test]
+    fn test_estimate_processing_time_one_mb() {
+        let svc = OcrService::new();
+        // Exactly 1MB: (1 + 1) * 1000 = 2000ms
+        let estimate = svc.estimate_processing_time(1024 * 1024);
+        assert_eq!(estimate, 2000);
+    }
+
+    #[test]
+    fn test_estimate_processing_time_zero_bytes() {
+        let svc = OcrService::new();
+        // 0 bytes: (0 + 1) * 1000 = 1000ms (minimum 1 second)
+        let estimate = svc.estimate_processing_time(0);
+        assert_eq!(estimate, 1000);
+    }
+
+    #[test]
+    fn test_estimate_processing_time_scales_with_size() {
+        let svc = OcrService::new();
+        let small = svc.estimate_processing_time(1024 * 1024);
+        let large = svc.estimate_processing_time(10 * 1024 * 1024);
+        assert!(large > small, "Larger file should take longer to estimate");
+    }
+
+    #[test]
+    fn test_get_settings_returns_defaults() {
+        let svc = OcrService::new();
+        let settings = svc.get_settings();
+        assert!(!settings.supported_formats.is_empty(), "Supported formats should not be empty");
+        assert!(settings.max_file_size_mb > 0, "Max file size should be positive");
+    }
+
+    #[test]
+    fn test_update_settings_changes_max_file_size() {
+        let mut svc = OcrService::new();
+        let new_settings = OcrSettings {
+            default_engine: crate::models::OcrEngine::Tesseract,
+            default_languages: vec!["eng".to_string()],
+            auto_ocr_on_upload: true,
+            max_file_size_mb: 100,
+            supported_formats: vec!["pdf".to_string()],
+        };
+        svc.update_settings(new_settings);
+        assert_eq!(svc.get_settings().max_file_size_mb, 100);
+        assert!(svc.get_settings().auto_ocr_on_upload);
     }
 }
