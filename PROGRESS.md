@@ -5,6 +5,53 @@
 
 ---
 
+## 🔄 현재 진행 상황 (2026-02-19) - Slack 지식 추출 파이프라인 + OAuth 라우트 + Docker Compose
+
+### 10차 세션: 3개 작업 병렬 완료 (2026-02-19)
+
+**작업 1: ConversationExtractionService (LLM 파이프라인)**
+
+| 파일 | 내용 |
+|---|---|
+| `minky-rust/src/services/conversation_extraction_service.rs` | ExtractionConfig(default), ExtractionResult, AnthropicRequest/Response, ConversationExtractionService::extract() + call_llm() + build_system_prompt() |
+
+- `extract()`: apply_filter → is_thread_worth_analysing → build_conversation_prompt → call_llm → parse_extraction_response → classify_status → ConversationStats
+- `call_llm()`: Anthropic Messages API 호출 (x-api-key, anthropic-version 헤더)
+- `build_system_prompt()`: JSON 스키마 + confidence 가이드라인 + role 레이블 정의
+- 6개 단위 테스트 (config default, model name, prompt schema, confidence guideline, role labels, custom config)
+
+**작업 2: routes/slack.rs (5개 엔드포인트)**
+
+| 엔드포인트 | 설명 |
+|---|---|
+| POST /api/slack/extract | 대화 지식 추출 (LLM 파이프라인 호출) |
+| GET /api/slack/extract/{id} | 추출 결과 조회 (DB stub) |
+| POST /api/slack/confirm | 사람 확인/거부 (DB stub) |
+| GET /api/slack/summary | 추출 활동 통계 |
+| GET /api/slack/oauth/callback | Slack OAuth 2.0 콜백 |
+
+- `extract_knowledge`: Validation 오류 시 status=Skipped 반환 (200 OK), 실제 추출 성공 시 stats 포함
+- `oauth_callback`: code/error 파라미터 처리, 토큰 교환 TODO 표시
+- 4개 라우트 레벨 테스트
+
+**작업 3: Docker Compose rust-backend 서비스 추가**
+
+- `docker-compose.yml`: rust-backend 서비스 (포트 8000, healthcheck wget, rust_logs named volume)
+- 환경 변수: DATABASE_URL(minky_rust_db), JWT_SECRET, OPENAI_API_KEY, ANTHROPIC_API_KEY
+- db 서비스 healthcheck 의존성 설정
+
+**빌드 및 테스트 결과**
+- Rust Build: 0 errors, 0 clippy warnings
+- Rust Unit Tests: 396/396 passed (+6개 신규: conversation_extraction_service 6개)
+- Rust Integration Tests: 15/15 passed
+- Doc Tests: 1/1 passed
+- 전체 Rust 테스트: 402 -> **412개** (+10개)
+
+**커밋 목록 (10차 세션)**
+- `951c9481` - feat: Add Slack/Teams knowledge extraction pipeline, OAuth routes, and Docker Compose Rust service
+
+---
+
 ## 🔄 현재 진행 상황 (2026-02-19) - Slack 연동 모델 + Document 헬퍼 + Docker
 
 ### 9차 세션: 3개 작업 병렬 완료 (2026-02-19)

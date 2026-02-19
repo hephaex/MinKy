@@ -128,8 +128,16 @@
 - [x] Slack/Teams 연동 모델 및 서비스 설계 ✅ (2026-02-19 완료)
   - models/slack.rs: MessagingPlatform, PlatformMessage, ExtractedKnowledge, ExtractionStatus, MessageFilter (18 테스트)
   - services/slack_service.rs: 순수 함수 (thread 분석, 프롬프트 빌드, LLM 파싱, 필터, 분류) + ConversationStats (27 테스트)
-- [ ] Slack/Teams API 연동 (OAuth, webhook 수신)
-- [ ] 대화에서 지식 자동 추출 (LLM 호출 파이프라인)
+- [x] Slack/Teams OAuth 엔드포인트 ✅ (2026-02-19 완료)
+  - GET /api/slack/oauth/callback
+  - POST /api/slack/confirm
+  - GET /api/slack/summary
+  - GET /api/slack/extract/{id}
+- [x] 대화에서 지식 자동 추출 파이프라인 ✅ (2026-02-19 완료)
+  - services/conversation_extraction_service.rs (LLM 호출, quality gate, 파싱)
+  - POST /api/slack/extract 엔드포인트
+- [ ] Slack Webhook 수신 핸들러 (실시간 이벤트)
+- [ ] OAuth 토큰 교환 DB 저장 (platform_configs 테이블)
 
 ---
 
