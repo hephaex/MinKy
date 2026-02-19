@@ -3,16 +3,13 @@ use serde::{Deserialize, Serialize};
 /// LLM Provider types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum LLMProvider {
     OpenAI,
+    #[default]
     Anthropic,
 }
 
-impl Default for LLMProvider {
-    fn default() -> Self {
-        Self::Anthropic
-    }
-}
 
 /// AI Model configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,16 +103,51 @@ pub struct ClusterResult {
 /// Analytics time range
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum TimeRange {
     Day,
     Week,
+    #[default]
     Month,
     Year,
     Custom { start: chrono::DateTime<chrono::Utc>, end: chrono::DateTime<chrono::Utc> },
 }
 
-impl Default for TimeRange {
-    fn default() -> Self {
-        Self::Month
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_llm_provider_default_is_anthropic() {
+        assert_eq!(LLMProvider::default(), LLMProvider::Anthropic);
+    }
+
+    #[test]
+    fn test_ai_model_config_default_provider_is_anthropic() {
+        let config = AIModelConfig::default();
+        assert_eq!(config.provider, LLMProvider::Anthropic);
+    }
+
+    #[test]
+    fn test_ai_model_config_default_max_tokens() {
+        let config = AIModelConfig::default();
+        assert!(config.max_tokens > 0, "max_tokens should be positive");
+        assert_eq!(config.max_tokens, 4096);
+    }
+
+    #[test]
+    fn test_ai_model_config_default_temperature_in_range() {
+        let config = AIModelConfig::default();
+        assert!(
+            config.temperature >= 0.0 && config.temperature <= 2.0,
+            "temperature should be in [0.0, 2.0]"
+        );
+    }
+
+    #[test]
+    fn test_ai_model_config_default_model_non_empty() {
+        let config = AIModelConfig::default();
+        assert!(!config.model.is_empty(), "default model name should not be empty");
     }
 }
+

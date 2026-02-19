@@ -57,3 +57,33 @@ pub struct CreateNotification {
 pub struct NotificationCount {
     pub unread_count: i64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_notification_type_display_comment() {
+        assert_eq!(NotificationType::Comment.to_string(), "comment");
+    }
+
+    #[test]
+    fn test_notification_type_display_mention() {
+        assert_eq!(NotificationType::Mention.to_string(), "mention");
+    }
+
+    #[test]
+    fn test_notification_type_display_document_share() {
+        assert_eq!(NotificationType::DocumentShare.to_string(), "document_share");
+    }
+
+    #[test]
+    fn test_notification_type_display_workflow_update() {
+        assert_eq!(NotificationType::WorkflowUpdate.to_string(), "workflow_update");
+    }
+
+    #[test]
+    fn test_notification_type_display_system_alert() {
+        assert_eq!(NotificationType::SystemAlert.to_string(), "system_alert");
+    }
+}
