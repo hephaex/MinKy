@@ -373,3 +373,102 @@ impl AnalyticsService {
 fn calculate_engagement(views: i64, comments: i64, versions: i64) -> f64 {
     (views as f64 * 1.0) + (comments as f64 * 5.0) + (versions as f64 * 3.0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- calculate_engagement ---
+
+    #[test]
+    fn test_calculate_engagement_zero_inputs() {
+        let score = calculate_engagement(0, 0, 0);
+        assert_eq!(score, 0.0);
+    }
+
+    #[test]
+    fn test_calculate_engagement_views_only() {
+        // 10 views * 1.0 = 10.0
+        let score = calculate_engagement(10, 0, 0);
+        assert!((score - 10.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_engagement_comments_weighted_5x() {
+        // 1 comment * 5.0 = 5.0
+        let score = calculate_engagement(0, 1, 0);
+        assert!((score - 5.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_engagement_versions_weighted_3x() {
+        // 1 version * 3.0 = 3.0
+        let score = calculate_engagement(0, 0, 1);
+        assert!((score - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_calculate_engagement_combined() {
+        // 100 views + 10 comments + 5 versions = 100 + 50 + 15 = 165
+        let score = calculate_engagement(100, 10, 5);
+        assert!((score - 165.0).abs() < f64::EPSILON);
+    }
+
+    // --- analyze_content ---
+
+    #[test]
+    fn test_analyze_content_word_count() {
+        let analysis = AnalyticsService::analyze_content("one two three four five");
+        assert_eq!(analysis.word_count, 5);
+    }
+
+    #[test]
+    fn test_analyze_content_empty_content() {
+        let analysis = AnalyticsService::analyze_content("");
+        assert_eq!(analysis.word_count, 0);
+    }
+
+    #[test]
+    fn test_analyze_content_reading_time_under_200_words_is_1_minute() {
+        // 100 words -> ceil(100/200) = 1 minute
+        let text = vec!["word"; 100].join(" ");
+        let analysis = AnalyticsService::analyze_content(&text);
+        assert_eq!(analysis.reading_time_minutes, 1);
+    }
+
+    #[test]
+    fn test_analyze_content_reading_time_200_words_is_1_minute() {
+        let text = vec!["word"; 200].join(" ");
+        let analysis = AnalyticsService::analyze_content(&text);
+        assert_eq!(analysis.reading_time_minutes, 1);
+    }
+
+    #[test]
+    fn test_analyze_content_reading_time_400_words_is_2_minutes() {
+        let text = vec!["word"; 400].join(" ");
+        let analysis = AnalyticsService::analyze_content(&text);
+        assert_eq!(analysis.reading_time_minutes, 2);
+    }
+
+    #[test]
+    fn test_analyze_content_complexity_score_within_range() {
+        let analysis = AnalyticsService::analyze_content("This is some sample text for complexity analysis.");
+        assert!(analysis.complexity_score >= 0.0 && analysis.complexity_score <= 100.0);
+    }
+
+    #[test]
+    fn test_analyze_content_top_keywords_max_10() {
+        // 20 distinct long words -> top 10 kept
+        let text = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon alpha alpha";
+        let analysis = AnalyticsService::analyze_content(text);
+        assert!(analysis.top_keywords.len() <= 10, "Top keywords should be at most 10");
+    }
+
+    #[test]
+    fn test_analyze_content_short_words_excluded_from_keywords() {
+        // Words <= 3 chars are excluded from keyword counting
+        let analysis = AnalyticsService::analyze_content("to be or not to be");
+        // All words <= 3 chars, so no keywords
+        assert!(analysis.top_keywords.is_empty(), "Short words should not appear in keywords");
+    }
+}
