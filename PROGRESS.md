@@ -5,6 +5,69 @@
 
 ---
 
+## 현재 진행 상황 (2026-02-19) - Rust 778개 + Frontend 337개 + Criterion 벤치마크
+
+### 16차 세션: 3개 작업 병렬 완료 (2026-02-19)
+
+**작업 1: Rust 단위 테스트 707 -> 778개 (+71개)**
+
+| 파일 | 추가 테스트 | 내용 |
+|---|---|---|
+| `services/audit_service.rs` | +13 | 순수 함수 추출 (build_export_details, build_login_failed_details, is_security_sensitive, is_document_action, clamp_audit_page_params, build_document_access_details) + 13개 테스트 |
+| `services/comment_service.rs` | +12 | 순수 함수 추출 (can_edit_comment, can_delete_comment, is_valid_parent, truncate_comment, is_valid_comment_content) + 12개 테스트 |
+| `services/document_service.rs` | +18 | 순수 함수 추출 (calc_offset, clamp_page_params, total_pages, can_read_document, can_write_document, build_search_pattern) + 18개 테스트 |
+| `services/tag_service.rs` | +13 | 순수 함수 추출 (validate_tag_name, normalize_tag_name, tags_are_duplicate, sort_tag_names, dedup_tag_ids) + 13개 테스트 |
+
+- 모든 함수 순수(pure) 형태로 추출하여 DB/네트워크 없이 테스트 가능
+- clippy 0 warnings (sort_by_key, &mut [String] 수정)
+- 총 Rust: 707 -> **778개** (unit 762 + integration 4 + kg 11 + doc 1)
+
+**작업 2: Frontend 테스트 304 -> 337개 (+33개)**
+
+| 파일 | 내용 |
+|---|---|
+| `frontend/src/utils/obsidianRenderer.test.js` (신규) | 23개 테스트 |
+| `frontend/src/services/searchService.test.js` (신규) | 10개 테스트 |
+
+obsidianRenderer 테스트 내용:
+- processInternalLinks: 빈 콘텐츠/broken span/anchor/alias/XSS 방지/다중 링크 (8개)
+- processHashtags: 없음/anchor/한국어/줄시작/구분자/다중 (6개)
+- extractFrontmatter: 없음/key-value/따옴표/배열/분리/빈블록/불완전 (9개)
+
+searchService/embeddingService 테스트 내용:
+- searchService: ask/semantic/history 응답 및 에러 처리 (5개)
+- embeddingService: getStats/createEmbedding/getSimilar/semanticSearch (5개)
+
+**작업 3: Criterion 벤치마크 추가**
+
+| 파일 | 내용 |
+|---|---|
+| `minky-rust/Cargo.toml` | criterion 0.5 의존성 + [[bench]] 섹션 추가 |
+| `minky-rust/benches/core_functions.rs` (신규) | 19개 벤치마크 함수 |
+
+벤치마크 그룹:
+- document_service: calc_offset, total_pages(5개 크기), clamp_page_params, can_read_document, can_write_document, build_search_pattern
+- tag_service: validate_tag_name, normalize_tag_name, tags_are_duplicate, sort_tag_names(3개 크기), dedup_tag_ids(3개 크기)
+- comment_service: can_edit_comment, can_delete_comment, truncate_comment, is_valid_comment_content
+- audit_service: build_export_details, is_security_sensitive, is_document_action, clamp_audit_page_params
+- 실행: `cargo bench` (결과: target/criterion/report/index.html)
+
+**빌드 및 테스트 결과**
+- Rust Build: 0 errors, 0 clippy warnings
+- Rust Unit Tests: **762/762 passed** (+55개)
+- Rust Integration Tests: 4/4 passed
+- Knowledge Graph Tests: 11/11 passed
+- Doc Tests: 1/1 passed
+- 총 Rust 테스트: 707 -> **778개**
+- Frontend Tests: **337/337 passed** (+33개)
+- E2E Tests: 28/28 passed (변동 없음)
+- Benchmarks: 컴파일 완료 (실행 가능)
+
+**커밋 목록 (16차 세션)**
+- TBD
+
+---
+
 ## 현재 진행 상황 (2026-02-19) - 테스트 707개 달성 + Frontend 304개 + E2E 28개
 
 ### 15차 세션: 3개 작업 병렬 완료 (2026-02-19)

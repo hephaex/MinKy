@@ -182,3 +182,111 @@ impl TagService {
         Ok(tags)
     }
 }
+
+// ---- Pure helper functions (testable without DB) ----
+
+/// Validate a tag name: non-empty, max 100 chars, trimmed
+pub fn validate_tag_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Tag name cannot be empty".to_string());
+    }
+    if trimmed.len() > 100 {
+        return Err("Tag name exceeds 100 characters".to_string());
+    }
+    Ok(trimmed.to_string())
+}
+
+/// Normalize a tag name to lowercase
+pub fn normalize_tag_name(name: &str) -> String {
+    name.trim().to_lowercase()
+}
+
+/// Check if two tag names are equivalent (case-insensitive)
+pub fn tags_are_duplicate(a: &str, b: &str) -> bool {
+    a.trim().to_lowercase() == b.trim().to_lowercase()
+}
+
+/// Sort tag names alphabetically
+pub fn sort_tag_names(names: &mut [String]) {
+    names.sort_by_key(|a| a.to_lowercase());
+}
+
+/// Deduplicate a list of tag IDs preserving order
+pub fn dedup_tag_ids(ids: Vec<i32>) -> Vec<i32> {
+    let mut seen = std::collections::HashSet::new();
+    ids.into_iter().filter(|id| seen.insert(*id)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_tag_name_valid() {
+        assert_eq!(validate_tag_name("rust"), Ok("rust".to_string()));
+    }
+
+    #[test]
+    fn test_validate_tag_name_trims() {
+        assert_eq!(validate_tag_name("  rust  "), Ok("rust".to_string()));
+    }
+
+    #[test]
+    fn test_validate_tag_name_empty() {
+        assert!(validate_tag_name("").is_err());
+    }
+
+    #[test]
+    fn test_validate_tag_name_whitespace_only() {
+        assert!(validate_tag_name("   ").is_err());
+    }
+
+    #[test]
+    fn test_validate_tag_name_too_long() {
+        let long_name = "a".repeat(101);
+        assert!(validate_tag_name(&long_name).is_err());
+    }
+
+    #[test]
+    fn test_validate_tag_name_exactly_100() {
+        let name = "a".repeat(100);
+        assert!(validate_tag_name(&name).is_ok());
+    }
+
+    #[test]
+    fn test_normalize_tag_name() {
+        assert_eq!(normalize_tag_name("  Rust  "), "rust");
+    }
+
+    #[test]
+    fn test_tags_are_duplicate_case_insensitive() {
+        assert!(tags_are_duplicate("Rust", "rust"));
+    }
+
+    #[test]
+    fn test_tags_are_duplicate_different() {
+        assert!(!tags_are_duplicate("rust", "python"));
+    }
+
+    #[test]
+    fn test_sort_tag_names() {
+        let mut names = vec!["Zebra".to_string(), "apple".to_string(), "Mango".to_string()];
+        sort_tag_names(&mut names);
+        assert_eq!(names, vec!["apple", "Mango", "Zebra"]);
+    }
+
+    #[test]
+    fn test_dedup_tag_ids_removes_duplicates() {
+        let ids = vec![1, 2, 1, 3, 2];
+        let result = dedup_tag_ids(ids);
+        assert_eq!(result, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_dedup_tag_ids_preserves_order() {
+        let ids = vec![5, 3, 1, 3, 5];
+        let result = dedup_tag_ids(ids);
+        assert_eq!(result, vec![5, 3, 1]);
+    }
+}

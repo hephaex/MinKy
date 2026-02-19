@@ -138,3 +138,110 @@ impl CommentService {
         Ok(count.0)
     }
 }
+
+// ---- Pure helper functions (testable without DB) ----
+
+/// Check if a user can edit a comment (owns it)
+pub fn can_edit_comment(comment_user_id: i32, requester_user_id: i32) -> bool {
+    comment_user_id == requester_user_id
+}
+
+/// Check if a user can delete a comment (owns it or is admin)
+pub fn can_delete_comment(comment_user_id: i32, requester_user_id: i32, is_admin: bool) -> bool {
+    comment_user_id == requester_user_id || is_admin
+}
+
+/// Check if a parent comment belongs to the same document
+pub fn is_valid_parent(parent_document_id: Uuid, child_document_id: Uuid) -> bool {
+    parent_document_id == child_document_id
+}
+
+/// Truncate comment content to maximum length
+pub fn truncate_comment(content: &str, max_len: usize) -> &str {
+    if content.len() <= max_len {
+        content
+    } else {
+        &content[..max_len]
+    }
+}
+
+/// Check if comment content is non-empty after trimming
+pub fn is_valid_comment_content(content: &str) -> bool {
+    !content.trim().is_empty()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_edit_comment_owner() {
+        assert!(can_edit_comment(42, 42));
+    }
+
+    #[test]
+    fn test_can_edit_comment_non_owner() {
+        assert!(!can_edit_comment(42, 99));
+    }
+
+    #[test]
+    fn test_can_delete_comment_owner() {
+        assert!(can_delete_comment(5, 5, false));
+    }
+
+    #[test]
+    fn test_can_delete_comment_admin() {
+        assert!(can_delete_comment(5, 99, true));
+    }
+
+    #[test]
+    fn test_can_delete_comment_non_owner_non_admin() {
+        assert!(!can_delete_comment(5, 99, false));
+    }
+
+    #[test]
+    fn test_is_valid_parent_same_document() {
+        let doc_id = Uuid::new_v4();
+        assert!(is_valid_parent(doc_id, doc_id));
+    }
+
+    #[test]
+    fn test_is_valid_parent_different_document() {
+        let doc1 = Uuid::new_v4();
+        let doc2 = Uuid::new_v4();
+        assert!(!is_valid_parent(doc1, doc2));
+    }
+
+    #[test]
+    fn test_truncate_comment_short() {
+        let s = "Hello";
+        assert_eq!(truncate_comment(s, 100), "Hello");
+    }
+
+    #[test]
+    fn test_truncate_comment_exact() {
+        let s = "Hello";
+        assert_eq!(truncate_comment(s, 5), "Hello");
+    }
+
+    #[test]
+    fn test_truncate_comment_long() {
+        let s = "Hello World";
+        assert_eq!(truncate_comment(s, 5), "Hello");
+    }
+
+    #[test]
+    fn test_is_valid_comment_content_non_empty() {
+        assert!(is_valid_comment_content("some text"));
+    }
+
+    #[test]
+    fn test_is_valid_comment_content_whitespace_only() {
+        assert!(!is_valid_comment_content("   "));
+    }
+
+    #[test]
+    fn test_is_valid_comment_content_empty() {
+        assert!(!is_valid_comment_content(""));
+    }
+}

@@ -254,4 +254,14 @@
   - playwright.config.js: Rust 백엔드 웹서버 설정 업데이트
   - 총 E2E 28개 all pass (chromium)
 
-*Last updated: 2026-02-19 (15차 세션 - 테스트 707개 달성, Frontend 304개, E2E 28개)*
+- [x] **Rust 테스트 750개 목표** ✅ (2026-02-19 완료 - 778개 달성)
+  - audit_service, comment_service, document_service, tag_service 순수 함수 추출 + 55개 테스트
+  - 총 778개 (unit 762 + integration 4 + kg 11 + doc 1)
+- [x] **Frontend 테스트 350개 목표** ✅ (2026-02-19 완료 - 337개 달성)
+  - obsidianRenderer.test.js 신규 23개, searchService.test.js 신규 10개
+  - Frontend 총 337개
+- [x] **Criterion 벤치마크 추가** ✅ (2026-02-19 완료)
+  - benches/core_functions.rs: 19개 벤치마크 함수 (document/tag/comment/audit service)
+  - cargo bench로 실행 가능
+
+*Last updated: 2026-02-19 (16차 세션 - Rust 778개, Frontend 337개, Criterion 벤치마크 추가)*

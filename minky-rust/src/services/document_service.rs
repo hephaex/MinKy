@@ -171,3 +171,135 @@ impl DocumentService {
         Ok(())
     }
 }
+
+// ---- Pure helper functions (testable without DB) ----
+
+/// Calculate the offset for pagination from page number and limit
+pub fn calc_offset(page: i32, limit: i32) -> i32 {
+    ((page - 1).max(0)) * limit.max(1)
+}
+
+/// Clamp pagination parameters to safe values
+pub fn clamp_page_params(page: i32, limit: i32) -> (i32, i32) {
+    let safe_page = page.max(1);
+    let safe_limit = limit.clamp(1, 100);
+    (safe_page, safe_limit)
+}
+
+/// Calculate total pages from total count and page size
+pub fn total_pages(total: i64, limit: i32) -> i64 {
+    if limit <= 0 {
+        return 0;
+    }
+    (total + limit as i64 - 1) / limit as i64
+}
+
+/// Determine whether a user can read a document
+pub fn can_read_document(doc_user_id: i32, doc_is_public: bool, requester_id: i32) -> bool {
+    doc_is_public || doc_user_id == requester_id
+}
+
+/// Determine whether a user can write (modify/delete) a document
+pub fn can_write_document(doc_user_id: i32, requester_id: i32) -> bool {
+    doc_user_id == requester_id
+}
+
+/// Build a search filter SQL snippet (simple pattern)
+pub fn build_search_pattern(query: &str) -> String {
+    format!("%{}%", query.trim().to_lowercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calc_offset_page1() {
+        assert_eq!(calc_offset(1, 20), 0);
+    }
+
+    #[test]
+    fn test_calc_offset_page2() {
+        assert_eq!(calc_offset(2, 20), 20);
+    }
+
+    #[test]
+    fn test_calc_offset_page3() {
+        assert_eq!(calc_offset(3, 10), 20);
+    }
+
+    #[test]
+    fn test_calc_offset_zero_page_clamps() {
+        assert_eq!(calc_offset(0, 10), 0);
+    }
+
+    #[test]
+    fn test_clamp_page_params_valid() {
+        assert_eq!(clamp_page_params(2, 25), (2, 25));
+    }
+
+    #[test]
+    fn test_clamp_page_params_zero_page() {
+        assert_eq!(clamp_page_params(0, 20).0, 1);
+    }
+
+    #[test]
+    fn test_clamp_page_params_overlimit() {
+        assert_eq!(clamp_page_params(1, 9999).1, 100);
+    }
+
+    #[test]
+    fn test_total_pages_exact() {
+        assert_eq!(total_pages(100, 10), 10);
+    }
+
+    #[test]
+    fn test_total_pages_remainder() {
+        assert_eq!(total_pages(101, 10), 11);
+    }
+
+    #[test]
+    fn test_total_pages_zero_total() {
+        assert_eq!(total_pages(0, 10), 0);
+    }
+
+    #[test]
+    fn test_total_pages_zero_limit() {
+        assert_eq!(total_pages(10, 0), 0);
+    }
+
+    #[test]
+    fn test_can_read_document_public() {
+        assert!(can_read_document(1, true, 99));
+    }
+
+    #[test]
+    fn test_can_read_document_owner() {
+        assert!(can_read_document(5, false, 5));
+    }
+
+    #[test]
+    fn test_can_read_document_non_owner_private() {
+        assert!(!can_read_document(5, false, 99));
+    }
+
+    #[test]
+    fn test_can_write_document_owner() {
+        assert!(can_write_document(7, 7));
+    }
+
+    #[test]
+    fn test_can_write_document_non_owner() {
+        assert!(!can_write_document(7, 99));
+    }
+
+    #[test]
+    fn test_build_search_pattern() {
+        assert_eq!(build_search_pattern("Rust"), "%rust%");
+    }
+
+    #[test]
+    fn test_build_search_pattern_trims_whitespace() {
+        assert_eq!(build_search_pattern("  Rust  "), "%rust%");
+    }
+}
