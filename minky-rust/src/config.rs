@@ -63,3 +63,42 @@ impl Config {
         self.jwt_secret.expose_secret().as_bytes()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_config(secret: &str) -> Config {
+        Config {
+            host: "127.0.0.1".to_string(),
+            port: 8000,
+            database_url: "postgres://localhost/test".to_string(),
+            database_max_connections: 5,
+            jwt_secret: SecretString::from(secret),
+            jwt_expiration_hours: 24,
+            opensearch_url: None,
+            openai_api_key: None,
+            anthropic_api_key: None,
+            git_repo_path: None,
+        }
+    }
+
+    #[test]
+    fn test_jwt_secret_bytes_matches_original_string() {
+        let config = make_config("mysecret");
+        assert_eq!(config.jwt_secret_bytes(), b"mysecret");
+    }
+
+    #[test]
+    fn test_jwt_secret_bytes_non_empty() {
+        let config = make_config("some-secret-key");
+        assert!(!config.jwt_secret_bytes().is_empty());
+    }
+
+    #[test]
+    fn test_jwt_secret_bytes_length_matches_string_len() {
+        let secret = "hello-world-secret";
+        let config = make_config(secret);
+        assert_eq!(config.jwt_secret_bytes().len(), secret.len());
+    }
+}
