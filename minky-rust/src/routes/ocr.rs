@@ -2,10 +2,11 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::Json,
-    routing::{get, post, put},
+    routing::{get, post},
     Router,
 };
 
+use crate::middleware::AuthUser;
 use crate::models::{OcrJob, OcrRequest, OcrResult, OcrSettings};
 use crate::services::OcrService;
 use crate::AppState;
@@ -13,16 +14,14 @@ use crate::AppState;
 /// Start OCR job
 async fn start_ocr(
     State(_state): State<AppState>,
+    auth_user: AuthUser,
     Path(attachment_id): Path<uuid::Uuid>,
     Json(request): Json<OcrRequest>,
 ) -> Result<Json<OcrJob>, (StatusCode, String)> {
     let service = OcrService::new();
 
-    // TODO: Get user_id from auth
-    let user_id = 1;
-
     service
-        .start_ocr(attachment_id, user_id, request)
+        .start_ocr(attachment_id, auth_user.id, request)
         .await
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
@@ -31,6 +30,7 @@ async fn start_ocr(
 /// Get OCR job status
 async fn get_job_status(
     State(_state): State<AppState>,
+    _auth_user: AuthUser,
     Path(job_id): Path<String>,
 ) -> Result<Json<OcrJob>, (StatusCode, String)> {
     let service = OcrService::new();
@@ -46,7 +46,8 @@ async fn get_job_status(
 /// Get OCR result
 async fn get_ocr_result(
     State(_state): State<AppState>,
-    Path(job_id): Path<String>,
+    _auth_user: AuthUser,
+    Path(_job_id): Path<String>,
 ) -> Result<Json<OcrResult>, (StatusCode, String)> {
     // TODO: Implement result storage and retrieval
     Err((StatusCode::NOT_FOUND, "Result not found".to_string()))
@@ -55,6 +56,7 @@ async fn get_ocr_result(
 /// Process image with OCR (synchronous)
 async fn process_image(
     State(_state): State<AppState>,
+    _auth_user: AuthUser,
     Json(request): Json<ProcessImageRequest>,
 ) -> Result<Json<OcrResult>, (StatusCode, String)> {
     let service = OcrService::new();
@@ -69,6 +71,7 @@ async fn process_image(
 /// Process PDF with OCR
 async fn process_pdf(
     State(_state): State<AppState>,
+    _auth_user: AuthUser,
     Json(request): Json<ProcessImageRequest>,
 ) -> Result<Json<OcrResult>, (StatusCode, String)> {
     let service = OcrService::new();
@@ -83,6 +86,7 @@ async fn process_pdf(
 /// Get OCR settings
 async fn get_settings(
     State(_state): State<AppState>,
+    _auth_user: AuthUser,
 ) -> Result<Json<OcrSettings>, (StatusCode, String)> {
     let service = OcrService::new();
     Ok(Json(service.get_settings().clone()))
@@ -91,6 +95,7 @@ async fn get_settings(
 /// Update OCR settings
 async fn update_settings(
     State(_state): State<AppState>,
+    _auth_user: AuthUser,
     Json(settings): Json<OcrSettings>,
 ) -> Result<Json<OcrSettings>, (StatusCode, String)> {
     let mut service = OcrService::new();
@@ -101,6 +106,7 @@ async fn update_settings(
 /// Check supported format
 async fn check_format(
     State(_state): State<AppState>,
+    _auth_user: AuthUser,
     Path(filename): Path<String>,
 ) -> Result<Json<FormatCheckResponse>, (StatusCode, String)> {
     let service = OcrService::new();
@@ -115,6 +121,7 @@ async fn check_format(
 /// Estimate processing time
 async fn estimate_time(
     State(_state): State<AppState>,
+    _auth_user: AuthUser,
     Path(file_size): Path<i64>,
 ) -> Result<Json<TimeEstimateResponse>, (StatusCode, String)> {
     let service = OcrService::new();

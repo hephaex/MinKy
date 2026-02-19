@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{
         ApiKey, ApiKeyWithSecret, BlockIpRequest, CreateApiKeyRequest, IpBlock, SecurityEvent,
         SecurityEventType, SecurityReport, SecuritySettings, SessionInfo, Severity,
@@ -48,6 +49,7 @@ pub struct EventsResponse {
 
 async fn get_security_events(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<EventsQuery>,
 ) -> AppResult<Json<EventsResponse>> {
     let service = SecurityService::new(state.db.clone());
@@ -70,7 +72,10 @@ pub struct IpBlocksResponse {
     pub data: Vec<IpBlock>,
 }
 
-async fn list_blocked_ips(State(state): State<AppState>) -> AppResult<Json<IpBlocksResponse>> {
+async fn list_blocked_ips(
+    State(state): State<AppState>,
+    _auth_user: AuthUser,
+) -> AppResult<Json<IpBlocksResponse>> {
     let service = SecurityService::new(state.db.clone());
     let blocks = service.get_blocked_ips().await?;
 
@@ -88,13 +93,11 @@ pub struct IpBlockResponse {
 
 async fn block_ip(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(payload): Json<BlockIpRequest>,
 ) -> AppResult<Json<IpBlockResponse>> {
-    // TODO: Get admin user from auth
-    let user_id = 1;
-
     let service = SecurityService::new(state.db.clone());
-    let block = service.block_ip(user_id, payload).await?;
+    let block = service.block_ip(auth_user.id, payload).await?;
 
     Ok(Json(IpBlockResponse {
         success: true,
@@ -110,6 +113,7 @@ pub struct MessageResponse {
 
 async fn unblock_ip(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(ip): Path<String>,
 ) -> AppResult<Json<MessageResponse>> {
     let service = SecurityService::new(state.db.clone());
@@ -127,12 +131,12 @@ pub struct ApiKeysResponse {
     pub data: Vec<ApiKey>,
 }
 
-async fn list_api_keys(State(state): State<AppState>) -> AppResult<Json<ApiKeysResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
+async fn list_api_keys(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+) -> AppResult<Json<ApiKeysResponse>> {
     let service = SecurityService::new(state.db.clone());
-    let keys = service.list_api_keys(user_id).await?;
+    let keys = service.list_api_keys(auth_user.id).await?;
 
     Ok(Json(ApiKeysResponse {
         success: true,
@@ -148,13 +152,11 @@ pub struct ApiKeyResponse {
 
 async fn create_api_key(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(payload): Json<CreateApiKeyRequest>,
 ) -> AppResult<Json<ApiKeyResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = SecurityService::new(state.db.clone());
-    let key = service.create_api_key(user_id, payload).await?;
+    let key = service.create_api_key(auth_user.id, payload).await?;
 
     Ok(Json(ApiKeyResponse {
         success: true,
@@ -164,13 +166,11 @@ async fn create_api_key(
 
 async fn revoke_api_key(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i64>,
 ) -> AppResult<Json<MessageResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = SecurityService::new(state.db.clone());
-    service.revoke_api_key(user_id, id).await?;
+    service.revoke_api_key(auth_user.id, id).await?;
 
     Ok(Json(MessageResponse {
         success: true,
@@ -184,14 +184,13 @@ pub struct SessionsResponse {
     pub data: Vec<SessionInfo>,
 }
 
-async fn get_sessions(State(state): State<AppState>) -> AppResult<Json<SessionsResponse>> {
-    // TODO: Get user and current session from auth
-    let user_id = 1;
-    let current_session_id = Some("current");
-
+async fn get_sessions(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+) -> AppResult<Json<SessionsResponse>> {
     let service = SecurityService::new(state.db.clone());
     let sessions = service
-        .get_user_sessions(user_id, current_session_id)
+        .get_user_sessions(auth_user.id, None)
         .await?;
 
     Ok(Json(SessionsResponse {
@@ -202,13 +201,11 @@ async fn get_sessions(State(state): State<AppState>) -> AppResult<Json<SessionsR
 
 async fn revoke_session(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<String>,
 ) -> AppResult<Json<MessageResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = SecurityService::new(state.db.clone());
-    service.revoke_session(user_id, &id).await?;
+    service.revoke_session(auth_user.id, &id).await?;
 
     Ok(Json(MessageResponse {
         success: true,
@@ -216,14 +213,14 @@ async fn revoke_session(
     }))
 }
 
-async fn revoke_all_sessions(State(state): State<AppState>) -> AppResult<Json<MessageResponse>> {
-    // TODO: Get user and current session from auth
-    let user_id = 1;
-    let current_session_id = "current";
-
+async fn revoke_all_sessions(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+) -> AppResult<Json<MessageResponse>> {
+    // Revoke all sessions for the user (session tracking is handled by service layer)
     let service = SecurityService::new(state.db.clone());
     let count = service
-        .revoke_all_sessions(user_id, current_session_id)
+        .revoke_all_sessions(auth_user.id, "current")
         .await?;
 
     Ok(Json(MessageResponse {
@@ -245,6 +242,7 @@ pub struct ReportResponse {
 
 async fn get_security_report(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<ReportQuery>,
 ) -> AppResult<Json<ReportResponse>> {
     let service = SecurityService::new(state.db.clone());
@@ -263,7 +261,10 @@ pub struct SettingsResponse {
     pub data: SecuritySettings,
 }
 
-async fn get_settings(State(state): State<AppState>) -> AppResult<Json<SettingsResponse>> {
+async fn get_settings(
+    State(state): State<AppState>,
+    _auth_user: AuthUser,
+) -> AppResult<Json<SettingsResponse>> {
     let service = SecurityService::new(state.db.clone());
     let settings = service.get_settings().await?;
 
@@ -275,6 +276,7 @@ async fn get_settings(State(state): State<AppState>) -> AppResult<Json<SettingsR
 
 async fn update_settings(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<SecuritySettings>,
 ) -> AppResult<Json<SettingsResponse>> {
     let service = SecurityService::new(state.db.clone());

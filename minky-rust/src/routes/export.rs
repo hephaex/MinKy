@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{ExportFormat, ExportJob, ExportRequest, ImportJob, ImportRequest},
     services::ExportService,
     AppState,
@@ -30,13 +31,11 @@ pub struct ExportJobResponse {
 
 async fn start_export(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(payload): Json<ExportRequest>,
 ) -> AppResult<Json<ExportJobResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = ExportService::new(state.db.clone());
-    let job = service.start_export(user_id, payload).await?;
+    let job = service.start_export(auth_user.id, payload).await?;
 
     Ok(Json(ExportJobResponse {
         success: true,
@@ -53,11 +52,9 @@ pub struct DownloadQuery {
 
 async fn download_export(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Query(query): Query<DownloadQuery>,
 ) -> impl IntoResponse {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = ExportService::new(state.db.clone());
 
     let request = ExportRequest {
@@ -74,7 +71,7 @@ async fn download_export(
         include_versions: Some(false),
     };
 
-    let documents = match service.export_documents(user_id, &request).await {
+    let documents = match service.export_documents(auth_user.id, &request).await {
         Ok(docs) => docs,
         Err(e) => {
             return (
@@ -131,6 +128,7 @@ pub struct ExportStatusResponse {
 
 async fn get_export_status(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(id): Path<String>,
 ) -> AppResult<Json<ExportStatusResponse>> {
     let service = ExportService::new(state.db.clone());
@@ -157,14 +155,12 @@ pub struct ImportJobResponse {
 
 async fn start_import(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(payload): Json<ImportPayload>,
 ) -> AppResult<Json<ImportJobResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = ExportService::new(state.db.clone());
     let job = service
-        .import_from_json(user_id, &payload.content, payload.request.category_id)
+        .import_from_json(auth_user.id, &payload.content, payload.request.category_id)
         .await?;
 
     Ok(Json(ImportJobResponse {

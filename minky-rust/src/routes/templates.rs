@@ -7,6 +7,7 @@ use serde::Serialize;
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{
         ApplyTemplateRequest, CreateTemplate, Template, TemplatePreview, TemplateQuery,
         UpdateTemplate,
@@ -34,13 +35,11 @@ pub struct TemplatesResponse {
 
 async fn list_templates(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Query(query): Query<TemplateQuery>,
 ) -> AppResult<Json<TemplatesResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = TemplateService::new(state.db.clone());
-    let templates = service.list_templates(user_id, query).await?;
+    let templates = service.list_templates(auth_user.id, query).await?;
 
     Ok(Json(TemplatesResponse {
         success: true,
@@ -56,14 +55,12 @@ pub struct TemplateResponse {
 
 async fn get_template(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<TemplateResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = TemplateService::new(state.db.clone());
     let template = service
-        .get_template(user_id, id)
+        .get_template(auth_user.id, id)
         .await?
         .ok_or_else(|| crate::error::AppError::NotFound("Template not found".to_string()))?;
 
@@ -75,13 +72,11 @@ async fn get_template(
 
 async fn create_template(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(payload): Json<CreateTemplate>,
 ) -> AppResult<Json<TemplateResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = TemplateService::new(state.db.clone());
-    let template = service.create_template(user_id, payload).await?;
+    let template = service.create_template(auth_user.id, payload).await?;
 
     Ok(Json(TemplateResponse {
         success: true,
@@ -91,14 +86,12 @@ async fn create_template(
 
 async fn update_template(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateTemplate>,
 ) -> AppResult<Json<TemplateResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = TemplateService::new(state.db.clone());
-    let template = service.update_template(user_id, id, payload).await?;
+    let template = service.update_template(auth_user.id, id, payload).await?;
 
     Ok(Json(TemplateResponse {
         success: true,
@@ -114,13 +107,11 @@ pub struct DeleteResponse {
 
 async fn delete_template(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<DeleteResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = TemplateService::new(state.db.clone());
-    service.delete_template(user_id, id).await?;
+    service.delete_template(auth_user.id, id).await?;
 
     Ok(Json(DeleteResponse {
         success: true,
@@ -141,15 +132,13 @@ pub struct PreviewResponse {
 
 async fn preview_template(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
     Json(payload): Json<PreviewRequest>,
 ) -> AppResult<Json<PreviewResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     let service = TemplateService::new(state.db.clone());
     let template = service
-        .get_template(user_id, id)
+        .get_template(auth_user.id, id)
         .await?
         .ok_or_else(|| crate::error::AppError::NotFound("Template not found".to_string()))?;
 
@@ -169,16 +158,14 @@ pub struct ApplyResponse {
 
 async fn apply_template(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
     Json(mut payload): Json<ApplyTemplateRequest>,
 ) -> AppResult<Json<ApplyResponse>> {
-    // TODO: Get user from auth
-    let user_id = 1;
-
     payload.template_id = id;
 
     let service = TemplateService::new(state.db.clone());
-    let document_id = service.apply_template(user_id, payload).await?;
+    let document_id = service.apply_template(auth_user.id, payload).await?;
 
     Ok(Json(ApplyResponse {
         success: true,

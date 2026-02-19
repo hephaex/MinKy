@@ -2,11 +2,12 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
-    routing::{delete, get, post},
+    routing::{get, post},
     Router,
 };
 use serde::Deserialize;
 
+use crate::middleware::AuthUser;
 use crate::models::{
     CreateSyncConfig, ResolveConflictRequest, SyncConfig, SyncConflict, SyncHistoryEntry, SyncJob,
     SyncStats,
@@ -22,14 +23,12 @@ pub struct HistoryQuery {
 /// List sync configurations
 async fn list_configs(
     State(state): State<AppState>,
+    auth_user: AuthUser,
 ) -> Result<Json<Vec<SyncConfig>>, (StatusCode, String)> {
     let service = SyncService::new(state.db.clone());
 
-    // TODO: Get user_id from auth
-    let user_id = 1;
-
     service
-        .list_configs(user_id)
+        .list_configs(auth_user.id)
         .await
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
@@ -38,6 +37,7 @@ async fn list_configs(
 /// Get sync configuration
 async fn get_config(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(config_id): Path<i32>,
 ) -> Result<Json<SyncConfig>, (StatusCode, String)> {
     let service = SyncService::new(state.db.clone());
@@ -53,15 +53,13 @@ async fn get_config(
 /// Create sync configuration
 async fn create_config(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(create): Json<CreateSyncConfig>,
 ) -> Result<Json<SyncConfig>, (StatusCode, String)> {
     let service = SyncService::new(state.db.clone());
 
-    // TODO: Get user_id from auth
-    let user_id = 1;
-
     service
-        .create_config(user_id, create)
+        .create_config(auth_user.id, create)
         .await
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
@@ -70,15 +68,13 @@ async fn create_config(
 /// Delete sync configuration
 async fn delete_config(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(config_id): Path<i32>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let service = SyncService::new(state.db.clone());
 
-    // TODO: Get user_id from auth
-    let user_id = 1;
-
     service
-        .delete_config(user_id, config_id)
+        .delete_config(auth_user.id, config_id)
         .await
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
@@ -87,6 +83,7 @@ async fn delete_config(
 /// Start sync
 async fn start_sync(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(config_id): Path<i32>,
 ) -> Result<Json<SyncJob>, (StatusCode, String)> {
     let service = SyncService::new(state.db.clone());
@@ -101,6 +98,7 @@ async fn start_sync(
 /// Get sync job status
 async fn get_job_status(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(job_id): Path<String>,
 ) -> Result<Json<SyncJob>, (StatusCode, String)> {
     let service = SyncService::new(state.db.clone());
@@ -116,6 +114,7 @@ async fn get_job_status(
 /// Get sync history
 async fn get_history(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(config_id): Path<i32>,
     Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Vec<SyncHistoryEntry>>, (StatusCode, String)> {
@@ -132,6 +131,7 @@ async fn get_history(
 /// Get pending conflicts
 async fn get_conflicts(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(config_id): Path<i32>,
 ) -> Result<Json<Vec<SyncConflict>>, (StatusCode, String)> {
     let service = SyncService::new(state.db.clone());
@@ -146,6 +146,7 @@ async fn get_conflicts(
 /// Resolve conflict
 async fn resolve_conflict(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(config_id): Path<i32>,
     Json(request): Json<ResolveConflictRequest>,
 ) -> Result<StatusCode, (StatusCode, String)> {
@@ -161,6 +162,7 @@ async fn resolve_conflict(
 /// Get sync statistics
 async fn get_stats(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(config_id): Path<i32>,
 ) -> Result<Json<SyncStats>, (StatusCode, String)> {
     let service = SyncService::new(state.db.clone());

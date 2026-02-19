@@ -2,11 +2,12 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
-    routing::{delete, get, post, put},
+    routing::{get, post},
     Router,
 };
 use serde::Deserialize;
 
+use crate::middleware::AuthUser;
 use crate::models::{
     CreateSkill, ExecuteSkillRequest, Skill, SkillExecutionHistory, SkillRegistry, SkillResult,
     SkillStats, SkillType, UpdateSkill,
@@ -22,6 +23,7 @@ pub struct HistoryQuery {
 /// Get skill registry (all available skills)
 async fn get_registry(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
 ) -> Result<Json<SkillRegistry>, (StatusCode, String)> {
     let service = SkillService::new(state.db.clone(), state.config.clone());
 
@@ -35,6 +37,7 @@ async fn get_registry(
 /// Get skill by ID
 async fn get_skill(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(skill_id): Path<String>,
 ) -> Result<Json<Skill>, (StatusCode, String)> {
     let service = SkillService::new(state.db.clone(), state.config.clone());
@@ -50,6 +53,7 @@ async fn get_skill(
 /// Get skill by type
 async fn get_skill_by_type(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(skill_type): Path<String>,
 ) -> Result<Json<Skill>, (StatusCode, String)> {
     let service = SkillService::new(state.db.clone(), state.config.clone());
@@ -67,15 +71,13 @@ async fn get_skill_by_type(
 /// Execute skill
 async fn execute_skill(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(request): Json<ExecuteSkillRequest>,
 ) -> Result<Json<SkillResult>, (StatusCode, String)> {
     let service = SkillService::new(state.db.clone(), state.config.clone());
 
-    // TODO: Get user_id from auth
-    let user_id = 1;
-
     service
-        .execute_skill(user_id, request)
+        .execute_skill(auth_user.id, request)
         .await
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
@@ -84,6 +86,7 @@ async fn execute_skill(
 /// Execute skill by type (shorthand)
 async fn execute_skill_by_type(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(skill_type): Path<String>,
     Json(mut request): Json<ExecuteSkillRequest>,
 ) -> Result<Json<SkillResult>, (StatusCode, String)> {
@@ -94,11 +97,8 @@ async fn execute_skill_by_type(
 
     request.skill_type = Some(parsed_type);
 
-    // TODO: Get user_id from auth
-    let user_id = 1;
-
     service
-        .execute_skill(user_id, request)
+        .execute_skill(auth_user.id, request)
         .await
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
@@ -107,15 +107,13 @@ async fn execute_skill_by_type(
 /// Create custom skill
 async fn create_skill(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(create): Json<CreateSkill>,
 ) -> Result<Json<Skill>, (StatusCode, String)> {
     let service = SkillService::new(state.db.clone(), state.config.clone());
 
-    // TODO: Get user_id from auth
-    let user_id = 1;
-
     service
-        .create_skill(user_id, create)
+        .create_skill(auth_user.id, create)
         .await
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
@@ -124,6 +122,7 @@ async fn create_skill(
 /// Update skill
 async fn update_skill(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(skill_id): Path<String>,
     Json(update): Json<UpdateSkill>,
 ) -> Result<Json<Skill>, (StatusCode, String)> {
@@ -139,6 +138,7 @@ async fn update_skill(
 /// Delete skill
 async fn delete_skill(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(skill_id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let service = SkillService::new(state.db.clone(), state.config.clone());
@@ -153,6 +153,7 @@ async fn delete_skill(
 /// Get skill stats
 async fn get_stats(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
 ) -> Result<Json<SkillStats>, (StatusCode, String)> {
     let service = SkillService::new(state.db.clone(), state.config.clone());
 
@@ -166,16 +167,14 @@ async fn get_stats(
 /// Get execution history
 async fn get_history(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Vec<SkillExecutionHistory>>, (StatusCode, String)> {
     let service = SkillService::new(state.db.clone(), state.config.clone());
-
-    // TODO: Get user_id from auth
-    let user_id = 1;
     let limit = query.limit.unwrap_or(50);
 
     service
-        .get_history(user_id, limit)
+        .get_history(auth_user.id, limit)
         .await
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
@@ -184,48 +183,55 @@ async fn get_history(
 /// Quick execute endpoints for common skills
 async fn review_code(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(request): Json<QuickExecuteRequest>,
 ) -> Result<Json<SkillResult>, (StatusCode, String)> {
-    execute_quick_skill(state, SkillType::CodeReviewer, request).await
+    execute_quick_skill(state, auth_user.id, SkillType::CodeReviewer, request).await
 }
 
 async fn debug_code(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(request): Json<QuickExecuteRequest>,
 ) -> Result<Json<SkillResult>, (StatusCode, String)> {
-    execute_quick_skill(state, SkillType::Debugger, request).await
+    execute_quick_skill(state, auth_user.id, SkillType::Debugger, request).await
 }
 
 async fn refactor_code(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(request): Json<QuickExecuteRequest>,
 ) -> Result<Json<SkillResult>, (StatusCode, String)> {
-    execute_quick_skill(state, SkillType::Refactorer, request).await
+    execute_quick_skill(state, auth_user.id, SkillType::Refactorer, request).await
 }
 
 async fn generate_tests(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(request): Json<QuickExecuteRequest>,
 ) -> Result<Json<SkillResult>, (StatusCode, String)> {
-    execute_quick_skill(state, SkillType::TestGenerator, request).await
+    execute_quick_skill(state, auth_user.id, SkillType::TestGenerator, request).await
 }
 
 async fn security_review(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(request): Json<QuickExecuteRequest>,
 ) -> Result<Json<SkillResult>, (StatusCode, String)> {
-    execute_quick_skill(state, SkillType::SecurityReviewer, request).await
+    execute_quick_skill(state, auth_user.id, SkillType::SecurityReviewer, request).await
 }
 
 async fn plan_feature(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Json(request): Json<QuickExecuteRequest>,
 ) -> Result<Json<SkillResult>, (StatusCode, String)> {
-    execute_quick_skill(state, SkillType::Planner, request).await
+    execute_quick_skill(state, auth_user.id, SkillType::Planner, request).await
 }
 
 async fn execute_quick_skill(
     state: AppState,
+    user_id: i32,
     skill_type: SkillType,
     request: QuickExecuteRequest,
 ) -> Result<Json<SkillResult>, (StatusCode, String)> {
@@ -238,9 +244,6 @@ async fn execute_quick_skill(
         context: request.context,
         options: None,
     };
-
-    // TODO: Get user_id from auth
-    let user_id = 1;
 
     service
         .execute_skill(user_id, exec_request)
