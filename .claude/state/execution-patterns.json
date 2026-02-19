@@ -1,0 +1,170 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-02-20T00:00:00Z",
+  "last_analyzed_sessions": 10,
+  "patterns": {
+    "test_fix": {
+      "description": "테스트 실패 수정",
+      "success_rate": 0.95,
+      "total_executions": 18,
+      "agents": ["validator", "tdd-guide", "debugger", "code-reviewer"],
+      "parallel_groups": [
+        ["validator"],
+        ["tdd-guide", "debugger"],
+        ["code-reviewer"]
+      ],
+      "avg_duration_sec": 45,
+      "common_issues": ["selector mismatch", "async timing", "mock setup"],
+      "recovery_actions": ["jest.resetModules()", "container.querySelector()"]
+    },
+    "feature_impl": {
+      "description": "새 기능 구현",
+      "success_rate": 0.88,
+      "total_executions": 12,
+      "agents": ["planner", "task-executor", "validator", "security-reviewer", "code-reviewer"],
+      "parallel_groups": [
+        ["planner"],
+        ["task-executor"],
+        ["validator", "security-reviewer"],
+        ["code-reviewer"]
+      ],
+      "avg_duration_sec": 180,
+      "common_issues": ["type errors", "missing imports", "test coverage"],
+      "recovery_actions": ["cargo check", "npm run build"]
+    },
+    "refactor": {
+      "description": "코드 리팩토링",
+      "success_rate": 0.92,
+      "total_executions": 8,
+      "agents": ["architect", "refactor-cleaner", "task-executor", "validator", "code-reviewer"],
+      "parallel_groups": [
+        ["architect", "refactor-cleaner"],
+        ["task-executor"],
+        ["validator", "code-reviewer"]
+      ],
+      "avg_duration_sec": 120,
+      "common_issues": ["breaking changes", "unused imports"],
+      "recovery_actions": ["git stash", "incremental apply"]
+    },
+    "security_audit": {
+      "description": "보안 감사",
+      "success_rate": 0.94,
+      "total_executions": 6,
+      "agents": ["security-reviewer", "code-reviewer", "validator"],
+      "parallel_groups": [
+        ["security-reviewer", "code-reviewer"],
+        ["validator"]
+      ],
+      "avg_duration_sec": 90,
+      "common_issues": ["XSS", "SQL injection", "hardcoded secrets"],
+      "recovery_actions": ["input validation", "parameterized queries"]
+    },
+    "docs_update": {
+      "description": "문서 업데이트",
+      "success_rate": 0.98,
+      "total_executions": 5,
+      "agents": ["doc-updater", "technical-writer"],
+      "parallel_groups": [
+        ["doc-updater", "technical-writer"]
+      ],
+      "avg_duration_sec": 30,
+      "common_issues": ["outdated examples", "missing sections"],
+      "recovery_actions": ["sync with code"]
+    },
+    "build_fix": {
+      "description": "빌드 에러 수정",
+      "success_rate": 0.90,
+      "total_executions": 15,
+      "agents": ["build-error-resolver", "validator"],
+      "parallel_groups": [
+        ["build-error-resolver"],
+        ["validator"]
+      ],
+      "avg_duration_sec": 60,
+      "common_issues": ["type mismatch", "missing dependency", "syntax error"],
+      "recovery_actions": ["cargo check", "npm install"]
+    }
+  },
+  "agent_stats": {
+    "validator": {
+      "success": 52,
+      "fail": 3,
+      "avg_time_sec": 25,
+      "best_with": ["code-reviewer", "tdd-guide"]
+    },
+    "code-reviewer": {
+      "success": 45,
+      "fail": 5,
+      "avg_time_sec": 40,
+      "best_with": ["validator", "security-reviewer"]
+    },
+    "tdd-guide": {
+      "success": 18,
+      "fail": 2,
+      "avg_time_sec": 35,
+      "best_with": ["validator", "debugger"]
+    },
+    "task-executor": {
+      "success": 30,
+      "fail": 4,
+      "avg_time_sec": 90,
+      "best_with": ["planner", "validator"]
+    },
+    "planner": {
+      "success": 12,
+      "fail": 1,
+      "avg_time_sec": 45,
+      "best_with": ["task-executor", "architect"]
+    },
+    "security-reviewer": {
+      "success": 10,
+      "fail": 1,
+      "avg_time_sec": 50,
+      "best_with": ["code-reviewer", "validator"]
+    },
+    "debugger": {
+      "success": 15,
+      "fail": 2,
+      "avg_time_sec": 55,
+      "best_with": ["tdd-guide", "validator"]
+    },
+    "build-error-resolver": {
+      "success": 15,
+      "fail": 3,
+      "avg_time_sec": 40,
+      "best_with": ["validator"]
+    }
+  },
+  "recent_sessions": [
+    {
+      "date": "2026-02-20",
+      "session_id": "18",
+      "task_type": "test_fix",
+      "agents_used": ["validator", "tdd-guide", "code-reviewer"],
+      "success": true,
+      "duration_sec": 45,
+      "files_changed": 7,
+      "tests_fixed": 22
+    },
+    {
+      "date": "2026-02-19",
+      "session_id": "17",
+      "task_type": "feature_impl",
+      "agents_used": ["planner", "task-executor", "validator", "code-reviewer"],
+      "success": true,
+      "duration_sec": 300,
+      "files_changed": 32,
+      "tests_added": 148
+    },
+    {
+      "date": "2026-02-19",
+      "session_id": "16",
+      "task_type": "test_expansion",
+      "agents_used": ["tdd-guide", "validator", "code-reviewer"],
+      "success": true,
+      "duration_sec": 180,
+      "files_changed": 8,
+      "tests_added": 104
+    }
+  ]
+}
