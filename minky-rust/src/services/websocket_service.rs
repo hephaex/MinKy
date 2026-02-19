@@ -5,8 +5,8 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
 use crate::models::{
-    BroadcastMessage, ChannelSubscription, CollaborationSession, CursorPosition, EventType,
-    PresenceInfo, UserStatus, WsEvent, WsMessage,
+    BroadcastMessage, CollaborationSession, CursorPosition, EventType,
+    PresenceInfo, WsEvent, WsMessage,
 };
 
 /// WebSocket connection manager
@@ -314,5 +314,81 @@ impl WebSocketEventService {
         self.manager
             .emit_document_event(EventType::CommentAdded, document_id, user_id, payload)
             .await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- WebSocketManager ---
+
+    #[tokio::test]
+    async fn test_subscribe_adds_user_to_channel() {
+        let mgr = WebSocketManager::new();
+        mgr.subscribe(1, vec!["doc:123".to_string()]).await.unwrap();
+        let users = mgr.get_channel_users("doc:123").await;
+        assert!(users.contains(&1), "User 1 should be in the channel after subscribe");
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_multiple_users_to_same_channel() {
+        let mgr = WebSocketManager::new();
+        mgr.subscribe(1, vec!["chat".to_string()]).await.unwrap();
+        mgr.subscribe(2, vec!["chat".to_string()]).await.unwrap();
+        let users = mgr.get_channel_users("chat").await;
+        assert!(users.contains(&1));
+        assert!(users.contains(&2));
+    }
+
+    #[tokio::test]
+    async fn test_unsubscribe_removes_user_from_channel() {
+        let mgr = WebSocketManager::new();
+        mgr.subscribe(1, vec!["room".to_string()]).await.unwrap();
+        mgr.unsubscribe(1, vec!["room".to_string()]).await.unwrap();
+        let users = mgr.get_channel_users("room").await;
+        assert!(!users.contains(&1), "User should be removed after unsubscribe");
+    }
+
+    #[tokio::test]
+    async fn test_get_channel_users_empty_for_unknown_channel() {
+        let mgr = WebSocketManager::new();
+        let users = mgr.get_channel_users("nonexistent").await;
+        assert!(users.is_empty(), "Unknown channel should return empty user list");
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_to_broadcasts_receives_messages() {
+        let mgr = WebSocketManager::new();
+        let mut rx = mgr.subscribe_to_broadcasts();
+
+        // Subscribe user so broadcast has something to send to
+        mgr.subscribe(1, vec!["updates".to_string()]).await.unwrap();
+
+        // Broadcast returns immediately (fire-and-forget)
+        mgr.broadcast(
+            "updates",
+            WsEvent {
+                event_type: EventType::DocumentUpdated,
+                channel: "updates".to_string(),
+                payload: serde_json::json!({}),
+                timestamp: chrono::Utc::now(),
+                user_id: None,
+            },
+            None,
+        )
+        .await;
+
+        let msg = rx.try_recv();
+        assert!(msg.is_ok(), "Should have received a broadcast message");
+        assert_eq!(msg.unwrap().channel, "updates");
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_returns_channel_list() {
+        let mgr = WebSocketManager::new();
+        let channels = vec!["a".to_string(), "b".to_string()];
+        let result = mgr.subscribe(1, channels.clone()).await.unwrap();
+        assert_eq!(result, channels, "Subscribe should return the subscribed channels");
     }
 }
