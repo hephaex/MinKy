@@ -322,4 +322,52 @@ mod tests {
         assert!(!prompt.contains("Title:"));
         assert!(prompt.contains("Content only."));
     }
+
+    #[test]
+    fn test_build_system_prompt_contains_json_instruction() {
+        let prompt = build_system_prompt();
+        assert!(
+            prompt.contains("JSON"),
+            "System prompt should instruct Claude to respond with JSON"
+        );
+    }
+
+    #[test]
+    fn test_build_system_prompt_contains_required_fields() {
+        let prompt = build_system_prompt();
+        // Prompt must mention all required JSON fields
+        for field in &["topics", "summary", "insights", "technologies", "relevant_for"] {
+            assert!(
+                prompt.contains(field),
+                "System prompt should mention required field '{field}'"
+            );
+        }
+    }
+
+    #[test]
+    fn test_build_user_prompt_title_appears_before_content() {
+        let request = DocumentUnderstandingRequest {
+            document_id: Uuid::new_v4(),
+            content: "Body text.".to_string(),
+            title: Some("The Title".to_string()),
+        };
+        let prompt = build_user_prompt(&request);
+        let title_pos = prompt.find("The Title").expect("Title must be in prompt");
+        let content_pos = prompt.find("Body text.").expect("Content must be in prompt");
+        assert!(title_pos < content_pos, "Title should appear before content in the prompt");
+    }
+
+    #[test]
+    fn test_parse_response_null_problem_solved_maps_to_none() {
+        let raw = r#"{
+            "topics": ["Rust"],
+            "summary": "A Rust guide.",
+            "problem_solved": null,
+            "insights": ["Ownership is key"],
+            "technologies": ["Rust"],
+            "relevant_for": ["engineer"]
+        }"#;
+        let result = parse_understanding_response(raw).unwrap();
+        assert!(result.problem_solved.is_none(), "null problem_solved should map to None");
+    }
 }
