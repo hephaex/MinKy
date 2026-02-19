@@ -5,6 +5,70 @@
 
 ---
 
+## 현재 진행 상황 (2026-02-19) - 프론트엔드 테스트 수정 완료
+
+### 18차 세션: 프론트엔드 테스트 수정 (2026-02-19)
+
+**테스트 수정 작업 완료**
+
+| 파일 | 문제 | 해결 방법 |
+|------|------|----------|
+| `TreeView.test.js` | `screen.getByText()` + `fireEvent.click()` 조합이 상태 업데이트 미반영 | `container.querySelector('[role="treeitem"]')` 사용 |
+| `DocumentCard.test.js` | 검색 하이라이팅으로 텍스트 span 분리 | `container.querySelector('.document-title').toHaveTextContent()` |
+| `FileUpload.test.js` | axios ESM 에러 + 잘못된 역할 셀렉터 | `transformIgnorePatterns` 추가 + `querySelector('input[type="file"]')` |
+| `SimpleDateSidebar.test.js` | 스타일 셀렉터 불일치 | 텍스트 기반 셀렉터로 변경 |
+| `logger.test.js` | `NODE_ENV` 변경이 모듈 캐시에 미반영 | `jest.resetModules()` + 동적 require |
+
+**수정된 파일:**
+- `frontend/src/components/TreeView.test.js` - 전체 리팩토링
+- `frontend/src/components/DocumentCard.test.js` - 하이라이트 테스트 수정
+- `frontend/src/components/FileUpload.test.js` - 전체 리팩토링
+- `frontend/src/components/SimpleDateSidebar.test.js` - 정렬 테스트 수정
+- `frontend/src/utils/logger.test.js` - 전체 리팩토링
+- `frontend/package.json` - Jest transformIgnorePatterns 추가
+
+**테스트 현황:**
+- Rust 테스트: 모두 통과
+- Frontend 테스트: **488개 모두 통과** (이전 22개 실패 → 0개 실패)
+- E2E 테스트: 178개
+- **총합: 1,511개 (모두 통과)**
+
+---
+
+## 현재 진행 상황 (2026-02-19) - PM 시스템 v2.0 + 테스트 1,511개
+
+### 17차 세션: PM 에이전트 전면 개편 (2026-02-19)
+
+**PM Agent v2.0 - 자율 운영 프로토콜**
+
+| 기능 | 구현 | 설명 |
+|------|------|------|
+| 자동 루프 (Auto Loop) | ✅ | 블로커 없는 한 계속 실행, 5턴마다 /compact |
+| 자동 커밋 (Auto Commit) | ✅ | 검증 후 자동 git commit, 타입별 메시지 생성 |
+| 에러 복구 (4레벨) | ✅ | L1:재시도 → L2:롤백 → L3:스킵 → L4:중단 |
+| 컨텍스트 관리 | ✅ | 10턴마다 체크포인트, turn_counter 추적 |
+| Sub-agent 표준화 | ✅ | JSON 출력 포맷, 에러 코드 체계 |
+
+**수정된 파일:**
+- `.claude/agents/pm.md` - 전면 개편 (실행 프로토콜 v2.0)
+- `.claude/agents/task-executor.md` - 표준 출력 섹션 추가
+- `.claude/agents/code-reviewer-minky.md` - 표준 출력 섹션 추가
+- `.claude/agents/validator.md` - 표준 출력 섹션 추가
+- `.claude/agents/progress-tracker.md` - 표준 출력 섹션 추가
+- `.claude/agents/health-checker.md` - 표준 출력 섹션 추가
+- `.claude/agents/ci-runner.md` - 표준 출력 섹션 추가
+- `CLAUDE.md` - 자율 운영 프로토콜 섹션 추가
+- `.claude/state/ci-session.json` - 새 스키마 (turn_counter, consecutive_failures)
+- `.claude/state/current-task.json` - 새 스키마 (retry_count, attempted_recoveries)
+
+**테스트 현황 (병렬 에이전트 실행 결과):**
+- Rust 테스트: 845개 (+83)
+- Frontend 테스트: 488개 (+148)
+- E2E 테스트: 178개 (+132)
+- **총합: 1,511개**
+
+---
+
 ## 현재 진행 상황 (2026-02-19) - Rust 778개 + Frontend 337개 + Criterion 벤치마크
 
 ### 16차 세션: 3개 작업 병렬 완료 (2026-02-19)
