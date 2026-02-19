@@ -592,4 +592,43 @@ mod tests {
         let chunks = chunk_text_with_config("   ", 10, 2);
         assert!(chunks.is_empty());
     }
+
+    #[test]
+    fn test_chunk_text_zero_chunk_size_returns_empty() {
+        // chunk_size=0 is a degenerate case: function returns empty
+        let chunks = chunk_text_with_config("hello world", 0, 0);
+        assert!(chunks.is_empty(), "chunk_size=0 should return no chunks");
+    }
+
+    #[test]
+    fn test_chunk_text_overlap_produces_more_chunks() {
+        // Without overlap: 6 words / 3 chunk_size = 2 chunks
+        // With overlap=1: step = 3-1 = 2, so more chunks
+        let text = "one two three four five six";
+        let no_overlap = chunk_text_with_config(text, 3, 0);
+        let with_overlap = chunk_text_with_config(text, 3, 1);
+        assert!(
+            with_overlap.len() >= no_overlap.len(),
+            "Overlap should produce at least as many chunks"
+        );
+    }
+
+    #[test]
+    fn test_chunk_text_each_chunk_has_expected_word_count() {
+        // chunk_size=2 words, no overlap, 4 words -> 2 chunks of 2 words each
+        let text = "alpha beta gamma delta";
+        let chunks = chunk_text_with_config(text, 2, 0);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].text, "alpha beta");
+        assert_eq!(chunks[1].text, "gamma delta");
+    }
+
+    #[test]
+    fn test_chunk_text_last_chunk_may_be_smaller() {
+        // 5 words with chunk_size=3, no overlap: [0..3], [3..5]
+        let text = "one two three four five";
+        let chunks = chunk_text_with_config(text, 3, 0);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[1].text, "four five", "Last chunk should have remaining words");
+    }
 }

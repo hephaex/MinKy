@@ -466,6 +466,33 @@ mod tests {
         assert!(result.contains("---"));
     }
 
+    #[test]
+    fn test_build_context_untitled_document_shows_fallback() {
+        let chunk = SemanticSearchResult {
+            document_id: Uuid::new_v4(),
+            chunk_id: None,
+            chunk_text: Some("some text".to_string()),
+            similarity: 0.75,
+            document_title: None, // no title
+        };
+        let result = build_context_for_test(&[chunk]);
+        assert!(result.contains("Untitled document"), "Missing title should show fallback");
+    }
+
+    #[test]
+    fn test_build_context_chunk_with_no_text_shows_empty_body() {
+        let chunk = SemanticSearchResult {
+            document_id: Uuid::new_v4(),
+            chunk_id: None,
+            chunk_text: None, // no text
+            similarity: 0.80,
+            document_title: Some("My Doc".to_string()),
+        };
+        let result = build_context_for_test(&[chunk]);
+        // Should not panic and should still contain the source reference
+        assert!(result.contains("[Source 1]"), "Source label should still appear");
+    }
+
     // Mirror of RagService::build_context for testing without a real pool.
     fn build_context_for_test(chunks: &[SemanticSearchResult]) -> String {
         if chunks.is_empty() {
