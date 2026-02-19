@@ -5,6 +5,45 @@
 
 ---
 
+## 🔄 현재 진행 상황 (2026-02-19) - AuthUser 연동 완료 및 단위 테스트 137개 달성
+
+### 4차 세션: AuthUser 전체 연동 + 포괄적 단위 테스트 (2026-02-19)
+
+**1. AuthUser 전체 라우트 연동 완료**
+
+전체 라우트 파일에서 하드코딩된 `user_id = 1` 완전 제거:
+- `routes/sync.rs`: list_configs, create_config, delete_config
+- `routes/export.rs`: start_export, download_export, start_import
+- `routes/security.rs`: block_ip, list_api_keys, create_api_key, revoke_api_key, get_sessions, revoke_session, revoke_all_sessions (7개 핸들러)
+- `routes/skills.rs`: execute_skill, execute_skill_by_type, create_skill, get_history + quick execute 6개 (execute_quick_skill 헬퍼 user_id 파라미터 추가)
+- `routes/templates.rs`: list_templates, get_template, create_template, update_template, delete_template, preview_template, apply_template (7개)
+- `routes/ocr.rs`: start_ocr + 모든 핸들러에 AuthUser 추가
+
+**2. 단위 테스트 88개 → 137개 (+49개)**
+
+| 서비스/모델 | 추가된 테스트 | 테스트 내용 |
+|---|---|---|
+| `services/auth_service.rs` | +10 | Argon2 해싱, JWT 생성/검증, 역할 인코딩, 크로스 시크릿 거부 |
+| `services/export_service.rs` | +10 | to_json, to_csv, to_markdown 변환 (빈 목록, 특수문자, 옵션 필드) |
+| `services/template_service.rs` | +7 | preview_template 변수 치환, 기본값, 필수/선택 변수 |
+| `services/ocr_service.rs` | +12 | is_supported_format (대소문자), 처리시간 추정, 설정 업데이트 |
+| `services/security_service.rs` | +10 | generate_api_key (접두사, 길이, 알파벳), hash_api_key, Severity 정렬 |
+
+**3. 빌드 및 테스트 결과**
+- Rust Build: 0 errors, 0 warnings (clippy 포함)
+- Rust Tests: 137/137 passed (이전 88개, +49개)
+- Frontend Tests: 228/228 passed (변동 없음)
+
+**4. 커밋 목록 (4차 세션)**
+- `eedf2eac` - refactor: Wire AuthUser into remaining route files (sync, export, security, skills, templates, ocr)
+- `6bc9d8e1` - test: Add auth_service unit tests for JWT and password hashing (88->98 tests)
+- `a2db5059` - test: Add export_service unit tests for JSON/CSV/Markdown conversion (98->108 tests)
+- `893b899c` - test: Add template_service unit tests for preview_template logic (108->115 tests)
+- `6898ec52` - test: Add ocr_service unit tests for format validation and time estimation (115->127 tests)
+- `e231136f` - test: Add security_service unit tests for API key and severity (127->137 tests)
+
+---
+
 ## 🔄 현재 진행 상황 (2026-02-19) - Auth 구현 및 추가 테스트 완료
 
 ### Auth 라우트 구현 및 단위 테스트 추가 (2026-02-19 - 3차)

@@ -707,3 +707,138 @@ impl SkillService {
             .collect())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::SkillContext;
+    use secrecy::SecretString;
+
+    fn make_service() -> SkillService {
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        let config = Config {
+            host: "127.0.0.1".to_string(),
+            port: 8000,
+            database_url: "postgres://localhost/test_db".to_string(),
+            database_max_connections: 1,
+            jwt_secret: SecretString::from("test-secret"),
+            jwt_expiration_hours: 24,
+            opensearch_url: None,
+            openai_api_key: None,
+            anthropic_api_key: None,
+            git_repo_path: None,
+        };
+        SkillService::new(pool, config)
+    }
+
+    #[tokio::test]
+    async fn test_get_skill_by_type_code_reviewer_exists() {
+        let svc = make_service();
+        let skill = svc.get_skill_by_type(&SkillType::CodeReviewer);
+        assert!(skill.is_some(), "Built-in CodeReviewer skill should exist");
+    }
+
+    #[tokio::test]
+    async fn test_get_skill_by_type_debugger_exists() {
+        let svc = make_service();
+        let skill = svc.get_skill_by_type(&SkillType::Debugger);
+        assert!(skill.is_some(), "Built-in Debugger skill should exist");
+    }
+
+    #[tokio::test]
+    async fn test_get_skill_by_type_planner_exists() {
+        let svc = make_service();
+        let skill = svc.get_skill_by_type(&SkillType::Planner);
+        assert!(skill.is_some(), "Built-in Planner skill should exist");
+    }
+
+    #[tokio::test]
+    async fn test_find_matching_skill_review_keyword() {
+        let svc = make_service();
+        let skill = svc.find_matching_skill("please review this code");
+        assert!(skill.is_some(), "Input containing 'review' should match a skill");
+    }
+
+    #[tokio::test]
+    async fn test_find_matching_skill_debug_keyword() {
+        let svc = make_service();
+        let skill = svc.find_matching_skill("I have an error in my code");
+        assert!(skill.is_some(), "Input containing 'error' should match a skill");
+    }
+
+    #[tokio::test]
+    async fn test_find_matching_skill_no_match_returns_none() {
+        let svc = make_service();
+        let skill = svc.find_matching_skill("xyzzy_nonsense_zzz_foobar");
+        assert!(skill.is_none(), "Unknown input should return None");
+    }
+
+    #[tokio::test]
+    async fn test_find_matching_skill_korean_trigger() {
+        let svc = make_service();
+        let skill = svc.find_matching_skill("코드리뷰 해줘");
+        assert!(skill.is_some(), "Korean trigger '코드리뷰' should match a skill");
+    }
+
+    #[tokio::test]
+    async fn test_build_prompt_includes_system_prompt() {
+        let svc = make_service();
+        let skill = svc.get_skill_by_type(&SkillType::CodeReviewer).unwrap();
+        let request = ExecuteSkillRequest {
+            skill_id: None,
+            skill_type: Some(SkillType::CodeReviewer),
+            input: "analyze this".to_string(),
+            context: None,
+            options: None,
+        };
+        let prompt = svc.build_prompt(skill, &request);
+        assert!(prompt.contains(&skill.system_prompt), "Prompt should include system prompt");
+        assert!(prompt.contains("analyze this"), "Prompt should include user request");
+    }
+
+    #[tokio::test]
+    async fn test_build_prompt_includes_code_snippet_when_provided() {
+        let svc = make_service();
+        let skill = svc.get_skill_by_type(&SkillType::Debugger).unwrap();
+        let request = ExecuteSkillRequest {
+            skill_id: None,
+            skill_type: Some(SkillType::Debugger),
+            input: "fix this".to_string(),
+            context: Some(SkillContext {
+                document_ids: None,
+                file_paths: None,
+                code_snippet: Some("fn main() {}".to_string()),
+                language: None,
+                error_message: None,
+                previous_output: None,
+                metadata: None,
+            }),
+            options: None,
+        };
+        let prompt = svc.build_prompt(skill, &request);
+        assert!(prompt.contains("fn main() {}"), "Prompt should include code snippet");
+    }
+
+    #[tokio::test]
+    async fn test_build_prompt_includes_error_message_when_provided() {
+        let svc = make_service();
+        let skill = svc.get_skill_by_type(&SkillType::Debugger).unwrap();
+        let request = ExecuteSkillRequest {
+            skill_id: None,
+            skill_type: Some(SkillType::Debugger),
+            input: "debug this".to_string(),
+            context: Some(SkillContext {
+                document_ids: None,
+                file_paths: None,
+                code_snippet: None,
+                language: None,
+                error_message: Some("NullPointerException at line 42".to_string()),
+                previous_output: None,
+                metadata: None,
+            }),
+            options: None,
+        };
+        let prompt = svc.build_prompt(skill, &request);
+        assert!(prompt.contains("NullPointerException"), "Prompt should include error message");
+    }
+}
