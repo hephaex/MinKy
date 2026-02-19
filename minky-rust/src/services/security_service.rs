@@ -500,3 +500,99 @@ fn hash_api_key(key: &str) -> String {
     hasher.update(key.as_bytes());
     format!("{:x}", hasher.finalize())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Severity;
+
+    #[test]
+    fn test_generate_api_key_has_mk_prefix() {
+        let key = generate_api_key();
+        assert!(key.starts_with("mk_"), "API key should start with 'mk_'");
+    }
+
+    #[test]
+    fn test_generate_api_key_length() {
+        let key = generate_api_key();
+        // "mk_" (3) + 32 alphanumeric chars = 35 total
+        assert_eq!(key.len(), 35, "API key should be 35 characters (mk_ + 32)");
+    }
+
+    #[test]
+    fn test_generate_api_key_alphanumeric_suffix() {
+        let key = generate_api_key();
+        let suffix = &key[3..]; // skip "mk_"
+        assert!(
+            suffix.chars().all(|c| c.is_ascii_alphanumeric()),
+            "API key suffix should be alphanumeric only"
+        );
+    }
+
+    #[test]
+    fn test_generate_api_key_unique() {
+        let key1 = generate_api_key();
+        let key2 = generate_api_key();
+        assert_ne!(key1, key2, "Each generated key should be unique");
+    }
+
+    #[test]
+    fn test_hash_api_key_produces_hex_string() {
+        let hash = hash_api_key("test_key");
+        // SHA256 produces 64 hex characters
+        assert_eq!(hash.len(), 64, "SHA256 hash should be 64 hex characters");
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "Hash should be hex");
+    }
+
+    #[test]
+    fn test_hash_api_key_deterministic() {
+        let hash1 = hash_api_key("same_key");
+        let hash2 = hash_api_key("same_key");
+        assert_eq!(hash1, hash2, "Same input should produce same hash");
+    }
+
+    #[test]
+    fn test_hash_api_key_different_inputs_differ() {
+        let hash1 = hash_api_key("key_one");
+        let hash2 = hash_api_key("key_two");
+        assert_ne!(hash1, hash2, "Different inputs should produce different hashes");
+    }
+
+    #[test]
+    fn test_severity_ordering_info_is_lowest() {
+        assert!(Severity::Info < Severity::Low);
+        assert!(Severity::Info < Severity::Medium);
+        assert!(Severity::Info < Severity::High);
+        assert!(Severity::Info < Severity::Critical);
+    }
+
+    #[test]
+    fn test_severity_ordering_critical_is_highest() {
+        assert!(Severity::Critical > Severity::High);
+        assert!(Severity::Critical > Severity::Medium);
+        assert!(Severity::Critical > Severity::Low);
+        assert!(Severity::Critical > Severity::Info);
+    }
+
+    #[test]
+    fn test_severity_ordering_preserves_sequence() {
+        let mut levels = vec![
+            Severity::Critical,
+            Severity::Low,
+            Severity::Info,
+            Severity::High,
+            Severity::Medium,
+        ];
+        levels.sort();
+        assert_eq!(
+            levels,
+            vec![
+                Severity::Info,
+                Severity::Low,
+                Severity::Medium,
+                Severity::High,
+                Severity::Critical,
+            ]
+        );
+    }
+}
