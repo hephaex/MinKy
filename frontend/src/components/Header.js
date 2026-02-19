@@ -20,6 +20,9 @@ const Header = () => {
           <Link to="/knowledge" className="nav-link">
             Knowledge
           </Link>
+          <Link to="/graph" className="nav-link">
+            Graph
+          </Link>
           <Link to="/chat" className="nav-link">
             Chat
           </Link>

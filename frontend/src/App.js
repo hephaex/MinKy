@@ -22,6 +22,7 @@ import ExplorePage from './pages/ExplorePage';
 import ConfigPage from './pages/ConfigPage';
 import ChatPage from './pages/ChatPage';
 import KnowledgeSearch from './pages/KnowledgeSearch';
+import KnowledgeGraphPage from './pages/KnowledgeGraphPage';
 import './App.css';
 
 function App() {
@@ -51,6 +52,7 @@ function App() {
                 <Route path="/config" element={<ConfigPage />} />
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/knowledge" element={<KnowledgeSearch />} />
+                <Route path="/graph" element={<KnowledgeGraphPage />} />
               </Routes>
             </ErrorBoundary>
           </main>
