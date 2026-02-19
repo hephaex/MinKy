@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::AppResult,
+    middleware::AdminUser,
     models::{
         AuditLogEntry, BackupInfo, CreateBackupRequest, MaintenanceMode, SystemConfig,
         SystemStats, UpdateUserAdmin, UserAdmin,
@@ -37,8 +38,10 @@ pub struct StatsResponse {
     pub data: SystemStats,
 }
 
-async fn get_system_stats(State(state): State<AppState>) -> AppResult<Json<StatsResponse>> {
-    // TODO: Verify admin role
+async fn get_system_stats(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> AppResult<Json<StatsResponse>> {
     let service = AdminService::new(state.db.clone());
     let stats = service.get_system_stats().await?;
 
@@ -62,6 +65,7 @@ pub struct UsersResponse {
 
 async fn list_users(
     State(state): State<AppState>,
+    _admin: AdminUser,
     Query(query): Query<ListUsersQuery>,
 ) -> AppResult<Json<UsersResponse>> {
     let service = AdminService::new(state.db.clone());
@@ -84,6 +88,7 @@ pub struct UserResponse {
 
 async fn get_user(
     State(state): State<AppState>,
+    _admin: AdminUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<UserResponse>> {
     let service = AdminService::new(state.db.clone());
@@ -102,6 +107,7 @@ async fn get_user(
 
 async fn update_user(
     State(state): State<AppState>,
+    _admin: AdminUser,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateUserAdmin>,
 ) -> AppResult<Json<UserResponse>> {
@@ -122,6 +128,7 @@ pub struct DeleteResponse {
 
 async fn delete_user(
     State(state): State<AppState>,
+    _admin: AdminUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<DeleteResponse>> {
     let service = AdminService::new(state.db.clone());
@@ -149,6 +156,7 @@ pub struct AuditLogsResponse {
 
 async fn get_audit_logs(
     State(state): State<AppState>,
+    _admin: AdminUser,
     Query(query): Query<AuditLogsQuery>,
 ) -> AppResult<Json<AuditLogsResponse>> {
     let service = AdminService::new(state.db.clone());
@@ -171,7 +179,10 @@ pub struct BackupsResponse {
     pub data: Vec<BackupInfo>,
 }
 
-async fn list_backups(State(state): State<AppState>) -> AppResult<Json<BackupsResponse>> {
+async fn list_backups(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> AppResult<Json<BackupsResponse>> {
     let service = AdminService::new(state.db.clone());
     let backups = service.list_backups().await?;
 
@@ -189,6 +200,7 @@ pub struct BackupResponse {
 
 async fn create_backup(
     State(state): State<AppState>,
+    _admin: AdminUser,
     Json(payload): Json<CreateBackupRequest>,
 ) -> AppResult<Json<BackupResponse>> {
     let service = AdminService::new(state.db.clone());
@@ -206,7 +218,10 @@ pub struct ConfigResponse {
     pub data: SystemConfig,
 }
 
-async fn get_config(State(state): State<AppState>) -> AppResult<Json<ConfigResponse>> {
+async fn get_config(
+    State(state): State<AppState>,
+    _admin: AdminUser,
+) -> AppResult<Json<ConfigResponse>> {
     let service = AdminService::new(state.db.clone());
     let config = service.get_system_config().await?;
 
@@ -218,6 +233,7 @@ async fn get_config(State(state): State<AppState>) -> AppResult<Json<ConfigRespo
 
 async fn update_config(
     State(state): State<AppState>,
+    _admin: AdminUser,
     Json(payload): Json<SystemConfig>,
 ) -> AppResult<Json<ConfigResponse>> {
     let service = AdminService::new(state.db.clone());
@@ -237,6 +253,7 @@ pub struct MaintenanceResponse {
 
 async fn get_maintenance_mode(
     State(state): State<AppState>,
+    _admin: AdminUser,
 ) -> AppResult<Json<MaintenanceResponse>> {
     let service = AdminService::new(state.db.clone());
     let mode = service.get_maintenance_mode().await?;
@@ -249,6 +266,7 @@ async fn get_maintenance_mode(
 
 async fn set_maintenance_mode(
     State(state): State<AppState>,
+    _admin: AdminUser,
     Json(payload): Json<MaintenanceMode>,
 ) -> AppResult<Json<MaintenanceResponse>> {
     let service = AdminService::new(state.db.clone());
