@@ -427,3 +427,94 @@ fn parse_diff_stats(output: &str) -> GitDiffStats {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- parse_status ---
+
+    #[test]
+    fn test_parse_status_added() {
+        assert!(matches!(parse_status('A'), FileStatus::Added));
+    }
+
+    #[test]
+    fn test_parse_status_modified() {
+        assert!(matches!(parse_status('M'), FileStatus::Modified));
+    }
+
+    #[test]
+    fn test_parse_status_deleted() {
+        assert!(matches!(parse_status('D'), FileStatus::Deleted));
+    }
+
+    #[test]
+    fn test_parse_status_renamed() {
+        assert!(matches!(parse_status('R'), FileStatus::Renamed));
+    }
+
+    #[test]
+    fn test_parse_status_untracked() {
+        assert!(matches!(parse_status('?'), FileStatus::Untracked));
+    }
+
+    #[test]
+    fn test_parse_status_unknown_defaults_to_modified() {
+        assert!(matches!(parse_status('X'), FileStatus::Modified));
+    }
+
+    // --- parse_stat_line ---
+
+    #[test]
+    fn test_parse_stat_line_full() {
+        // "3 files changed, 10 insertions(+), 5 deletions(-)"
+        let (files, ins, dels) = parse_stat_line("3 files changed, 10 insertions(+), 5 deletions(-)");
+        assert_eq!(files, 3);
+        assert_eq!(ins, 10);
+        assert_eq!(dels, 5);
+    }
+
+    #[test]
+    fn test_parse_stat_line_insertions_only() {
+        let (files, ins, dels) = parse_stat_line("1 file changed, 4 insertions(+)");
+        assert_eq!(files, 1);
+        assert_eq!(ins, 4);
+        assert_eq!(dels, 0);
+    }
+
+    #[test]
+    fn test_parse_stat_line_deletions_only() {
+        let (files, ins, dels) = parse_stat_line("2 files changed, 7 deletions(-)");
+        assert_eq!(files, 2);
+        assert_eq!(ins, 0);
+        assert_eq!(dels, 7);
+    }
+
+    #[test]
+    fn test_parse_stat_line_empty_returns_zeros() {
+        let (files, ins, dels) = parse_stat_line("");
+        assert_eq!(files, 0);
+        assert_eq!(ins, 0);
+        assert_eq!(dels, 0);
+    }
+
+    // --- parse_diff_stats ---
+
+    #[test]
+    fn test_parse_diff_stats_empty_output() {
+        let stats = parse_diff_stats("");
+        assert_eq!(stats.files_changed, 0);
+        assert_eq!(stats.insertions, 0);
+        assert_eq!(stats.deletions, 0);
+    }
+
+    #[test]
+    fn test_parse_diff_stats_uses_last_line() {
+        let output = "src/main.rs | 10 +++++-----\n2 files changed, 5 insertions(+), 5 deletions(-)";
+        let stats = parse_diff_stats(output);
+        assert_eq!(stats.files_changed, 2);
+        assert_eq!(stats.insertions, 5);
+        assert_eq!(stats.deletions, 5);
+    }
+}

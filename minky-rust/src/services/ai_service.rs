@@ -1,4 +1,3 @@
-use anyhow::Result;
 use reqwest::Client;
 use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
@@ -338,4 +337,130 @@ struct EmbeddingAPIResponse {
 #[derive(Debug, Deserialize)]
 struct EmbeddingData {
     embedding: Vec<f32>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use secrecy::SecretString;
+
+    fn make_service() -> AIService {
+        let config = Config {
+            host: "127.0.0.1".to_string(),
+            port: 8000,
+            database_url: "postgres://localhost/test".to_string(),
+            database_max_connections: 5,
+            jwt_secret: SecretString::from("test-secret"),
+            jwt_expiration_hours: 24,
+            opensearch_url: None,
+            openai_api_key: None,
+            anthropic_api_key: None,
+            git_repo_path: None,
+        };
+        AIService::new(config)
+    }
+
+    // --- get_system_prompt ---
+
+    #[test]
+    fn test_get_system_prompt_title_mentions_title() {
+        let svc = make_service();
+        let prompt = svc.get_system_prompt(&SuggestionType::Title);
+        assert!(
+            prompt.to_lowercase().contains("title"),
+            "Title prompt should mention 'title'"
+        );
+    }
+
+    #[test]
+    fn test_get_system_prompt_summary_mentions_summary() {
+        let svc = make_service();
+        let prompt = svc.get_system_prompt(&SuggestionType::Summary);
+        assert!(
+            prompt.to_lowercase().contains("summar"),
+            "Summary prompt should mention 'summar...'"
+        );
+    }
+
+    #[test]
+    fn test_get_system_prompt_tags_mentions_tags() {
+        let svc = make_service();
+        let prompt = svc.get_system_prompt(&SuggestionType::Tags);
+        assert!(
+            prompt.to_lowercase().contains("tag"),
+            "Tags prompt should mention 'tag'"
+        );
+    }
+
+    #[test]
+    fn test_get_system_prompt_grammar_mentions_grammar() {
+        let svc = make_service();
+        let prompt = svc.get_system_prompt(&SuggestionType::Grammar);
+        assert!(
+            prompt.to_lowercase().contains("grammar"),
+            "Grammar prompt should mention 'grammar'"
+        );
+    }
+
+    #[test]
+    fn test_get_system_prompt_all_variants_non_empty() {
+        let svc = make_service();
+        let types = [
+            SuggestionType::Title,
+            SuggestionType::Summary,
+            SuggestionType::Tags,
+            SuggestionType::Improve,
+            SuggestionType::Translate,
+            SuggestionType::Grammar,
+            SuggestionType::Expand,
+            SuggestionType::Simplify,
+        ];
+        for suggestion_type in &types {
+            let prompt = svc.get_system_prompt(suggestion_type);
+            assert!(!prompt.is_empty(), "Prompt for {:?} should not be empty", suggestion_type);
+        }
+    }
+
+    // --- build_user_prompt ---
+
+    #[test]
+    fn test_build_user_prompt_content_only() {
+        let svc = make_service();
+        let request = SuggestionRequest {
+            content: "hello world".to_string(),
+            suggestion_type: SuggestionType::Title,
+            context: None,
+        };
+        let prompt = svc.build_user_prompt(&request);
+        assert_eq!(prompt, "hello world");
+    }
+
+    #[test]
+    fn test_build_user_prompt_with_context_prepends_context() {
+        let svc = make_service();
+        let request = SuggestionRequest {
+            content: "my content".to_string(),
+            suggestion_type: SuggestionType::Summary,
+            context: Some("extra context".to_string()),
+        };
+        let prompt = svc.build_user_prompt(&request);
+        assert!(prompt.contains("extra context"), "Should include context");
+        assert!(prompt.contains("my content"), "Should include content");
+        assert!(
+            prompt.find("extra context").unwrap() < prompt.find("my content").unwrap(),
+            "Context should appear before content"
+        );
+    }
+
+    #[test]
+    fn test_build_user_prompt_no_context_returns_content_unchanged() {
+        let svc = make_service();
+        let content = "This is the document text.".to_string();
+        let request = SuggestionRequest {
+            content: content.clone(),
+            suggestion_type: SuggestionType::Improve,
+            context: None,
+        };
+        assert_eq!(svc.build_user_prompt(&request), content);
+    }
 }
