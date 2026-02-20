@@ -18,6 +18,7 @@
 | Document 엔드포인트 인증 누락 | Critical | ✅ 수정됨 | `1e5da9a3` |
 | List 엔드포인트 인증 누락 | High | ✅ 수정됨 | `1e5da9a3` |
 | JWT localStorage XSS 취약점 | High | ✅ 수정됨 | `28fd3bbf` |
+| Slack webhook 서명 미검증 | Critical | ✅ 수정됨 | `1da141b9` |
 
 **수정 내용:**
 
@@ -40,8 +41,14 @@
    - 개발 환경에서는 Secure 플래그 비활성화
    - 프로덕션에서는 `Secure` 쿠키 사용
 
+4. **Slack webhook 서명 검증 추가** (`slack.rs`)
+   - HMAC-SHA256 서명 검증 구현
+   - 타임스탬프 기반 replay attack 방지 (5분 윈도우)
+   - constant-time comparison으로 timing attack 방지
+   - 5개 단위 테스트 추가
+
 **테스트 결과:**
-- Rust: 861개 모두 통과
+- Rust: 866개 모두 통과 (Slack 테스트 5개 추가)
 - Frontend: 488개 모두 통과
 
 ---
