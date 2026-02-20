@@ -54,28 +54,34 @@ pub struct PaginationMeta {
 
 async fn list_documents(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Query(query): Query<ListQuery>,
 ) -> AppResult<Json<ListResponse<DocumentResponse>>> {
     let page = query.page.unwrap_or(1).max(1);
     let limit = query.limit.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * limit;
+    let user_id = auth_user.id;
 
+    // Only return user's own documents or public documents
     let total: (i64,) = if let Some(ref search) = query.search {
         sqlx::query_as(
-            "SELECT COUNT(*) FROM documents WHERE title ILIKE '%' || $1 || '%'"
+            "SELECT COUNT(*) FROM documents WHERE (user_id = $1 OR is_public = true) AND title ILIKE '%' || $2 || '%'"
         )
+        .bind(user_id)
         .bind(search)
         .fetch_one(&state.db)
         .await?
     } else if let Some(cat_id) = query.category_id {
         sqlx::query_as(
-            "SELECT COUNT(*) FROM documents WHERE category_id = $1"
+            "SELECT COUNT(*) FROM documents WHERE (user_id = $1 OR is_public = true) AND category_id = $2"
         )
+        .bind(user_id)
         .bind(cat_id)
         .fetch_one(&state.db)
         .await?
     } else {
-        sqlx::query_as("SELECT COUNT(*) FROM documents")
+        sqlx::query_as("SELECT COUNT(*) FROM documents WHERE user_id = $1 OR is_public = true")
+            .bind(user_id)
             .fetch_one(&state.db)
             .await?
     };
@@ -84,10 +90,11 @@ async fn list_documents(
         sqlx::query_as(
             r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at
                FROM documents
-               WHERE title ILIKE '%' || $1 || '%'
+               WHERE (user_id = $1 OR is_public = true) AND title ILIKE '%' || $2 || '%'
                ORDER BY created_at DESC
-               LIMIT $2 OFFSET $3"#
+               LIMIT $3 OFFSET $4"#
         )
+        .bind(user_id)
         .bind(search)
         .bind(limit)
         .bind(offset)
@@ -97,10 +104,11 @@ async fn list_documents(
         sqlx::query_as(
             r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at
                FROM documents
-               WHERE category_id = $1
+               WHERE (user_id = $1 OR is_public = true) AND category_id = $2
                ORDER BY created_at DESC
-               LIMIT $2 OFFSET $3"#
+               LIMIT $3 OFFSET $4"#
         )
+        .bind(user_id)
         .bind(cat_id)
         .bind(limit)
         .bind(offset)
@@ -110,9 +118,11 @@ async fn list_documents(
         sqlx::query_as(
             r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at
                FROM documents
+               WHERE user_id = $1 OR is_public = true
                ORDER BY created_at DESC
-               LIMIT $1 OFFSET $2"#
+               LIMIT $2 OFFSET $3"#
         )
+        .bind(user_id)
         .bind(limit)
         .bind(offset)
         .fetch_all(&state.db)
@@ -180,18 +190,23 @@ async fn create_document(
 
 async fn get_document(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<SingleResponse<DocumentResponse>>> {
+    let user_id = auth_user.id;
+
+    // Only allow access to own documents or public documents
     let doc: Option<DocumentResponse> = sqlx::query_as(
         r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at
            FROM documents
-           WHERE id = $1"#
+           WHERE id = $1 AND (user_id = $2 OR is_public = true)"#
     )
     .bind(id)
+    .bind(user_id)
     .fetch_optional(&state.db)
     .await?;
 
-    let doc = doc.ok_or_else(|| AppError::NotFound(format!("Document {} not found", id)))?;
+    let doc = doc.ok_or_else(|| AppError::NotFound(format!("Document {} not found or access denied", id)))?;
 
     // Increment view count
     sqlx::query("UPDATE documents SET view_count = view_count + 1 WHERE id = $1")
@@ -217,22 +232,26 @@ pub struct UpdateDocumentRequest {
 
 async fn update_document(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateDocumentRequest>,
 ) -> AppResult<Json<SingleResponse<DocumentResponse>>> {
     payload.validate().map_err(|e| AppError::Validation(e.to_string()))?;
 
-    // Check document exists
-    let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM documents WHERE id = $1")
+    let user_id = auth_user.id;
+
+    // Check document exists AND user owns it
+    let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM documents WHERE id = $1 AND user_id = $2")
         .bind(id)
+        .bind(user_id)
         .fetch_optional(&state.db)
         .await?;
 
     if existing.is_none() {
-        return Err(AppError::NotFound(format!("Document {} not found", id)));
+        return Err(AppError::NotFound(format!("Document {} not found or access denied", id)));
     }
 
-    // Build update query dynamically based on provided fields
+    // Build update query dynamically based on provided fields (only owner can update)
     let doc: DocumentResponse = sqlx::query_as(
         r#"UPDATE documents
            SET
@@ -241,7 +260,7 @@ async fn update_document(
                category_id = CASE WHEN $3::boolean THEN $4::integer ELSE category_id END,
                is_public = COALESCE($5, is_public),
                updated_at = NOW()
-           WHERE id = $6
+           WHERE id = $6 AND user_id = $7
            RETURNING id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at"#
     )
     .bind(payload.title.as_deref())
@@ -250,6 +269,7 @@ async fn update_document(
     .bind(payload.category_id)
     .bind(payload.is_public)
     .bind(id)
+    .bind(user_id)
     .fetch_one(&state.db)
     .await?;
 
@@ -267,15 +287,20 @@ pub struct DeleteResponse {
 
 async fn delete_document(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<DeleteResponse>> {
-    let result = sqlx::query("DELETE FROM documents WHERE id = $1")
+    let user_id = auth_user.id;
+
+    // Only allow owner to delete their document
+    let result = sqlx::query("DELETE FROM documents WHERE id = $1 AND user_id = $2")
         .bind(id)
+        .bind(user_id)
         .execute(&state.db)
         .await?;
 
     if result.rows_affected() == 0 {
-        return Err(AppError::NotFound(format!("Document {} not found", id)));
+        return Err(AppError::NotFound(format!("Document {} not found or access denied", id)));
     }
 
     Ok(Json(DeleteResponse {
