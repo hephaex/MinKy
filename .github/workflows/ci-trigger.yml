@@ -1,0 +1,133 @@
+name: Claude CI Trigger
+
+# Claude Code CI/CD 트리거
+# 이 워크플로우는 특정 이벤트 발생 시 트리거 파일을 생성합니다.
+# Claude Code는 트리거 파일을 감지하여 CI/CD를 자동 실행합니다.
+
+on:
+  issues:
+    types: [opened, labeled]
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: '0 */4 * * *'  # 4시간마다
+  workflow_dispatch:
+    inputs:
+      task_type:
+        description: 'Task type to trigger'
+        required: false
+        default: 'sync'
+        type: choice
+        options:
+          - sync
+          - validate
+          - full
+
+jobs:
+  create-trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create trigger file
+        run: |
+          mkdir -p .claude/triggers/queue
+
+          TRIGGER_ID="trigger-$(date +%Y%m%d%H%M%S)"
+          TRIGGER_FILE=".claude/triggers/queue/${TRIGGER_ID}.json"
+
+          cat > "$TRIGGER_FILE" << EOF
+          {
+            "id": "${TRIGGER_ID}",
+            "event": "${{ github.event_name }}",
+            "action": "${{ github.event.action }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "ref": "${{ github.ref }}",
+            "sha": "${{ github.sha }}",
+            "actor": "${{ github.actor }}",
+            "repository": "${{ github.repository }}",
+            "payload": {
+              "issue_number": ${{ github.event.issue.number || 'null' }},
+              "issue_title": "${{ github.event.issue.title || '' }}",
+              "labels": ${{ toJSON(github.event.issue.labels.*.name) || '[]' }},
+              "input_task_type": "${{ github.event.inputs.task_type || '' }}"
+            }
+          }
+          EOF
+
+          echo "Created trigger: ${TRIGGER_FILE}"
+          cat "$TRIGGER_FILE"
+
+      - name: Update latest trigger
+        run: |
+          TRIGGER_ID="trigger-$(date +%Y%m%d%H%M%S)"
+          cat > .claude/triggers/latest.json << EOF
+          {
+            "id": "${TRIGGER_ID}",
+            "event": "${{ github.event_name }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "processed": false
+          }
+          EOF
+
+      - name: Commit trigger files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .claude/triggers/
+
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "ci: Add CI trigger for ${{ github.event_name }}"
+            git push
+          fi
+
+  # 이슈 분석 (issues 이벤트일 때만)
+  analyze-issue:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    needs: create-trigger
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Analyze issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUMBER=${{ github.event.issue.number }}
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+
+          echo "Analyzing issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
+
+          # 이슈 분석 결과를 상태 파일에 추가
+          ANALYSIS_FILE=".claude/state/issue-analysis-${ISSUE_NUMBER}.json"
+
+          cat > "$ANALYSIS_FILE" << EOF
+          {
+            "issue_number": ${ISSUE_NUMBER},
+            "title": "${ISSUE_TITLE}",
+            "analyzed_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "status": "pending_review",
+            "labels": ${{ toJSON(github.event.issue.labels.*.name) }}
+          }
+          EOF
+
+          echo "Analysis saved to ${ANALYSIS_FILE}"
+
+  # 정기 동기화 (schedule 이벤트일 때만)
+  scheduled-sync:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    needs: create-trigger
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log scheduled run
+        run: |
+          echo "Scheduled CI trigger at $(date)"
+          echo "This will sync issues and check for pending work"

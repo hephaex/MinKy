@@ -1,0 +1,185 @@
+name: Tech Report Generator
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+
+jobs:
+  generate-report:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Tech Report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
+            const prTitle = pr.title;
+            const prBody = pr.body || '';
+
+            // 날짜 포맷
+            const date = new Date().toISOString().split('T')[0];
+
+            // 슬러그 생성
+            const slug = prTitle
+              .toLowerCase()
+              .replace(/[^a-z0-9가-힣]+/g, '-')
+              .replace(/^-|-$/g, '')
+              .substring(0, 30);
+
+            // 관련 이슈 찾기
+            const closingIssueMatch = prBody.match(/(?:closes?|fixes?|resolves?)\s*#(\d+)/i);
+            const relatedIssue = closingIssueMatch ? closingIssueMatch[1] : null;
+
+            // 변경 파일 정보
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            const additions = files.reduce((sum, f) => sum + f.additions, 0);
+            const deletions = files.reduce((sum, f) => sum + f.deletions, 0);
+            const changedFiles = files.map(f => `- \`${f.filename}\`: +${f.additions}/-${f.deletions}`).join('\n');
+
+            // 태그 추출
+            const tags = [];
+            if (files.some(f => f.filename.includes('rust') || f.filename.endsWith('.rs'))) tags.push('#rust');
+            if (files.some(f => f.filename.includes('frontend') || f.filename.endsWith('.js') || f.filename.endsWith('.tsx'))) tags.push('#frontend');
+            if (prTitle.toLowerCase().includes('fix')) tags.push('#bugfix');
+            if (prTitle.toLowerCase().includes('feat')) tags.push('#feature');
+
+            // 기술 보고서 생성
+            const report = `# 기술 보고서: ${prTitle}
+
+**PR**: #${prNumber}
+**이슈**: ${relatedIssue ? `#${relatedIssue}` : 'N/A'}
+**날짜**: ${date}
+**작성자**: Technical Writer Agent (GitHub Actions)
+
+---
+
+## 📋 개요
+
+### PR 요약
+${prBody.split('\n').slice(0, 10).join('\n') || '설명 없음'}
+
+---
+
+## 🔧 변경 사항
+
+### 변경된 파일 (${files.length}개)
+${changedFiles}
+
+### 통계
+- **추가된 라인**: +${additions}
+- **삭제된 라인**: -${deletions}
+
+---
+
+## 📚 학습 포인트
+
+### 1. 이 PR에서 배울 점
+- **무엇**: 이 PR의 주요 변경 사항을 분석하세요
+- **왜 중요**: 코드 품질과 유지보수성 향상
+- **적용**: 유사한 문제 해결 시 참고
+
+### 2. 코드 패턴
+- **무엇**: 사용된 코드 패턴 확인 필요
+- **왜 중요**: 일관된 코드 스타일 유지
+- **적용**: 새 기능 구현 시 참고
+
+### 3. 테스트 전략
+- **무엇**: 테스트 추가/수정 여부 확인 필요
+- **왜 중요**: 회귀 방지
+- **적용**: 향후 유사 기능 테스트 시 참고
+
+---
+
+## 🔗 레퍼런스
+
+### 관련 링크
+1. [PR #${prNumber}](${pr.html_url}) - 원본 PR
+${relatedIssue ? `2. [Issue #${relatedIssue}](https://github.com/${context.repo.owner}/${context.repo.repo}/issues/${relatedIssue}) - 관련 이슈` : ''}
+
+### 추천 학습 자료
+> ⚠️ 이 섹션은 수동으로 업데이트가 필요합니다.
+> 관련 기술 문서나 튜토리얼 링크를 추가해주세요.
+
+---
+
+## 🏷️ 태그
+
+${tags.join(' ') || '#general'}
+
+---
+
+*이 보고서는 GitHub Actions에 의해 자동 생성되었습니다.*
+*상세 학습 포인트와 레퍼런스는 수동으로 보완해주세요.*
+`;
+
+            // 파일 이름
+            const filename = `LessonLearn/${date}_PR${prNumber}_${slug}.md`;
+
+            // 파일 생성 (base64 인코딩)
+            const content = Buffer.from(report).toString('base64');
+
+            try {
+              await github.rest.repos.createOrUpdateFileContents({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: filename,
+                message: `docs: Add tech report for PR #${prNumber}`,
+                content: content,
+                branch: 'main'
+              });
+
+              console.log(`Created tech report: ${filename}`);
+
+              // PR에 코멘트 추가
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `## 📚 기술 보고서 생성 완료
+
+기술 보고서가 자동으로 생성되었습니다: [\`${filename}\`](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/${filename})
+
+### 다음 단계
+- [ ] 학습 포인트 상세화
+- [ ] 레퍼런스 링크 추가
+- [ ] 태그 보완
+
+---
+*Technical Writer Agent (GitHub Actions)*`
+              });
+
+            } catch (error) {
+              console.error('Failed to create tech report:', error);
+
+              // 실패 시 PR에 알림
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `## ⚠️ 기술 보고서 생성 실패
+
+자동 기술 보고서 생성에 실패했습니다.
+수동으로 LessonLearn 폴더에 보고서를 작성해주세요.
+
+에러: ${error.message}`
+              });
+            }
