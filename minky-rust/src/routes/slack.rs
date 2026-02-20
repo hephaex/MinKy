@@ -543,6 +543,12 @@ async fn slack_webhook(
                 into_error_response(e)
             })?;
         } else {
+            // In production, require signing secret for security
+            if state.config.environment == "production" {
+                return Err(into_error_response(AppError::Configuration(
+                    "SLACK_SIGNING_SECRET is required in production".to_string(),
+                )));
+            }
             tracing::warn!(
                 "SLACK_SIGNING_SECRET not configured - webhook signature verification skipped. \
                  This is insecure for production use."
