@@ -27,6 +27,7 @@ const AdminPanel = () => {
     } else if (activeTab === 'documents') {
       fetchDocuments();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, userPage, documentPage]);
 
   const fetchSystemStats = async () => {

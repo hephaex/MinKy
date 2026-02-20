@@ -69,8 +69,9 @@ function runIteration(nodes, edges, width, height) {
     const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
     const strength = edge.weight !== undefined ? edge.weight : 1;
 
-    const fx = dx * ATTRACTION * strength;
-    const fy = dy * ATTRACTION * strength;
+    // Normalize force by distance
+    const fx = (dx / dist) * ATTRACTION * strength * dist;
+    const fy = (dy / dist) * ATTRACTION * strength * dist;
 
     forces[sourceIndex].fx += fx;
     forces[sourceIndex].fy += fy;

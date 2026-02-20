@@ -65,23 +65,23 @@ const DocumentView = () => {
         setLoading(true);
         const data = await documentService.getDocument(id);
         setDocument(data);
-        
+
         // 옵시디언 스타일 콘텐츠 처리
         if (data.markdown_content) {
           const { metadata, content } = extractFrontmatter(data.markdown_content);
           setFrontmatter(metadata);
-          
+
           // 내부 링크와 해시태그 처리
           let processed = processInternalLinks(content, navigate);
           processed = processHashtags(processed);
           setProcessedContent(processed);
         }
-        
+
         // Auto-generate tags if document has no tags
         if (data && (!data.tags || data.tags.length === 0) && data.markdown_content) {
           await generateAndApplyTags(data);
         }
-        
+
         setError(null);
       } catch (err) {
         setError('Failed to fetch document');
@@ -92,6 +92,7 @@ const DocumentView = () => {
     };
 
     fetchDocument();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleDelete = async () => {

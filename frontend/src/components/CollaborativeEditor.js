@@ -131,6 +131,7 @@ const CollaborativeEditor = ({
       
       collaborationService.leaveDocument(documentId);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId]);
 
   // Handle local content changes

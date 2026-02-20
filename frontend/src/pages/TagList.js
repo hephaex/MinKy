@@ -19,6 +19,7 @@ const TagList = () => {
   useEffect(() => {
     fetchTags(1, searchQuery);
     fetchStatistics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, viewMode]);
 
   const fetchTags = async (page = 1, search = '') => {

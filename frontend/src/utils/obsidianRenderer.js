@@ -19,7 +19,7 @@ const escapeHtml = (text) => {
 
 export const processInternalLinks = (content, navigate, documentLookup = {}) => {
   // [[link|display]] 또는 [[link]] 패턴 처리
-  const linkPattern = /\[\[([^\|\]]+)(?:\|([^\]]+))?\]\]/g;
+  const linkPattern = /\[\[([^|\]]+)(?:\|([^\]]+))?\]\]/g;
 
   return content.replace(linkPattern, (match, target, displayText) => {
     const display = displayText || target;

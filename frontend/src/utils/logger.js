@@ -41,4 +41,6 @@ export const logInfo = (context, message) => {
   }
 };
 
-export default { logError, logWarning, logInfo };
+const logger = { logError, logWarning, logInfo };
+
+export default logger;

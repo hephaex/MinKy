@@ -33,6 +33,8 @@ const DateExplorer = () => {
     }
   };
 
+  // TODO: Wire up to document list item clicks
+  // eslint-disable-next-line no-unused-vars
   const handleDocumentClick = (document) => {
     navigate(`/documents/${document.id}`);
   };

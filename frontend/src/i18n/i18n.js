@@ -131,7 +131,9 @@ const formatNumber = (number, options = {}, language = DEFAULT_LANGUAGE) => {
 
 // Relative time formatting
 const formatRelativeTime = (date, language = DEFAULT_LANGUAGE) => {
-  const locale = language === 'ko' ? 'ko-KR' : 
+  // locale reserved for future Intl.RelativeTimeFormat support
+  // eslint-disable-next-line no-unused-vars
+  const locale = language === 'ko' ? 'ko-KR' :
                 language === 'ja' ? 'ja-JP' :
                 language === 'zh' ? 'zh-CN' : 'en-US';
   
@@ -271,7 +273,7 @@ export const getLanguageClass = (language) => {
 // Export translation functions for use outside React components
 export { translate as t, pluralize as tn, formatDate as tDate, formatNumber as tNumber, formatRelativeTime as tRelative };
 
-export default {
+const i18nExports = {
   I18nProvider,
   useI18n,
   LanguageSelector,
@@ -284,3 +286,5 @@ export default {
   getTextDirection,
   getLanguageClass
 };
+
+export default i18nExports;

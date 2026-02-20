@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { computeLayout, nodeRadius } from './graphLayout';
+import { computeLayout } from './graphLayout';
 import GraphNode from './GraphNode';
 import GraphEdge from './GraphEdge';
 import NodeDetailPanel from './NodeDetailPanel';

@@ -75,6 +75,8 @@ const TagInput = ({ tags = [], onChange, suggestedTags = [], onSuggestionApply }
     }
   };
 
+  // Apply all suggested tags at once (future: add "Apply All" button)
+  // eslint-disable-next-line no-unused-vars
   const applyAllSuggestedTags = () => {
     const newTags = [...tags];
     suggestedTags.forEach(tag => {

@@ -34,6 +34,7 @@ const AISuggestions = ({
   };
 
   // Debounced content suggestions
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const getSuggestions = useCallback(
     debounce(async (currentContent, cursor) => {
       if (!aiEnabled || !currentContent.trim()) {

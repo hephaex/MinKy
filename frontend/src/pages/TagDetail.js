@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { tagService } from '../services/api';
 import Pagination from '../components/Pagination';
+// highlightTextReact, truncateWithHighlight reserved for future search result highlighting
+// eslint-disable-next-line no-unused-vars
 import { highlightTextReact, truncateWithHighlight } from '../utils/highlightText';
 import { logError } from '../utils/logger';
 import { formatDateTime } from '../utils/dateUtils';
@@ -18,6 +20,7 @@ const TagDetail = () => {
 
   useEffect(() => {
     fetchTagData(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   const fetchTagData = async (page = 1) => {
