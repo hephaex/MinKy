@@ -32,6 +32,7 @@ pub struct VersionListResponse {
 
 async fn list_versions(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> AppResult<Json<VersionListResponse>> {
     let service = VersionService::new(state.db.clone());
@@ -63,6 +64,7 @@ pub struct VersionData {
 
 async fn get_version(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<VersionResponse>> {
     let service = VersionService::new(state.db.clone());
@@ -83,6 +85,7 @@ async fn get_version(
 
 async fn get_latest_version(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> AppResult<Json<VersionResponse>> {
     let service = VersionService::new(state.db.clone());
@@ -171,6 +174,7 @@ pub struct CompareResponse {
 
 async fn compare_versions(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
     axum::extract::Query(query): axum::extract::Query<CompareQuery>,
 ) -> AppResult<Json<CompareResponse>> {

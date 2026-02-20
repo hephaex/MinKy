@@ -35,6 +35,7 @@ pub struct WorkflowResponse {
 
 async fn get_workflow(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<WorkflowResponse>> {
     let service = WorkflowService::new(state.db.clone());
@@ -48,6 +49,7 @@ async fn get_workflow(
 
 async fn get_workflow_by_document(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> AppResult<Json<WorkflowResponse>> {
     let service = WorkflowService::new(state.db.clone());
@@ -149,6 +151,7 @@ pub struct UpdateAssignmentRequest {
 
 async fn update_assignment(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(id): Path<i32>,
     Json(payload): Json<UpdateAssignmentRequest>,
 ) -> AppResult<Json<WorkflowResponse>> {
@@ -183,6 +186,7 @@ pub struct WorkflowHistoryResponse {
 
 async fn get_history(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<WorkflowHistoryResponse>> {
     let service = WorkflowService::new(state.db.clone());
@@ -215,6 +219,7 @@ async fn list_assigned(
 
 async fn list_by_status(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(status): Path<String>,
 ) -> AppResult<Json<WorkflowListResponse>> {
     let status = match status.as_str() {
@@ -237,7 +242,10 @@ async fn list_by_status(
     }))
 }
 
-async fn list_overdue(State(state): State<AppState>) -> AppResult<Json<WorkflowListResponse>> {
+async fn list_overdue(
+    State(state): State<AppState>,
+    _auth_user: AuthUser,
+) -> AppResult<Json<WorkflowListResponse>> {
     let service = WorkflowService::new(state.db.clone());
     let workflows = service.get_overdue().await?;
 

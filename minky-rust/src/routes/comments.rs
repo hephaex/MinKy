@@ -32,6 +32,7 @@ pub struct CommentListResponse {
 
 async fn list_comments(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> AppResult<Json<CommentListResponse>> {
     let service = CommentService::new(state.db.clone());
