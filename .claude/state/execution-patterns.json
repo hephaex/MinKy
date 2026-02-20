@@ -1,7 +1,17 @@
 {
   "version": "1.0",
-  "updated_at": "2026-02-20T01:00:00Z",
-  "last_analyzed_sessions": 11,
+  "updated_at": "2026-02-20T09:00:00Z",
+  "last_analyzed_sessions": 13,
+  "last_orchestration": {
+    "date": "2026-02-20",
+    "recipe": "security_audit",
+    "result": "success",
+    "recommendations_generated": 3,
+    "agents_executed": ["security-reviewer", "code-reviewer", "validator"],
+    "parallel_execution": true,
+    "issues_fixed": {"critical": 3, "high": 2},
+    "commits": ["1e5da9a3", "28fd3bbf"]
+  },
   "patterns": {
     "test_fix": {
       "description": "테스트 실패 수정",
@@ -49,7 +59,7 @@
     "security_audit": {
       "description": "보안 감사",
       "success_rate": 0.95,
-      "total_executions": 7,
+      "total_executions": 8,
       "agents": ["security-reviewer", "code-reviewer", "validator"],
       "parallel_groups": [
         ["security-reviewer", "code-reviewer"],
@@ -87,13 +97,13 @@
   },
   "agent_stats": {
     "validator": {
-      "success": 53,
+      "success": 54,
       "fail": 3,
       "avg_time_sec": 25,
-      "best_with": ["code-reviewer", "tdd-guide"]
+      "best_with": ["code-reviewer", "tdd-guide", "security-reviewer"]
     },
     "code-reviewer": {
-      "success": 46,
+      "success": 47,
       "fail": 5,
       "avg_time_sec": 40,
       "best_with": ["validator", "security-reviewer"]
@@ -117,9 +127,9 @@
       "best_with": ["task-executor", "architect"]
     },
     "security-reviewer": {
-      "success": 11,
+      "success": 12,
       "fail": 1,
-      "avg_time_sec": 50,
+      "avg_time_sec": 48,
       "best_with": ["code-reviewer", "validator"]
     },
     "debugger": {
@@ -136,6 +146,30 @@
     }
   },
   "recent_sessions": [
+    {
+      "date": "2026-02-20",
+      "session_id": "21",
+      "task_type": "security_fix",
+      "agents_used": ["security-reviewer", "code-reviewer", "validator", "task-executor"],
+      "success": true,
+      "duration_sec": 120,
+      "parallel_execution": true,
+      "tests_passed": 1349,
+      "issues_fixed": {"critical": 3, "high": 2},
+      "commits": ["1e5da9a3", "28fd3bbf"],
+      "files_changed": 10
+    },
+    {
+      "date": "2026-02-20",
+      "session_id": "20",
+      "task_type": "security_audit",
+      "agents_used": ["security-reviewer", "code-reviewer", "validator"],
+      "success": true,
+      "duration_sec": 45,
+      "parallel_execution": true,
+      "tests_passed": 1349,
+      "issues_found": {"critical": 3, "high": 2, "medium": 3, "low": 5}
+    },
     {
       "date": "2026-02-20",
       "session_id": "19",

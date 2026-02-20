@@ -5,6 +5,47 @@
 
 ---
 
+## 현재 진행 상황 (2026-02-20) - 보안 취약점 수정 완료
+
+### 21차 세션: 보안 감사 후 Critical/High 이슈 수정 (2026-02-20)
+
+**PM Orchestrate 보안 감사 및 자동 수정**
+
+`/pm-orchestrate` 실행으로 security_audit 레시피 적용:
+
+| 이슈 | 심각도 | 상태 | 커밋 |
+|------|--------|------|------|
+| Document 엔드포인트 인증 누락 | Critical | ✅ 수정됨 | `1e5da9a3` |
+| List 엔드포인트 인증 누락 | High | ✅ 수정됨 | `1e5da9a3` |
+| JWT localStorage XSS 취약점 | High | ✅ 수정됨 | `28fd3bbf` |
+
+**수정 내용:**
+
+1. **Document 엔드포인트 인증 추가** (`documents.rs`)
+   - `list_documents`: AuthUser 추가 + 소유권/공개 문서 필터
+   - `get_document`: AuthUser 추가 + 접근 권한 확인
+   - `update_document`: AuthUser 추가 + 소유권 확인
+   - `delete_document`: AuthUser 추가 + 소유권 확인
+
+2. **JWT HttpOnly 쿠키 전환**
+   - Backend: `auth.rs`에 쿠키 설정 로직 추가
+     - `Set-Cookie: access_token=<jwt>; HttpOnly; SameSite=Strict; Path=/`
+     - logout 엔드포인트 추가로 쿠키 삭제
+   - Frontend: `api.js`에서 localStorage 제거
+     - `withCredentials: true` 설정
+     - 자동 토큰 갱신 인터셉터 추가
+   - 테스트 업데이트: sessionStorage 기반으로 변경
+
+3. **Config에 environment 필드 추가**
+   - 개발 환경에서는 Secure 플래그 비활성화
+   - 프로덕션에서는 `Secure` 쿠키 사용
+
+**테스트 결과:**
+- Rust: 861개 모두 통과
+- Frontend: 488개 모두 통과
+
+---
+
 ## 현재 진행 상황 (2026-02-20) - PM Orchestrate 전체 검증 완료
 
 ### 20차 세션: PM Orchestrate 첫 실행 - 전체 검증 (2026-02-20)
