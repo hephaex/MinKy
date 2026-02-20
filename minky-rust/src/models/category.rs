@@ -143,4 +143,144 @@ mod tests {
 
         assert_eq!(tree[0].document_count, 42);
     }
+
+    #[test]
+    fn test_category_structure() {
+        let now = Utc::now();
+        let cat = Category {
+            id: 5,
+            name: "Research".to_string(),
+            parent_id: Some(1),
+            user_id: 10,
+            created_at: now,
+            updated_at: now,
+        };
+
+        assert_eq!(cat.id, 5);
+        assert_eq!(cat.name, "Research");
+        assert_eq!(cat.parent_id, Some(1));
+        assert_eq!(cat.user_id, 10);
+    }
+
+    #[test]
+    fn test_create_category() {
+        let create = CreateCategory {
+            name: "NewCategory".to_string(),
+            parent_id: Some(2),
+        };
+
+        assert_eq!(create.name, "NewCategory");
+        assert_eq!(create.parent_id, Some(2));
+    }
+
+    #[test]
+    fn test_create_category_root() {
+        let create = CreateCategory {
+            name: "RootCategory".to_string(),
+            parent_id: None,
+        };
+
+        assert_eq!(create.name, "RootCategory");
+        assert_eq!(create.parent_id, None);
+    }
+
+    #[test]
+    fn test_update_category_name_only() {
+        let update = UpdateCategory {
+            name: Some("Updated".to_string()),
+            parent_id: None,
+        };
+
+        assert_eq!(update.name, Some("Updated".to_string()));
+        assert_eq!(update.parent_id, None);
+    }
+
+    #[test]
+    fn test_update_category_parent_only() {
+        let update = UpdateCategory {
+            name: None,
+            parent_id: Some(5),
+        };
+
+        assert_eq!(update.name, None);
+        assert_eq!(update.parent_id, Some(5));
+    }
+
+    #[test]
+    fn test_category_with_count_structure() {
+        let cat = CategoryWithCount {
+            id: 3,
+            name: "Active".to_string(),
+            parent_id: None,
+            user_id: 7,
+            document_count: 15,
+        };
+
+        assert_eq!(cat.id, 3);
+        assert_eq!(cat.document_count, 15);
+    }
+
+    #[test]
+    fn test_category_tree_structure() {
+        let tree = CategoryTree {
+            id: 10,
+            name: "Main".to_string(),
+            parent_id: None,
+            document_count: 50,
+            children: vec![
+                CategoryTree {
+                    id: 11,
+                    name: "Sub".to_string(),
+                    parent_id: Some(10),
+                    document_count: 20,
+                    children: vec![],
+                },
+            ],
+        };
+
+        assert_eq!(tree.id, 10);
+        assert_eq!(tree.children.len(), 1);
+        assert_eq!(tree.children[0].parent_id, Some(10));
+    }
+
+    #[test]
+    fn test_build_tree_wide_hierarchy() {
+        let cats = vec![
+            make_category(1, "A", None),
+            make_category(2, "B", None),
+            make_category(3, "C", None),
+            make_category(4, "D", None),
+            make_category(5, "E", None),
+        ];
+        let tree = CategoryTree::build_tree(cats, None);
+
+        assert_eq!(tree.len(), 5);
+        for node in &tree {
+            assert!(node.children.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_build_tree_deep_nesting() {
+        let cats = vec![
+            make_category(1, "L0", None),
+            make_category(2, "L1", Some(1)),
+            make_category(3, "L2", Some(2)),
+            make_category(4, "L3", Some(3)),
+            make_category(5, "L4", Some(4)),
+        ];
+        let tree = CategoryTree::build_tree(cats, None);
+
+        assert_eq!(tree.len(), 1);
+        let mut current = &tree[0];
+        assert_eq!(current.name, "L0");
+
+        for expected_name in &["L1", "L2", "L3", "L4"] {
+            assert_eq!(current.children.len(), 1);
+            current = &current.children[0];
+            assert_eq!(current.name, *expected_name);
+        }
+
+        assert!(current.children.is_empty());
+    }
 }

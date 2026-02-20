@@ -146,4 +146,152 @@ mod tests {
         assert_eq!(tree[0].replies[0].replies.len(), 1);
         assert_eq!(tree[0].replies[0].replies[0].content, "Child of 2");
     }
+
+    #[test]
+    fn test_comment_structure() {
+        let doc_id = Uuid::new_v4();
+        let comment = Comment {
+            id: 1,
+            content: "Great document!".to_string(),
+            document_id: doc_id,
+            user_id: 5,
+            parent_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        assert_eq!(comment.id, 1);
+        assert_eq!(comment.user_id, 5);
+        assert_eq!(comment.document_id, doc_id);
+        assert_eq!(comment.parent_id, None);
+    }
+
+    #[test]
+    fn test_create_comment_top_level() {
+        let doc_id = Uuid::new_v4();
+        let create = CreateComment {
+            content: "New comment".to_string(),
+            document_id: doc_id,
+            parent_id: None,
+        };
+
+        assert_eq!(create.content, "New comment");
+        assert_eq!(create.document_id, doc_id);
+        assert_eq!(create.parent_id, None);
+    }
+
+    #[test]
+    fn test_create_comment_reply() {
+        let create = CreateComment {
+            content: "This is a reply".to_string(),
+            document_id: Uuid::new_v4(),
+            parent_id: Some(42),
+        };
+
+        assert_eq!(create.parent_id, Some(42));
+    }
+
+    #[test]
+    fn test_update_comment() {
+        let update = UpdateComment {
+            content: "Updated content".to_string(),
+        };
+
+        assert_eq!(update.content, "Updated content");
+    }
+
+    #[test]
+    fn test_comment_flat_structure() {
+        let flat = CommentFlat {
+            id: 5,
+            content: "Test comment".to_string(),
+            document_id: Uuid::nil(),
+            user_id: 10,
+            author_name: "John Doe".to_string(),
+            parent_id: Some(1),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        assert_eq!(flat.id, 5);
+        assert_eq!(flat.author_name, "John Doe");
+        assert_eq!(flat.user_id, 10);
+        assert_eq!(flat.parent_id, Some(1));
+    }
+
+    #[test]
+    fn test_comment_with_author_structure() {
+        let author_comment = CommentWithAuthor {
+            id: 1,
+            content: "Authored comment".to_string(),
+            document_id: Uuid::nil(),
+            user_id: 1,
+            author_name: "Alice".to_string(),
+            parent_id: None,
+            replies: vec![],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        assert_eq!(author_comment.author_name, "Alice");
+        assert!(author_comment.replies.is_empty());
+    }
+
+    #[test]
+    fn test_build_tree_multiple_roots_with_replies() {
+        let comments = vec![
+            make_comment(1, "First root", None),
+            make_comment(2, "Reply to 1", Some(1)),
+            make_comment(3, "Second root", None),
+            make_comment(4, "Reply to 3", Some(3)),
+            make_comment(5, "Another reply to 3", Some(3)),
+        ];
+        let tree = CommentWithAuthor::build_tree(comments, None);
+
+        assert_eq!(tree.len(), 2);
+        assert_eq!(tree[0].replies.len(), 1);
+        assert_eq!(tree[1].replies.len(), 2);
+    }
+
+    #[test]
+    fn test_comment_timestamps_preserved() {
+        let now = Utc::now();
+        let flat = CommentFlat {
+            id: 1,
+            content: "Test".to_string(),
+            document_id: Uuid::nil(),
+            user_id: 1,
+            author_name: "Test".to_string(),
+            parent_id: None,
+            created_at: now,
+            updated_at: now,
+        };
+
+        assert_eq!(flat.created_at, now);
+        assert_eq!(flat.updated_at, now);
+    }
+
+    #[test]
+    fn test_build_tree_preserves_all_fields() {
+        let now = Utc::now();
+        let doc_id = Uuid::new_v4();
+        let comments = vec![CommentFlat {
+            id: 99,
+            content: "Test content".to_string(),
+            document_id: doc_id,
+            user_id: 42,
+            author_name: "TestAuthor".to_string(),
+            parent_id: None,
+            created_at: now,
+            updated_at: now,
+        }];
+
+        let tree = CommentWithAuthor::build_tree(comments, None);
+
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].id, 99);
+        assert_eq!(tree[0].user_id, 42);
+        assert_eq!(tree[0].document_id, doc_id);
+        assert_eq!(tree[0].created_at, now);
+    }
 }

@@ -212,4 +212,173 @@ mod tests {
     fn test_korean_search_mode_default_is_morpheme() {
         assert!(matches!(KoreanSearchMode::default(), KoreanSearchMode::Morpheme));
     }
+
+    #[test]
+    fn test_morpheme_structure() {
+        let morpheme = Morpheme {
+            surface: "한글".to_string(),
+            pos: "NNG".to_string(),
+            pos_detail: vec!["일반명사".to_string()],
+            reading: Some("한글".to_string()),
+            start_offset: 0,
+            end_offset: 2,
+        };
+
+        assert_eq!(morpheme.surface, "한글");
+        assert_eq!(morpheme.pos, "NNG");
+        assert_eq!(morpheme.start_offset, 0);
+    }
+
+    #[test]
+    fn test_morpheme_analysis_structure() {
+        let analysis = MorphemeAnalysis {
+            text: "한글 분석".to_string(),
+            morphemes: vec![
+                Morpheme {
+                    surface: "한글".to_string(),
+                    pos: "NNG".to_string(),
+                    pos_detail: vec![],
+                    reading: None,
+                    start_offset: 0,
+                    end_offset: 2,
+                },
+            ],
+            sentences: vec![],
+        };
+
+        assert_eq!(analysis.text, "한글 분석");
+        assert_eq!(analysis.morphemes.len(), 1);
+    }
+
+    #[test]
+    fn test_sentence_structure() {
+        let sentence = Sentence {
+            text: "샘플 문장입니다.".to_string(),
+            morphemes: vec![],
+            start_offset: 0,
+            end_offset: 8,
+        };
+
+        assert_eq!(sentence.text, "샘플 문장입니다.");
+        assert!(sentence.morphemes.is_empty());
+    }
+
+    #[test]
+    fn test_analyze_text_request() {
+        let req = AnalyzeTextRequest {
+            text: "분석할 텍스트".to_string(),
+            options: Some(AnalysisOptions {
+                include_pos: Some(true),
+                include_reading: None,
+                normalize: Some(false),
+                split_sentences: None,
+            }),
+        };
+
+        assert_eq!(req.text, "분석할 텍스트");
+        assert!(req.options.is_some());
+    }
+
+    #[test]
+    fn test_korean_search_query() {
+        let query = KoreanSearchQuery {
+            q: "검색어".to_string(),
+            page: Some(1),
+            limit: Some(20),
+            category_id: None,
+            search_mode: Some(KoreanSearchMode::Morpheme),
+            include_synonyms: Some(true),
+            include_jamo: Some(false),
+            typo_tolerance: Some(true),
+        };
+
+        assert_eq!(query.q, "검색어");
+        assert_eq!(query.page, Some(1));
+        assert_eq!(query.limit, Some(20));
+    }
+
+    #[test]
+    fn test_korean_search_hit() {
+        let hit = KoreanSearchHit {
+            document_id: uuid::Uuid::nil(),
+            title: "문서 제목".to_string(),
+            content_snippet: "내용 요약".to_string(),
+            score: 0.95,
+            highlights: vec![],
+            matched_morphemes: vec!["검색".to_string()],
+            created_at: Utc::now(),
+        };
+
+        assert_eq!(hit.title, "문서 제목");
+        assert!(hit.score > 0.9);
+        assert_eq!(hit.matched_morphemes.len(), 1);
+    }
+
+    #[test]
+    fn test_spell_check_result() {
+        let result = SpellCheckResult {
+            original: "맞춤법 착오".to_string(),
+            corrected: "맞춤법 오류".to_string(),
+            corrections: vec![SpellCorrection {
+                original: "착오".to_string(),
+                suggested: "오류".to_string(),
+                confidence: 0.98,
+                start_offset: 4,
+                end_offset: 6,
+            }],
+            has_errors: true,
+        };
+
+        assert!(result.has_errors);
+        assert_eq!(result.corrections.len(), 1);
+    }
+
+    #[test]
+    fn test_synonym_group() {
+        let group = SynonymGroup {
+            id: 1,
+            name: "컴퓨터".to_string(),
+            synonyms: vec!["PC".to_string(), "컴".to_string()],
+            is_active: true,
+        };
+
+        assert_eq!(group.name, "컴퓨터");
+        assert_eq!(group.synonyms.len(), 2);
+        assert!(group.is_active);
+    }
+
+    #[test]
+    fn test_extracted_keyword() {
+        let kw = ExtractedKeyword {
+            keyword: "한글".to_string(),
+            score: 0.87,
+            frequency: 5,
+            pos: "NNG".to_string(),
+        };
+
+        assert_eq!(kw.keyword, "한글");
+        assert_eq!(kw.frequency, 5);
+    }
+
+    #[test]
+    fn test_match_type_serialization() {
+        let exact = MatchType::Exact;
+        let morpheme = MatchType::Morpheme;
+
+        assert!(matches!(exact, MatchType::Exact));
+        assert!(matches!(morpheme, MatchType::Morpheme));
+    }
+
+    #[test]
+    fn test_korean_search_modes() {
+        let modes = vec![
+            KoreanSearchMode::Morpheme,
+            KoreanSearchMode::Exact,
+            KoreanSearchMode::Fuzzy,
+            KoreanSearchMode::Chosung,
+            KoreanSearchMode::Jamo,
+        ];
+
+        assert_eq!(modes.len(), 5);
+    }
 }

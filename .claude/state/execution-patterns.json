@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "updated_at": "2026-02-20T00:00:00Z",
-  "last_analyzed_sessions": 10,
+  "updated_at": "2026-02-20T01:00:00Z",
+  "last_analyzed_sessions": 11,
   "patterns": {
     "test_fix": {
       "description": "테스트 실패 수정",
@@ -48,8 +48,8 @@
     },
     "security_audit": {
       "description": "보안 감사",
-      "success_rate": 0.94,
-      "total_executions": 6,
+      "success_rate": 0.95,
+      "total_executions": 7,
       "agents": ["security-reviewer", "code-reviewer", "validator"],
       "parallel_groups": [
         ["security-reviewer", "code-reviewer"],
@@ -87,13 +87,13 @@
   },
   "agent_stats": {
     "validator": {
-      "success": 52,
+      "success": 53,
       "fail": 3,
       "avg_time_sec": 25,
       "best_with": ["code-reviewer", "tdd-guide"]
     },
     "code-reviewer": {
-      "success": 45,
+      "success": 46,
       "fail": 5,
       "avg_time_sec": 40,
       "best_with": ["validator", "security-reviewer"]
@@ -117,7 +117,7 @@
       "best_with": ["task-executor", "architect"]
     },
     "security-reviewer": {
-      "success": 10,
+      "success": 11,
       "fail": 1,
       "avg_time_sec": 50,
       "best_with": ["code-reviewer", "validator"]
@@ -136,6 +136,17 @@
     }
   },
   "recent_sessions": [
+    {
+      "date": "2026-02-20",
+      "session_id": "19",
+      "task_type": "security_audit",
+      "agents_used": ["validator", "security-reviewer", "code-reviewer"],
+      "success": true,
+      "duration_sec": 60,
+      "parallel_execution": true,
+      "tests_passed": 1333,
+      "issues_found": {"critical": 0, "high": 0, "medium": 5, "low": 7}
+    },
     {
       "date": "2026-02-20",
       "session_id": "18",

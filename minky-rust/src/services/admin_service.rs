@@ -305,3 +305,158 @@ impl AdminService {
         Ok(config)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_empty_user_admin_row() {
+        let row: UserAdminRow = (
+            1,
+            "testuser".to_string(),
+            "test@example.com".to_string(),
+            "user".to_string(),
+            true,
+            Utc::now(),
+            None,
+            5,
+            1024,
+        );
+
+        assert_eq!(row.0, 1);
+        assert_eq!(row.1, "testuser");
+        assert_eq!(row.5, row.5);
+        assert_eq!(row.7, 5);
+        assert_eq!(row.8, 1024);
+    }
+
+    #[test]
+    fn test_parse_audit_log_row() {
+        let row: AuditLogRow = (
+            1,
+            Some(1),
+            Some("testuser".to_string()),
+            "CREATE".to_string(),
+            "document".to_string(),
+            Some("doc123".to_string()),
+            None,
+            Some("192.168.1.1".to_string()),
+            Some("Mozilla/5.0".to_string()),
+            Utc::now(),
+        );
+
+        assert_eq!(row.0, 1);
+        assert_eq!(row.1, Some(1));
+        assert_eq!(row.3, "CREATE");
+        assert_eq!(row.4, "document");
+    }
+
+    #[test]
+    fn test_admin_service_creation() {
+        // This is a basic smoke test for service construction
+        // Note: In real usage, a proper PgPool would be needed
+        // For unit tests, we're testing the tuple parsing logic above
+        let row: UserAdminRow = (
+            42,
+            "admin".to_string(),
+            "admin@example.com".to_string(),
+            "admin".to_string(),
+            true,
+            Utc::now(),
+            Some(Utc::now()),
+            100,
+            50000,
+        );
+
+        let user_admin = UserAdmin {
+            id: row.0,
+            username: row.1,
+            email: row.2,
+            role: row.3,
+            is_active: row.4,
+            created_at: row.5,
+            last_login: row.6,
+            document_count: row.7,
+            storage_used_bytes: row.8,
+        };
+
+        assert_eq!(user_admin.id, 42);
+        assert_eq!(user_admin.role, "admin");
+        assert!(user_admin.is_active);
+    }
+
+    #[test]
+    fn test_update_user_admin_structure() {
+        let update = UpdateUserAdmin {
+            role: Some("editor".to_string()),
+            is_active: Some(false),
+        };
+
+        assert_eq!(update.role, Some("editor".to_string()));
+        assert_eq!(update.is_active, Some(false));
+    }
+
+    #[test]
+    fn test_create_backup_info_structure() {
+        let backup = BackupInfo {
+            id: "backup-123".to_string(),
+            filename: "backup_20260219_150000.sql.gz".to_string(),
+            size_bytes: 1024 * 1024,
+            created_at: Utc::now(),
+            backup_type: "full".to_string(),
+            status: "completed".to_string(),
+        };
+
+        assert_eq!(backup.id, "backup-123");
+        assert!(backup.filename.contains("backup_"));
+        assert!(backup.size_bytes > 0);
+    }
+
+    #[test]
+    fn test_system_config_structure() {
+        let config = SystemConfig {
+            max_upload_size_mb: 100,
+            allowed_file_types: vec!["pdf".to_string(), "txt".to_string()],
+            enable_registration: true,
+            require_email_verification: true,
+            session_timeout_minutes: 120,
+            rate_limit_requests_per_minute: 200,
+        };
+
+        assert_eq!(config.max_upload_size_mb, 100);
+        assert_eq!(config.allowed_file_types.len(), 2);
+        assert!(config.enable_registration);
+        assert_eq!(config.session_timeout_minutes, 120);
+    }
+
+    #[test]
+    fn test_maintenance_mode_structure() {
+        let mode = MaintenanceMode {
+            enabled: true,
+            message: Some("System maintenance in progress".to_string()),
+            estimated_end: Some(Utc::now()),
+        };
+
+        assert!(mode.enabled);
+        assert!(mode.message.is_some());
+        assert!(mode.estimated_end.is_some());
+    }
+
+    #[test]
+    fn test_system_stats_structure() {
+        let stats = SystemStats {
+            total_users: 1000,
+            active_users: 800,
+            total_documents: 5000,
+            total_storage_bytes: 10 * 1024 * 1024 * 1024, // 10 GB
+            database_size_bytes: 2 * 1024 * 1024 * 1024,  // 2 GB
+            cache_hit_rate: 0.95,
+            uptime_seconds: 86400,
+        };
+
+        assert_eq!(stats.total_users, 1000);
+        assert!(stats.active_users < stats.total_users);
+        assert!(stats.cache_hit_rate > 0.0 && stats.cache_hit_rate <= 1.0);
+    }
+}

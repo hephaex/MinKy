@@ -195,3 +195,159 @@ impl CategoryService {
         Ok(false)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn make_category(id: i32, name: &str, parent_id: Option<i32>) -> Category {
+        Category {
+            id,
+            name: name.to_string(),
+            parent_id,
+            user_id: 1,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn test_create_category_structure() {
+        let create = CreateCategory {
+            name: "Engineering".to_string(),
+            parent_id: None,
+        };
+
+        assert_eq!(create.name, "Engineering");
+        assert_eq!(create.parent_id, None);
+    }
+
+    #[test]
+    fn test_create_category_with_parent() {
+        let create = CreateCategory {
+            name: "Rust".to_string(),
+            parent_id: Some(1),
+        };
+
+        assert_eq!(create.name, "Rust");
+        assert_eq!(create.parent_id, Some(1));
+    }
+
+    #[test]
+    fn test_update_category_partial() {
+        let update = UpdateCategory {
+            name: Some("Updated".to_string()),
+            parent_id: None,
+        };
+
+        assert_eq!(update.name, Some("Updated".to_string()));
+        assert_eq!(update.parent_id, None);
+    }
+
+    #[test]
+    fn test_update_category_all_fields() {
+        let update = UpdateCategory {
+            name: Some("New Name".to_string()),
+            parent_id: Some(5),
+        };
+
+        assert_eq!(update.name, Some("New Name".to_string()));
+        assert_eq!(update.parent_id, Some(5));
+    }
+
+    #[test]
+    fn test_category_structure() {
+        let cat = make_category(42, "Documentation", Some(1));
+
+        assert_eq!(cat.id, 42);
+        assert_eq!(cat.name, "Documentation");
+        assert_eq!(cat.parent_id, Some(1));
+        assert_eq!(cat.user_id, 1);
+    }
+
+    #[test]
+    fn test_category_tree_structure() {
+        let tree = CategoryTree {
+            id: 1,
+            name: "Root".to_string(),
+            parent_id: None,
+            document_count: 5,
+            children: vec![
+                CategoryTree {
+                    id: 2,
+                    name: "Child".to_string(),
+                    parent_id: Some(1),
+                    document_count: 3,
+                    children: vec![],
+                },
+            ],
+        };
+
+        assert_eq!(tree.id, 1);
+        assert_eq!(tree.children.len(), 1);
+        assert_eq!(tree.document_count, 5);
+    }
+
+    #[test]
+    fn test_category_with_count_structure() {
+        let cat = CategoryWithCount {
+            id: 10,
+            name: "Projects".to_string(),
+            parent_id: None,
+            user_id: 1,
+            document_count: 25,
+        };
+
+        assert_eq!(cat.id, 10);
+        assert_eq!(cat.document_count, 25);
+        assert_eq!(cat.name, "Projects");
+    }
+
+    #[test]
+    fn test_build_tree_single_root() {
+        let categories = vec![CategoryWithCount {
+            id: 1,
+            name: "Root".to_string(),
+            parent_id: None,
+            user_id: 1,
+            document_count: 10,
+        }];
+
+        let tree = CategoryTree::build_tree(categories, None);
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].name, "Root");
+        assert_eq!(tree[0].document_count, 10);
+    }
+
+    #[test]
+    fn test_build_tree_with_hierarchy() {
+        let categories = vec![
+            CategoryWithCount {
+                id: 1,
+                name: "Engineering".to_string(),
+                parent_id: None,
+                user_id: 1,
+                document_count: 0,
+            },
+            CategoryWithCount {
+                id: 2,
+                name: "Frontend".to_string(),
+                parent_id: Some(1),
+                user_id: 1,
+                document_count: 5,
+            },
+            CategoryWithCount {
+                id: 3,
+                name: "Backend".to_string(),
+                parent_id: Some(1),
+                user_id: 1,
+                document_count: 8,
+            },
+        ];
+
+        let tree = CategoryTree::build_tree(categories, None);
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].children.len(), 2);
+    }
+}
