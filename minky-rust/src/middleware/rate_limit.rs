@@ -58,6 +58,36 @@ impl RateLimiter {
     }
 }
 
+/// Rate limiting middleware
+pub async fn rate_limit_middleware(
+    request: Request,
+    next: Next,
+) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
+    // Extract client identifier (IP or user ID)
+    let client_id = request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    // Use a simple in-memory rate limiter (100 requests per minute)
+    static LIMITER: std::sync::OnceLock<RateLimiter> = std::sync::OnceLock::new();
+    let limiter = LIMITER.get_or_init(|| RateLimiter::new(100, 60));
+
+    if limiter.check(&client_id).await {
+        Ok(next.run(request).await)
+    } else {
+        Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "error": "Rate limit exceeded",
+                "retry_after": 60
+            })),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,35 +133,5 @@ mod tests {
         limiter.cleanup().await;
         // Now the key should have been removed; a fresh check should succeed
         assert!(limiter.check("cleanup_client").await);
-    }
-}
-
-/// Rate limiting middleware
-pub async fn rate_limit_middleware(
-    request: Request,
-    next: Next,
-) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
-    // Extract client identifier (IP or user ID)
-    let client_id = request
-        .headers()
-        .get("x-forwarded-for")
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
-
-    // Use a simple in-memory rate limiter (100 requests per minute)
-    static LIMITER: std::sync::OnceLock<RateLimiter> = std::sync::OnceLock::new();
-    let limiter = LIMITER.get_or_init(|| RateLimiter::new(100, 60));
-
-    if limiter.check(&client_id).await {
-        Ok(next.run(request).await)
-    } else {
-        Err((
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(json!({
-                "error": "Rate limit exceeded",
-                "retry_after": 60
-            })),
-        ))
     }
 }

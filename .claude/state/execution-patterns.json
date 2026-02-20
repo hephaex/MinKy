@@ -1,16 +1,17 @@
 {
   "version": "1.0",
-  "updated_at": "2026-02-20T09:00:00Z",
+  "updated_at": "2026-02-21T10:00:00Z",
   "last_analyzed_sessions": 13,
   "last_orchestration": {
-    "date": "2026-02-20",
-    "recipe": "security_audit",
+    "date": "2026-02-21",
+    "recipe": "refactor",
     "result": "success",
-    "recommendations_generated": 4,
-    "agents_executed": ["security-reviewer", "code-reviewer", "validator"],
+    "recommendations_generated": 2,
+    "agents_executed": ["refactor-cleaner", "validator", "code-reviewer"],
     "parallel_execution": true,
-    "issues_fixed": {"critical": 4, "high": 2},
-    "commits": ["1e5da9a3", "28fd3bbf", "1da141b9"]
+    "code_removed_lines": 200,
+    "modules_created": 2,
+    "commits": ["9a7bfc15", "86d9a27a", "830ef366"]
   },
   "patterns": {
     "test_fix": {
@@ -25,14 +26,20 @@
       ],
       "avg_duration_sec": 45,
       "common_issues": ["selector mismatch", "async timing", "mock setup"],
-      "recovery_actions": ["jest.resetModules()", "container.querySelector()"]
+      "recovery_actions": ["jest.resetModules()", "container.querySelector()"],
+      "recommendations": [
+        "Run tdd-guide and debugger in parallel for faster root cause analysis",
+        "Use container.querySelector for React Testing Library selector issues",
+        "Check async timing with waitFor and act wrappers"
+      ]
     },
     "feature_impl": {
       "description": "새 기능 구현",
       "success_rate": 0.88,
       "total_executions": 12,
-      "agents": ["planner", "task-executor", "validator", "security-reviewer", "code-reviewer"],
+      "agents": ["build-error-resolver", "planner", "task-executor", "validator", "security-reviewer", "code-reviewer"],
       "parallel_groups": [
+        ["build-error-resolver"],
         ["planner"],
         ["task-executor"],
         ["validator", "security-reviewer"],
@@ -40,12 +47,22 @@
       ],
       "avg_duration_sec": 180,
       "common_issues": ["type errors", "missing imports", "test coverage"],
-      "recovery_actions": ["cargo check", "npm run build"]
+      "recovery_actions": ["cargo check", "npm run build"],
+      "pre_check": {
+        "enabled": true,
+        "commands": ["cargo check", "npm run build"],
+        "on_failure": "abort_with_build_fix"
+      },
+      "recommendations": [
+        "Run cargo check before implementation to catch type errors early",
+        "Ensure all imports are resolved before task-executor starts",
+        "Add test coverage check after implementation"
+      ]
     },
     "refactor": {
       "description": "코드 리팩토링",
       "success_rate": 0.92,
-      "total_executions": 8,
+      "total_executions": 9,
       "agents": ["architect", "refactor-cleaner", "task-executor", "validator", "code-reviewer"],
       "parallel_groups": [
         ["architect", "refactor-cleaner"],
@@ -54,7 +71,12 @@
       ],
       "avg_duration_sec": 120,
       "common_issues": ["breaking changes", "unused imports"],
-      "recovery_actions": ["git stash", "incremental apply"]
+      "recovery_actions": ["git stash", "incremental apply"],
+      "recommendations": [
+        "Run architect and refactor-cleaner in parallel for comprehensive analysis",
+        "Apply changes incrementally to catch breaking changes early",
+        "Create shared modules for duplicate code patterns"
+      ]
     },
     "security_audit": {
       "description": "보안 감사",
@@ -67,7 +89,12 @@
       ],
       "avg_duration_sec": 90,
       "common_issues": ["XSS", "SQL injection", "hardcoded secrets"],
-      "recovery_actions": ["input validation", "parameterized queries"]
+      "recovery_actions": ["input validation", "parameterized queries"],
+      "recommendations": [
+        "Run security-reviewer and code-reviewer in parallel for multiple perspectives",
+        "Focus on OWASP Top 10 vulnerabilities",
+        "Check for hardcoded secrets before any commit"
+      ]
     },
     "docs_update": {
       "description": "문서 업데이트",
@@ -79,7 +106,12 @@
       ],
       "avg_duration_sec": 30,
       "common_issues": ["outdated examples", "missing sections"],
-      "recovery_actions": ["sync with code"]
+      "recovery_actions": ["sync with code"],
+      "recommendations": [
+        "Run doc-updater and technical-writer in parallel for speed",
+        "Keep code examples in sync with actual implementation",
+        "Update codemaps after significant changes"
+      ]
     },
     "build_fix": {
       "description": "빌드 에러 수정",
@@ -92,7 +124,12 @@
       ],
       "avg_duration_sec": 60,
       "common_issues": ["type mismatch", "missing dependency", "syntax error"],
-      "recovery_actions": ["cargo check", "npm install"]
+      "recovery_actions": ["cargo check", "npm install"],
+      "recommendations": [
+        "Focus on one error at a time - fix the first error before moving on",
+        "Check for missing dependencies with cargo check or npm install",
+        "Verify with validator after each fix"
+      ]
     }
   },
   "agent_stats": {
@@ -146,6 +183,20 @@
     }
   },
   "recent_sessions": [
+    {
+      "date": "2026-02-21",
+      "session_id": "23",
+      "task_type": "refactor",
+      "agents_used": ["refactor-cleaner", "validator", "code-reviewer"],
+      "success": true,
+      "duration_sec": 90,
+      "parallel_execution": true,
+      "tests_passed": 1356,
+      "code_removed_lines": 200,
+      "modules_created": ["routes/common.rs", "services/anthropic_types.rs"],
+      "commits": ["9a7bfc15", "86d9a27a", "830ef366"],
+      "files_changed": 10
+    },
     {
       "date": "2026-02-20",
       "session_id": "22",

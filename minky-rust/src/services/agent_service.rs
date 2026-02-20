@@ -338,6 +338,7 @@ mod tests {
     use chrono::Utc;
     use secrecy::SecretString;
 
+    #[allow(dead_code)]
     fn make_config() -> Config {
         Config {
             environment: "test".to_string(),
@@ -359,6 +360,7 @@ mod tests {
         }
     }
 
+    #[allow(dead_code)]
     fn make_service() -> AgentService {
         let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
         AgentService::new(pool, make_config())

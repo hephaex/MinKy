@@ -88,7 +88,7 @@ fn knowledge_graph_query_defaults_are_reasonable() {
 
     let threshold = q.threshold.unwrap_or(0.0);
     assert!(
-        threshold >= 0.0 && threshold <= 1.0,
+        (0.0..=1.0).contains(&threshold),
         "threshold must be in [0, 1]"
     );
 

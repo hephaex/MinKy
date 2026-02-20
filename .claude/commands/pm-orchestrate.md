@@ -36,6 +36,19 @@ READ PROGRESS.md (현재 상황)
 | docs, 문서 | docs_update | doc-updater + technical-writer |
 | build, 빌드, error | build_fix | build-error-resolver → validator |
 
+### 2.5단계: 사전 검증 (Pre-check)
+
+```
+IF recipe.pre_check.enabled:
+  FOR each command IN recipe.pre_check.commands:
+    result = Bash[command]
+    IF failure:
+      → recipe.pre_check.on_failure 실행
+      → "abort_with_build_fix" → build_fix 레시피로 전환
+      → "continue" → 경고 후 계속
+      → "abort" → 중단
+```
+
 ### 3단계: 병렬 실행
 
 ```

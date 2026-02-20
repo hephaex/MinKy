@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_korean_search_modes() {
-        let modes = vec![
+        let modes = [
             KoreanSearchMode::Morpheme,
             KoreanSearchMode::Exact,
             KoreanSearchMode::Fuzzy,

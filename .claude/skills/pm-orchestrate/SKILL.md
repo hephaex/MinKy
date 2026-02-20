@@ -32,13 +32,30 @@ ANALYZE:
 
 현재 작업을 분석하여 최적의 레시피를 선택합니다:
 
-| 작업 유형 | 레시피 | 병렬 실행 비율 |
-|----------|--------|--------------|
-| 테스트 수정 | test_fix | 66% |
-| 기능 구현 | feature_impl | 50% |
-| 리팩토링 | refactor | 60% |
-| 보안 감사 | security_audit | 66% |
-| 빌드 수정 | build_fix | 50% |
+| 작업 유형 | 레시피 | 병렬 실행 비율 | 사전 검증 |
+|----------|--------|--------------|----------|
+| 테스트 수정 | test_fix | 66% | - |
+| 기능 구현 | feature_impl | 50% | cargo check, npm build |
+| 리팩토링 | refactor | 60% | - |
+| 보안 감사 | security_audit | 66% | - |
+| 빌드 수정 | build_fix | 50% | - |
+
+### 2.5. 사전 검증 (Pre-check)
+
+feature_impl 패턴은 구현 전 사전 검증을 수행합니다:
+
+```python
+if recipe.pre_check and recipe.pre_check.enabled:
+    for command in recipe.pre_check.commands:
+        result = run_bash(command)
+        if not result.success:
+            if recipe.pre_check.on_failure == "abort_with_build_fix":
+                # 빌드 수정 레시피로 자동 전환
+                return execute_recipe("build_fix")
+            elif recipe.pre_check.on_failure == "abort":
+                return error("Pre-check failed")
+            # "continue" → 경고 후 계속 진행
+```
 
 ### 3. 병렬 에이전트 실행
 
