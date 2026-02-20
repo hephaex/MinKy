@@ -1,6 +1,7 @@
 mod admin;
 mod agents;
 mod ai;
+pub mod common;
 mod analytics;
 mod attachments;
 mod auth;

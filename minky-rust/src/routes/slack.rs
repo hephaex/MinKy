@@ -33,48 +33,9 @@ use crate::{
     AppState,
 };
 
+use super::common::{into_error_response, ApiResponse};
+
 type HmacSha256 = Hmac<Sha256>;
-
-// ---------------------------------------------------------------------------
-// Response wrapper
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Serialize)]
-struct ApiResponse<T: Serialize> {
-    success: bool,
-    data: T,
-}
-
-impl<T: Serialize> ApiResponse<T> {
-    fn ok(data: T) -> Json<Self> {
-        Json(Self {
-            success: true,
-            data,
-        })
-    }
-}
-
-fn into_error_response(err: AppError) -> (StatusCode, Json<serde_json::Value>) {
-    let status = match &err {
-        AppError::NotFound(_) => StatusCode::NOT_FOUND,
-        AppError::Validation(_) => StatusCode::BAD_REQUEST,
-        AppError::Unauthorized => StatusCode::UNAUTHORIZED,
-        AppError::Forbidden => StatusCode::FORBIDDEN,
-        AppError::Conflict(_) => StatusCode::CONFLICT,
-        AppError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
-        AppError::Configuration(_) | AppError::Internal(_) | AppError::Database(_) => {
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
-        AppError::ExternalService(_) => StatusCode::BAD_GATEWAY,
-    };
-
-    let body = Json(serde_json::json!({
-        "success": false,
-        "error": err.to_string(),
-    }));
-
-    (status, body)
-}
 
 // ---------------------------------------------------------------------------
 // Request / Response types

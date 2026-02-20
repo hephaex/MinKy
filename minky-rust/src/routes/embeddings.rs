@@ -14,7 +14,7 @@ use axum::{
     Json, Router,
 };
 use secrecy::ExposeSecret;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
@@ -28,6 +28,8 @@ use crate::{
     services::{EmbeddingConfig, EmbeddingService},
     AppState,
 };
+
+use super::common::{into_error_response, ApiResponse};
 
 // ---------------------------------------------------------------------------
 // Helper
@@ -70,21 +72,6 @@ pub struct QueueRequest {
     pub priority: i32,
 }
 
-/// Generic success wrapper
-#[derive(Debug, Serialize)]
-pub struct ApiResponse<T: Serialize> {
-    pub success: bool,
-    pub data: T,
-}
-
-impl<T: Serialize> ApiResponse<T> {
-    fn ok(data: T) -> Json<Self> {
-        Json(Self {
-            success: true,
-            data,
-        })
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Handlers
@@ -314,32 +301,6 @@ async fn queue_document(
         .await
         .map(ApiResponse::ok)
         .map_err(into_error_response)
-}
-
-// ---------------------------------------------------------------------------
-// Error helper
-// ---------------------------------------------------------------------------
-
-fn into_error_response(err: AppError) -> (StatusCode, Json<serde_json::Value>) {
-    let status = match &err {
-        AppError::NotFound(_) => StatusCode::NOT_FOUND,
-        AppError::Validation(_) => StatusCode::BAD_REQUEST,
-        AppError::Unauthorized => StatusCode::UNAUTHORIZED,
-        AppError::Forbidden => StatusCode::FORBIDDEN,
-        AppError::Conflict(_) => StatusCode::CONFLICT,
-        AppError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
-        AppError::Configuration(_) | AppError::Internal(_) | AppError::Database(_) => {
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
-        AppError::ExternalService(_) => StatusCode::BAD_GATEWAY,
-    };
-
-    let body = Json(serde_json::json!({
-        "success": false,
-        "error": err.to_string(),
-    }));
-
-    (status, body)
 }
 
 // ---------------------------------------------------------------------------
