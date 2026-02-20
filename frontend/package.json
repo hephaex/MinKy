@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@uiw/react-codemirror": "^4.21.21",
     "@uiw/react-md-editor": "^3.23.5",
     "axios": "^1.4.0",
     "dompurify": "^3.3.1",
