@@ -34,7 +34,7 @@ impl std::fmt::Display for NodeType {
 /// A single node in the knowledge graph
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphNode {
-    /// Unique identifier for the node (e.g. "doc-<uuid>" or "topic-<label>")
+    /// Unique identifier for the node (e.g. `doc-{uuid}` or `topic-{label}`)
     pub id: String,
 
     /// Human-readable label shown in the UI

@@ -44,7 +44,7 @@ pub struct Config {
     /// Slack signing secret (for webhook signature verification)
     pub slack_signing_secret: Option<SecretString>,
 
-    /// CORS allowed origins (comma-separated, e.g., "http://localhost:3000,https://minky.example.com")
+    /// CORS allowed origins (comma-separated, e.g., `http://localhost:3000,https://minky.example.com`)
     #[serde(default = "default_cors_origins")]
     pub cors_allowed_origins: String,
 }
