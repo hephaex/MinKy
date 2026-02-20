@@ -21,6 +21,7 @@ use sha2::Sha256;
 
 use crate::{
     error::AppError,
+    middleware::AuthUser,
     models::{
         ConfirmKnowledgeRequest, ExtractedKnowledge, ExtractionStatus, ExtractionSummary,
         MessageFilter, PlatformMessage,
@@ -331,6 +332,7 @@ pub fn extract_messages_from_event(
 /// Requires `ANTHROPIC_API_KEY` to be configured in the environment.
 async fn extract_knowledge(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(req): Json<ExtractKnowledgeRequest>,
 ) -> Result<Json<ApiResponse<ExtractKnowledgeResponse>>, (StatusCode, Json<serde_json::Value>)> {
     use secrecy::ExposeSecret;
@@ -381,6 +383,7 @@ async fn extract_knowledge(
 /// Currently returns a stub summary until DB persistence is wired.
 async fn get_extraction_summary(
     State(_state): State<AppState>,
+    _auth_user: AuthUser,
     Query(_query): Query<SummaryQuery>,
 ) -> Result<Json<ApiResponse<ExtractionSummary>>, (StatusCode, Json<serde_json::Value>)> {
     // TODO: query extraction_jobs table once DB schema is added.
@@ -403,6 +406,7 @@ async fn get_extraction_summary(
 /// Accepts or rejects an extraction, optionally overriding title/summary.
 async fn confirm_knowledge(
     State(_state): State<AppState>,
+    _auth_user: AuthUser,
     Json(req): Json<ConfirmKnowledgeRequest>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, (StatusCode, Json<serde_json::Value>)> {
     // TODO: persist confirmation to database once extraction_jobs table exists.
@@ -419,6 +423,7 @@ async fn confirm_knowledge(
 /// Retrieve a previously extracted knowledge item by conversation ID.
 async fn get_extraction(
     State(_state): State<AppState>,
+    _auth_user: AuthUser,
     Path(conversation_id): Path<String>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, (StatusCode, Json<serde_json::Value>)> {
     // TODO: look up extraction_jobs table.

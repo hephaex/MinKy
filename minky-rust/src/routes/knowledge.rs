@@ -14,6 +14,7 @@ use serde::Serialize;
 
 use crate::{
     error::AppError,
+    middleware::AuthUser,
     models::knowledge_graph::{KnowledgeGraph, KnowledgeGraphQuery, TeamExpertiseMap},
     services::KnowledgeGraphService,
     AppState,
@@ -77,6 +78,7 @@ fn into_error_response(err: AppError) -> (StatusCode, Json<serde_json::Value>) {
 /// - `max_documents` – maximum document nodes in graph (default: 100)
 async fn get_knowledge_graph(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<KnowledgeGraphQuery>,
 ) -> Result<Json<ApiResponse<KnowledgeGraph>>, (StatusCode, Json<serde_json::Value>)> {
     let service = KnowledgeGraphService::new(state.db.clone());
@@ -93,6 +95,7 @@ async fn get_knowledge_graph(
 /// Return the team expertise map derived from document authorship and AI analysis.
 async fn get_team_expertise(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
 ) -> Result<Json<ApiResponse<TeamExpertiseMap>>, (StatusCode, Json<serde_json::Value>)> {
     let service = KnowledgeGraphService::new(state.db.clone());
 
