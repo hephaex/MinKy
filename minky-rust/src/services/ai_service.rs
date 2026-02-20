@@ -361,6 +361,7 @@ mod tests {
             slack_client_secret: None,
             slack_redirect_uri: None,
             slack_signing_secret: None,
+            cors_allowed_origins: "http://localhost:3000".to_string(),
         };
         AIService::new(config)
     }

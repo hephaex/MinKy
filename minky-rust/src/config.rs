@@ -43,6 +43,14 @@ pub struct Config {
 
     /// Slack signing secret (for webhook signature verification)
     pub slack_signing_secret: Option<SecretString>,
+
+    /// CORS allowed origins (comma-separated, e.g., "http://localhost:3000,https://minky.example.com")
+    #[serde(default = "default_cors_origins")]
+    pub cors_allowed_origins: String,
+}
+
+fn default_cors_origins() -> String {
+    "http://localhost:3000,http://127.0.0.1:3000".to_string()
 }
 
 fn default_environment() -> String {
@@ -104,6 +112,7 @@ mod tests {
             slack_client_secret: None,
             slack_redirect_uri: None,
             slack_signing_secret: None,
+            cors_allowed_origins: "http://localhost:3000".to_string(),
         }
     }
 
@@ -192,5 +201,18 @@ mod tests {
     fn test_config_default_port_is_8000() {
         let config = make_config("s");
         assert_eq!(config.port, 8000);
+    }
+
+    #[test]
+    fn test_cors_allowed_origins_can_be_parsed() {
+        let config = make_config("s");
+        let origins: Vec<&str> = config.cors_allowed_origins.split(',').collect();
+        assert!(!origins.is_empty());
+    }
+
+    #[test]
+    fn test_default_cors_origins() {
+        let default = default_cors_origins();
+        assert!(default.contains("localhost:3000"));
     }
 }
