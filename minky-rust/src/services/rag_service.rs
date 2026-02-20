@@ -18,7 +18,6 @@
 
 use chrono::Utc;
 use secrecy::ExposeSecret;
-use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -31,7 +30,10 @@ use crate::{
         RagSemanticSearchResponse, RagSemanticSearchResult, RagSource,
         SearchHistoryEntry, SearchHistoryQuery,
     },
-    services::{EmbeddingConfig, EmbeddingService},
+    services::{
+        anthropic_types::{AnthropicMessage, AnthropicRequest, AnthropicResponse},
+        EmbeddingConfig, EmbeddingService,
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -324,8 +326,11 @@ Always cite which source number(s) you used when possible.";
             .map(|c| c.text.clone())
             .unwrap_or_default();
 
-        let tokens_used = result.usage.input_tokens + result.usage.output_tokens;
-        let model = result.model.clone();
+        let tokens_used = result
+            .usage
+            .map(|u| u.input_tokens + u.output_tokens)
+            .unwrap_or(0);
+        let model = result.model.clone().unwrap_or_default();
 
         Ok((answer, tokens_used, model))
     }
@@ -363,41 +368,6 @@ Always cite which source number(s) you used when possible.";
     }
 }
 
-// ---------------------------------------------------------------------------
-// Internal Anthropic API types
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Serialize)]
-struct AnthropicRequest {
-    model: String,
-    max_tokens: u32,
-    system: Option<String>,
-    messages: Vec<AnthropicMessage>,
-}
-
-#[derive(Debug, Serialize)]
-struct AnthropicMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicResponse {
-    model: String,
-    content: Vec<AnthropicContent>,
-    usage: AnthropicUsage,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicContent {
-    text: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicUsage {
-    input_tokens: u32,
-    output_tokens: u32,
-}
 
 // ---------------------------------------------------------------------------
 // Internal database row type

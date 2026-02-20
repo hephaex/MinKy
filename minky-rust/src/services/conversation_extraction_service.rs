@@ -14,12 +14,14 @@
 //! mocked HTTP (wiremock).
 
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     error::AppError,
     models::{ExtractedKnowledge, ExtractionStatus, MessageFilter, PlatformMessage},
-    services::{ConversationStats, SlackService},
+    services::{
+        anthropic_types::{AnthropicMessage, AnthropicRequest, AnthropicResponse},
+        ConversationStats, SlackService,
+    },
 };
 
 // ---------------------------------------------------------------------------
@@ -69,33 +71,6 @@ pub struct ExtractionResult {
     pub stats: ConversationStats,
 }
 
-// ---------------------------------------------------------------------------
-// Anthropic API types (minimal)
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Serialize)]
-struct AnthropicRequest {
-    model: String,
-    max_tokens: u32,
-    system: String,
-    messages: Vec<AnthropicMessage>,
-}
-
-#[derive(Debug, Serialize)]
-struct AnthropicMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicResponse {
-    content: Vec<AnthropicContent>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicContent {
-    text: String,
-}
 
 // ---------------------------------------------------------------------------
 // Service
@@ -214,7 +189,7 @@ Guidelines:
         let request_body = AnthropicRequest {
             model: self.config.model.clone(),
             max_tokens: self.config.max_tokens,
-            system: Self::build_system_prompt(),
+            system: Some(Self::build_system_prompt()),
             messages: vec![AnthropicMessage {
                 role: "user".to_string(),
                 content: format!(

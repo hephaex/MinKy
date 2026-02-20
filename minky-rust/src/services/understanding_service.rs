@@ -22,13 +22,14 @@
 
 use reqwest::Client;
 use secrecy::ExposeSecret;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
     config::Config,
     error::{AppError, AppResult},
     models::{DocumentUnderstandingRequest, DocumentUnderstandingResponse},
+    services::anthropic_types::{AnthropicMessage, AnthropicRequest, AnthropicResponse},
 };
 
 /// Service for AI-powered document understanding using Claude
@@ -198,33 +199,6 @@ fn parse_understanding_response(raw: &str) -> AppResult<DocumentUnderstandingRes
     })
 }
 
-// ---------------------------------------------------------------------------
-// Internal types for Anthropic API
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Serialize)]
-struct AnthropicRequest {
-    model: String,
-    max_tokens: u32,
-    system: Option<String>,
-    messages: Vec<AnthropicMessage>,
-}
-
-#[derive(Debug, Serialize)]
-struct AnthropicMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicResponse {
-    content: Vec<AnthropicContent>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicContent {
-    text: String,
-}
 
 /// Intermediate struct for JSON deserialization
 #[derive(Debug, Deserialize)]

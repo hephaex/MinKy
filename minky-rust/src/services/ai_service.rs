@@ -9,6 +9,7 @@ use crate::{
         AIModelConfig, ChatMessage, ChatRole, EmbeddingResponse, LLMProvider,
         SuggestionRequest, SuggestionResponse, SuggestionType,
     },
+    services::anthropic_types::{AnthropicMessage, AnthropicRequest, AnthropicResponse},
 };
 
 /// AI service for LLM interactions
@@ -166,7 +167,10 @@ impl AIService {
             .map(|c| c.text.clone())
             .unwrap_or_default();
 
-        let tokens = result.usage.input_tokens + result.usage.output_tokens;
+        let tokens = result
+            .usage
+            .map(|u| u.input_tokens + u.output_tokens)
+            .unwrap_or(0);
 
         Ok((content, tokens))
     }
@@ -259,37 +263,6 @@ impl AIService {
     }
 }
 
-// Anthropic API types
-#[derive(Debug, Serialize)]
-struct AnthropicRequest {
-    model: String,
-    max_tokens: u32,
-    system: Option<String>,
-    messages: Vec<AnthropicMessage>,
-}
-
-#[derive(Debug, Serialize)]
-struct AnthropicMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicResponse {
-    content: Vec<AnthropicContent>,
-    usage: AnthropicUsage,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicContent {
-    text: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AnthropicUsage {
-    input_tokens: u32,
-    output_tokens: u32,
-}
 
 // OpenAI API types
 #[derive(Debug, Serialize)]

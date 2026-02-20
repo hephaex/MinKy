@@ -33,6 +33,7 @@ pub struct AttachmentListResponse {
 
 async fn list_attachments(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> AppResult<Json<AttachmentListResponse>> {
     let upload_dir = PathBuf::from("./uploads");
@@ -149,6 +150,7 @@ async fn upload_attachment(
 
 async fn download_attachment(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
     let upload_dir = PathBuf::from("./uploads");
@@ -178,6 +180,7 @@ async fn download_attachment(
 
 async fn get_attachment_info(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<AttachmentResponse>> {
     let upload_dir = PathBuf::from("./uploads");

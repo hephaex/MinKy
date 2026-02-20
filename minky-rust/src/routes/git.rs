@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{
         CommitRequest, CreateBranchRequest, GitBranch, GitCommit, GitDiff, GitLogEntry,
         GitRepository, GitStatus, PullRequest, PushRequest,
@@ -45,7 +46,7 @@ pub struct RepositoryResponse {
     pub data: GitRepository,
 }
 
-async fn get_repository_info(State(state): State<AppState>) -> AppResult<Json<RepositoryResponse>> {
+async fn get_repository_info(State(state): State<AppState>, _auth_user: AuthUser) -> AppResult<Json<RepositoryResponse>> {
     let service = get_git_service(&state);
     let info = service.get_repository_info()?;
 
@@ -61,7 +62,7 @@ pub struct StatusResponse {
     pub data: GitStatus,
 }
 
-async fn get_status(State(state): State<AppState>) -> AppResult<Json<StatusResponse>> {
+async fn get_status(State(state): State<AppState>, _auth_user: AuthUser) -> AppResult<Json<StatusResponse>> {
     let service = get_git_service(&state);
     let status = service.get_status()?;
 
@@ -84,6 +85,7 @@ pub struct LogResponse {
 
 async fn get_log(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<LogQuery>,
 ) -> AppResult<Json<LogResponse>> {
     let service = get_git_service(&state);
@@ -102,7 +104,7 @@ pub struct BranchesResponse {
     pub data: Vec<GitBranch>,
 }
 
-async fn list_branches(State(state): State<AppState>) -> AppResult<Json<BranchesResponse>> {
+async fn list_branches(State(state): State<AppState>, _auth_user: AuthUser) -> AppResult<Json<BranchesResponse>> {
     let service = get_git_service(&state);
     let branches = service.list_branches()?;
 
@@ -120,6 +122,7 @@ pub struct BranchResponse {
 
 async fn create_branch(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<CreateBranchRequest>,
 ) -> AppResult<Json<BranchResponse>> {
     let service = get_git_service(&state);
@@ -139,6 +142,7 @@ pub struct MessageResponse {
 
 async fn checkout_branch(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(name): Path<String>,
 ) -> AppResult<Json<MessageResponse>> {
     let service = get_git_service(&state);
@@ -158,6 +162,7 @@ pub struct CommitResponse {
 
 async fn commit(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<CommitRequest>,
 ) -> AppResult<Json<CommitResponse>> {
     let service = get_git_service(&state);
@@ -171,6 +176,7 @@ async fn commit(
 
 async fn push(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<PushRequest>,
 ) -> AppResult<Json<MessageResponse>> {
     let service = get_git_service(&state);
@@ -184,6 +190,7 @@ async fn push(
 
 async fn pull(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<PullRequest>,
 ) -> AppResult<Json<MessageResponse>> {
     let service = get_git_service(&state);
@@ -208,6 +215,7 @@ pub struct DiffResponse {
 
 async fn get_diff(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<DiffQuery>,
 ) -> AppResult<Json<DiffResponse>> {
     let service = get_git_service(&state);
@@ -227,6 +235,7 @@ pub struct StageRequest {
 
 async fn stage_files(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<StageRequest>,
 ) -> AppResult<Json<MessageResponse>> {
     let service = get_git_service(&state);
