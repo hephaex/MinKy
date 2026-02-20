@@ -17,6 +17,7 @@ use serde::Serialize;
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{
         RagAskRequest, RagAskResponse, RagSemanticSearchRequest,
         RagSemanticSearchResponse, SearchHistoryEntry, SearchHistoryQuery,
@@ -93,6 +94,7 @@ struct HistoryResponseBody {
 /// ```
 async fn ask(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<RagAskRequest>,
 ) -> AppResult<Json<AskResponseBody>> {
     if payload.question.trim().is_empty() {
@@ -142,6 +144,7 @@ async fn ask(
 /// ```
 async fn semantic_search(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<RagSemanticSearchRequest>,
 ) -> AppResult<Json<SemanticResponseBody>> {
     if payload.query.trim().is_empty() {
@@ -178,6 +181,7 @@ async fn semantic_search(
 /// ```
 async fn search_history(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<SearchHistoryQuery>,
 ) -> AppResult<Json<HistoryResponseBody>> {
     let service = RagService::new(state.db.clone(), state.config.clone());

@@ -8,6 +8,7 @@ use validator::Validate;
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{EmbeddingResponse, SuggestionRequest, SuggestionResponse, SuggestionType},
     services::AIService,
     AppState,
@@ -39,6 +40,7 @@ pub struct SuggestionResponseBody {
 
 async fn generate_suggestion(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<SuggestionRequestBody>,
 ) -> AppResult<Json<SuggestionResponseBody>> {
     let service = AIService::new(state.config.clone());
@@ -66,6 +68,7 @@ pub struct ContentRequest {
 
 async fn suggest_title(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<ContentRequest>,
 ) -> AppResult<Json<SuggestionResponseBody>> {
     let service = AIService::new(state.config.clone());
@@ -86,6 +89,7 @@ async fn suggest_title(
 
 async fn suggest_summary(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<ContentRequest>,
 ) -> AppResult<Json<SuggestionResponseBody>> {
     let service = AIService::new(state.config.clone());
@@ -106,6 +110,7 @@ async fn suggest_summary(
 
 async fn suggest_tags(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<ContentRequest>,
 ) -> AppResult<Json<SuggestionResponseBody>> {
     let service = AIService::new(state.config.clone());
@@ -126,6 +131,7 @@ async fn suggest_tags(
 
 async fn improve_text(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<ContentRequest>,
 ) -> AppResult<Json<SuggestionResponseBody>> {
     let service = AIService::new(state.config.clone());
@@ -158,6 +164,7 @@ pub struct EmbeddingResponseBody {
 
 async fn generate_embedding(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(payload): Json<EmbeddingRequest>,
 ) -> AppResult<Json<EmbeddingResponseBody>> {
     let service = AIService::new(state.config.clone());

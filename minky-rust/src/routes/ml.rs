@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::Deserialize;
 
+use crate::middleware::AuthUser;
 use crate::models::{
     AnomalyResult, ClusteredDocument, ClusteringJob, ClusteringRequest, ClusteringResult,
     DocumentCluster, DocumentSimilarity, DocumentTopics, SimilarDocumentsRequest, Topic,
@@ -28,6 +29,7 @@ pub struct AnomalyQuery {
 /// Start clustering job
 async fn start_clustering(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(request): Json<ClusteringRequest>,
 ) -> Result<Json<ClusteringJob>, (StatusCode, String)> {
     let service = MlService::new(state.db.clone());
@@ -42,6 +44,7 @@ async fn start_clustering(
 /// Get clustering result
 async fn get_clustering_result(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(job_id): Path<String>,
 ) -> Result<Json<ClusteringResult>, (StatusCode, String)> {
     let service = MlService::new(state.db.clone());
@@ -57,6 +60,7 @@ async fn get_clustering_result(
 /// Get all clusters
 async fn get_clusters(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
 ) -> Result<Json<Vec<DocumentCluster>>, (StatusCode, String)> {
     let service = MlService::new(state.db.clone());
 
@@ -70,6 +74,7 @@ async fn get_clusters(
 /// Get documents in cluster
 async fn get_cluster_documents(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(cluster_id): Path<i32>,
 ) -> Result<Json<Vec<ClusteredDocument>>, (StatusCode, String)> {
     let service = MlService::new(state.db.clone());
@@ -84,6 +89,7 @@ async fn get_cluster_documents(
 /// Find similar documents
 async fn find_similar_documents(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(request): Json<SimilarDocumentsRequest>,
 ) -> Result<Json<Vec<DocumentSimilarity>>, (StatusCode, String)> {
     let service = MlService::new(state.db.clone());
@@ -98,6 +104,7 @@ async fn find_similar_documents(
 /// Start topic modeling
 async fn start_topic_modeling(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(request): Json<TopicModelingRequest>,
 ) -> Result<Json<TopicModelingResponse>, (StatusCode, String)> {
     let service = MlService::new(state.db.clone());
@@ -112,6 +119,7 @@ async fn start_topic_modeling(
 /// Get all topics
 async fn get_topics(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
 ) -> Result<Json<Vec<Topic>>, (StatusCode, String)> {
     let service = MlService::new(state.db.clone());
 
@@ -125,6 +133,7 @@ async fn get_topics(
 /// Get document topics
 async fn get_document_topics(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(document_id): Path<uuid::Uuid>,
 ) -> Result<Json<DocumentTopics>, (StatusCode, String)> {
     let service = MlService::new(state.db.clone());
@@ -139,6 +148,7 @@ async fn get_document_topics(
 /// Get trend analysis
 async fn get_trends(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<TrendQuery>,
 ) -> Result<Json<TrendAnalysis>, (StatusCode, String)> {
     let service = MlService::new(state.db.clone());
@@ -154,6 +164,7 @@ async fn get_trends(
 /// Detect anomalies
 async fn detect_anomalies(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<AnomalyQuery>,
 ) -> Result<Json<Vec<AnomalyResult>>, (StatusCode, String)> {
     let service = MlService::new(state.db.clone());

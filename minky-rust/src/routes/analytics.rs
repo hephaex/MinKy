@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::AppResult,
+    middleware::AuthUser,
     models::{
         AnalyticsOverview, CategoryStats, ContentAnalysis, DashboardData, DocumentMetrics,
         TagStats, TimeSeriesPoint, UserMetrics, WorkflowAnalytics,
@@ -41,6 +42,7 @@ pub struct OverviewResponse {
 
 async fn get_overview(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<TimeRangeQuery>,
 ) -> AppResult<Json<OverviewResponse>> {
     let service = AnalyticsService::new(state.db.clone());
@@ -59,7 +61,7 @@ pub struct DashboardResponse {
     pub data: DashboardData,
 }
 
-async fn get_dashboard(State(state): State<AppState>) -> AppResult<Json<DashboardResponse>> {
+async fn get_dashboard(State(state): State<AppState>, _auth_user: AuthUser) -> AppResult<Json<DashboardResponse>> {
     let service = AnalyticsService::new(state.db.clone());
     let dashboard = service.get_dashboard().await?;
 
@@ -82,6 +84,7 @@ pub struct DocumentsResponse {
 
 async fn get_top_documents(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<LimitQuery>,
 ) -> AppResult<Json<DocumentsResponse>> {
     let service = AnalyticsService::new(state.db.clone());
@@ -102,6 +105,7 @@ pub struct ContentAnalysisResponse {
 
 async fn analyze_document_content(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(id): Path<uuid::Uuid>,
 ) -> AppResult<Json<ContentAnalysisResponse>> {
     // Fetch document content
@@ -126,6 +130,7 @@ pub struct UsersResponse {
 
 async fn get_active_users(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<LimitQuery>,
 ) -> AppResult<Json<UsersResponse>> {
     let service = AnalyticsService::new(state.db.clone());
@@ -144,7 +149,7 @@ pub struct CategoriesResponse {
     pub data: Vec<CategoryStats>,
 }
 
-async fn get_category_stats(State(state): State<AppState>) -> AppResult<Json<CategoriesResponse>> {
+async fn get_category_stats(State(state): State<AppState>, _auth_user: AuthUser) -> AppResult<Json<CategoriesResponse>> {
     let service = AnalyticsService::new(state.db.clone());
     let categories = service.get_category_stats().await?;
 
@@ -162,6 +167,7 @@ pub struct TagsResponse {
 
 async fn get_tag_stats(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<LimitQuery>,
 ) -> AppResult<Json<TagsResponse>> {
     let service = AnalyticsService::new(state.db.clone());
@@ -182,6 +188,7 @@ pub struct TimelineResponse {
 
 async fn get_activity_timeline(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<TimeRangeQuery>,
 ) -> AppResult<Json<TimelineResponse>> {
     let service = AnalyticsService::new(state.db.clone());
@@ -202,6 +209,7 @@ pub struct WorkflowAnalyticsResponse {
 
 async fn get_workflow_analytics(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
 ) -> AppResult<Json<WorkflowAnalyticsResponse>> {
     let service = AnalyticsService::new(state.db.clone());
     let analytics = service.get_workflow_analytics().await?;

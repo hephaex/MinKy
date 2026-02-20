@@ -5,7 +5,27 @@
 
 ---
 
-## 현재 진행 상황 (2026-02-20) - 보안 취약점 수정 완료
+## 현재 진행 상황 (2026-02-20) - 전체 API 인증 보안 완료
+
+### 22차 세션: 추가 API 엔드포인트 인증 수정 (2026-02-20)
+
+**PM 자동화 보안 수정 2차**
+
+병렬 보안 분석으로 추가 발견된 인증 누락 엔드포인트 수정:
+
+| 파일 | 엔드포인트 | 상태 | 커밋 |
+|------|-----------|------|------|
+| `search.rs` | `search()`, `autocomplete()` | ✅ AuthUser 추가 | `f5a689d0` |
+| `slack.rs` | `extract_knowledge()`, `get_extraction_summary()`, `confirm_knowledge()`, `get_extraction()` | ✅ AuthUser 추가 | `f5a689d0` |
+| `knowledge.rs` | `get_knowledge_graph()`, `get_team_expertise()` | ✅ AuthUser 추가 | `f5a689d0` |
+
+**이전 세션 수정 포함 (73c3c1b8):**
+- `understanding.rs`: `analyze_document()`, `get_understanding()` - AuthUser 추가
+- `embeddings.rs`: 모든 핸들러 - AuthUser 추가
+
+**테스트 결과:** Rust 866개 + Frontend 488개 = 1,354개 모두 통과
+
+---
 
 ### 21차 세션: 보안 감사 후 Critical/High 이슈 수정 (2026-02-20)
 

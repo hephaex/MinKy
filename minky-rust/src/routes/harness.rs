@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::Deserialize;
 
+use crate::middleware::AuthUser;
 use crate::models::{
     HarnessStats, HarnessSummary, IssueHarness, StartHarnessRequest,
 };
@@ -21,6 +22,7 @@ pub struct ListQuery {
 /// Start harness for an issue
 async fn start_harness(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(request): Json<StartHarnessRequest>,
 ) -> Result<Json<IssueHarness>, (StatusCode, String)> {
     let service = HarnessService::new(state.db.clone(), state.config.clone());
@@ -35,6 +37,7 @@ async fn start_harness(
 /// Start harness for an issue by number (shorthand)
 async fn start_harness_for_issue(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(issue_number): Path<i32>,
 ) -> Result<Json<IssueHarness>, (StatusCode, String)> {
     let service = HarnessService::new(state.db.clone(), state.config.clone());
@@ -54,6 +57,7 @@ async fn start_harness_for_issue(
 /// Get harness status
 async fn get_harness(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(harness_id): Path<String>,
 ) -> Result<Json<IssueHarness>, (StatusCode, String)> {
     let service = HarnessService::new(state.db.clone(), state.config.clone());
@@ -69,6 +73,7 @@ async fn get_harness(
 /// List all harnesses
 async fn list_harnesses(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<HarnessSummary>>, (StatusCode, String)> {
     let service = HarnessService::new(state.db.clone(), state.config.clone());
@@ -84,6 +89,7 @@ async fn list_harnesses(
 /// Get harness statistics
 async fn get_stats(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
 ) -> Result<Json<HarnessStats>, (StatusCode, String)> {
     let service = HarnessService::new(state.db.clone(), state.config.clone());
 
@@ -97,6 +103,7 @@ async fn get_stats(
 /// Cancel a running harness
 async fn cancel_harness(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(harness_id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let service = HarnessService::new(state.db.clone(), state.config.clone());
@@ -111,6 +118,7 @@ async fn cancel_harness(
 /// Get harness phases for a specific harness
 async fn get_harness_phases(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(harness_id): Path<String>,
 ) -> Result<Json<Vec<crate::models::PhaseResult>>, (StatusCode, String)> {
     let service = HarnessService::new(state.db.clone(), state.config.clone());
@@ -127,6 +135,7 @@ async fn get_harness_phases(
 /// Get execution plan for a harness
 async fn get_harness_plan(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(harness_id): Path<String>,
 ) -> Result<Json<crate::models::ExecutionPlan>, (StatusCode, String)> {
     let service = HarnessService::new(state.db.clone(), state.config.clone());
@@ -145,6 +154,7 @@ async fn get_harness_plan(
 /// Get verification result for a harness
 async fn get_harness_verification(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(harness_id): Path<String>,
 ) -> Result<Json<crate::models::VerificationResult>, (StatusCode, String)> {
     let service = HarnessService::new(state.db.clone(), state.config.clone());
@@ -163,6 +173,7 @@ async fn get_harness_verification(
 /// Get commit info for a harness
 async fn get_harness_commit(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(harness_id): Path<String>,
 ) -> Result<Json<crate::models::CommitInfo>, (StatusCode, String)> {
     let service = HarnessService::new(state.db.clone(), state.config.clone());

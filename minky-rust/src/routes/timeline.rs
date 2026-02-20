@@ -7,6 +7,7 @@ use axum::{
 };
 use serde::Deserialize;
 
+use crate::middleware::AuthUser;
 use crate::models::{
     ActivityHeatmap, DailyActivity, DocumentHistory, TimelineEventType, TimelineQuery,
     TimelineResponse, TimelineStats, UserActivityStream,
@@ -32,6 +33,7 @@ pub struct UserActivityQuery {
 /// Get timeline events
 async fn get_timeline(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<TimelineQuery>,
 ) -> Result<Json<TimelineResponse>, (StatusCode, String)> {
     let service = TimelineService::new(state.db.clone());
@@ -46,6 +48,7 @@ async fn get_timeline(
 /// Log timeline event
 async fn log_event(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Json(request): Json<LogEventRequest>,
 ) -> Result<Json<LogEventResponse>, (StatusCode, String)> {
     let service = TimelineService::new(state.db.clone());
@@ -66,6 +69,7 @@ async fn log_event(
 /// Get daily activity
 async fn get_daily_activity(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<DailyActivityQuery>,
 ) -> Result<Json<Vec<DailyActivity>>, (StatusCode, String)> {
     let service = TimelineService::new(state.db.clone());
@@ -81,6 +85,7 @@ async fn get_daily_activity(
 /// Get activity heatmap
 async fn get_heatmap(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Query(query): Query<HeatmapQuery>,
 ) -> Result<Json<ActivityHeatmap>, (StatusCode, String)> {
     let service = TimelineService::new(state.db.clone());
@@ -96,6 +101,7 @@ async fn get_heatmap(
 /// Get user activity stream
 async fn get_user_activity(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(user_id): Path<i32>,
     Query(query): Query<UserActivityQuery>,
 ) -> Result<Json<UserActivityStream>, (StatusCode, String)> {
@@ -112,6 +118,7 @@ async fn get_user_activity(
 /// Get document history
 async fn get_document_history(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
     Path(document_id): Path<uuid::Uuid>,
 ) -> Result<Json<DocumentHistory>, (StatusCode, String)> {
     let service = TimelineService::new(state.db.clone());
@@ -126,6 +133,7 @@ async fn get_document_history(
 /// Get timeline statistics
 async fn get_stats(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
 ) -> Result<Json<TimelineStats>, (StatusCode, String)> {
     let service = TimelineService::new(state.db.clone());
 
