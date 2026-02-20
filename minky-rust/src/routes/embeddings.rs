@@ -19,6 +19,7 @@ use uuid::Uuid;
 
 use crate::{
     error::AppError,
+    middleware::AuthUser,
     models::{
         ChunkEmbedding, CreateChunkEmbeddingsRequest, CreateDocumentEmbeddingRequest,
         DocumentEmbedding, EmbeddingModel, EmbeddingQueueEntry, EmbeddingStats,
@@ -92,10 +93,26 @@ impl<T: Serialize> ApiResponse<T> {
 /// POST /api/embeddings/document/:id
 ///
 /// Generate (or regenerate) the document-level embedding for the given document.
+/// Requires authentication.
 async fn create_document_embedding(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<DocumentEmbedding>>, (StatusCode, Json<serde_json::Value>)> {
+    // Verify user has access to this document
+    let has_access: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+    )
+    .bind(document_id)
+    .bind(auth_user.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| into_error_response(AppError::Database(e)))?;
+
+    if !has_access {
+        return Err(into_error_response(AppError::Forbidden));
+    }
+
     let service = build_service(&state);
 
     let req = CreateDocumentEmbeddingRequest {
@@ -113,12 +130,27 @@ async fn create_document_embedding(
 /// POST /api/embeddings/chunks/:id
 ///
 /// Generate chunk-level embeddings for the given document.
-/// The request body supplies the chunks to embed.
+/// The request body supplies the chunks to embed. Requires authentication.
 async fn create_chunk_embeddings(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
     Json(mut payload): Json<CreateChunkEmbeddingsRequest>,
 ) -> Result<Json<ApiResponse<Vec<ChunkEmbedding>>>, (StatusCode, Json<serde_json::Value>)> {
+    // Verify user has access to this document
+    let has_access: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+    )
+    .bind(document_id)
+    .bind(auth_user.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| into_error_response(AppError::Database(e)))?;
+
+    if !has_access {
+        return Err(into_error_response(AppError::Forbidden));
+    }
+
     // Ensure the path parameter overrides any document_id in the body.
     payload.document_id = document_id;
 
@@ -134,10 +166,26 @@ async fn create_chunk_embeddings(
 /// GET /api/embeddings/document/:id
 ///
 /// Return the stored document-level embedding for the given document.
+/// Requires authentication.
 async fn get_document_embedding(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> Result<Json<ApiResponse<DocumentEmbedding>>, (StatusCode, Json<serde_json::Value>)> {
+    // Verify user has access to this document
+    let has_access: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+    )
+    .bind(document_id)
+    .bind(auth_user.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| into_error_response(AppError::Database(e)))?;
+
+    if !has_access {
+        return Err(into_error_response(AppError::Forbidden));
+    }
+
     let embedding: Option<DocumentEmbedding> = sqlx::query_as(
         "SELECT * FROM document_embeddings WHERE document_id = $1 ORDER BY created_at DESC LIMIT 1",
     )
@@ -160,15 +208,20 @@ async fn get_document_embedding(
 /// POST /api/embeddings/search
 ///
 /// Perform a semantic search against the chunk embedding store.
+/// Requires authentication. Results are filtered to documents the user can access.
 async fn semantic_search(
     State(state): State<AppState>,
-    Json(payload): Json<SemanticSearchRequest>,
+    auth_user: AuthUser,
+    Json(mut payload): Json<SemanticSearchRequest>,
 ) -> Result<Json<ApiResponse<Vec<SemanticSearchResult>>>, (StatusCode, Json<serde_json::Value>)> {
     if payload.query.trim().is_empty() {
         return Err(into_error_response(AppError::Validation(
             "Query must not be empty".into(),
         )));
     }
+
+    // Set user_id to filter results to accessible documents
+    payload.user_id = Some(auth_user.id);
 
     let service = build_service(&state);
 
@@ -182,11 +235,27 @@ async fn semantic_search(
 /// GET /api/embeddings/similar/:id
 ///
 /// Return documents similar to the given document using vector similarity.
+/// Requires authentication.
 async fn find_similar_documents(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
     Query(query): Query<SimilarQuery>,
 ) -> Result<Json<ApiResponse<Vec<SemanticSearchResult>>>, (StatusCode, Json<serde_json::Value>)> {
+    // Verify user has access to this document
+    let has_access: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+    )
+    .bind(document_id)
+    .bind(auth_user.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| into_error_response(AppError::Database(e)))?;
+
+    if !has_access {
+        return Err(into_error_response(AppError::Forbidden));
+    }
+
     let limit = query.limit.unwrap_or(10).min(50);
     let service = build_service(&state);
 
@@ -200,8 +269,10 @@ async fn find_similar_documents(
 /// GET /api/embeddings/stats
 ///
 /// Return overall embedding statistics (document counts, queue depth, etc.).
+/// Requires authentication (admin-level stats).
 async fn get_stats(
     State(state): State<AppState>,
+    _auth_user: AuthUser,
 ) -> Result<Json<ApiResponse<EmbeddingStats>>, (StatusCode, Json<serde_json::Value>)> {
     let service = build_service(&state);
 
@@ -215,11 +286,27 @@ async fn get_stats(
 /// POST /api/embeddings/queue/:id
 ///
 /// Add the given document to the async embedding generation queue.
+/// Requires authentication.
 async fn queue_document(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
     Json(payload): Json<QueueRequest>,
 ) -> Result<Json<ApiResponse<EmbeddingQueueEntry>>, (StatusCode, Json<serde_json::Value>)> {
+    // Verify user has access to this document
+    let has_access: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+    )
+    .bind(document_id)
+    .bind(auth_user.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| into_error_response(AppError::Database(e)))?;
+
+    if !has_access {
+        return Err(into_error_response(AppError::Forbidden));
+    }
+
     let service = build_service(&state);
 
     service

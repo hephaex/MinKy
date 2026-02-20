@@ -18,7 +18,8 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
+    middleware::AuthUser,
     models::{DocumentUnderstanding, DocumentUnderstandingResponse},
     services::{EmbeddingConfig, EmbeddingService, UnderstandingService},
     AppState,
@@ -46,11 +47,26 @@ pub struct CachedUnderstandingResponse {
 ///
 /// Calls Claude to extract topics, summary, insights, technologies, and target
 /// roles from the document. The result is upserted so subsequent `GET` calls
-/// return the cached value immediately.
+/// return the cached value immediately. Requires authentication.
 async fn analyze_document(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> AppResult<Json<UnderstandingApiResponse>> {
+    // Verify user has access to this document
+    let has_access: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+    )
+    .bind(document_id)
+    .bind(auth_user.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(AppError::Database)?;
+
+    if !has_access {
+        return Err(AppError::Forbidden);
+    }
+
     let understanding_service = UnderstandingService::new(state.config.clone());
     let analysis = understanding_service
         .analyze_document_by_id(&state.db, document_id)
@@ -75,10 +91,38 @@ async fn analyze_document(
 /// `GET /api/documents/{id}/understanding`
 ///
 /// Returns `404` if the document has not been analyzed yet.
+/// Requires authentication.
 async fn get_understanding(
     State(state): State<AppState>,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> Result<Json<CachedUnderstandingResponse>, (StatusCode, Json<serde_json::Value>)> {
+    // Verify user has access to this document
+    let has_access: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+    )
+    .bind(document_id)
+    .bind(auth_user.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(|e| (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({
+            "success": false,
+            "error": e.to_string()
+        })),
+    ))?;
+
+    if !has_access {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "success": false,
+                "error": "Access denied to this document"
+            })),
+        ));
+    }
+
     let embedding_config = build_embedding_config(&state);
     let embedding_service = EmbeddingService::new(state.db.clone(), embedding_config);
 
