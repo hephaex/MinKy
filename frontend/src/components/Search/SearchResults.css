@@ -1,0 +1,57 @@
+.kb-results-state {
+  padding: 40px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.kb-results-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: #888;
+  gap: 12px;
+}
+
+.kb-results-empty-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #555;
+}
+
+.kb-results-empty-desc {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-width: 360px;
+}
+
+.kb-results {
+  width: 100%;
+}
+
+.kb-results-header {
+  margin-bottom: 16px;
+}
+
+.kb-results-count {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.kb-results-query {
+  color: #007bff;
+  font-style: italic;
+}
+
+.kb-results-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
