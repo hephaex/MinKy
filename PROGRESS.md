@@ -5,7 +5,48 @@
 
 ---
 
-## 현재 진행 상황 (2026-02-20) - 전체 보안 감사 완료
+## 현재 진행 상황 (2026-02-20) - 코드 품질 리팩토링
+
+### 23차 세션: 코드 중복 제거 및 리팩토링 (2026-02-20)
+
+**PM 자동화 코드 품질 개선**
+
+#### 1. 공통 API 응답 타입 추출 (커밋 `9a7bfc15`)
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `routes/common.rs` | ApiResponse + into_error_response 정의 (신규) |
+| `routes/embeddings.rs` | 공통 모듈 사용 |
+| `routes/knowledge.rs` | 공통 모듈 사용 |
+| `routes/slack.rs` | 공통 모듈 사용 |
+
+#### 2. Anthropic API 타입 통합 (커밋 `86d9a27a`)
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `services/anthropic_types.rs` | AnthropicRequest/Message/Response/Content/Usage 정의 (신규) |
+| `services/ai_service.rs` | 공통 모듈 사용, 중복 제거 |
+| `services/rag_service.rs` | 공통 모듈 사용, 중복 제거 |
+| `services/understanding_service.rs` | 공통 모듈 사용, 중복 제거 |
+| `services/conversation_extraction_service.rs` | 공통 모듈 사용, 중복 제거 |
+
+#### 3. 추가 보안 수정 (커밋 `86d9a27a`)
+
+| 파일 | 핸들러 |
+|------|--------|
+| `routes/attachments.rs` | list_attachments, download_attachment, get_attachment_info - AuthUser 추가 |
+| `routes/git.rs` | get_repository_info, get_status - AuthUser 추가 |
+
+#### 결과
+
+| 지표 | 값 |
+|------|-----|
+| 중복 코드 제거 | ~200줄 |
+| 새 모듈 | 2개 (common.rs, anthropic_types.rs) |
+| 테스트 | 모두 통과 |
+| 커밋 | 2개 |
+
+---
 
 ### 22차 세션: 전체 보안 강화 완료 (2026-02-20)
 
