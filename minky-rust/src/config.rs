@@ -5,6 +5,9 @@ use serde::Deserialize;
 /// Application configuration loaded from environment variables
 #[derive(Clone, Deserialize)]
 pub struct Config {
+    #[serde(default = "default_environment")]
+    pub environment: String,
+
     #[serde(default = "default_host")]
     pub host: String,
 
@@ -40,6 +43,10 @@ pub struct Config {
 
     /// Slack signing secret (for webhook signature verification)
     pub slack_signing_secret: Option<SecretString>,
+}
+
+fn default_environment() -> String {
+    "development".to_string()
 }
 
 fn default_host() -> String {
@@ -82,6 +89,7 @@ mod tests {
 
     fn make_config(secret: &str) -> Config {
         Config {
+            environment: "development".to_string(),
             host: "127.0.0.1".to_string(),
             port: 8000,
             database_url: "postgres://localhost/test".to_string(),

@@ -171,6 +171,7 @@ mod tests {
     /// Build a test Config without needing a real database
     fn make_config() -> Config {
         Config {
+            environment: "test".to_string(),
             host: "127.0.0.1".to_string(),
             port: 8000,
             database_url: "postgres://localhost/test_db".to_string(),
@@ -282,6 +283,7 @@ mod tests {
         // Build a service with different secret
         let other_pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
         let other_config = Config {
+            environment: "test".to_string(),
             host: "127.0.0.1".to_string(),
             port: 8000,
             database_url: "postgres://localhost/test_db".to_string(),
@@ -324,6 +326,7 @@ mod tests {
     async fn test_access_token_encodes_admin_role() {
         let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
         let config = Config {
+            environment: "test".to_string(),
             host: "127.0.0.1".to_string(),
             port: 8000,
             database_url: "postgres://localhost/test_db".to_string(),

@@ -37,6 +37,21 @@ impl IntoResponse for AuthError {
     }
 }
 
+/// Extract cookie value by name from Cookie header
+fn extract_cookie_value(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            cookies
+                .split(';')
+                .map(|s| s.trim())
+                .find(|s| s.starts_with(&format!("{}=", name)))
+                .and_then(|s| s.split('=').nth(1))
+                .map(|s| s.to_string())
+        })
+}
+
 impl<S> FromRequestParts<S> for AuthUser
 where
     AppState: FromRef<S>,
@@ -47,20 +62,19 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = AppState::from_ref(state);
 
-        let auth_header = parts
+        // Try Authorization header first, then fall back to HttpOnly cookie
+        let token = parts
             .headers
             .get(header::AUTHORIZATION)
             .and_then(|h| h.to_str().ok())
-            .ok_or_else(|| AuthError("Missing Authorization header".to_string()))?;
-
-        let token = auth_header
-            .strip_prefix("Bearer ")
-            .ok_or_else(|| AuthError("Invalid Authorization header format".to_string()))?;
+            .and_then(|h| h.strip_prefix("Bearer ").map(|s| s.to_string()))
+            .or_else(|| extract_cookie_value(&parts.headers, "access_token"))
+            .ok_or_else(|| AuthError("Missing authentication token".to_string()))?;
 
         let auth_service = AuthService::new(state.db.clone(), state.config.clone());
 
         let claims = auth_service
-            .validate_token(token)
+            .validate_token(&token)
             .map_err(|_| AuthError("Invalid or expired token".to_string()))?;
 
         Ok(AuthUser {
@@ -85,20 +99,23 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = AppState::from_ref(state);
 
-        let auth_user = parts
+        // Try Authorization header first, then fall back to HttpOnly cookie
+        let token = parts
             .headers
             .get(header::AUTHORIZATION)
             .and_then(|h| h.to_str().ok())
-            .and_then(|h| h.strip_prefix("Bearer "))
-            .and_then(|token| {
-                let auth_service = AuthService::new(state.db.clone(), state.config.clone());
-                auth_service.validate_token(token).ok()
-            })
-            .map(|claims| AuthUser {
-                id: claims.sub,
-                email: claims.email,
-                role: claims.role,
-            });
+            .and_then(|h| h.strip_prefix("Bearer ").map(|s| s.to_string()))
+            .or_else(|| extract_cookie_value(&parts.headers, "access_token"));
+
+        let auth_user = token.and_then(|t| {
+            let auth_service = AuthService::new(state.db.clone(), state.config.clone());
+            auth_service.validate_token(&t).ok()
+        })
+        .map(|claims| AuthUser {
+            id: claims.sub,
+            email: claims.email,
+            role: claims.role,
+        });
 
         Ok(OptionalAuthUser(auth_user))
     }

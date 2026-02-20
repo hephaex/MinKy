@@ -717,6 +717,7 @@ mod tests {
     fn make_service() -> SkillService {
         let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
         let config = Config {
+            environment: "test".to_string(),
             host: "127.0.0.1".to_string(),
             port: 8000,
             database_url: "postgres://localhost/test_db".to_string(),

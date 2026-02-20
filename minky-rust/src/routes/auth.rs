@@ -1,4 +1,9 @@
-use axum::{extract::State, http::StatusCode, routing::{get, post}, Json, Router};
+use axum::{
+    extract::State,
+    http::{header::SET_COOKIE, HeaderMap, HeaderValue, StatusCode},
+    routing::{get, post},
+    Json, Router,
+};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -11,11 +16,35 @@ use crate::{
     AppState,
 };
 
+/// Cookie configuration constants
+const ACCESS_TOKEN_COOKIE: &str = "access_token";
+const REFRESH_TOKEN_COOKIE: &str = "refresh_token";
+const ACCESS_TOKEN_MAX_AGE: i64 = 900; // 15 minutes
+const REFRESH_TOKEN_MAX_AGE: i64 = 604800; // 7 days
+
+/// Build HttpOnly cookie header value
+fn build_cookie(name: &str, value: &str, max_age: i64, secure: bool) -> String {
+    let secure_flag = if secure { "; Secure" } else { "" };
+    format!(
+        "{}={}; HttpOnly; SameSite=Strict; Path=/; Max-Age={}{}",
+        name, value, max_age, secure_flag
+    )
+}
+
+/// Build cookie deletion header (for logout)
+fn build_delete_cookie(name: &str) -> String {
+    format!(
+        "{}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
+        name
+    )
+}
+
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/login", post(login))
         .route("/register", post(register))
         .route("/refresh", post(refresh_token))
+        .route("/logout", post(logout))
         .route("/me", get(me))
 }
 
@@ -46,7 +75,7 @@ pub struct UserInfo {
 async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
-) -> AppResult<Json<AuthResponse>> {
+) -> AppResult<(HeaderMap, Json<AuthResponse>)> {
     payload
         .validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;
@@ -89,17 +118,46 @@ async fn login(
     let refresh_token = auth_service
         .generate_refresh_token(&user)?;
 
-    Ok(Json(AuthResponse {
-        success: true,
-        access_token: Some(access_token),
-        refresh_token: Some(refresh_token),
-        user: Some(UserInfo {
-            id: user.id,
-            email: user.email,
-            username: user.username,
-            role: format!("{:?}", user.role).to_lowercase(),
+    // Set HttpOnly cookies
+    let is_secure = state.config.environment != "development";
+    let mut headers = HeaderMap::new();
+
+    headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&build_cookie(
+            ACCESS_TOKEN_COOKIE,
+            &access_token,
+            ACCESS_TOKEN_MAX_AGE,
+            is_secure,
+        ))
+        .unwrap(),
+    );
+    headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&build_cookie(
+            REFRESH_TOKEN_COOKIE,
+            &refresh_token,
+            REFRESH_TOKEN_MAX_AGE,
+            is_secure,
+        ))
+        .unwrap(),
+    );
+
+    Ok((
+        headers,
+        Json(AuthResponse {
+            success: true,
+            // Tokens no longer sent in body for security (HttpOnly cookies instead)
+            access_token: None,
+            refresh_token: None,
+            user: Some(UserInfo {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                role: format!("{:?}", user.role).to_lowercase(),
+            }),
         }),
-    }))
+    ))
 }
 
 #[derive(Debug, Deserialize, Validate)]
@@ -115,7 +173,7 @@ pub struct RegisterRequest {
 async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
-) -> AppResult<(StatusCode, Json<AuthResponse>)> {
+) -> AppResult<(StatusCode, HeaderMap, Json<AuthResponse>)> {
     payload
         .validate()
         .map_err(|e| AppError::Validation(e.to_string()))?;
@@ -152,12 +210,39 @@ async fn register(
     let refresh_token = auth_service
         .generate_refresh_token(&user)?;
 
+    // Set HttpOnly cookies
+    let is_secure = state.config.environment != "development";
+    let mut headers = HeaderMap::new();
+
+    headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&build_cookie(
+            ACCESS_TOKEN_COOKIE,
+            &access_token,
+            ACCESS_TOKEN_MAX_AGE,
+            is_secure,
+        ))
+        .unwrap(),
+    );
+    headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&build_cookie(
+            REFRESH_TOKEN_COOKIE,
+            &refresh_token,
+            REFRESH_TOKEN_MAX_AGE,
+            is_secure,
+        ))
+        .unwrap(),
+    );
+
     Ok((
         StatusCode::CREATED,
+        headers,
         Json(AuthResponse {
             success: true,
-            access_token: Some(access_token),
-            refresh_token: Some(refresh_token),
+            // Tokens no longer sent in body for security (HttpOnly cookies instead)
+            access_token: None,
+            refresh_token: None,
             user: Some(UserInfo {
                 id: user.id,
                 email: user.email,
@@ -168,20 +253,42 @@ async fn register(
     ))
 }
 
-/// Refresh token request
-#[derive(Debug, Deserialize)]
+/// Refresh token request (for backward compatibility, can also use cookie)
+#[derive(Debug, Deserialize, Default)]
 pub struct RefreshRequest {
-    pub refresh_token: String,
+    pub refresh_token: Option<String>,
+}
+
+/// Extract refresh token from cookie header
+fn extract_cookie_value(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
+    headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|cookies| {
+            cookies
+                .split(';')
+                .map(|s| s.trim())
+                .find(|s| s.starts_with(&format!("{}=", name)))
+                .and_then(|s| s.split('=').nth(1))
+                .map(|s| s.to_string())
+        })
 }
 
 async fn refresh_token(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<RefreshRequest>,
-) -> AppResult<Json<AuthResponse>> {
+) -> AppResult<(HeaderMap, Json<AuthResponse>)> {
     let auth_service = AuthService::new(state.db.clone(), state.config.clone());
 
+    // Try to get refresh token from body first, then from cookie
+    let token = payload
+        .refresh_token
+        .or_else(|| extract_cookie_value(&headers, REFRESH_TOKEN_COOKIE))
+        .ok_or(AppError::Unauthorized)?;
+
     let claims = auth_service
-        .validate_token(&payload.refresh_token)
+        .validate_token(&token)
         .map_err(|_| AppError::Unauthorized)?;
 
     // Load user to verify still active
@@ -199,17 +306,68 @@ async fn refresh_token(
     let new_refresh_token = auth_service
         .generate_refresh_token(&user)?;
 
-    Ok(Json(AuthResponse {
-        success: true,
-        access_token: Some(new_access_token),
-        refresh_token: Some(new_refresh_token),
-        user: Some(UserInfo {
-            id: user.id,
-            email: user.email,
-            username: user.username,
-            role: format!("{:?}", user.role).to_lowercase(),
+    // Set HttpOnly cookies
+    let is_secure = state.config.environment != "development";
+    let mut response_headers = HeaderMap::new();
+
+    response_headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&build_cookie(
+            ACCESS_TOKEN_COOKIE,
+            &new_access_token,
+            ACCESS_TOKEN_MAX_AGE,
+            is_secure,
+        ))
+        .unwrap(),
+    );
+    response_headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&build_cookie(
+            REFRESH_TOKEN_COOKIE,
+            &new_refresh_token,
+            REFRESH_TOKEN_MAX_AGE,
+            is_secure,
+        ))
+        .unwrap(),
+    );
+
+    Ok((
+        response_headers,
+        Json(AuthResponse {
+            success: true,
+            // Tokens no longer sent in body for security (HttpOnly cookies instead)
+            access_token: None,
+            refresh_token: None,
+            user: Some(UserInfo {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                role: format!("{:?}", user.role).to_lowercase(),
+            }),
         }),
-    }))
+    ))
+}
+
+/// Logout - clears HttpOnly cookies
+async fn logout() -> (HeaderMap, Json<serde_json::Value>) {
+    let mut headers = HeaderMap::new();
+
+    headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&build_delete_cookie(ACCESS_TOKEN_COOKIE)).unwrap(),
+    );
+    headers.append(
+        SET_COOKIE,
+        HeaderValue::from_str(&build_delete_cookie(REFRESH_TOKEN_COOKIE)).unwrap(),
+    );
+
+    (
+        headers,
+        Json(serde_json::json!({
+            "success": true,
+            "message": "Logged out successfully"
+        })),
+    )
 }
 
 /// Get current authenticated user info

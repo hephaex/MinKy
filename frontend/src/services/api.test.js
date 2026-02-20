@@ -20,55 +20,60 @@ jest.mock('axios', () => ({
 }));
 
 describe('authService', () => {
-  let mockGetItem;
-  let mockSetItem;
-  let mockRemoveItem;
+  let mockSessionGetItem;
+  let mockSessionSetItem;
+  let mockSessionRemoveItem;
 
   beforeEach(() => {
-    // Setup localStorage mock for each test
-    mockGetItem = jest.fn();
-    mockSetItem = jest.fn();
-    mockRemoveItem = jest.fn();
+    // Setup sessionStorage mock for each test (used for cached user info)
+    mockSessionGetItem = jest.fn();
+    mockSessionSetItem = jest.fn();
+    mockSessionRemoveItem = jest.fn();
 
-    Object.defineProperty(window, 'localStorage', {
+    Object.defineProperty(window, 'sessionStorage', {
       value: {
-        getItem: mockGetItem,
-        setItem: mockSetItem,
-        removeItem: mockRemoveItem,
+        getItem: mockSessionGetItem,
+        setItem: mockSessionSetItem,
+        removeItem: mockSessionRemoveItem,
         clear: jest.fn(),
       },
       writable: true,
     });
   });
 
-  describe('isAuthenticated', () => {
-    it('returns true when token exists', () => {
-      mockGetItem.mockReturnValue('test-token');
-      expect(authService.isAuthenticated()).toBe(true);
+  describe('isAuthenticatedSync', () => {
+    it('returns true when user is cached in sessionStorage', () => {
+      mockSessionGetItem.mockReturnValue('{"id":1,"email":"test@test.com"}');
+      expect(authService.isAuthenticatedSync()).toBe(true);
     });
 
-    it('returns false when token does not exist', () => {
-      mockGetItem.mockReturnValue(null);
-      expect(authService.isAuthenticated()).toBe(false);
+    it('returns false when no user is cached', () => {
+      mockSessionGetItem.mockReturnValue(null);
+      expect(authService.isAuthenticatedSync()).toBe(false);
     });
   });
 
-  describe('getToken', () => {
-    it('returns token from localStorage', () => {
-      mockGetItem.mockReturnValue('my-token');
-      expect(authService.getToken()).toBe('my-token');
+  describe('getCachedUser', () => {
+    it('returns parsed user from sessionStorage', () => {
+      const user = { id: 1, email: 'test@test.com', username: 'testuser' };
+      mockSessionGetItem.mockReturnValue(JSON.stringify(user));
+      expect(authService.getCachedUser()).toEqual(user);
     });
 
-    it('returns null when no token', () => {
-      mockGetItem.mockReturnValue(null);
-      expect(authService.getToken()).toBeNull();
+    it('returns null when no user cached', () => {
+      mockSessionGetItem.mockReturnValue(null);
+      expect(authService.getCachedUser()).toBeNull();
     });
   });
 
   describe('logout', () => {
-    it('removes token from localStorage', async () => {
+    it('removes user from sessionStorage', async () => {
+      // Mock the API post call (logout endpoint)
+      const mockApi = require('./api').default;
+      mockApi.post = jest.fn().mockResolvedValue({ data: { success: true } });
+
       await authService.logout();
-      expect(mockRemoveItem).toHaveBeenCalledWith('token');
+      expect(mockSessionRemoveItem).toHaveBeenCalledWith('user');
     });
   });
 });

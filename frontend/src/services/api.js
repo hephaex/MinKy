@@ -7,22 +7,45 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Enable cookies for cross-origin requests (HttpOnly cookies)
+  withCredentials: true,
 });
 
-// Add token to requests if available
+// Request interceptor for FormData handling
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  
   // For FormData uploads, remove default Content-Type to let axios set the boundary
   if (config.data instanceof FormData) {
     delete config.headers['Content-Type'];
   }
-  
+
   return config;
 });
+
+// Response interceptor for handling auth errors
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If 401 and not already retrying, try to refresh token
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      try {
+        // Try to refresh the token (cookie is automatically sent)
+        await api.post('/auth/refresh', {});
+        // Retry the original request
+        return api(originalRequest);
+      } catch (refreshError) {
+        // Refresh failed, user needs to login again
+        window.dispatchEvent(new CustomEvent('auth:logout'));
+        return Promise.reject(error);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export const documentService = {
   getDocuments: async (page = 1, perPage = 10, search = '') => {
@@ -86,21 +109,26 @@ export const documentService = {
 };
 
 export const authService = {
-  // SECURITY TODO: localStorage is vulnerable to XSS attacks.
-  // Consider migrating to HttpOnly cookies for token storage.
-  // Backend should set: Set-Cookie: token=<jwt>; HttpOnly; Secure; SameSite=Strict
+  // Auth tokens are now stored in HttpOnly cookies (set by backend)
+  // This prevents XSS attacks from accessing the tokens
   login: async (credentials) => {
     const response = await api.post('/auth/login', credentials);
-    if (response.data.access_token) {
-      localStorage.setItem('token', response.data.access_token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
+    // Token is automatically set as HttpOnly cookie by the backend
+    // Store user info in memory for quick access
+    if (response.data.user) {
+      sessionStorage.setItem('user', JSON.stringify(response.data.user));
     }
     return response.data;
   },
 
   logout: async () => {
-    localStorage.removeItem('token');
-    delete api.defaults.headers.common['Authorization'];
+    try {
+      // Call backend to clear HttpOnly cookies
+      await api.post('/auth/logout');
+    } finally {
+      // Clear user info from session storage
+      sessionStorage.removeItem('user');
+    }
   },
 
   getCurrentUser: async () => {
@@ -108,12 +136,32 @@ export const authService = {
     return response.data;
   },
 
-  isAuthenticated: () => {
-    return !!localStorage.getItem('token');
+  // Check if user is authenticated by verifying session
+  // Since we can't access HttpOnly cookies, we verify with the server
+  isAuthenticated: async () => {
+    try {
+      await api.get('/auth/me');
+      return true;
+    } catch {
+      return false;
+    }
   },
 
-  getToken: () => {
-    return localStorage.getItem('token');
+  // Sync check using cached user info
+  isAuthenticatedSync: () => {
+    return !!sessionStorage.getItem('user');
+  },
+
+  // Get cached user info
+  getCachedUser: () => {
+    const user = sessionStorage.getItem('user');
+    return user ? JSON.parse(user) : null;
+  },
+
+  // Refresh token (called automatically by interceptor)
+  refreshToken: async () => {
+    const response = await api.post('/auth/refresh', {});
+    return response.data;
   }
 };
 
