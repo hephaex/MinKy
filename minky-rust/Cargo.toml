@@ -68,6 +68,8 @@ async-trait = "0.1"
 secrecy = { version = "0.10", features = ["serde"] }
 rand = "0.8"
 sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
 
 # Text Processing
 regex = "1.11"

@@ -9,12 +9,15 @@
 //!   POST /api/slack/webhook          – Receive Slack Events API payloads
 
 use axum::{
+    body::Bytes,
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::{get, post},
     Json, Router,
 };
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 
 use crate::{
     error::AppError,
@@ -28,6 +31,8 @@ use crate::{
     },
     AppState,
 };
+
+type HmacSha256 = Hmac<Sha256>;
 
 // ---------------------------------------------------------------------------
 // Response wrapper
@@ -147,6 +152,80 @@ pub enum WebhookAction {
     EventIgnored { event_type: String },
     /// Unknown top-level webhook type
     UnknownType { webhook_type: String },
+}
+
+// ---------------------------------------------------------------------------
+// Slack Signature Verification
+// ---------------------------------------------------------------------------
+
+/// Verify Slack request signature using HMAC-SHA256.
+///
+/// Slack sends two headers with each request:
+/// - `X-Slack-Request-Timestamp`: Unix timestamp when request was sent
+/// - `X-Slack-Signature`: HMAC-SHA256 signature in format `v0=<hex>`
+///
+/// The signature is computed over: `v0:{timestamp}:{body}`
+///
+/// Returns `Ok(())` if signature is valid, `Err` otherwise.
+pub fn verify_slack_signature(
+    signing_secret: &str,
+    timestamp: &str,
+    body: &[u8],
+    signature: &str,
+) -> Result<(), AppError> {
+    // Check timestamp is not too old (5 minutes)
+    let ts: i64 = timestamp.parse().map_err(|_| {
+        AppError::Validation("Invalid X-Slack-Request-Timestamp".to_string())
+    })?;
+    let now = chrono::Utc::now().timestamp();
+    if (now - ts).abs() > 300 {
+        return Err(AppError::Validation(
+            "Request timestamp is too old (replay attack prevention)".to_string(),
+        ));
+    }
+
+    // Compute expected signature
+    let sig_basestring = format!(
+        "v0:{}:{}",
+        timestamp,
+        String::from_utf8_lossy(body)
+    );
+
+    let mut mac = HmacSha256::new_from_slice(signing_secret.as_bytes())
+        .map_err(|_| AppError::Configuration("Invalid signing secret length".to_string()))?;
+    mac.update(sig_basestring.as_bytes());
+    let expected = format!("v0={}", hex::encode(mac.finalize().into_bytes()));
+
+    // Constant-time comparison to prevent timing attacks
+    if expected.len() != signature.len() {
+        return Err(AppError::Unauthorized);
+    }
+    let mut diff = 0u8;
+    for (a, b) in expected.bytes().zip(signature.bytes()) {
+        diff |= a ^ b;
+    }
+    if diff != 0 {
+        return Err(AppError::Unauthorized);
+    }
+
+    Ok(())
+}
+
+/// Extract Slack signature headers from request.
+fn extract_slack_headers(headers: &HeaderMap) -> Result<(String, String), AppError> {
+    let timestamp = headers
+        .get("X-Slack-Request-Timestamp")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .ok_or_else(|| AppError::Validation("Missing X-Slack-Request-Timestamp header".to_string()))?;
+
+    let signature = headers
+        .get("X-Slack-Signature")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .ok_or_else(|| AppError::Validation("Missing X-Slack-Signature header".to_string()))?;
+
+    Ok((timestamp, signature))
 }
 
 // ---------------------------------------------------------------------------
@@ -427,14 +506,44 @@ async fn oauth_callback(
 ///    For `message` and `app_mention` events, spawns a background task to
 ///    attempt knowledge extraction.
 ///
-/// Security: Slack signs every request with `X-Slack-Signature`.
-/// Full signature verification requires the signing secret from `platform_configs`.
-/// A TODO is left for signature validation before production use.
+/// Security: All requests are verified using HMAC-SHA256 signature validation
+/// with the `X-Slack-Signature` header (except url_verification which happens
+/// before signing secret is configured).
 async fn slack_webhook(
     State(state): State<AppState>,
-    Json(payload): Json<SlackWebhookPayload>,
+    headers: HeaderMap,
+    body: Bytes,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     use secrecy::ExposeSecret;
+
+    // Parse the JSON body
+    let payload: SlackWebhookPayload = serde_json::from_slice(&body)
+        .map_err(|e| into_error_response(AppError::Validation(format!("Invalid JSON: {e}"))))?;
+
+    // For url_verification, skip signature check (signing secret not yet configured)
+    // For all other events, verify the signature
+    if payload.event_type != "url_verification" {
+        if let Some(ref signing_secret) = state.config.slack_signing_secret {
+            let (timestamp, signature) = extract_slack_headers(&headers)
+                .map_err(into_error_response)?;
+
+            verify_slack_signature(
+                signing_secret.expose_secret(),
+                &timestamp,
+                &body,
+                &signature,
+            )
+            .map_err(|e| {
+                tracing::warn!(error = %e, "Slack webhook signature verification failed");
+                into_error_response(e)
+            })?;
+        } else {
+            tracing::warn!(
+                "SLACK_SIGNING_SECRET not configured - webhook signature verification skipped. \
+                 This is insecure for production use."
+            );
+        }
+    }
 
     match classify_webhook_action(&payload) {
         WebhookAction::UrlVerification => {
@@ -443,8 +552,6 @@ async fn slack_webhook(
         }
 
         WebhookAction::KnowledgeExtractionQueued { team_id, event_type } => {
-            // TODO: validate X-Slack-Signature header using slack_signing_secret
-
             tracing::info!(
                 team_id = %team_id,
                 event_type = %event_type,
@@ -751,5 +858,71 @@ mod tests {
         };
         let result = extract_messages_from_event(&payload);
         assert!(result.is_none());
+    }
+
+    // ---- verify_slack_signature tests ----
+
+    #[test]
+    fn test_verify_slack_signature_valid() {
+        // Test vector from Slack documentation
+        let signing_secret = "8f742231b10e8888abcd99yyyzzz85a5";
+        let timestamp = &chrono::Utc::now().timestamp().to_string();
+        let body = b"token=xyzz0WbapA4vBCDEFasx0q6G&team_id=T1DC2JH3J&api_app_id=A1DE&event=...";
+
+        // Compute expected signature
+        let sig_basestring = format!("v0:{}:{}", timestamp, String::from_utf8_lossy(body));
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+        type HmacSha256 = Hmac<Sha256>;
+        let mut mac = HmacSha256::new_from_slice(signing_secret.as_bytes()).unwrap();
+        mac.update(sig_basestring.as_bytes());
+        let signature = format!("v0={}", hex::encode(mac.finalize().into_bytes()));
+
+        let result = verify_slack_signature(signing_secret, timestamp, body, &signature);
+        assert!(result.is_ok(), "Valid signature should pass verification");
+    }
+
+    #[test]
+    fn test_verify_slack_signature_invalid() {
+        let signing_secret = "8f742231b10e8888abcd99yyyzzz85a5";
+        let timestamp = &chrono::Utc::now().timestamp().to_string();
+        let body = b"token=xyzz0WbapA4vBCDEFasx0q6G";
+        let wrong_signature = "v0=abc123wrongsignature";
+
+        let result = verify_slack_signature(signing_secret, timestamp, body, wrong_signature);
+        assert!(result.is_err(), "Invalid signature should fail verification");
+    }
+
+    #[test]
+    fn test_verify_slack_signature_old_timestamp() {
+        let signing_secret = "test-secret";
+        let old_timestamp = (chrono::Utc::now().timestamp() - 600).to_string(); // 10 minutes ago
+        let body = b"test body";
+        let signature = "v0=doesnotmatter";
+
+        let result = verify_slack_signature(signing_secret, &old_timestamp, body, signature);
+        assert!(result.is_err(), "Old timestamp should fail (replay attack prevention)");
+    }
+
+    #[test]
+    fn test_verify_slack_signature_invalid_timestamp() {
+        let signing_secret = "test-secret";
+        let invalid_timestamp = "not-a-number";
+        let body = b"test body";
+        let signature = "v0=doesnotmatter";
+
+        let result = verify_slack_signature(signing_secret, invalid_timestamp, body, signature);
+        assert!(result.is_err(), "Invalid timestamp should fail");
+    }
+
+    #[test]
+    fn test_verify_slack_signature_length_mismatch() {
+        let signing_secret = "test-secret";
+        let timestamp = &chrono::Utc::now().timestamp().to_string();
+        let body = b"test body";
+        let short_signature = "v0=abc"; // Too short
+
+        let result = verify_slack_signature(signing_secret, timestamp, body, short_signature);
+        assert!(result.is_err(), "Signature with wrong length should fail");
     }
 }
