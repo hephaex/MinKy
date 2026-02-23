@@ -134,6 +134,79 @@
   color: #4a90d9;
 }
 
+/* Path Mode Controls */
+.kg-page__path-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.kg-page__path-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 107, 107, 0.4);
+  background: rgba(255, 107, 107, 0.1);
+  color: #ff6b6b;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.kg-page__path-btn:hover {
+  border-color: rgba(255, 107, 107, 0.6);
+  background: rgba(255, 107, 107, 0.15);
+}
+
+.kg-page__path-btn--active {
+  background: rgba(255, 107, 107, 0.25);
+  border-color: #ff6b6b;
+  color: #fff;
+}
+
+.kg-page__path-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.kg-page__path-hint {
+  color: #7f8c8d;
+  font-style: italic;
+}
+
+.kg-page__path-loading {
+  color: #f39c12;
+}
+
+.kg-page__path-found {
+  color: #2ecc71;
+  font-weight: 500;
+}
+
+.kg-page__path-not-found {
+  color: #e74c3c;
+}
+
+.kg-page__path-clear {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #7f8c8d;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.kg-page__path-clear:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #bdc3c7;
+}
+
 /* Graph wrapper */
 .kg-page__graph-wrapper {
   flex: 1;

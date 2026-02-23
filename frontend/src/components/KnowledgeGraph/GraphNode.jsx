@@ -6,7 +6,16 @@ import { nodeColor, nodeRadius } from './graphLayout';
  * A single node in the knowledge graph SVG.
  * Renders a circle with label and handles hover/click interactions.
  */
-function GraphNode({ node, degree, isSelected, isHighlighted, onSelect, onHover }) {
+function GraphNode({
+  node,
+  degree,
+  isSelected,
+  isHighlighted,
+  isPathNode,
+  isPathEndpoint,
+  onSelect,
+  onHover,
+}) {
   const radius = nodeRadius(degree);
   const color = nodeColor(node.type);
   const labelMaxLength = 18;
@@ -15,9 +24,15 @@ function GraphNode({ node, degree, isSelected, isHighlighted, onSelect, onHover 
       ? node.label.slice(0, labelMaxLength - 3) + '...'
       : node.label;
 
-  const opacity = isHighlighted ? 1.0 : 0.7;
-  const strokeWidth = isSelected ? 3 : 1.5;
-  const strokeColor = isSelected ? '#FFD700' : '#FFFFFF';
+  const opacity = isHighlighted ? 1.0 : 0.4;
+  const strokeWidth = isSelected || isPathEndpoint ? 3 : isPathNode ? 2.5 : 1.5;
+  const strokeColor = isPathEndpoint
+    ? '#00FF00' // Green for path endpoints
+    : isPathNode
+      ? '#FF6B6B' // Red-pink for path nodes
+      : isSelected
+        ? '#FFD700'
+        : '#FFFFFF';
 
   const handleClick = () => onSelect(node);
   const handleMouseEnter = () => onHover(node);
@@ -117,8 +132,15 @@ GraphNode.propTypes = {
   degree: PropTypes.number.isRequired,
   isSelected: PropTypes.bool.isRequired,
   isHighlighted: PropTypes.bool.isRequired,
+  isPathNode: PropTypes.bool,
+  isPathEndpoint: PropTypes.bool,
   onSelect: PropTypes.func.isRequired,
   onHover: PropTypes.func.isRequired,
+};
+
+GraphNode.defaultProps = {
+  isPathNode: false,
+  isPathEndpoint: false,
 };
 
 export default GraphNode;

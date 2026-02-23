@@ -3,6 +3,7 @@
 //! Endpoints:
 //! - GET /api/knowledge/graph  – full knowledge graph (nodes + edges)
 //! - GET /api/knowledge/team   – team expertise map
+//! - GET /api/knowledge/path   – find shortest path between two nodes
 
 use axum::{
     extract::{Query, State},
@@ -13,7 +14,7 @@ use axum::{
 
 use crate::{
     middleware::AuthUser,
-    models::knowledge_graph::{KnowledgeGraph, KnowledgeGraphQuery, TeamExpertiseMap},
+    models::knowledge_graph::{GraphPath, KnowledgeGraph, KnowledgeGraphQuery, PathQuery, TeamExpertiseMap},
     services::KnowledgeGraphService,
     AppState,
 };
@@ -65,6 +66,28 @@ async fn get_team_expertise(
         .map_err(into_error_response)
 }
 
+/// GET /api/knowledge/path
+///
+/// Find the shortest path between two nodes in the knowledge graph.
+///
+/// Query parameters:
+/// - `from` – source node ID (required)
+/// - `to` – target node ID (required)
+/// - `max_depth` – maximum path length (default: 5, max: 10)
+async fn get_graph_path(
+    State(state): State<AppState>,
+    _auth_user: AuthUser,
+    Query(query): Query<PathQuery>,
+) -> Result<Json<ApiResponse<GraphPath>>, (StatusCode, Json<serde_json::Value>)> {
+    let service = KnowledgeGraphService::new(state.db.clone());
+
+    service
+        .find_path(&query)
+        .await
+        .map(ApiResponse::ok)
+        .map_err(into_error_response)
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -73,4 +96,5 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/graph", get(get_knowledge_graph))
         .route("/team", get(get_team_expertise))
+        .route("/path", get(get_graph_path))
 }

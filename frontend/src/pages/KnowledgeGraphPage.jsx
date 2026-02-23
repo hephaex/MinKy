@@ -79,6 +79,13 @@ function KnowledgeGraphPage() {
   );
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Path finding state
+  const [pathMode, setPathMode] = useState(false);
+  const [pathSource, setPathSource] = useState(null);
+  const [pathTarget, setPathTarget] = useState(null);
+  const [pathResult, setPathResult] = useState(null);
+  const [pathLoading, setPathLoading] = useState(false);
+
   useEffect(() => {
     const loadGraphData = async () => {
       setLoading(true);
@@ -119,10 +126,61 @@ function KnowledgeGraphPage() {
     });
   }, []);
 
+  // Find path between two nodes
+  const findPath = useCallback(async (from, to) => {
+    if (!from || !to || from === to) return;
+
+    setPathLoading(true);
+    try {
+      const response = await fetch(
+        `/api/knowledge/path?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&max_depth=10`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setPathResult(data.data || data);
+      } else {
+        setPathResult({ found: false, node_ids: [], edges: [], length: 0 });
+      }
+    } catch {
+      setPathResult({ found: false, node_ids: [], edges: [], length: 0 });
+    } finally {
+      setPathLoading(false);
+    }
+  }, []);
+
   const handleNodeClick = useCallback(node => {
-    if (node.documentId) {
+    if (pathMode) {
+      // In path mode, set source or target
+      if (!pathSource) {
+        setPathSource(node.id);
+        setPathResult(null);
+      } else if (!pathTarget && node.id !== pathSource) {
+        setPathTarget(node.id);
+        findPath(pathSource, node.id);
+      } else {
+        // Reset and start new selection
+        setPathSource(node.id);
+        setPathTarget(null);
+        setPathResult(null);
+      }
+    } else if (node.documentId) {
       // Navigate to document (optional)
     }
+  }, [pathMode, pathSource, pathTarget, findPath]);
+
+  const togglePathMode = useCallback(() => {
+    setPathMode(prev => !prev);
+    setPathSource(null);
+    setPathTarget(null);
+    setPathResult(null);
+  }, []);
+
+  const clearPath = useCallback(() => {
+    setPathSource(null);
+    setPathTarget(null);
+    setPathResult(null);
   }, []);
 
   // Filter nodes by type and search query
@@ -169,6 +227,7 @@ function KnowledgeGraphPage() {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             aria-label="Filter knowledge graph nodes"
+            disabled={pathMode}
           />
           {searchQuery && (
             <button
@@ -185,6 +244,49 @@ function KnowledgeGraphPage() {
           activeTypes={activeTypes}
           onToggleType={handleToggleType}
         />
+
+        {/* Path Mode Controls */}
+        <div className="kg-page__path-controls">
+          <button
+            className={`kg-page__path-btn${pathMode ? ' kg-page__path-btn--active' : ''}`}
+            onClick={togglePathMode}
+            title={pathMode ? 'Exit path mode' : 'Find path between two nodes'}
+          >
+            {pathMode ? 'Exit Path Mode' : 'Find Path'}
+          </button>
+
+          {pathMode && (
+            <div className="kg-page__path-status">
+              {pathLoading ? (
+                <span className="kg-page__path-loading">Finding path...</span>
+              ) : pathResult?.found ? (
+                <span className="kg-page__path-found">
+                  Path found: {pathResult.length} step{pathResult.length !== 1 ? 's' : ''}
+                </span>
+              ) : pathResult ? (
+                <span className="kg-page__path-not-found">No path found</span>
+              ) : pathSource ? (
+                <span className="kg-page__path-hint">
+                  Now click the target node
+                </span>
+              ) : (
+                <span className="kg-page__path-hint">
+                  Click the source node
+                </span>
+              )}
+
+              {(pathSource || pathTarget) && (
+                <button
+                  className="kg-page__path-clear"
+                  onClick={clearPath}
+                  title="Clear selection"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Graph */}
@@ -200,6 +302,10 @@ function KnowledgeGraphPage() {
               : 'No knowledge connections yet. Upload documents to build the graph.'
           }
           onNodeClick={handleNodeClick}
+          pathMode={pathMode}
+          pathSource={pathSource}
+          pathTarget={pathTarget}
+          pathResult={pathResult}
         />
       </div>
     </div>

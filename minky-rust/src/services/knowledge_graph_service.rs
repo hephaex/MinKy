@@ -9,11 +9,13 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use std::collections::VecDeque;
+
 use crate::error::Result;
 use crate::models::knowledge_graph::{
-    DocumentTopicRow, ExpertiseArea, ExpertiseLevel, GraphEdge, GraphNode, KnowledgeGraph,
-    KnowledgeGraphMeta, KnowledgeGraphQuery, MemberExpertise, NodeType, SimilarityPairRow,
-    TeamExpertiseMap, UniqueExpert,
+    DocumentTopicRow, ExpertiseArea, ExpertiseLevel, GraphEdge, GraphNode, GraphPath,
+    KnowledgeGraph, KnowledgeGraphMeta, KnowledgeGraphQuery, MemberExpertise, NodeType,
+    PathQuery, SimilarityPairRow, TeamExpertiseMap, UniqueExpert,
 };
 
 /// Service for building and serving the knowledge graph
@@ -181,6 +183,19 @@ impl KnowledgeGraphService {
         .await?;
 
         Ok(rows)
+    }
+
+    /// Find the shortest path between two nodes in the knowledge graph.
+    pub async fn find_path(&self, query: &PathQuery) -> Result<GraphPath> {
+        let max_depth = query.max_depth.unwrap_or(5).clamp(1, 10);
+
+        // Build the full graph first
+        let graph_query = KnowledgeGraphQuery::default();
+        let graph = self.build_graph(&graph_query).await?;
+
+        // Use BFS to find shortest path
+        let path = find_path_bfs(&graph, &query.from, &query.to, max_depth as usize);
+        Ok(path)
     }
 
     /// Build the team expertise map from document authorship and AI understanding.
@@ -459,6 +474,138 @@ pub fn build_derived_nodes_pure(
     (topic_nodes, tech_nodes, insight_nodes)
 }
 
+/// Find the shortest path between two nodes using BFS.
+///
+/// This is a pure function that operates on the in-memory graph structure.
+pub fn find_path_bfs(
+    graph: &KnowledgeGraph,
+    from: &str,
+    to: &str,
+    max_depth: usize,
+) -> GraphPath {
+    // Build adjacency list from edges (undirected)
+    let mut adjacency: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    for edge in &graph.edges {
+        adjacency
+            .entry(edge.source.clone())
+            .or_default()
+            .push((edge.target.clone(), edge.id.clone()));
+        adjacency
+            .entry(edge.target.clone())
+            .or_default()
+            .push((edge.source.clone(), edge.id.clone()));
+    }
+
+    // Build node lookup
+    let node_map: HashMap<String, &GraphNode> = graph
+        .nodes
+        .iter()
+        .map(|n| (n.id.clone(), n))
+        .collect();
+
+    // Check if source and target exist
+    if !node_map.contains_key(from) || !node_map.contains_key(to) {
+        return GraphPath {
+            node_ids: vec![],
+            nodes: vec![],
+            edges: vec![],
+            length: 0,
+            found: false,
+        };
+    }
+
+    // BFS with path tracking
+    let mut visited: HashMap<String, (String, String)> = HashMap::new(); // node -> (parent, edge_id)
+    let mut queue: VecDeque<(String, usize)> = VecDeque::new();
+
+    queue.push_back((from.to_string(), 0));
+    visited.insert(from.to_string(), (String::new(), String::new()));
+
+    while let Some((current, depth)) = queue.pop_front() {
+        if current == to {
+            // Reconstruct path
+            return reconstruct_path(&visited, &node_map, &graph.edges, from, to);
+        }
+
+        if depth >= max_depth {
+            continue;
+        }
+
+        if let Some(neighbors) = adjacency.get(&current) {
+            for (neighbor, edge_id) in neighbors {
+                if !visited.contains_key(neighbor) {
+                    visited.insert(neighbor.clone(), (current.clone(), edge_id.clone()));
+                    queue.push_back((neighbor.clone(), depth + 1));
+                }
+            }
+        }
+    }
+
+    // No path found
+    GraphPath {
+        node_ids: vec![],
+        nodes: vec![],
+        edges: vec![],
+        length: 0,
+        found: false,
+    }
+}
+
+/// Reconstruct the path from BFS visited map.
+fn reconstruct_path(
+    visited: &HashMap<String, (String, String)>,
+    node_map: &HashMap<String, &GraphNode>,
+    all_edges: &[GraphEdge],
+    _from: &str,
+    to: &str,
+) -> GraphPath {
+    let edge_map: HashMap<String, &GraphEdge> = all_edges
+        .iter()
+        .map(|e| (e.id.clone(), e))
+        .collect();
+
+    let mut node_ids: Vec<String> = Vec::new();
+    let mut edge_ids: Vec<String> = Vec::new();
+    let mut current = to.to_string();
+
+    // Walk backwards from target to source
+    while !current.is_empty() {
+        node_ids.push(current.clone());
+        if let Some((parent, edge_id)) = visited.get(&current) {
+            if !edge_id.is_empty() {
+                edge_ids.push(edge_id.clone());
+            }
+            current = parent.clone();
+        } else {
+            break;
+        }
+    }
+
+    node_ids.reverse();
+    edge_ids.reverse();
+
+    // Build node and edge lists
+    let nodes: Vec<GraphNode> = node_ids
+        .iter()
+        .filter_map(|id| node_map.get(id).map(|n| (*n).clone()))
+        .collect();
+
+    let edges: Vec<GraphEdge> = edge_ids
+        .iter()
+        .filter_map(|id| edge_map.get(id).map(|e| (*e).clone()))
+        .collect();
+
+    let length = edges.len() as i32;
+
+    GraphPath {
+        node_ids,
+        nodes,
+        edges,
+        length,
+        found: true,
+    }
+}
+
 /// Normalize a label to a safe node id fragment (lowercase, hyphens only).
 pub fn normalize_label(label: &str) -> String {
     label
@@ -665,5 +812,182 @@ mod tests {
         assert_eq!(insights[0].node_type, NodeType::Insight);
         // Insight edges have weight 0.8 (lower than topic/tech at 1.0)
         assert!((edges[0].weight - 0.8).abs() < 1e-6);
+    }
+
+    // -- find_path_bfs --
+
+    fn make_test_graph() -> KnowledgeGraph {
+        // Create a simple graph: A -- B -- C -- D
+        //                              \       /
+        //                               E ----
+        let nodes = vec![
+            GraphNode {
+                id: "A".into(),
+                label: "Node A".into(),
+                node_type: NodeType::Document,
+                document_id: None,
+                document_count: 0,
+                summary: None,
+                topics: vec![],
+            },
+            GraphNode {
+                id: "B".into(),
+                label: "Node B".into(),
+                node_type: NodeType::Topic,
+                document_id: None,
+                document_count: 0,
+                summary: None,
+                topics: vec![],
+            },
+            GraphNode {
+                id: "C".into(),
+                label: "Node C".into(),
+                node_type: NodeType::Document,
+                document_id: None,
+                document_count: 0,
+                summary: None,
+                topics: vec![],
+            },
+            GraphNode {
+                id: "D".into(),
+                label: "Node D".into(),
+                node_type: NodeType::Document,
+                document_id: None,
+                document_count: 0,
+                summary: None,
+                topics: vec![],
+            },
+            GraphNode {
+                id: "E".into(),
+                label: "Node E".into(),
+                node_type: NodeType::Technology,
+                document_id: None,
+                document_count: 0,
+                summary: None,
+                topics: vec![],
+            },
+        ];
+
+        let edges = vec![
+            GraphEdge {
+                id: "e1".into(),
+                source: "A".into(),
+                target: "B".into(),
+                weight: 0.9,
+                label: None,
+            },
+            GraphEdge {
+                id: "e2".into(),
+                source: "B".into(),
+                target: "C".into(),
+                weight: 0.8,
+                label: None,
+            },
+            GraphEdge {
+                id: "e3".into(),
+                source: "C".into(),
+                target: "D".into(),
+                weight: 0.7,
+                label: None,
+            },
+            GraphEdge {
+                id: "e4".into(),
+                source: "B".into(),
+                target: "E".into(),
+                weight: 0.85,
+                label: None,
+            },
+            GraphEdge {
+                id: "e5".into(),
+                source: "E".into(),
+                target: "D".into(),
+                weight: 0.75,
+                label: None,
+            },
+        ];
+
+        KnowledgeGraph {
+            nodes,
+            edges,
+            meta: KnowledgeGraphMeta {
+                total_documents: 3,
+                similarity_threshold: 0.5,
+                max_edges_per_node: 5,
+            },
+        }
+    }
+
+    #[test]
+    fn test_find_path_bfs_direct_connection() {
+        let graph = make_test_graph();
+        let path = find_path_bfs(&graph, "A", "B", 5);
+
+        assert!(path.found);
+        assert_eq!(path.length, 1);
+        assert_eq!(path.node_ids, vec!["A", "B"]);
+        assert_eq!(path.edges.len(), 1);
+        assert_eq!(path.edges[0].id, "e1");
+    }
+
+    #[test]
+    fn test_find_path_bfs_multi_hop() {
+        let graph = make_test_graph();
+        let path = find_path_bfs(&graph, "A", "D", 10);
+
+        assert!(path.found);
+        // Shortest path is A -> B -> E -> D (3 edges) or A -> B -> C -> D (3 edges)
+        assert_eq!(path.length, 3);
+        assert_eq!(path.node_ids.len(), 4);
+        assert_eq!(path.node_ids[0], "A");
+        assert_eq!(path.node_ids[3], "D");
+    }
+
+    #[test]
+    fn test_find_path_bfs_same_node() {
+        let graph = make_test_graph();
+        let path = find_path_bfs(&graph, "A", "A", 5);
+
+        assert!(path.found);
+        assert_eq!(path.length, 0);
+        assert_eq!(path.node_ids, vec!["A"]);
+        assert!(path.edges.is_empty());
+    }
+
+    #[test]
+    fn test_find_path_bfs_node_not_found() {
+        let graph = make_test_graph();
+        let path = find_path_bfs(&graph, "A", "Z", 5);
+
+        assert!(!path.found);
+        assert_eq!(path.length, 0);
+        assert!(path.node_ids.is_empty());
+    }
+
+    #[test]
+    fn test_find_path_bfs_max_depth_exceeded() {
+        let graph = make_test_graph();
+        // A -> D requires 3 hops, but we limit to 2
+        let path = find_path_bfs(&graph, "A", "D", 2);
+
+        assert!(!path.found);
+    }
+
+    #[test]
+    fn test_find_path_bfs_disconnected_nodes() {
+        // Graph with isolated node
+        let mut graph = make_test_graph();
+        graph.nodes.push(GraphNode {
+            id: "ISOLATED".into(),
+            label: "Isolated".into(),
+            node_type: NodeType::Document,
+            document_id: None,
+            document_count: 0,
+            summary: None,
+            topics: vec![],
+        });
+
+        let path = find_path_bfs(&graph, "A", "ISOLATED", 10);
+
+        assert!(!path.found);
     }
 }

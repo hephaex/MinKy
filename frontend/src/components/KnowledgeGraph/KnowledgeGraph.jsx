@@ -31,6 +31,10 @@ function KnowledgeGraph({
   loading,
   emptyMessage,
   onNodeClick,
+  pathMode,
+  pathSource,
+  pathTarget,
+  pathResult,
 }) {
   const containerRef = useRef(null);
   const svgRef = useRef(null);
@@ -98,8 +102,24 @@ function KnowledgeGraph({
     return map;
   }, [nodes, edges]);
 
+  // Path edge and node IDs
+  const pathEdgeIds = useMemo(() => {
+    if (!pathResult?.found) return new Set();
+    return new Set((pathResult.edges || []).map(e => e.id));
+  }, [pathResult]);
+
+  const pathNodeIds = useMemo(() => {
+    if (!pathResult?.found) return new Set();
+    return new Set(pathResult.node_ids || []);
+  }, [pathResult]);
+
   // Edges connected to the hovered/selected node
   const highlightedEdgeIds = useMemo(() => {
+    // If path is found, highlight path edges
+    if (pathResult?.found && pathEdgeIds.size > 0) {
+      return pathEdgeIds;
+    }
+
     const focus = hoveredNode || selectedNode;
     if (!focus) return new Set();
     return new Set(
@@ -107,7 +127,7 @@ function KnowledgeGraph({
         .filter(e => e.source === focus.id || e.target === focus.id)
         .map(e => e.id)
     );
-  }, [hoveredNode, selectedNode, edges]);
+  }, [hoveredNode, selectedNode, edges, pathResult, pathEdgeIds]);
 
   // Edges connected to the selected node (for detail panel)
   const selectedNodeEdges = useMemo(() => {
@@ -275,22 +295,33 @@ function KnowledgeGraph({
               {positionedNodes.map(node => {
                 const degree = degreeMap[node.id] || 0;
                 const isSelected = selectedNode?.id === node.id;
-                const isHighlighted =
-                  !hoveredNode ||
-                  hoveredNode.id === node.id ||
-                  highlightedEdgeIds.size === 0 ||
-                  Array.from(highlightedEdgeIds).some(eid => {
-                    const edge = edges.find(e => e.id === eid);
-                    return edge && (edge.source === node.id || edge.target === node.id);
-                  });
+                const isPathSource = pathSource === node.id;
+                const isPathTarget = pathTarget === node.id;
+                const isInPath = pathNodeIds.has(node.id);
+
+                // Highlight logic
+                let isHighlighted = true;
+                if (pathMode && pathResult?.found) {
+                  // In path mode with result, only highlight path nodes
+                  isHighlighted = isInPath;
+                } else if (hoveredNode) {
+                  isHighlighted =
+                    hoveredNode.id === node.id ||
+                    Array.from(highlightedEdgeIds).some(eid => {
+                      const edge = edges.find(e => e.id === eid);
+                      return edge && (edge.source === node.id || edge.target === node.id);
+                    });
+                }
 
                 return (
                   <GraphNode
                     key={node.id}
                     node={node}
                     degree={degree}
-                    isSelected={isSelected}
+                    isSelected={isSelected || isPathSource || isPathTarget}
                     isHighlighted={isHighlighted}
+                    isPathNode={isInPath}
+                    isPathEndpoint={isPathSource || isPathTarget}
                     onSelect={handleNodeSelect}
                     onHover={handleNodeHover}
                   />
@@ -398,6 +429,15 @@ KnowledgeGraph.propTypes = {
   loading: PropTypes.bool,
   emptyMessage: PropTypes.string,
   onNodeClick: PropTypes.func,
+  pathMode: PropTypes.bool,
+  pathSource: PropTypes.string,
+  pathTarget: PropTypes.string,
+  pathResult: PropTypes.shape({
+    found: PropTypes.bool,
+    node_ids: PropTypes.arrayOf(PropTypes.string),
+    edges: PropTypes.array,
+    length: PropTypes.number,
+  }),
 };
 
 KnowledgeGraph.defaultProps = {
@@ -407,6 +447,10 @@ KnowledgeGraph.defaultProps = {
   loading: false,
   emptyMessage: null,
   onNodeClick: null,
+  pathMode: false,
+  pathSource: null,
+  pathTarget: null,
+  pathResult: null,
 };
 
 export default KnowledgeGraph;

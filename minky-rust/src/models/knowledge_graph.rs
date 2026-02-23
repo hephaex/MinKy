@@ -231,6 +231,42 @@ pub struct SimilarityPairRow {
     pub similarity: f64,
 }
 
+/// Query parameters for path finding endpoint
+#[derive(Debug, Clone, Deserialize)]
+pub struct PathQuery {
+    /// Source node ID (e.g., "doc-uuid" or "topic-rust")
+    pub from: String,
+    /// Target node ID
+    pub to: String,
+    /// Maximum path length (default 5, max 10)
+    pub max_depth: Option<i32>,
+}
+
+impl Default for PathQuery {
+    fn default() -> Self {
+        Self {
+            from: String::new(),
+            to: String::new(),
+            max_depth: Some(5),
+        }
+    }
+}
+
+/// A path through the knowledge graph
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphPath {
+    /// Ordered list of node IDs in the path (from source to target)
+    pub node_ids: Vec<String>,
+    /// Ordered list of nodes in the path
+    pub nodes: Vec<GraphNode>,
+    /// Edges connecting consecutive nodes in the path
+    pub edges: Vec<GraphEdge>,
+    /// Total path length (number of edges)
+    pub length: i32,
+    /// Whether a path was found
+    pub found: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -331,5 +367,44 @@ mod tests {
         let json = serde_json::to_value(&edge).unwrap();
         // label should be omitted when None (skip_serializing_if)
         assert!(json.get("label").is_none());
+    }
+
+    #[test]
+    fn test_path_query_default() {
+        let q = PathQuery::default();
+        assert_eq!(q.max_depth, Some(5));
+        assert!(q.from.is_empty());
+        assert!(q.to.is_empty());
+    }
+
+    #[test]
+    fn test_graph_path_serialization() {
+        let path = GraphPath {
+            node_ids: vec!["doc-1".into(), "topic-rust".into(), "doc-2".into()],
+            nodes: vec![],
+            edges: vec![],
+            length: 2,
+            found: true,
+        };
+
+        let json = serde_json::to_value(&path).unwrap();
+        assert_eq!(json["length"], 2);
+        assert_eq!(json["found"], true);
+        assert_eq!(json["node_ids"].as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn test_graph_path_not_found() {
+        let path = GraphPath {
+            node_ids: vec![],
+            nodes: vec![],
+            edges: vec![],
+            length: 0,
+            found: false,
+        };
+
+        let json = serde_json::to_value(&path).unwrap();
+        assert_eq!(json["found"], false);
+        assert_eq!(json["length"], 0);
     }
 }
