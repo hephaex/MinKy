@@ -5,10 +5,12 @@
 //! - GET /api/knowledge/team     – team expertise map
 //! - GET /api/knowledge/path     – find shortest path between two nodes
 //! - GET /api/knowledge/clusters – detect and return clusters
+//! - GET /api/knowledge/export   – export graph data (JSON or CSV)
 
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
+    http::{header, StatusCode},
+    response::IntoResponse,
     routing::get,
     Json, Router,
 };
@@ -16,8 +18,8 @@ use axum::{
 use crate::{
     middleware::AuthUser,
     models::knowledge_graph::{
-        ClusterQuery, ClusterResult, GraphPath, KnowledgeGraph, KnowledgeGraphQuery, PathQuery,
-        TeamExpertiseMap,
+        ClusterQuery, ClusterResult, ExportFormat, ExportQuery, GraphExport, GraphPath,
+        KnowledgeGraph, KnowledgeGraphQuery, PathQuery, TeamExpertiseMap,
     },
     services::KnowledgeGraphService,
     AppState,
@@ -113,6 +115,100 @@ async fn get_graph_clusters(
         .map_err(into_error_response)
 }
 
+/// GET /api/knowledge/export
+///
+/// Export the knowledge graph data in JSON or CSV format.
+///
+/// Query parameters:
+/// - `format` – export format: json (default) or csv
+/// - `include_details` – include summary fields (default: true)
+async fn get_graph_export(
+    State(state): State<AppState>,
+    _auth_user: AuthUser,
+    Query(query): Query<ExportQuery>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let service = KnowledgeGraphService::new(state.db.clone());
+
+    let export = service
+        .export_graph(query.include_details)
+        .await
+        .map_err(into_error_response)?;
+
+    match query.format {
+        ExportFormat::Json => {
+            let json = serde_json::to_string_pretty(&export)
+                .map_err(|e| into_error_response(crate::error::AppError::Internal(e.into())))?;
+
+            Ok((
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, "application/json"),
+                    (
+                        header::CONTENT_DISPOSITION,
+                        "attachment; filename=\"knowledge-graph.json\"",
+                    ),
+                ],
+                json,
+            ))
+        }
+        ExportFormat::Csv => {
+            let csv = export_to_csv(&export);
+
+            Ok((
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, "text/csv"),
+                    (
+                        header::CONTENT_DISPOSITION,
+                        "attachment; filename=\"knowledge-graph.csv\"",
+                    ),
+                ],
+                csv,
+            ))
+        }
+    }
+}
+
+/// Convert graph export to CSV format.
+fn export_to_csv(export: &GraphExport) -> String {
+    let mut csv = String::new();
+
+    // Nodes section
+    csv.push_str("# Nodes\n");
+    csv.push_str("id,label,type,document_count,created_at\n");
+    for node in &export.nodes {
+        csv.push_str(&format!(
+            "\"{}\",\"{}\",\"{}\",{},{}\n",
+            escape_csv(&node.id),
+            escape_csv(&node.label),
+            escape_csv(&node.node_type),
+            node.document_count,
+            node.created_at.as_deref().unwrap_or("")
+        ));
+    }
+
+    csv.push('\n');
+
+    // Edges section
+    csv.push_str("# Edges\n");
+    csv.push_str("source,target,weight\n");
+    for edge in &export.edges {
+        csv.push_str(&format!(
+            "\"{}\",\"{}\",{:.4}\n",
+            escape_csv(&edge.source),
+            escape_csv(&edge.target),
+            edge.weight
+        ));
+    }
+
+    csv
+}
+
+/// Escape double quotes in CSV values.
+fn escape_csv(s: &str) -> String {
+    s.replace('"', "\"\"")
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -123,4 +219,5 @@ pub fn router() -> Router<AppState> {
         .route("/team", get(get_team_expertise))
         .route("/path", get(get_graph_path))
         .route("/clusters", get(get_graph_clusters))
+        .route("/export", get(get_graph_export))
 }

@@ -13,9 +13,10 @@ use std::collections::VecDeque;
 
 use crate::error::Result;
 use crate::models::knowledge_graph::{
-    ClusterResult, DocumentTopicRow, ExpertiseArea, ExpertiseLevel, GraphCluster, GraphEdge,
-    GraphNode, GraphPath, KnowledgeGraph, KnowledgeGraphMeta, KnowledgeGraphQuery,
-    MemberExpertise, NodeType, PathQuery, SimilarityPairRow, TeamExpertiseMap, UniqueExpert,
+    ClusterResult, DocumentTopicRow, ExpertiseArea, ExpertiseLevel, ExportedEdge, ExportedNode,
+    GraphCluster, GraphEdge, GraphExport, GraphNode, GraphPath, KnowledgeGraph,
+    KnowledgeGraphMeta, KnowledgeGraphQuery, MemberExpertise, NodeType, PathQuery,
+    SimilarityPairRow, TeamExpertiseMap, UniqueExpert,
 };
 
 /// Service for building and serving the knowledge graph
@@ -366,6 +367,51 @@ impl KnowledgeGraphService {
             members,
             shared_areas,
             unique_experts,
+        })
+    }
+
+    /// Export the knowledge graph in a simplified format.
+    ///
+    /// This method builds the full graph and converts it to an export-friendly format.
+    pub async fn export_graph(
+        &self,
+        include_details: bool,
+    ) -> Result<GraphExport> {
+        let query = KnowledgeGraphQuery::default();
+        let graph = self.build_graph(&query).await?;
+
+        let nodes: Vec<ExportedNode> = graph
+            .nodes
+            .iter()
+            .map(|n| ExportedNode {
+                id: n.id.clone(),
+                label: n.label.clone(),
+                node_type: n.node_type.to_string(),
+                document_count: n.document_count,
+                summary: if include_details { n.summary.clone() } else { None },
+                created_at: n.created_at.clone(),
+            })
+            .collect();
+
+        let edges: Vec<ExportedEdge> = graph
+            .edges
+            .iter()
+            .map(|e| ExportedEdge {
+                source: e.source.clone(),
+                target: e.target.clone(),
+                weight: e.weight,
+            })
+            .collect();
+
+        let node_count = nodes.len();
+        let edge_count = edges.len();
+
+        Ok(GraphExport {
+            nodes,
+            edges,
+            exported_at: chrono::Utc::now().to_rfc3339(),
+            node_count,
+            edge_count,
         })
     }
 }

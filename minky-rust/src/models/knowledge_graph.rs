@@ -326,6 +326,71 @@ pub struct ClusterResult {
     pub converged: bool,
 }
 
+// ---------------------------------------------------------------------------
+// Graph Export Types
+// ---------------------------------------------------------------------------
+
+/// Export format for knowledge graph data
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportFormat {
+    #[default]
+    Json,
+    Csv,
+}
+
+/// Query parameters for graph export endpoint
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExportQuery {
+    /// Export format (json, csv)
+    #[serde(default)]
+    pub format: ExportFormat,
+    /// Include full node details (default: true)
+    #[serde(default = "default_true")]
+    pub include_details: bool,
+}
+
+impl Default for ExportQuery {
+    fn default() -> Self {
+        Self {
+            format: ExportFormat::Json,
+            include_details: true,
+        }
+    }
+}
+
+/// Exported graph data (simplified for CSV export)
+#[derive(Debug, Clone, Serialize)]
+pub struct ExportedNode {
+    pub id: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub node_type: String,
+    pub document_count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
+}
+
+/// Exported edge data (simplified for CSV export)
+#[derive(Debug, Clone, Serialize)]
+pub struct ExportedEdge {
+    pub source: String,
+    pub target: String,
+    pub weight: f64,
+}
+
+/// Export result containing nodes, edges, and metadata
+#[derive(Debug, Clone, Serialize)]
+pub struct GraphExport {
+    pub nodes: Vec<ExportedNode>,
+    pub edges: Vec<ExportedEdge>,
+    pub exported_at: String,
+    pub node_count: usize,
+    pub edge_count: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

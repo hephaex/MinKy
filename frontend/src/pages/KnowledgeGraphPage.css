@@ -330,6 +330,36 @@
   color: #bdc3c7;
 }
 
+/* Export Controls */
+.kg-page__export-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kg-page__export-btn {
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(52, 152, 219, 0.4);
+  background: rgba(52, 152, 219, 0.1);
+  color: #3498db;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.kg-page__export-btn:hover:not(:disabled) {
+  border-color: rgba(52, 152, 219, 0.6);
+  background: rgba(52, 152, 219, 0.15);
+}
+
+.kg-page__export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Graph wrapper */
 .kg-page__graph-wrapper {
   flex: 1;

@@ -37,6 +37,27 @@ function buildSampleGraph() {
 }
 
 /**
+ * Convert export data to CSV format.
+ */
+function exportToCsv(data) {
+  const escapeCsv = str => `"${String(str || '').replace(/"/g, '""')}"`;
+
+  let csv = '# Nodes\n';
+  csv += 'id,label,type,documentCount,created_at\n';
+  for (const node of data.nodes) {
+    csv += `${escapeCsv(node.id)},${escapeCsv(node.label)},${escapeCsv(node.type)},${node.documentCount || 0},${node.created_at || ''}\n`;
+  }
+
+  csv += '\n# Edges\n';
+  csv += 'source,target,weight\n';
+  for (const edge of data.edges) {
+    csv += `${escapeCsv(edge.source)},${escapeCsv(edge.target)},${edge.weight.toFixed(4)}\n`;
+  }
+
+  return csv;
+}
+
+/**
  * Filter controls for the knowledge graph.
  */
 function GraphFilters({ activeTypes, onToggleType }) {
@@ -94,6 +115,9 @@ function KnowledgeGraphPage() {
   // Timeline filter state
   const [timelineMode, setTimelineMode] = useState(false);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
+
+  // Export state
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const loadGraphData = async () => {
@@ -249,6 +273,66 @@ function KnowledgeGraphPage() {
     edge => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
   );
 
+  // Export graph data
+  const handleExport = async format => {
+    setExporting(true);
+    try {
+      if (apiAvailable) {
+        // Use API export endpoint
+        const response = await fetch(`/api/knowledge/export?format=${format}`, {
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `knowledge-graph.${format}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      } else {
+        // Export current demo data
+        const exportData = {
+          nodes: filteredNodes.map(n => ({
+            id: n.id,
+            label: n.label,
+            type: n.type,
+            documentCount: n.documentCount,
+            created_at: n.created_at,
+          })),
+          edges: filteredEdges.map(e => ({
+            source: e.source,
+            target: e.target,
+            weight: e.weight,
+          })),
+          exported_at: new Date().toISOString(),
+        };
+
+        const content = format === 'json'
+          ? JSON.stringify(exportData, null, 2)
+          : exportToCsv(exportData);
+
+        const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `knowledge-graph.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      // Export failed silently
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="kg-page">
       {/* Page header */}
@@ -398,6 +482,26 @@ function KnowledgeGraphPage() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Export Controls */}
+        <div className="kg-page__export-controls">
+          <button
+            className="kg-page__export-btn"
+            onClick={() => handleExport('json')}
+            disabled={exporting || loading}
+            title="Export graph as JSON"
+          >
+            {exporting ? 'Exporting...' : 'Export JSON'}
+          </button>
+          <button
+            className="kg-page__export-btn"
+            onClick={() => handleExport('csv')}
+            disabled={exporting || loading}
+            title="Export graph as CSV"
+          >
+            Export CSV
+          </button>
         </div>
       </div>
 
