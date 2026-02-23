@@ -37,6 +37,9 @@ function KnowledgeGraph({
   pathResult,
   clusterMode,
   clusterData,
+  onSetPathSource,
+  onFilterToNode,
+  onExportConnections,
 }) {
   const containerRef = useRef(null);
   const svgRef = useRef(null);
@@ -355,6 +358,11 @@ function KnowledgeGraph({
             allNodes={positionedNodes}
             onClose={handlePanelClose}
             onNavigate={handleNavigateToNode}
+            clusterMode={clusterMode}
+            clusterData={clusterData}
+            onSetPathSource={onSetPathSource}
+            onFilterToNode={onFilterToNode}
+            onExportConnections={onExportConnections}
           />
         )}
       </div>
@@ -468,6 +476,9 @@ KnowledgeGraph.propTypes = {
     cluster_count: PropTypes.number,
     node_cluster_map: PropTypes.object,
   }),
+  onSetPathSource: PropTypes.func,
+  onFilterToNode: PropTypes.func,
+  onExportConnections: PropTypes.func,
 };
 
 KnowledgeGraph.defaultProps = {
@@ -483,6 +494,9 @@ KnowledgeGraph.defaultProps = {
   pathResult: null,
   clusterMode: false,
   clusterData: null,
+  onSetPathSource: null,
+  onFilterToNode: null,
+  onExportConnections: null,
 };
 
 export default KnowledgeGraph;

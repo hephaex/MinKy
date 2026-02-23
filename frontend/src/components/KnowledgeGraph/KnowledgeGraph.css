@@ -269,6 +269,96 @@
   background: rgba(74, 144, 217, 0.1);
 }
 
+/* Created date */
+.knowledge-graph__panel-date {
+  font-size: 12px;
+  color: #7f8c8d;
+  cursor: help;
+}
+
+/* Statistics */
+.knowledge-graph__panel-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.knowledge-graph__panel-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 50px;
+}
+
+.knowledge-graph__panel-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ecf0f1;
+}
+
+.knowledge-graph__panel-stat-label {
+  font-size: 10px;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Cluster info */
+.knowledge-graph__panel-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.knowledge-graph__panel-cluster-badge {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.knowledge-graph__panel-cluster-label {
+  font-size: 13px;
+  color: #ecf0f1;
+  font-weight: 500;
+}
+
+.knowledge-graph__panel-cluster-size {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+/* Quick actions */
+.knowledge-graph__panel-actions {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 12px;
+  margin-top: 8px;
+}
+
+.knowledge-graph__panel-action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.knowledge-graph__panel-action-btn {
+  width: 100%;
+  background: rgba(74, 144, 217, 0.1);
+  border: 1px solid rgba(74, 144, 217, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #4a90d9;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.knowledge-graph__panel-action-btn:hover {
+  background: rgba(74, 144, 217, 0.2);
+  border-color: rgba(74, 144, 217, 0.5);
+}
+
 /* Controls */
 .knowledge-graph__controls {
   display: flex;

@@ -244,8 +244,70 @@ function KnowledgeGraphPage() {
     setClusterMode(prev => !prev);
   }, [clusterMode, clusterData, loadClusters]);
 
-  // Filter nodes by type, search query, and date range
+  // Quick action: Set path source from detail panel
+  const handleSetPathSource = useCallback(node => {
+    setPathMode(true);
+    setPathSource(node.id);
+    setPathTarget(null);
+    setPathResult(null);
+  }, []);
+
+  // Quick action: Filter to show only this node and its connections
+  const [focusedNodeId, setFocusedNodeId] = useState(null);
+
+  const handleFilterToNode = useCallback(node => {
+    setFocusedNodeId(prev => (prev === node.id ? null : node.id));
+  }, []);
+
+  // Quick action: Export node's connections as JSON
+  const handleExportConnections = useCallback((node, relatedNodes) => {
+    const exportData = {
+      node: {
+        id: node.id,
+        label: node.label,
+        type: node.type,
+        summary: node.summary,
+        topics: node.topics,
+        created_at: node.created_at,
+      },
+      connections: relatedNodes.map(r => ({
+        id: r.id,
+        label: r.label,
+        type: r.type,
+        weight: r.weight,
+      })),
+      exported_at: new Date().toISOString(),
+    };
+
+    const content = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([content], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `connections-${node.label.replace(/\s+/g, '-').toLowerCase()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  // Get connected node IDs when focusing on a node
+  const focusedConnectedIds = focusedNodeId
+    ? new Set([
+        focusedNodeId,
+        ...graphData.edges
+          .filter(e => e.source === focusedNodeId || e.target === focusedNodeId)
+          .flatMap(e => [e.source, e.target]),
+      ])
+    : null;
+
+  // Filter nodes by type, search query, date range, and focused node
   const filteredNodes = graphData.nodes.filter(node => {
+    // If focusing on a specific node, only show it and its connections
+    if (focusedConnectedIds && !focusedConnectedIds.has(node.id)) {
+      return false;
+    }
+
     const matchesType = activeTypes.has(node.type || 'document');
     const matchesSearch =
       !searchQuery ||
@@ -484,6 +546,22 @@ function KnowledgeGraphPage() {
           )}
         </div>
 
+        {/* Focus Filter Indicator */}
+        {focusedNodeId && (
+          <div className="kg-page__focus-indicator">
+            <span className="kg-page__focus-label">
+              Showing connections for: {graphData.nodes.find(n => n.id === focusedNodeId)?.label || focusedNodeId}
+            </span>
+            <button
+              className="kg-page__focus-clear"
+              onClick={() => setFocusedNodeId(null)}
+              title="Show all nodes"
+            >
+              Show All
+            </button>
+          </div>
+        )}
+
         {/* Export Controls */}
         <div className="kg-page__export-controls">
           <button
@@ -524,6 +602,9 @@ function KnowledgeGraphPage() {
           pathResult={pathResult}
           clusterMode={clusterMode}
           clusterData={clusterData}
+          onSetPathSource={handleSetPathSource}
+          onFilterToNode={handleFilterToNode}
+          onExportConnections={handleExportConnections}
         />
       </div>
     </div>
