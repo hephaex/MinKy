@@ -117,6 +117,7 @@ fn graph_node_document_id_is_omitted_when_none() {
         document_count: 5,
         summary: None,
         topics: Vec::new(),
+        created_at: None,
     };
 
     let json = serde_json::to_value(&node).unwrap();
@@ -134,6 +135,7 @@ fn graph_node_document_id_present_when_some() {
         document_count: 0,
         summary: Some("A document".into()),
         topics: vec!["Rust".into()],
+        created_at: Some("2026-01-15T10:00:00Z".into()),
     };
 
     let json = serde_json::to_value(&node).unwrap();
@@ -190,6 +192,7 @@ fn knowledge_graph_serializes_all_fields() {
             document_count: 0,
             summary: None,
             topics: Vec::new(),
+            created_at: None,
         }],
         edges: vec![],
         meta: KnowledgeGraphMeta {

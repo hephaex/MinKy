@@ -8,9 +8,9 @@ import './KnowledgeGraphPage.css';
  */
 function buildSampleGraph() {
   const nodes = [
-    { id: 'doc1', label: 'RAG Architecture', type: 'document', documentId: 'doc1', documentCount: 0, summary: 'Retrieval-Augmented Generation patterns for knowledge systems', topics: ['RAG', 'AI', 'Search'] },
-    { id: 'doc2', label: 'pgvector Setup', type: 'document', documentId: 'doc2', documentCount: 0, summary: 'Setting up pgvector for semantic search in PostgreSQL', topics: ['PostgreSQL', 'Embeddings', 'Database'] },
-    { id: 'doc3', label: 'Embedding APIs', type: 'document', documentId: 'doc3', documentCount: 0, summary: 'Comparison of OpenAI and Voyage AI embedding APIs', topics: ['OpenAI', 'Embeddings', 'API'] },
+    { id: 'doc1', label: 'RAG Architecture', type: 'document', documentId: 'doc1', documentCount: 0, summary: 'Retrieval-Augmented Generation patterns for knowledge systems', topics: ['RAG', 'AI', 'Search'], created_at: '2026-02-15T10:00:00Z' },
+    { id: 'doc2', label: 'pgvector Setup', type: 'document', documentId: 'doc2', documentCount: 0, summary: 'Setting up pgvector for semantic search in PostgreSQL', topics: ['PostgreSQL', 'Embeddings', 'Database'], created_at: '2026-02-10T14:30:00Z' },
+    { id: 'doc3', label: 'Embedding APIs', type: 'document', documentId: 'doc3', documentCount: 0, summary: 'Comparison of OpenAI and Voyage AI embedding APIs', topics: ['OpenAI', 'Embeddings', 'API'], created_at: '2026-01-25T09:00:00Z' },
     { id: 't1', label: 'Embeddings', type: 'topic', documentCount: 3, topics: ['Vector Search', 'Semantic'] },
     { id: 't2', label: 'PostgreSQL', type: 'technology', documentCount: 2, topics: ['Database', 'SQL'] },
     { id: 't3', label: 'RAG', type: 'topic', documentCount: 2, topics: ['LLM', 'Search'] },
@@ -90,6 +90,10 @@ function KnowledgeGraphPage() {
   const [clusterMode, setClusterMode] = useState(false);
   const [clusterData, setClusterData] = useState(null);
   const [clusterLoading, setClusterLoading] = useState(false);
+
+  // Timeline filter state
+  const [timelineMode, setTimelineMode] = useState(false);
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
   useEffect(() => {
     const loadGraphData = async () => {
@@ -216,14 +220,27 @@ function KnowledgeGraphPage() {
     setClusterMode(prev => !prev);
   }, [clusterMode, clusterData, loadClusters]);
 
-  // Filter nodes by type and search query
+  // Filter nodes by type, search query, and date range
   const filteredNodes = graphData.nodes.filter(node => {
     const matchesType = activeTypes.has(node.type || 'document');
     const matchesSearch =
       !searchQuery ||
       node.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (node.topics || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesType && matchesSearch;
+
+    // Timeline filtering (only applies to document nodes with created_at)
+    let matchesDate = true;
+    if (timelineMode && node.created_at) {
+      const nodeDate = new Date(node.created_at);
+      if (dateRange.start) {
+        matchesDate = matchesDate && nodeDate >= new Date(dateRange.start);
+      }
+      if (dateRange.end) {
+        matchesDate = matchesDate && nodeDate <= new Date(dateRange.end + 'T23:59:59Z');
+      }
+    }
+
+    return matchesType && matchesSearch && matchesDate;
   });
 
   // Only include edges where both endpoints are visible
@@ -330,6 +347,51 @@ function KnowledgeGraphPage() {
                   className="kg-page__path-clear"
                   onClick={clearPath}
                   title="Clear selection"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Timeline Controls */}
+        <div className="kg-page__timeline-controls">
+          <button
+            className={`kg-page__timeline-btn${timelineMode ? ' kg-page__timeline-btn--active' : ''}`}
+            onClick={() => setTimelineMode(prev => !prev)}
+            title={timelineMode ? 'Disable timeline filter' : 'Filter by date range'}
+          >
+            {timelineMode ? 'Hide Timeline' : 'Timeline'}
+          </button>
+
+          {timelineMode && (
+            <div className="kg-page__timeline-inputs">
+              <label className="kg-page__timeline-label">
+                From:
+                <input
+                  type="date"
+                  className="kg-page__timeline-date"
+                  value={dateRange.start}
+                  onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                  aria-label="Start date"
+                />
+              </label>
+              <label className="kg-page__timeline-label">
+                To:
+                <input
+                  type="date"
+                  className="kg-page__timeline-date"
+                  value={dateRange.end}
+                  onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  aria-label="End date"
+                />
+              </label>
+              {(dateRange.start || dateRange.end) && (
+                <button
+                  className="kg-page__timeline-clear"
+                  onClick={() => setDateRange({ start: '', end: '' })}
+                  title="Clear date range"
                 >
                   Clear
                 </button>

@@ -65,6 +65,7 @@ impl KnowledgeGraphService {
                 document_count: 0,
                 summary: row.summary.clone(),
                 topics: row.topics.clone(),
+                created_at: row.created_at.map(|dt| dt.to_rfc3339()),
             });
         }
 
@@ -130,7 +131,8 @@ impl KnowledgeGraphService {
                 du.summary     AS summary,
                 COALESCE(du.topics, '{}')        AS topics,
                 COALESCE(du.technologies, '{}')  AS technologies,
-                COALESCE(du.insights, '{}')      AS insights
+                COALESCE(du.insights, '{}')      AS insights,
+                d.created_at   AS created_at
             FROM documents d
             LEFT JOIN document_understanding du ON du.document_id = d.id
             ORDER BY d.created_at DESC
@@ -460,6 +462,7 @@ pub fn build_derived_nodes_pure(
             document_count: count,
             summary: None,
             topics: Vec::new(),
+            created_at: None,
         })
         .collect();
 
@@ -473,6 +476,7 @@ pub fn build_derived_nodes_pure(
             document_count: count,
             summary: None,
             topics: Vec::new(),
+            created_at: None,
         })
         .collect();
 
@@ -486,6 +490,7 @@ pub fn build_derived_nodes_pure(
             document_count: count,
             summary: None,
             topics: Vec::new(),
+            created_at: None,
         })
         .collect();
 
@@ -934,6 +939,7 @@ mod tests {
             topics: vec!["Rust".into(), "Testing".into()],
             technologies: vec!["PostgreSQL".into()],
             insights: vec![],
+            created_at: None,
         }];
 
         let mut doc_node_ids = HashMap::new();
@@ -967,6 +973,7 @@ mod tests {
                 topics: vec!["Rust".into()],
                 technologies: vec![],
                 insights: vec![],
+                created_at: None,
             },
             DocumentTopicRow {
                 document_id: doc_id2,
@@ -975,6 +982,7 @@ mod tests {
                 topics: vec!["Rust".into()],
                 technologies: vec![],
                 insights: vec![],
+                created_at: None,
             },
         ];
 
@@ -1006,6 +1014,7 @@ mod tests {
             topics: vec!["  ".into(), "".into(), "Valid".into()],
             technologies: vec![],
             insights: vec![],
+            created_at: None,
         }];
 
         let mut doc_node_ids = HashMap::new();
@@ -1034,6 +1043,7 @@ mod tests {
             topics: vec![],
             technologies: vec![],
             insights: vec!["Key insight".into()],
+            created_at: None,
         }];
 
         let mut doc_node_ids = HashMap::new();
@@ -1065,6 +1075,7 @@ mod tests {
                 document_count: 0,
                 summary: None,
                 topics: vec![],
+                created_at: None,
             },
             GraphNode {
                 id: "B".into(),
@@ -1074,6 +1085,7 @@ mod tests {
                 document_count: 0,
                 summary: None,
                 topics: vec![],
+                created_at: None,
             },
             GraphNode {
                 id: "C".into(),
@@ -1083,6 +1095,7 @@ mod tests {
                 document_count: 0,
                 summary: None,
                 topics: vec![],
+                created_at: None,
             },
             GraphNode {
                 id: "D".into(),
@@ -1092,6 +1105,7 @@ mod tests {
                 document_count: 0,
                 summary: None,
                 topics: vec![],
+                created_at: None,
             },
             GraphNode {
                 id: "E".into(),
@@ -1101,6 +1115,7 @@ mod tests {
                 document_count: 0,
                 summary: None,
                 topics: vec![],
+                created_at: None,
             },
         ];
 
@@ -1220,6 +1235,7 @@ mod tests {
             document_count: 0,
             summary: None,
             topics: vec![],
+            created_at: None,
         });
 
         let path = find_path_bfs(&graph, "A", "ISOLATED", 10);
@@ -1274,6 +1290,7 @@ mod tests {
                     document_count: 0,
                     summary: None,
                     topics: vec![],
+                    created_at: None,
                 },
                 GraphNode {
                     id: "B".into(),
@@ -1283,6 +1300,7 @@ mod tests {
                     document_count: 0,
                     summary: None,
                     topics: vec![],
+                    created_at: None,
                 },
                 GraphNode {
                     id: "X".into(),
@@ -1292,6 +1310,7 @@ mod tests {
                     document_count: 0,
                     summary: None,
                     topics: vec![],
+                    created_at: None,
                 },
                 GraphNode {
                     id: "Y".into(),
@@ -1301,6 +1320,7 @@ mod tests {
                     document_count: 0,
                     summary: None,
                     topics: vec![],
+                    created_at: None,
                 },
             ],
             edges: vec![
@@ -1346,6 +1366,7 @@ mod tests {
             document_count: 0,
             summary: None,
             topics: vec![],
+            created_at: None,
         });
 
         let result = detect_clusters(&graph, 10, 2);

@@ -58,6 +58,10 @@ pub struct GraphNode {
     /// Related topics / sub-labels for search and tooltip display
     #[serde(default)]
     pub topics: Vec<String>,
+
+    /// Creation timestamp for timeline filtering (ISO 8601 format)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
 }
 
 /// A directed or undirected edge between two graph nodes
@@ -221,6 +225,7 @@ pub struct DocumentTopicRow {
     pub topics: Vec<String>,
     pub technologies: Vec<String>,
     pub insights: Vec<String>,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Row type for similarity pairs from pgvector
@@ -384,6 +389,7 @@ mod tests {
             document_count: 0,
             summary: Some("A test document".into()),
             topics: vec!["Rust".into(), "Testing".into()],
+            created_at: Some("2026-01-15T10:30:00Z".into()),
         };
 
         let json = serde_json::to_value(&node).unwrap();
