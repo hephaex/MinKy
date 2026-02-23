@@ -24,7 +24,7 @@
 
 ---
 
-### ✅ Phase 1 완료! Phase 2 준비
+### ✅ Phase 1-3 완료! Phase 4 준비
 
 **Phase 1 (Knowledge Understanding) 완료:**
 - ✅ pgvector 설정 및 마이그레이션
@@ -34,6 +34,27 @@
 - ✅ 프론트엔드 검색 UI
 - ✅ 프론트엔드 채팅 UI
 - ✅ API 문서화
+
+**Phase 2 (Real-time Features) 완료:**
+- ✅ WebSocket 실시간 연결 (/ws)
+- ✅ Chat 스트리밍 응답 (SSE)
+- ✅ 프론트엔드 스트리밍 UI
+
+**Phase 3 (Knowledge Graph Enhancement) 완료 (2026-02-24):**
+- ✅ Path Finding - BFS 최단 경로 탐색 (커밋 `b2829e36`)
+- ✅ Cluster Analysis - Label Propagation 알고리즘 (커밋 `acba9ad5`)
+- ✅ Timeline View - 날짜 범위 필터링 (커밋 `a04a78de`)
+- ✅ Graph Export - JSON/CSV 내보내기 (커밋 `be39fef8`)
+
+**Phase 4 (Frontend Enhancement) 진행 중 (2026-02-24):**
+- ✅ 지식 그래프 상세 패널 강화 (커밋 `7c9ea5b9`)
+  - 생성일 표시 (상대 시간 + 툴팁)
+  - 노드 통계 (연결 수, 평균 강도, 문서 수)
+  - 클러스터 정보 표시
+  - 빠른 액션 (경로 탐색, 연결 필터, 내보내기)
+- [ ] 문서 목록 대시보드 개선 (다음 작업)
+- [ ] 검색 결과 하이라이팅 개선
+- [ ] 채팅 UI 개선
 
 **E2E 테스트 결과 (2026-02-19):**
 1. [x] PostgreSQL 데이터베이스 마이그레이션 실행
