@@ -30,7 +30,7 @@ const aiMsg = {
   role: 'assistant',
   content: 'Response text',
   timestamp: '2026-02-19T10:00:05Z',
-  sources: [{ title: 'Doc A', url: 'https://example.com' }],
+  sources: [{ document_title: 'Doc A', document_id: 'doc-1', chunk_text: 'Preview text for the document...', similarity: 0.95 }],
 };
 
 describe('ChatMessage', () => {
@@ -54,18 +54,22 @@ describe('ChatMessage', () => {
     expect(screen.getByText('Response text')).toBeInTheDocument();
   });
 
-  it('renders source links', () => {
+  it('renders source cards', () => {
     render(<ChatMessage message={aiMsg} />);
-    const link = screen.getByRole('link', { name: 'Doc A' });
-    expect(link).toHaveAttribute('href', 'https://example.com');
-    expect(link).toHaveAttribute('target', '_blank');
-    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    // Check source card title is rendered
+    expect(screen.getByText('Doc A')).toBeInTheDocument();
+    // Check similarity percentage is displayed
+    expect(screen.getByText('95%')).toBeInTheDocument();
+    // Check preview text is displayed
+    expect(screen.getByText(/Preview text for the document/)).toBeInTheDocument();
+    // Check source number badge
+    expect(screen.getByText('[1]')).toBeInTheDocument();
   });
 
   it('does not render sources section when no sources', () => {
     const msg = { ...aiMsg, sources: [] };
-    render(<ChatMessage message={msg} />);
-    expect(screen.queryByText('Sources:')).not.toBeInTheDocument();
+    const { container } = render(<ChatMessage message={msg} />);
+    expect(container.querySelector('.chat-message__sources')).not.toBeInTheDocument();
   });
 
   it('calls onCopy when copy button is clicked', () => {

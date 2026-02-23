@@ -2,6 +2,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useChat } from './useChat';
 import { chatService } from '../services/chatService';
 
+let mockIdCounter = 0;
 jest.mock('../services/chatService', () => ({
   chatService: {
     getSessions: jest.fn(),
@@ -9,13 +10,15 @@ jest.mock('../services/chatService', () => ({
     createSession: jest.fn(),
     deleteSession: jest.fn(),
     sendMessage: jest.fn(),
+    sendMessageStream: jest.fn(),
   },
-  generateId: () => 'mock-id',
+  generateId: () => `mock-id-${++mockIdCounter}`,
 }));
 
 describe('useChat', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIdCounter = 0;
     chatService.getSessions.mockResolvedValue([]);
     chatService.createSession.mockResolvedValue({ id: 'new-session', title: 'New Chat', updatedAt: new Date().toISOString() });
   });
@@ -52,7 +55,8 @@ describe('useChat', () => {
     expect(result.current.messages).toEqual([]);
   });
 
-  it('sendMessage appends user and AI messages', async () => {
+  it('sendMessage appends user and AI messages (non-streaming)', async () => {
+    // Test non-streaming path for simpler mocking
     chatService.sendMessage.mockResolvedValue({
       content: 'AI response',
       sources: [],
@@ -62,7 +66,7 @@ describe('useChat', () => {
     await waitFor(() => expect(result.current.sessions).toBeDefined());
 
     await act(async () => {
-      await result.current.sendMessage('Hello');
+      await result.current.sendMessage('Hello', { streaming: false });
     });
 
     expect(result.current.messages).toHaveLength(2);
@@ -72,9 +76,35 @@ describe('useChat', () => {
     expect(result.current.messages[1].content).toBe('AI response');
   });
 
+  it('sendMessage with streaming calls sendMessageStream', async () => {
+    // Just verify streaming method is called
+    chatService.sendMessageStream.mockImplementation(async (question, options, callbacks) => {
+      callbacks.onDone({ tokensUsed: 10, model: 'test-model' });
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.sessions).toBeDefined());
+
+    await act(async () => {
+      await result.current.sendMessage('Hello');
+    });
+
+    expect(chatService.sendMessageStream).toHaveBeenCalledWith(
+      'Hello',
+      expect.objectContaining({ topK: 5, threshold: 0.7 }),
+      expect.objectContaining({
+        onSources: expect.any(Function),
+        onDelta: expect.any(Function),
+        onDone: expect.any(Function),
+        onError: expect.any(Function),
+      })
+    );
+  });
+
   it('sets error message on sendMessage failure', async () => {
-    chatService.sendMessage.mockRejectedValue({
-      response: { data: { error: 'Server error' } },
+    // Mock streaming to call error callback
+    chatService.sendMessageStream.mockImplementation(async (question, options, callbacks) => {
+      callbacks.onError(new Error('Server error'));
     });
 
     const { result } = renderHook(() => useChat());

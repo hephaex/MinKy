@@ -64,8 +64,44 @@ const markdownComponents = {
   },
 };
 
+const StreamingCursor = () => (
+  <span className="chat-streaming-cursor" aria-label="Generating response">▊</span>
+);
+
+const SourceCard = ({ source, index }) => {
+  const { document_title, document_id, chunk_text, similarity } = source;
+  const title = document_title || `Document ${index + 1}`;
+  const preview = chunk_text?.slice(0, 100) || '';
+  const similarityPercent = Math.round((similarity || 0) * 100);
+
+  return (
+    <div className="chat-source-card">
+      <div className="chat-source-card__header">
+        <span className="chat-source-card__number">[{index + 1}]</span>
+        <span className="chat-source-card__title">{title}</span>
+        <span className="chat-source-card__similarity">{similarityPercent}%</span>
+      </div>
+      {preview && (
+        <p className="chat-source-card__preview">
+          {preview}{chunk_text?.length > 100 ? '...' : ''}
+        </p>
+      )}
+    </div>
+  );
+};
+
+SourceCard.propTypes = {
+  source: PropTypes.shape({
+    document_title: PropTypes.string,
+    document_id: PropTypes.string,
+    chunk_text: PropTypes.string,
+    similarity: PropTypes.number,
+  }).isRequired,
+  index: PropTypes.number.isRequired,
+};
+
 const ChatMessage = ({ message, onCopy = null }) => {
-  const { role, content, timestamp, sources } = message;
+  const { role, content, timestamp, sources, isStreaming, isError, tokensUsed, model } = message;
   const isUser = role === 'user';
 
   const handleCopy = () => {
@@ -78,8 +114,15 @@ const ChatMessage = ({ message, onCopy = null }) => {
     ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
 
+  const messageClass = [
+    'chat-message',
+    isUser ? 'chat-message--user' : 'chat-message--ai',
+    isStreaming ? 'chat-message--streaming' : '',
+    isError ? 'chat-message--error' : '',
+  ].filter(Boolean).join(' ');
+
   return (
-    <div className={`chat-message ${isUser ? 'chat-message--user' : 'chat-message--ai'}`}>
+    <div className={messageClass}>
       <div className="chat-message__avatar" aria-hidden="true">
         {isUser ? 'U' : 'AI'}
       </div>
@@ -88,45 +131,50 @@ const ChatMessage = ({ message, onCopy = null }) => {
           {isUser ? (
             <p className="chat-message__text">{content}</p>
           ) : (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents}
-            >
-              {content}
-            </ReactMarkdown>
+            <>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
+                {content || (isStreaming ? '' : 'Generating response...')}
+              </ReactMarkdown>
+              {isStreaming && <StreamingCursor />}
+            </>
           )}
         </div>
         {sources && sources.length > 0 && (
           <div className="chat-message__sources">
-            <span className="chat-message__sources-label">Sources:</span>
-            <ul className="chat-message__sources-list">
-              {sources.map((source, i) => (
-                <li key={i}>
-                  <a
-                    href={source.url || '#'}
-                    className="chat-message__source-link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {source.title || source.url}
-                  </a>
-                </li>
-              ))}
-            </ul>
+            <details className="chat-message__sources-details" open={!isStreaming}>
+              <summary className="chat-message__sources-label">
+                Sources ({sources.length})
+              </summary>
+              <div className="chat-message__sources-list">
+                {sources.map((source, i) => (
+                  <SourceCard key={source.document_id || i} source={source} index={i} />
+                ))}
+              </div>
+            </details>
           </div>
         )}
         <div className="chat-message__meta">
           {formattedTime && (
             <span className="chat-message__time">{formattedTime}</span>
           )}
-          <button
-            className="chat-message__copy"
-            onClick={handleCopy}
-            aria-label="Copy message"
-            title="Copy message"
-          >
-            Copy
-          </button>
+          {tokensUsed && (
+            <span className="chat-message__tokens" title={`Model: ${model || 'unknown'}`}>
+              {tokensUsed} tokens
+            </span>
+          )}
+          {!isStreaming && content && (
+            <button
+              className="chat-message__copy"
+              onClick={handleCopy}
+              aria-label="Copy message"
+              title="Copy message"
+            >
+              Copy
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -137,16 +185,26 @@ ChatMessage.propTypes = {
   message: PropTypes.shape({
     id: PropTypes.string,
     role: PropTypes.oneOf(['user', 'assistant']).isRequired,
-    content: PropTypes.string.isRequired,
+    content: PropTypes.string,
     timestamp: PropTypes.string,
     sources: PropTypes.arrayOf(
       PropTypes.shape({
-        title: PropTypes.string,
-        url: PropTypes.string,
+        document_title: PropTypes.string,
+        document_id: PropTypes.string,
+        chunk_text: PropTypes.string,
+        similarity: PropTypes.number,
       })
     ),
+    isStreaming: PropTypes.bool,
+    isError: PropTypes.bool,
+    tokensUsed: PropTypes.number,
+    model: PropTypes.string,
   }).isRequired,
   onCopy: PropTypes.func,
+};
+
+ChatMessage.defaultProps = {
+  onCopy: null,
 };
 
 export default ChatMessage;

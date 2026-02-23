@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { chatService, generateId } from '../services/chatService';
 
 const buildUserMessage = (content) => ({
@@ -8,11 +8,21 @@ const buildUserMessage = (content) => ({
   timestamp: new Date().toISOString(),
 });
 
+const buildAssistantMessage = (id, content = '', sources = [], isStreaming = false) => ({
+  id,
+  role: 'assistant',
+  content,
+  sources,
+  timestamp: new Date().toISOString(),
+  isStreaming,
+});
+
 const buildErrorMessage = (text) => ({
   id: generateId(),
   role: 'assistant',
   content: text,
   timestamp: new Date().toISOString(),
+  isError: true,
 });
 
 export const useChat = () => {
@@ -21,6 +31,8 @@ export const useChat = () => {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [streamingMessageId, setStreamingMessageId] = useState(null);
+  const streamingContentRef = useRef('');
 
   const loadSessions = useCallback(async () => {
     try {
@@ -86,7 +98,7 @@ export const useChat = () => {
   );
 
   const sendMessage = useCallback(
-    async (content) => {
+    async (content, options = {}) => {
       setError(null);
       const userMsg = buildUserMessage(content);
       setMessages((prev) => [...prev, userMsg]);
@@ -109,15 +121,97 @@ export const useChat = () => {
           }
         }
 
-        const response = await chatService.sendMessage(sessionId, content);
-        const aiMsg = {
-          id: generateId(),
-          role: 'assistant',
-          content: response.content || response.message || '',
-          timestamp: new Date().toISOString(),
-          sources: response.sources || [],
-        };
-        setMessages((prev) => [...prev, aiMsg]);
+        // Use streaming by default
+        const useStreaming = options.streaming !== false;
+
+        if (useStreaming) {
+          const aiMsgId = generateId();
+          streamingContentRef.current = '';
+          setStreamingMessageId(aiMsgId);
+
+          // Add initial empty message for streaming
+          setMessages((prev) => [
+            ...prev,
+            buildAssistantMessage(aiMsgId, '', [], true),
+          ]);
+
+          let sources = [];
+
+          await chatService.sendMessageStream(
+            content,
+            {
+              topK: options.topK || 5,
+              threshold: options.threshold || 0.7,
+              includeSources: true,
+            },
+            {
+              onSources: (receivedSources) => {
+                sources = receivedSources;
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === aiMsgId
+                      ? { ...msg, sources: receivedSources }
+                      : msg
+                  )
+                );
+              },
+              onDelta: (text) => {
+                streamingContentRef.current += text;
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === aiMsgId
+                      ? { ...msg, content: streamingContentRef.current }
+                      : msg
+                  )
+                );
+              },
+              onDone: ({ tokensUsed, model }) => {
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === aiMsgId
+                      ? {
+                          ...msg,
+                          isStreaming: false,
+                          tokensUsed,
+                          model,
+                        }
+                      : msg
+                  )
+                );
+                setStreamingMessageId(null);
+                streamingContentRef.current = '';
+              },
+              onError: (err) => {
+                setError(err.message);
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === aiMsgId
+                      ? {
+                          ...msg,
+                          content: err.message,
+                          isStreaming: false,
+                          isError: true,
+                        }
+                      : msg
+                  )
+                );
+                setStreamingMessageId(null);
+                streamingContentRef.current = '';
+              },
+            }
+          );
+        } else {
+          // Non-streaming fallback
+          const response = await chatService.sendMessage(sessionId, content);
+          const aiMsg = {
+            id: generateId(),
+            role: 'assistant',
+            content: response.content || response.message || '',
+            timestamp: new Date().toISOString(),
+            sources: response.sources || [],
+          };
+          setMessages((prev) => [...prev, aiMsg]);
+        }
 
         setSessions((prev) =>
           prev.map((s) =>
@@ -129,6 +223,7 @@ export const useChat = () => {
       } catch (err) {
         const errorText =
           err?.response?.data?.error ||
+          err?.message ||
           'Failed to get a response. Please try again.';
         setError(errorText);
         setMessages((prev) => [...prev, buildErrorMessage(errorText)]);
@@ -144,6 +239,8 @@ export const useChat = () => {
     activeSessionId,
     messages,
     isLoading,
+    isStreaming: streamingMessageId !== null,
+    streamingMessageId,
     error,
     sendMessage,
     selectSession,
