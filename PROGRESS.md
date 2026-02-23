@@ -5,7 +5,51 @@
 
 ---
 
-## 현재 진행 상황 (2026-02-21) - PM 자율 실행
+## 현재 진행 상황 (2026-02-23) - Phase 2 실시간 기능
+
+### 25차 세션: Phase 2 - WebSocket 및 스트리밍 구현 (2026-02-23)
+
+**Phase 2 실시간 기능 개발**
+
+#### 1. WebSocket 라우트 핸들러 구현
+
+| 파일 | 설명 |
+|------|------|
+| `routes/ws.rs` | WebSocket 업그레이드 핸들러 구현 |
+| `routes/mod.rs` | ws 모듈 추가 및 라우트 등록 |
+| `lib.rs` | AppState에 WebSocketManager 추가 |
+
+**기능:**
+- 인증된 WebSocket 연결 처리
+- Subscribe/Unsubscribe/Ping 메시지 라우팅
+- 실시간 이벤트 브로드캐스트
+- 사용자 presence 관리
+
+#### 2. Chat 스트리밍 응답 구현 (SSE)
+
+| 파일 | 설명 |
+|------|------|
+| `routes/rag.rs` | POST /search/ask/stream 엔드포인트 추가 |
+| `services/anthropic_types.rs` | 스트리밍 타입 추가 (AnthropicStreamRequest, AnthropicStreamEvent) |
+| `Cargo.toml` | tokio-stream, async-stream, reqwest stream feature 추가 |
+
+**SSE 이벤트 타입:**
+- `sources`: 검색된 소스 문서 목록
+- `delta`: 텍스트 증분 (Claude 토큰 단위)
+- `done`: 생성 완료 (토큰 사용량, 모델명)
+- `error`: 에러 발생
+
+#### 결과
+
+| 지표 | 값 |
+|------|-----|
+| 새 파일 | 1개 (routes/ws.rs) |
+| 수정된 파일 | 5개 |
+| 새 엔드포인트 | 2개 (/ws, /search/ask/stream) |
+| Rust 테스트 | 모두 통과 |
+| Clippy 경고 | 0 |
+
+---
 
 ### 24차 세션: PM 자율 실행 - 대규모 커밋 및 정리 (2026-02-21)
 

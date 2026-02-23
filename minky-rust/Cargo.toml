@@ -50,7 +50,7 @@ config = "0.14"
 dotenvy = "0.15"
 
 # HTTP Client (for external APIs)
-reqwest = { version = "0.12", features = ["json", "multipart"] }
+reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
 
 # OpenSearch
 opensearch = "2.3"
@@ -73,6 +73,9 @@ hex = "0.4"
 
 # Text Processing
 regex = "1.11"
+futures-util = "0.3.32"
+tokio-stream = "0.1.18"
+async-stream = "0.3.6"
 
 [dev-dependencies]
 tokio-test = "0.4"

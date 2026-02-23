@@ -41,10 +41,99 @@ pub struct AnthropicContent {
 }
 
 /// Token usage statistics from Anthropic API.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AnthropicUsage {
     pub input_tokens: u32,
     pub output_tokens: u32,
+}
+
+/// Request body for Anthropic Messages API with streaming support.
+#[derive(Debug, Serialize)]
+pub struct AnthropicStreamRequest {
+    pub model: String,
+    pub max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system: Option<String>,
+    pub messages: Vec<AnthropicMessage>,
+    pub stream: bool,
+}
+
+impl AnthropicStreamRequest {
+    /// Create a new streaming request.
+    pub fn new(model: &str, max_tokens: u32, system: Option<String>, user_message: &str) -> Self {
+        Self {
+            model: model.to_string(),
+            max_tokens,
+            system,
+            messages: vec![AnthropicMessage {
+                role: "user".to_string(),
+                content: user_message.to_string(),
+            }],
+            stream: true,
+        }
+    }
+}
+
+/// Streaming event types from Anthropic API.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AnthropicStreamEvent {
+    MessageStart {
+        message: AnthropicMessageInfo,
+    },
+    ContentBlockStart {
+        index: u32,
+        content_block: AnthropicContentBlock,
+    },
+    ContentBlockDelta {
+        index: u32,
+        delta: AnthropicDelta,
+    },
+    ContentBlockStop {
+        index: u32,
+    },
+    MessageDelta {
+        delta: AnthropicMessageDelta,
+        usage: Option<AnthropicUsage>,
+    },
+    MessageStop,
+    Ping,
+    Error {
+        error: AnthropicErrorInfo,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AnthropicMessageInfo {
+    pub id: String,
+    pub model: String,
+    pub usage: Option<AnthropicUsage>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AnthropicContentBlock {
+    #[serde(rename = "type")]
+    pub block_type: String,
+    pub text: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AnthropicDelta {
+    #[serde(rename = "type")]
+    pub delta_type: String,
+    pub text: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AnthropicMessageDelta {
+    pub stop_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AnthropicErrorInfo {
+    #[serde(rename = "type")]
+    pub error_type: String,
+    pub message: String,
 }
 
 impl AnthropicRequest {

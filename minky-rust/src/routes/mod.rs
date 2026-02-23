@@ -30,6 +30,7 @@ mod timeline;
 mod understanding;
 mod versions;
 mod workflows;
+mod ws;
 
 use axum::Router;
 
@@ -67,5 +68,6 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/knowledge", knowledge::router())
         .nest("/embeddings", embeddings::router())
         .nest("/slack", slack::router())
+        .merge(ws::router())
         .merge(crate::openapi::router())
 }

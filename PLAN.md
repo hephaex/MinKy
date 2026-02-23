@@ -124,6 +124,18 @@
 
 ## Backlog (Phase 2+)
 
+- [x] **WebSocket 실시간 연결** ✅ (2026-02-23 완료)
+  - `/ws` 엔드포인트 구현
+  - 인증된 WebSocket 연결
+  - Subscribe/Unsubscribe/Ping 메시지 처리
+  - 실시간 이벤트 브로드캐스트
+
+- [x] **Chat 스트리밍 응답 (SSE)** ✅ (2026-02-23 완료)
+  - POST `/api/search/ask/stream` 엔드포인트
+  - Claude API 스트리밍 연동
+  - 실시간 토큰 전송
+  - SSE 이벤트: sources, delta, done, error
+
 - [x] **지식 그래프 시각화** ✅ (2026-02-19 완료)
   - SVG 기반 포스-다이렉티드 그래프
   - 노드: 문서/토픽/기술/사람/인사이트 타입별 색상

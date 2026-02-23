@@ -17,14 +17,18 @@ use tower_http::{
     trace::TraceLayer,
 };
 
+use std::sync::Arc;
+
 use crate::config::Config;
 use crate::middleware::rate_limit_middleware;
+use crate::services::WebSocketManager;
 
 /// Application state shared across all handlers
 #[derive(Clone)]
 pub struct AppState {
     pub db: sqlx::PgPool,
     pub config: Config,
+    pub ws_manager: Arc<WebSocketManager>,
 }
 
 /// Create the application with all routes and middleware
@@ -38,9 +42,12 @@ pub async fn create_app(config: Config) -> Result<Router> {
     // Run migrations
     sqlx::migrate!("./migrations").run(&db).await?;
 
+    let ws_manager = Arc::new(WebSocketManager::new());
+
     let state = AppState {
         db,
         config: config.clone(),
+        ws_manager,
     };
 
     // Parse CORS allowed origins from config
