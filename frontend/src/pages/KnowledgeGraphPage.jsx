@@ -86,6 +86,11 @@ function KnowledgeGraphPage() {
   const [pathResult, setPathResult] = useState(null);
   const [pathLoading, setPathLoading] = useState(false);
 
+  // Cluster analysis state
+  const [clusterMode, setClusterMode] = useState(false);
+  const [clusterData, setClusterData] = useState(null);
+  const [clusterLoading, setClusterLoading] = useState(false);
+
   useEffect(() => {
     const loadGraphData = async () => {
       setLoading(true);
@@ -183,6 +188,34 @@ function KnowledgeGraphPage() {
     setPathResult(null);
   }, []);
 
+  // Load cluster data from API
+  const loadClusters = useCallback(async () => {
+    setClusterLoading(true);
+    try {
+      const response = await fetch('/api/knowledge/clusters?min_cluster_size=2', {
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setClusterData(data.data || data);
+      } else {
+        setClusterData(null);
+      }
+    } catch {
+      setClusterData(null);
+    } finally {
+      setClusterLoading(false);
+    }
+  }, []);
+
+  const toggleClusterMode = useCallback(() => {
+    if (!clusterMode && !clusterData) {
+      loadClusters();
+    }
+    setClusterMode(prev => !prev);
+  }, [clusterMode, clusterData, loadClusters]);
+
   // Filter nodes by type and search query
   const filteredNodes = graphData.nodes.filter(node => {
     const matchesType = activeTypes.has(node.type || 'document');
@@ -245,6 +278,23 @@ function KnowledgeGraphPage() {
           onToggleType={handleToggleType}
         />
 
+        {/* Cluster Mode Toggle */}
+        <div className="kg-page__cluster-controls">
+          <button
+            className={`kg-page__cluster-btn${clusterMode ? ' kg-page__cluster-btn--active' : ''}`}
+            onClick={toggleClusterMode}
+            disabled={clusterLoading}
+            title={clusterMode ? 'Hide clusters' : 'Show cluster colors'}
+          >
+            {clusterLoading ? 'Loading...' : clusterMode ? 'Hide Clusters' : 'Show Clusters'}
+          </button>
+          {clusterMode && clusterData && (
+            <span className="kg-page__cluster-info">
+              {clusterData.cluster_count} cluster{clusterData.cluster_count !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
         {/* Path Mode Controls */}
         <div className="kg-page__path-controls">
           <button
@@ -306,6 +356,8 @@ function KnowledgeGraphPage() {
           pathSource={pathSource}
           pathTarget={pathTarget}
           pathResult={pathResult}
+          clusterMode={clusterMode}
+          clusterData={clusterData}
         />
       </div>
     </div>

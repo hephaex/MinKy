@@ -1,9 +1,10 @@
 //! Knowledge graph API routes
 //!
 //! Endpoints:
-//! - GET /api/knowledge/graph  – full knowledge graph (nodes + edges)
-//! - GET /api/knowledge/team   – team expertise map
-//! - GET /api/knowledge/path   – find shortest path between two nodes
+//! - GET /api/knowledge/graph    – full knowledge graph (nodes + edges)
+//! - GET /api/knowledge/team     – team expertise map
+//! - GET /api/knowledge/path     – find shortest path between two nodes
+//! - GET /api/knowledge/clusters – detect and return clusters
 
 use axum::{
     extract::{Query, State},
@@ -14,7 +15,10 @@ use axum::{
 
 use crate::{
     middleware::AuthUser,
-    models::knowledge_graph::{GraphPath, KnowledgeGraph, KnowledgeGraphQuery, PathQuery, TeamExpertiseMap},
+    models::knowledge_graph::{
+        ClusterQuery, ClusterResult, GraphPath, KnowledgeGraph, KnowledgeGraphQuery, PathQuery,
+        TeamExpertiseMap,
+    },
     services::KnowledgeGraphService,
     AppState,
 };
@@ -88,6 +92,27 @@ async fn get_graph_path(
         .map_err(into_error_response)
 }
 
+/// GET /api/knowledge/clusters
+///
+/// Detect and return clusters (communities) in the knowledge graph.
+///
+/// Query parameters:
+/// - `max_iterations` – maximum label propagation iterations (default: 10, max: 100)
+/// - `min_cluster_size` – minimum nodes per cluster (default: 2)
+async fn get_graph_clusters(
+    State(state): State<AppState>,
+    _auth_user: AuthUser,
+    Query(query): Query<ClusterQuery>,
+) -> Result<Json<ApiResponse<ClusterResult>>, (StatusCode, Json<serde_json::Value>)> {
+    let service = KnowledgeGraphService::new(state.db.clone());
+
+    service
+        .analyze_clusters(query.max_iterations, query.min_cluster_size)
+        .await
+        .map(ApiResponse::ok)
+        .map_err(into_error_response)
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -97,4 +122,5 @@ pub fn router() -> Router<AppState> {
         .route("/graph", get(get_knowledge_graph))
         .route("/team", get(get_team_expertise))
         .route("/path", get(get_graph_path))
+        .route("/clusters", get(get_graph_clusters))
 }

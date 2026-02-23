@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Type of a graph node
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeType {
     Document,
@@ -265,6 +265,60 @@ pub struct GraphPath {
     pub length: i32,
     /// Whether a path was found
     pub found: bool,
+}
+
+// ---------------------------------------------------------------------------
+// Cluster Analysis Types
+// ---------------------------------------------------------------------------
+
+/// Query parameters for cluster analysis
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClusterQuery {
+    /// Maximum number of iterations for label propagation (default 10)
+    pub max_iterations: Option<i32>,
+    /// Minimum cluster size to include (default 2)
+    pub min_cluster_size: Option<i32>,
+}
+
+impl Default for ClusterQuery {
+    fn default() -> Self {
+        Self {
+            max_iterations: Some(10),
+            min_cluster_size: Some(2),
+        }
+    }
+}
+
+/// A single cluster in the knowledge graph
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphCluster {
+    /// Unique cluster identifier (0-indexed)
+    pub id: i32,
+    /// Node IDs belonging to this cluster
+    pub node_ids: Vec<String>,
+    /// Number of nodes in the cluster
+    pub size: i32,
+    /// Dominant node type in the cluster
+    pub dominant_type: NodeType,
+    /// Label derived from most connected node
+    pub label: String,
+    /// Cluster color for visualization (hex)
+    pub color: String,
+}
+
+/// Complete cluster analysis result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClusterResult {
+    /// List of identified clusters
+    pub clusters: Vec<GraphCluster>,
+    /// Total number of clusters found
+    pub cluster_count: i32,
+    /// Mapping of node ID to cluster ID
+    pub node_cluster_map: std::collections::HashMap<String, i32>,
+    /// Number of iterations used
+    pub iterations: i32,
+    /// Whether the algorithm converged
+    pub converged: bool,
 }
 
 #[cfg(test)]

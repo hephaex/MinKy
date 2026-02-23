@@ -35,6 +35,8 @@ function KnowledgeGraph({
   pathSource,
   pathTarget,
   pathResult,
+  clusterMode,
+  clusterData,
 }) {
   const containerRef = useRef(null);
   const svgRef = useRef(null);
@@ -112,6 +114,18 @@ function KnowledgeGraph({
     if (!pathResult?.found) return new Set();
     return new Set(pathResult.node_ids || []);
   }, [pathResult]);
+
+  // Cluster color map: node ID -> cluster color
+  const clusterColorMap = useMemo(() => {
+    if (!clusterMode || !clusterData?.clusters) return {};
+    const map = {};
+    for (const cluster of clusterData.clusters) {
+      for (const nodeId of cluster.node_ids) {
+        map[nodeId] = cluster.color;
+      }
+    }
+    return map;
+  }, [clusterMode, clusterData]);
 
   // Edges connected to the hovered/selected node
   const highlightedEdgeIds = useMemo(() => {
@@ -298,6 +312,7 @@ function KnowledgeGraph({
                 const isPathSource = pathSource === node.id;
                 const isPathTarget = pathTarget === node.id;
                 const isInPath = pathNodeIds.has(node.id);
+                const clusterColor = clusterColorMap[node.id] || null;
 
                 // Highlight logic
                 let isHighlighted = true;
@@ -322,6 +337,7 @@ function KnowledgeGraph({
                     isHighlighted={isHighlighted}
                     isPathNode={isInPath}
                     isPathEndpoint={isPathSource || isPathTarget}
+                    clusterColor={clusterColor}
                     onSelect={handleNodeSelect}
                     onHover={handleNodeHover}
                   />
@@ -438,6 +454,20 @@ KnowledgeGraph.propTypes = {
     edges: PropTypes.array,
     length: PropTypes.number,
   }),
+  clusterMode: PropTypes.bool,
+  clusterData: PropTypes.shape({
+    clusters: PropTypes.arrayOf(
+      PropTypes.shape({
+        id: PropTypes.number,
+        node_ids: PropTypes.arrayOf(PropTypes.string),
+        size: PropTypes.number,
+        color: PropTypes.string,
+        label: PropTypes.string,
+      })
+    ),
+    cluster_count: PropTypes.number,
+    node_cluster_map: PropTypes.object,
+  }),
 };
 
 KnowledgeGraph.defaultProps = {
@@ -451,6 +481,8 @@ KnowledgeGraph.defaultProps = {
   pathSource: null,
   pathTarget: null,
   pathResult: null,
+  clusterMode: false,
+  clusterData: null,
 };
 
 export default KnowledgeGraph;

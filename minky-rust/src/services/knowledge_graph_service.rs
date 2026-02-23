@@ -13,9 +13,9 @@ use std::collections::VecDeque;
 
 use crate::error::Result;
 use crate::models::knowledge_graph::{
-    DocumentTopicRow, ExpertiseArea, ExpertiseLevel, GraphEdge, GraphNode, GraphPath,
-    KnowledgeGraph, KnowledgeGraphMeta, KnowledgeGraphQuery, MemberExpertise, NodeType,
-    PathQuery, SimilarityPairRow, TeamExpertiseMap, UniqueExpert,
+    ClusterResult, DocumentTopicRow, ExpertiseArea, ExpertiseLevel, GraphCluster, GraphEdge,
+    GraphNode, GraphPath, KnowledgeGraph, KnowledgeGraphMeta, KnowledgeGraphQuery,
+    MemberExpertise, NodeType, PathQuery, SimilarityPairRow, TeamExpertiseMap, UniqueExpert,
 };
 
 /// Service for building and serving the knowledge graph
@@ -196,6 +196,24 @@ impl KnowledgeGraphService {
         // Use BFS to find shortest path
         let path = find_path_bfs(&graph, &query.from, &query.to, max_depth as usize);
         Ok(path)
+    }
+
+    /// Detect clusters in the knowledge graph using label propagation.
+    pub async fn analyze_clusters(
+        &self,
+        max_iterations: Option<i32>,
+        min_cluster_size: Option<i32>,
+    ) -> Result<ClusterResult> {
+        let max_iter = max_iterations.unwrap_or(10).clamp(1, 100) as usize;
+        let min_size = min_cluster_size.unwrap_or(2).clamp(1, 50) as usize;
+
+        // Build the full graph first
+        let graph_query = KnowledgeGraphQuery::default();
+        let graph = self.build_graph(&graph_query).await?;
+
+        // Run cluster detection
+        let result = detect_clusters(&graph, max_iter, min_size);
+        Ok(result)
     }
 
     /// Build the team expertise map from document authorship and AI understanding.
@@ -621,6 +639,224 @@ pub fn normalize_label(label: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Cluster Analysis (Label Propagation Algorithm)
+// ---------------------------------------------------------------------------
+
+/// Predefined cluster colors for visualization
+const CLUSTER_COLORS: &[&str] = &[
+    "#4A90D9", "#7ED321", "#F5A623", "#9B59B6", "#E74C3C",
+    "#3498DB", "#2ECC71", "#F39C12", "#8E44AD", "#E67E22",
+    "#1ABC9C", "#D35400", "#C0392B", "#16A085", "#27AE60",
+];
+
+/// Detect communities in the knowledge graph using label propagation.
+///
+/// Label propagation is a simple, efficient community detection algorithm:
+/// 1. Each node starts with its own unique label
+/// 2. Iteratively, nodes adopt the most common label among neighbors
+/// 3. Continue until convergence or max iterations
+///
+/// Returns cluster assignments and cluster metadata.
+pub fn detect_clusters(
+    graph: &KnowledgeGraph,
+    max_iterations: usize,
+    min_cluster_size: usize,
+) -> ClusterResult {
+    if graph.nodes.is_empty() {
+        return ClusterResult {
+            clusters: vec![],
+            cluster_count: 0,
+            node_cluster_map: HashMap::new(),
+            iterations: 0,
+            converged: true,
+        };
+    }
+
+    // Build adjacency list (undirected)
+    let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+    for node in &graph.nodes {
+        adjacency.entry(node.id.clone()).or_default();
+    }
+    for edge in &graph.edges {
+        adjacency
+            .entry(edge.source.clone())
+            .or_default()
+            .push(edge.target.clone());
+        adjacency
+            .entry(edge.target.clone())
+            .or_default()
+            .push(edge.source.clone());
+    }
+
+    // Initialize each node with its own label (node index)
+    let node_ids: Vec<String> = graph.nodes.iter().map(|n| n.id.clone()).collect();
+    let mut labels: HashMap<String, usize> = node_ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| (id.clone(), i))
+        .collect();
+
+    // Label propagation iterations
+    let mut converged = false;
+    let mut iterations = 0;
+
+    for iter in 0..max_iterations {
+        iterations = iter + 1;
+        let mut changed = false;
+
+        for node_id in &node_ids {
+            let neighbors = match adjacency.get(node_id) {
+                Some(n) if !n.is_empty() => n,
+                _ => continue,
+            };
+
+            // Count label frequencies among neighbors
+            let mut label_counts: HashMap<usize, usize> = HashMap::new();
+            for neighbor in neighbors {
+                if let Some(&label) = labels.get(neighbor) {
+                    *label_counts.entry(label).or_insert(0) += 1;
+                }
+            }
+
+            // Find the most common label (break ties by choosing smaller label)
+            if let Some((&most_common_label, _)) = label_counts
+                .iter()
+                .max_by(|(l1, c1), (l2, c2)| c1.cmp(c2).then_with(|| l2.cmp(l1)))
+            {
+                let current_label = *labels.get(node_id).unwrap_or(&0);
+                if most_common_label != current_label {
+                    labels.insert(node_id.clone(), most_common_label);
+                    changed = true;
+                }
+            }
+        }
+
+        if !changed {
+            converged = true;
+            break;
+        }
+    }
+
+    // Group nodes by their final labels
+    let mut label_to_nodes: HashMap<usize, Vec<String>> = HashMap::new();
+    for (node_id, label) in &labels {
+        label_to_nodes
+            .entry(*label)
+            .or_default()
+            .push(node_id.clone());
+    }
+
+    // Build node map for lookups
+    let node_map: HashMap<String, &GraphNode> = graph
+        .nodes
+        .iter()
+        .map(|n| (n.id.clone(), n))
+        .collect();
+
+    // Create cluster objects, filtering by min size
+    let mut clusters: Vec<GraphCluster> = Vec::new();
+    let mut node_cluster_map: HashMap<String, i32> = HashMap::new();
+    let mut cluster_id = 0;
+
+    for (_label, node_ids) in label_to_nodes {
+        if node_ids.len() < min_cluster_size {
+            continue;
+        }
+
+        // Find dominant node type
+        let mut type_counts: HashMap<NodeType, usize> = HashMap::new();
+        for node_id in &node_ids {
+            if let Some(node) = node_map.get(node_id) {
+                *type_counts.entry(node.node_type.clone()).or_insert(0) += 1;
+            }
+        }
+        let dominant_type = type_counts
+            .into_iter()
+            .max_by_key(|(_, count)| *count)
+            .map(|(t, _)| t)
+            .unwrap_or(NodeType::Document);
+
+        // Find the most connected node for label
+        let cluster_label = find_cluster_label(&node_ids, &adjacency, &node_map);
+
+        // Assign color
+        let color = CLUSTER_COLORS[cluster_id as usize % CLUSTER_COLORS.len()].to_string();
+
+        // Update node -> cluster mapping
+        for node_id in &node_ids {
+            node_cluster_map.insert(node_id.clone(), cluster_id);
+        }
+
+        clusters.push(GraphCluster {
+            id: cluster_id,
+            size: node_ids.len() as i32,
+            node_ids,
+            dominant_type,
+            label: cluster_label,
+            color,
+        });
+
+        cluster_id += 1;
+    }
+
+    // Sort clusters by size descending
+    clusters.sort_by(|a, b| b.size.cmp(&a.size));
+
+    // Re-assign cluster IDs after sorting
+    for (new_id, cluster) in clusters.iter_mut().enumerate() {
+        let old_id = cluster.id;
+        cluster.id = new_id as i32;
+        for node_id in &cluster.node_ids {
+            if node_cluster_map.get(node_id) == Some(&old_id) {
+                node_cluster_map.insert(node_id.clone(), new_id as i32);
+            }
+        }
+    }
+
+    ClusterResult {
+        cluster_count: clusters.len() as i32,
+        clusters,
+        node_cluster_map,
+        iterations: iterations as i32,
+        converged,
+    }
+}
+
+/// Find a label for the cluster based on the most connected node.
+fn find_cluster_label(
+    node_ids: &[String],
+    adjacency: &HashMap<String, Vec<String>>,
+    node_map: &HashMap<String, &GraphNode>,
+) -> String {
+    // Find node with most connections within the cluster
+    let cluster_set: std::collections::HashSet<&String> = node_ids.iter().collect();
+
+    let mut best_node: Option<&GraphNode> = None;
+    let mut best_degree = 0;
+
+    for node_id in node_ids {
+        let degree = adjacency
+            .get(node_id)
+            .map(|neighbors| {
+                neighbors
+                    .iter()
+                    .filter(|n| cluster_set.contains(n))
+                    .count()
+            })
+            .unwrap_or(0);
+
+        if degree > best_degree {
+            best_degree = degree;
+            best_node = node_map.get(node_id).copied();
+        }
+    }
+
+    best_node
+        .map(|n| n.label.clone())
+        .unwrap_or_else(|| "Cluster".to_string())
+}
+
+// ---------------------------------------------------------------------------
 // Internal row types for SQL queries
 // ---------------------------------------------------------------------------
 
@@ -989,5 +1225,156 @@ mod tests {
         let path = find_path_bfs(&graph, "A", "ISOLATED", 10);
 
         assert!(!path.found);
+    }
+
+    // -- detect_clusters --
+
+    #[test]
+    fn test_detect_clusters_empty_graph() {
+        let graph = KnowledgeGraph {
+            nodes: vec![],
+            edges: vec![],
+            meta: KnowledgeGraphMeta {
+                total_documents: 0,
+                similarity_threshold: 0.5,
+                max_edges_per_node: 5,
+            },
+        };
+
+        let result = detect_clusters(&graph, 10, 2);
+
+        assert_eq!(result.cluster_count, 0);
+        assert!(result.converged);
+    }
+
+    #[test]
+    fn test_detect_clusters_single_cluster() {
+        // All nodes connected - should form one cluster
+        // Graph structure: A-B-C-D with B-E and E-D connections
+        let graph = make_test_graph();
+
+        let result = detect_clusters(&graph, 10, 2);
+
+        // All 5 nodes should be in one cluster (they're all connected)
+        assert_eq!(result.cluster_count, 1);
+        assert_eq!(result.clusters[0].size, 5);
+        assert!(result.converged);
+    }
+
+    #[test]
+    fn test_detect_clusters_two_clusters() {
+        // Create two disconnected components
+        let graph = KnowledgeGraph {
+            nodes: vec![
+                GraphNode {
+                    id: "A".into(),
+                    label: "Node A".into(),
+                    node_type: NodeType::Document,
+                    document_id: None,
+                    document_count: 0,
+                    summary: None,
+                    topics: vec![],
+                },
+                GraphNode {
+                    id: "B".into(),
+                    label: "Node B".into(),
+                    node_type: NodeType::Document,
+                    document_id: None,
+                    document_count: 0,
+                    summary: None,
+                    topics: vec![],
+                },
+                GraphNode {
+                    id: "X".into(),
+                    label: "Node X".into(),
+                    node_type: NodeType::Topic,
+                    document_id: None,
+                    document_count: 0,
+                    summary: None,
+                    topics: vec![],
+                },
+                GraphNode {
+                    id: "Y".into(),
+                    label: "Node Y".into(),
+                    node_type: NodeType::Topic,
+                    document_id: None,
+                    document_count: 0,
+                    summary: None,
+                    topics: vec![],
+                },
+            ],
+            edges: vec![
+                GraphEdge {
+                    id: "e1".into(),
+                    source: "A".into(),
+                    target: "B".into(),
+                    weight: 0.9,
+                    label: None,
+                },
+                GraphEdge {
+                    id: "e2".into(),
+                    source: "X".into(),
+                    target: "Y".into(),
+                    weight: 0.8,
+                    label: None,
+                },
+            ],
+            meta: KnowledgeGraphMeta {
+                total_documents: 2,
+                similarity_threshold: 0.5,
+                max_edges_per_node: 5,
+            },
+        };
+
+        let result = detect_clusters(&graph, 10, 2);
+
+        // Should find 2 clusters of size 2 each
+        assert_eq!(result.cluster_count, 2);
+        assert_eq!(result.clusters[0].size, 2);
+        assert_eq!(result.clusters[1].size, 2);
+    }
+
+    #[test]
+    fn test_detect_clusters_min_size_filter() {
+        // Single isolated node should be filtered out by min_cluster_size
+        let mut graph = make_test_graph();
+        graph.nodes.push(GraphNode {
+            id: "ISOLATED".into(),
+            label: "Isolated".into(),
+            node_type: NodeType::Document,
+            document_id: None,
+            document_count: 0,
+            summary: None,
+            topics: vec![],
+        });
+
+        let result = detect_clusters(&graph, 10, 2);
+
+        // Isolated node forms cluster of size 1, should be filtered
+        // Only the main cluster of 5 nodes should remain
+        assert_eq!(result.cluster_count, 1);
+        assert_eq!(result.clusters[0].size, 5);
+        assert!(!result.node_cluster_map.contains_key("ISOLATED"));
+    }
+
+    #[test]
+    fn test_detect_clusters_has_colors() {
+        let graph = make_test_graph();
+        let result = detect_clusters(&graph, 10, 2);
+
+        // Each cluster should have a color assigned
+        for cluster in &result.clusters {
+            assert!(cluster.color.starts_with('#'));
+            assert_eq!(cluster.color.len(), 7); // #RRGGBB
+        }
+    }
+
+    #[test]
+    fn test_detect_clusters_dominant_type() {
+        // All nodes are documents, so dominant type should be Document
+        let graph = make_test_graph();
+        let result = detect_clusters(&graph, 10, 2);
+
+        assert_eq!(result.clusters[0].dominant_type, NodeType::Document);
     }
 }

@@ -13,11 +13,13 @@ function GraphNode({
   isHighlighted,
   isPathNode,
   isPathEndpoint,
+  clusterColor,
   onSelect,
   onHover,
 }) {
   const radius = nodeRadius(degree);
-  const color = nodeColor(node.type);
+  // Use cluster color if provided, otherwise use default type-based color
+  const color = clusterColor || nodeColor(node.type);
   const labelMaxLength = 18;
   const label =
     node.label.length > labelMaxLength
@@ -134,6 +136,7 @@ GraphNode.propTypes = {
   isHighlighted: PropTypes.bool.isRequired,
   isPathNode: PropTypes.bool,
   isPathEndpoint: PropTypes.bool,
+  clusterColor: PropTypes.string,
   onSelect: PropTypes.func.isRequired,
   onHover: PropTypes.func.isRequired,
 };
@@ -141,6 +144,7 @@ GraphNode.propTypes = {
 GraphNode.defaultProps = {
   isPathNode: false,
   isPathEndpoint: false,
+  clusterColor: null,
 };
 
 export default GraphNode;
