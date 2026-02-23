@@ -39,15 +39,34 @@
 - `done`: 생성 완료 (토큰 사용량, 모델명)
 - `error`: 에러 발생
 
+#### 3. 프론트엔드 스트리밍 UI 구현 (커밋 `3573cebc`)
+
+| 파일 | 설명 |
+|------|------|
+| `services/chatService.js` | SSE 스트림 파싱 함수 및 sendMessageStream 메서드 추가 |
+| `services/api.js` | API_BASE_URL 내보내기 추가 |
+| `hooks/useChat.js` | 스트리밍 상태 관리 (streamingMessageId, streamingContentRef) |
+| `components/Chat/ChatMessage.jsx` | StreamingCursor, SourceCard 컴포넌트 추가 |
+| `components/Chat/Chat.css` | 스트리밍 및 소스 카드 스타일 추가 |
+
+**기능:**
+- SSE 이벤트 파싱 (sources, delta, done, error)
+- 실시간 텍스트 스트리밍 표시
+- 깜빡이는 커서 애니메이션
+- RAG 소스 문서 카드 표시 (제목, 유사도, 미리보기)
+- 토큰 사용량 및 모델명 표시
+
 #### 결과
 
 | 지표 | 값 |
 |------|-----|
 | 새 파일 | 1개 (routes/ws.rs) |
-| 수정된 파일 | 5개 |
+| 수정된 파일 | 12개 (Backend 5개 + Frontend 7개) |
 | 새 엔드포인트 | 2개 (/ws, /search/ask/stream) |
 | Rust 테스트 | 모두 통과 |
+| Frontend 테스트 | 489개 모두 통과 |
 | Clippy 경고 | 0 |
+| 커밋 | 2개 (2860f5e5, 3573cebc) |
 
 ---
 
