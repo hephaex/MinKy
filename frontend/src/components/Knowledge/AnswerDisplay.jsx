@@ -65,7 +65,7 @@ const AnswerDisplay = ({
 
       {sources.length > 0 && !streaming && (
         <div className="kb-answer-sources">
-          <SourceDocuments sources={sources} />
+          <SourceDocuments sources={sources} query={question} />
         </div>
       )}
     </div>

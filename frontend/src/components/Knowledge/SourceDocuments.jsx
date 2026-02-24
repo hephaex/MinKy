@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
+import { highlightTextReact } from '../../utils/highlightText';
 import './SourceDocuments.css';
 
-const SourceDocuments = ({ sources = [] }) => {
+const SourceDocuments = ({ sources = [], query = '' }) => {
   const [expanded, setExpanded] = useState(false);
 
   if (sources.length === 0) return null;
@@ -26,7 +27,9 @@ const SourceDocuments = ({ sources = [] }) => {
           <li key={source.id || i} className="kb-source-item">
             <Link to={`/documents/${source.id}`} className="kb-source-link">
               <span className="kb-source-index" aria-hidden="true">{i + 1}</span>
-              <span className="kb-source-title">{source.title || '제목 없음'}</span>
+              <span className="kb-source-title">
+                {query ? highlightTextReact(source.title || '제목 없음', query) : (source.title || '제목 없음')}
+              </span>
               {source.score != null && (
                 <span className="kb-source-relevance" aria-label={`관련도 ${Math.round(source.score * 100)}%`}>
                   {Math.round(source.score * 100)}%
@@ -59,6 +62,7 @@ SourceDocuments.propTypes = {
       score: PropTypes.number,
     })
   ),
+  query: PropTypes.string,
 };
 
 export default SourceDocuments;

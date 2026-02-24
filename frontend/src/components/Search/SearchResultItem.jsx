@@ -1,6 +1,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
+import { highlightTextReact } from '../../utils/highlightText';
 import './SearchResultItem.css';
 
 const SearchResultItem = ({ result, query = '' }) => {
@@ -13,17 +14,6 @@ const SearchResultItem = ({ result, query = '' }) => {
     updated_at,
     source,
   } = result;
-
-  const highlightText = (text, searchQuery) => {
-    if (!searchQuery || !text) return text;
-    const escaped = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
-    return parts.map((part, i) =>
-      part.toLowerCase() === searchQuery.toLowerCase()
-        ? <mark key={i} className="kb-result-highlight">{part}</mark>
-        : part
-    );
-  };
 
   const formatScore = (s) => {
     if (s == null) return null;
@@ -51,7 +41,7 @@ const SearchResultItem = ({ result, query = '' }) => {
             <polyline points="10 9 9 9 8 9" />
           </svg>
           <h3 className="kb-result-title">
-            {highlightText(title || '제목 없음', query)}
+            {query ? highlightTextReact(title || '제목 없음', query) : (title || '제목 없음')}
           </h3>
           {score != null && (
             <span className="kb-result-score" aria-label={`관련도 ${formatScore(score)}`}>
@@ -62,7 +52,7 @@ const SearchResultItem = ({ result, query = '' }) => {
 
         {excerpt && (
           <p className="kb-result-excerpt">
-            {highlightText(excerpt, query)}
+            {query ? highlightTextReact(excerpt, query) : excerpt}
           </p>
         )}
 

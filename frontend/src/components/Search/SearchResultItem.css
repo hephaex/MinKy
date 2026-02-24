@@ -64,10 +64,10 @@
   overflow: hidden;
 }
 
-.kb-result-highlight {
+.kb-result-item .search-highlight {
   background: #fff3cd;
   color: #856404;
-  padding: 1px 3px;
+  padding: 2px 4px;
   border-radius: 3px;
   font-weight: 600;
 }
