@@ -65,6 +65,24 @@
   - 복사 버튼 애니메이션 (체크마크 아이콘)
   - 글자 수 제한 진행 바 표시
 
+**Phase 5 (Production Readiness) 완료 (2026-02-24):**
+- ✅ 환경 변수 보안화 (커밋 `a8129087`)
+  - docker-compose.yml에서 하드코딩된 비밀번호 제거
+  - ${VAR:?required} 문법으로 필수 변수 체크
+  - .env.example 포괄적 문서화
+- ✅ Redis 기반 Rate Limiting (커밋 `a8129087`)
+  - RateLimiterBackend trait 추상화
+  - RedisRateLimiter (프로덕션), InMemoryRateLimiter (개발)
+  - REDIS_URL 환경변수로 자동 선택
+- ✅ DB 커넥션 풀 프로덕션 설정 (커밋 `a8129087`)
+  - min_connections, acquire_timeout, max_lifetime, idle_timeout
+- ✅ Health 엔드포인트 확장 (커밋 `a8129087`)
+  - /api/health/ready (K8s readiness probe)
+  - /api/health/live (K8s liveness probe)
+  - DB 풀 통계, Redis 상태, 응답 시간 측정
+- ✅ Redis 프로덕션 설정 (커밋 `a8129087`)
+  - 메모리 제한 (256mb 기본), LRU 퇴거 정책, AOF 영속성
+
 **E2E 테스트 결과 (2026-02-19):**
 1. [x] PostgreSQL 데이터베이스 마이그레이션 실행
    - pgvector 0.8.0 소스 빌드 및 설치 완료

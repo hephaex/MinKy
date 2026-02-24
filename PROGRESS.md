@@ -5,7 +5,71 @@
 
 ---
 
-## 현재 진행 상황 (2026-02-24) - Phase 4 프론트엔드 개선 완료
+## 현재 진행 상황 (2026-02-24) - Phase 5 프로덕션 준비 완료
+
+### 28차 세션: Phase 5 - Production Readiness 완료 (2026-02-24)
+
+#### 1. 환경 변수 보안화 (커밋 `a8129087`)
+
+| 파일 | 설명 |
+|------|------|
+| `docker-compose.yml` | 하드코딩된 비밀번호를 ${VAR:?required} 참조로 변경 |
+| `.env.example` | 모든 필수 변수 포괄적 문서화 |
+
+**변경사항:**
+- DATABASE_URL, POSTGRES_PASSWORD 하드코딩 제거
+- OPENSEARCH_INITIAL_ADMIN_PASSWORD 하드코딩 제거
+- JWT_SECRET, SECRET_KEY 필수 변수로 설정
+
+#### 2. Redis 기반 Rate Limiting (커밋 `a8129087`)
+
+| 파일 | 설명 |
+|------|------|
+| `middleware/rate_limit.rs` | Redis/인메모리 하이브리드 Rate Limiter |
+| `Cargo.toml` | redis crate 추가 |
+
+**구현:**
+- `RateLimiterBackend` trait로 추상화
+- `RedisRateLimiter`: 프로덕션용 (INCR + EXPIRE 슬라이딩 윈도우)
+- `InMemoryRateLimiter`: 개발/fallback용 (HashMap 기반)
+- REDIS_URL 환경변수로 자동 선택
+
+#### 3. DB 커넥션 풀 프로덕션 설정 (커밋 `a8129087`)
+
+| 파일 | 설명 |
+|------|------|
+| `config.rs` | 새 풀 옵션 필드 추가 |
+| `lib.rs` | PgPoolOptions에 프로덕션 설정 적용 |
+
+**새 설정:**
+- `database_min_connections`: 최소 연결 유지 (기본 2)
+- `database_acquire_timeout_secs`: 연결 획득 타임아웃 (기본 30초)
+- `database_max_lifetime_secs`: 최대 연결 수명 (기본 30분)
+- `database_idle_timeout_secs`: 유휴 연결 타임아웃 (기본 10분)
+
+#### 4. Health 엔드포인트 확장 (커밋 `a8129087`)
+
+| 파일 | 설명 |
+|------|------|
+| `routes/health.rs` | 종합 헬스체크 + K8s probes |
+
+**새 엔드포인트:**
+- `GET /api/health`: 전체 상태 (DB, Redis, 풀 통계, 응답시간)
+- `GET /api/health/ready`: K8s readiness probe
+- `GET /api/health/live`: K8s liveness probe
+
+#### 5. Redis 프로덕션 설정 (커밋 `a8129087`)
+
+| 파일 | 설명 |
+|------|------|
+| `docker-compose.yml` | Redis 서버 설정 추가 |
+| `.env.example` | Redis 설정 변수 문서화 |
+
+**설정:** 메모리 제한 (256mb), LRU 퇴거, AOF 영속성
+
+**테스트 결과:** Rust 897개 테스트 통과, 빌드 성공
+
+---
 
 ### 27차 세션: Phase 4 - Frontend Enhancement 완료 (2026-02-24)
 
