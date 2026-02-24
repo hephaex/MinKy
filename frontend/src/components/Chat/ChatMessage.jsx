@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import PropTypes from 'prop-types';
+import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -74,8 +75,8 @@ const SourceCard = ({ source, index }) => {
   const preview = chunk_text?.slice(0, 100) || '';
   const similarityPercent = Math.round((similarity || 0) * 100);
 
-  return (
-    <div className="chat-source-card">
+  const cardContent = (
+    <>
       <div className="chat-source-card__header">
         <span className="chat-source-card__number">[{index + 1}]</span>
         <span className="chat-source-card__title">{title}</span>
@@ -86,8 +87,18 @@ const SourceCard = ({ source, index }) => {
           {preview}{chunk_text?.length > 100 ? '...' : ''}
         </p>
       )}
-    </div>
+    </>
   );
+
+  if (document_id) {
+    return (
+      <Link to={`/documents/${document_id}`} className="chat-source-card chat-source-card--clickable">
+        {cardContent}
+      </Link>
+    );
+  }
+
+  return <div className="chat-source-card">{cardContent}</div>;
 };
 
 SourceCard.propTypes = {
@@ -103,9 +114,12 @@ SourceCard.propTypes = {
 const ChatMessage = ({ message, onCopy = null }) => {
   const { role, content, timestamp, sources, isStreaming, isError, tokensUsed, model } = message;
   const isUser = role === 'user';
+  const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
       if (onCopy) onCopy(message.id);
     });
   };
@@ -167,12 +181,22 @@ const ChatMessage = ({ message, onCopy = null }) => {
           )}
           {!isStreaming && content && (
             <button
-              className="chat-message__copy"
+              className={`chat-message__copy ${copied ? 'chat-message__copy--copied' : ''}`}
               onClick={handleCopy}
               aria-label="Copy message"
               title="Copy message"
             >
-              Copy
+              {copied ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              )}
+              <span>{copied ? 'Copied!' : 'Copy'}</span>
             </button>
           )}
         </div>

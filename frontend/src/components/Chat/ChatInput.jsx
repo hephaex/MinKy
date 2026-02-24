@@ -40,11 +40,13 @@ const ChatInput = ({ onSend, disabled = false }) => {
   };
 
   const remaining = MAX_LENGTH - value.length;
-  const isNearLimit = remaining < 200;
+  const isNearLimit = remaining < 500;
+  const isCritical = remaining < 100;
+  const progressPercent = (value.length / MAX_LENGTH) * 100;
 
   return (
     <div className="chat-input">
-      <div className="chat-input__wrapper">
+      <div className={`chat-input__wrapper ${isCritical ? 'chat-input__wrapper--critical' : ''}`}>
         <textarea
           ref={textareaRef}
           className="chat-input__textarea"
@@ -70,11 +72,21 @@ const ChatInput = ({ onSend, disabled = false }) => {
         <span id="chat-input-hint" className="chat-input__hint">
           Enter to send, Shift+Enter for new line
         </span>
-        {isNearLimit && (
-          <span className={`chat-input__counter ${remaining < 50 ? 'chat-input__counter--warn' : ''}`}>
-            {remaining}
-          </span>
-        )}
+        <div className="chat-input__limit-info">
+          {isNearLimit && (
+            <>
+              <div className="chat-input__progress-bar">
+                <div
+                  className={`chat-input__progress-fill ${isCritical ? 'chat-input__progress-fill--critical' : ''}`}
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <span className={`chat-input__counter ${isCritical ? 'chat-input__counter--warn' : ''}`}>
+                {remaining} / {MAX_LENGTH}
+              </span>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

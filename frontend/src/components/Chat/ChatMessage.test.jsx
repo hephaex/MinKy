@@ -1,6 +1,11 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
 import ChatMessage from './ChatMessage';
+
+const renderWithRouter = (ui) => {
+  return render(<BrowserRouter>{ui}</BrowserRouter>);
+};
 
 // react-markdown and remark-gfm are ESM-only; mock them for Jest (CJS environment)
 jest.mock('react-markdown', () => {
@@ -45,17 +50,17 @@ describe('ChatMessage', () => {
   });
 
   it('applies ai class for assistant role', () => {
-    const { container } = render(<ChatMessage message={aiMsg} />);
-    expect(container.firstChild).toHaveClass('chat-message--ai');
+    const { container } = renderWithRouter(<ChatMessage message={aiMsg} />);
+    expect(container.querySelector('.chat-message')).toHaveClass('chat-message--ai');
   });
 
   it('renders assistant message content', () => {
-    render(<ChatMessage message={aiMsg} />);
+    renderWithRouter(<ChatMessage message={aiMsg} />);
     expect(screen.getByText('Response text')).toBeInTheDocument();
   });
 
   it('renders source cards', () => {
-    render(<ChatMessage message={aiMsg} />);
+    renderWithRouter(<ChatMessage message={aiMsg} />);
     // Check source card title is rendered
     expect(screen.getByText('Doc A')).toBeInTheDocument();
     // Check similarity percentage is displayed
@@ -68,7 +73,7 @@ describe('ChatMessage', () => {
 
   it('does not render sources section when no sources', () => {
     const msg = { ...aiMsg, sources: [] };
-    const { container } = render(<ChatMessage message={msg} />);
+    const { container } = renderWithRouter(<ChatMessage message={msg} />);
     expect(container.querySelector('.chat-message__sources')).not.toBeInTheDocument();
   });
 
@@ -94,7 +99,7 @@ describe('ChatMessage', () => {
   });
 
   it('shows AI avatar label', () => {
-    render(<ChatMessage message={aiMsg} />);
+    renderWithRouter(<ChatMessage message={aiMsg} />);
     expect(document.querySelector('.chat-message__avatar')).toHaveTextContent('AI');
   });
 });
