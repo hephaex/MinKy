@@ -5,7 +5,49 @@
 
 ---
 
-## 현재 진행 상황 (2026-02-24) - Rust 1,015개 테스트 달성
+## 현재 진행 상황 (2026-02-24) - Rust 1,076개 테스트 달성
+
+### 32차 세션: 라우트 테스트 확장 (2026-02-24)
+
+#### 1. routes/tags.rs 테스트 추가 (커밋 `2530e69b`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `routes/tags.rs` | 19개 |
+
+**테스트 항목:**
+- CreateTagRequest/UpdateTagRequest 검증
+- TagListResponse/TagResponse/DeleteResponse 구조
+- TagWithCount 문서 카운트 검증
+- 유니코드, 특수문자 태그명 처리
+
+#### 2. routes/categories.rs 테스트 추가 (커밋 `2530e69b`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `routes/categories.rs` | 23개 |
+
+**테스트 항목:**
+- ListQuery flat 옵션 처리
+- CreateCategoryRequest/UpdateCategoryRequest 검증
+- CategoryListResponse/CategoryTreeResponse 구조
+- CategoryWithCount 부모-자식 관계 검증
+
+#### 3. routes/comments.rs 테스트 추가 (커밋 `2530e69b`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `routes/comments.rs` | 19개 |
+
+**테스트 항목:**
+- CreateCommentRequest/UpdateCommentRequest 검증 (최대 10,000자)
+- CommentListResponse/CommentResponse 구조
+- CommentData/CommentWithAuthor 댓글 스레딩
+- 멀티라인, 마크다운 콘텐츠 처리
+
+**결과:** Rust 1,076개 테스트 통과 (1,015 → 1,076, +61개)
+
+---
 
 ### 31차 세션: 라우트/유틸리티 테스트 확장 (2026-02-24)
 
