@@ -119,11 +119,7 @@ impl RateLimiterBackend for RedisRateLimiter {
                         .await;
                 }
 
-                if count as usize <= self.max_requests {
-                    true
-                } else {
-                    false
-                }
+                count as usize <= self.max_requests
             }
             Err(e) => {
                 tracing::warn!("Redis INCR failed, allowing request: {}", e);

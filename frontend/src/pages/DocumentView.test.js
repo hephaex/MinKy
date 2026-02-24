@@ -53,7 +53,9 @@ jest.mock('../services/api', () => ({
 }));
 
 // Import after mocks are set up
+// eslint-disable-next-line import/first
 import DocumentView from './DocumentView';
+// eslint-disable-next-line import/first
 import { documentService } from '../services/api';
 
 describe('DocumentView', () => {

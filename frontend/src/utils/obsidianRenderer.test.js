@@ -9,6 +9,7 @@ jest.mock('dompurify', () => ({
   sanitize: jest.fn((html) => html),
 }));
 
+// eslint-disable-next-line import/first
 import { processInternalLinks, processHashtags, extractFrontmatter } from './obsidianRenderer';
 
 describe('processInternalLinks', () => {
