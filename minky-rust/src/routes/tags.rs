@@ -153,3 +153,209 @@ async fn delete_tag(
         message: "Tag deleted successfully".to_string(),
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    // CreateTagRequest validation tests
+    #[test]
+    fn test_create_tag_request_valid() {
+        let req = CreateTagRequest {
+            name: "rust".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_tag_request_empty_name_fails() {
+        let req = CreateTagRequest {
+            name: "".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_tag_request_name_too_long_fails() {
+        let req = CreateTagRequest {
+            name: "x".repeat(101),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_tag_request_max_length_ok() {
+        let req = CreateTagRequest {
+            name: "x".repeat(100),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_tag_request_single_char_ok() {
+        let req = CreateTagRequest {
+            name: "a".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_tag_request_unicode_name() {
+        let req = CreateTagRequest {
+            name: "한국어태그".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    // UpdateTagRequest validation tests
+    #[test]
+    fn test_update_tag_request_none_ok() {
+        let req = UpdateTagRequest { name: None };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_tag_request_valid_name() {
+        let req = UpdateTagRequest {
+            name: Some("new-tag".to_string()),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_tag_request_empty_name_fails() {
+        let req = UpdateTagRequest {
+            name: Some("".to_string()),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_tag_request_name_too_long_fails() {
+        let req = UpdateTagRequest {
+            name: Some("x".repeat(101)),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    // TagListResponse tests
+    #[test]
+    fn test_tag_list_response_creation() {
+        let tags = vec![TagWithCount {
+            id: 1,
+            name: "rust".to_string(),
+            user_id: 42,
+            document_count: 5,
+            created_at: Utc::now(),
+        }];
+        let response = TagListResponse {
+            success: true,
+            data: tags,
+        };
+        assert!(response.success);
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].name, "rust");
+    }
+
+    #[test]
+    fn test_tag_list_response_empty() {
+        let response = TagListResponse {
+            success: true,
+            data: vec![],
+        };
+        assert!(response.data.is_empty());
+    }
+
+    // TagResponse tests
+    #[test]
+    fn test_tag_response_creation() {
+        let tag = TagWithCount {
+            id: 1,
+            name: "web".to_string(),
+            user_id: 10,
+            document_count: 3,
+            created_at: Utc::now(),
+        };
+        let response = TagResponse {
+            success: true,
+            data: tag,
+        };
+        assert!(response.success);
+        assert_eq!(response.data.id, 1);
+        assert_eq!(response.data.document_count, 3);
+    }
+
+    // DeleteResponse tests
+    #[test]
+    fn test_delete_response_creation() {
+        let response = DeleteResponse {
+            success: true,
+            message: "Tag deleted successfully".to_string(),
+        };
+        assert!(response.success);
+        assert!(response.message.contains("deleted"));
+    }
+
+    // TagWithCount tests
+    #[test]
+    fn test_tag_with_count_zero_documents() {
+        let tag = TagWithCount {
+            id: 5,
+            name: "empty-tag".to_string(),
+            user_id: 1,
+            document_count: 0,
+            created_at: Utc::now(),
+        };
+        assert_eq!(tag.document_count, 0);
+    }
+
+    #[test]
+    fn test_tag_with_count_many_documents() {
+        let tag = TagWithCount {
+            id: 10,
+            name: "popular".to_string(),
+            user_id: 2,
+            document_count: 1000,
+            created_at: Utc::now(),
+        };
+        assert_eq!(tag.document_count, 1000);
+    }
+
+    #[test]
+    fn test_create_tag_request_with_spaces() {
+        let req = CreateTagRequest {
+            name: "tag with spaces".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_tag_request_with_hyphen() {
+        let req = CreateTagRequest {
+            name: "my-custom-tag".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_tag_request_with_underscore() {
+        let req = CreateTagRequest {
+            name: "my_custom_tag".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+}

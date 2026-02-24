@@ -163,3 +163,253 @@ async fn delete_comment(
         message: "Comment deleted successfully".to_string(),
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    // CreateCommentRequest validation tests
+    #[test]
+    fn test_create_comment_request_valid() {
+        let req = CreateCommentRequest {
+            content: "This is a comment".to_string(),
+            document_id: Uuid::new_v4(),
+            parent_id: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_comment_request_empty_content_fails() {
+        let req = CreateCommentRequest {
+            content: "".to_string(),
+            document_id: Uuid::new_v4(),
+            parent_id: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_comment_request_content_too_long_fails() {
+        let req = CreateCommentRequest {
+            content: "x".repeat(10001),
+            document_id: Uuid::new_v4(),
+            parent_id: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_comment_request_max_length_ok() {
+        let req = CreateCommentRequest {
+            content: "x".repeat(10000),
+            document_id: Uuid::new_v4(),
+            parent_id: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_comment_request_single_char_ok() {
+        let req = CreateCommentRequest {
+            content: "a".to_string(),
+            document_id: Uuid::new_v4(),
+            parent_id: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_comment_request_with_parent() {
+        let req = CreateCommentRequest {
+            content: "This is a reply".to_string(),
+            document_id: Uuid::new_v4(),
+            parent_id: Some(1),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+        assert_eq!(req.parent_id, Some(1));
+    }
+
+    #[test]
+    fn test_create_comment_request_unicode_content() {
+        let req = CreateCommentRequest {
+            content: "한글 댓글 테스트 🎉".to_string(),
+            document_id: Uuid::new_v4(),
+            parent_id: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    // UpdateCommentRequest validation tests
+    #[test]
+    fn test_update_comment_request_valid() {
+        let req = UpdateCommentRequest {
+            content: "Updated content".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_comment_request_empty_content_fails() {
+        let req = UpdateCommentRequest {
+            content: "".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_comment_request_content_too_long_fails() {
+        let req = UpdateCommentRequest {
+            content: "x".repeat(10001),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    // CommentListResponse tests
+    #[test]
+    fn test_comment_list_response_creation() {
+        let comments = vec![CommentWithAuthor {
+            id: 1,
+            content: "Test comment".to_string(),
+            document_id: Uuid::new_v4(),
+            user_id: 42,
+            author_name: "Alice".to_string(),
+            parent_id: None,
+            replies: vec![],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }];
+        let response = CommentListResponse {
+            success: true,
+            data: comments,
+            count: 1,
+        };
+        assert!(response.success);
+        assert_eq!(response.count, 1);
+        assert_eq!(response.data.len(), 1);
+    }
+
+    #[test]
+    fn test_comment_list_response_empty() {
+        let response = CommentListResponse {
+            success: true,
+            data: vec![],
+            count: 0,
+        };
+        assert!(response.data.is_empty());
+        assert_eq!(response.count, 0);
+    }
+
+    // CommentResponse tests
+    #[test]
+    fn test_comment_response_creation() {
+        let doc_id = Uuid::new_v4();
+        let data = CommentData {
+            id: 1,
+            content: "Great article!".to_string(),
+            document_id: doc_id,
+            user_id: 10,
+            parent_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let response = CommentResponse {
+            success: true,
+            data,
+        };
+        assert!(response.success);
+        assert_eq!(response.data.id, 1);
+        assert_eq!(response.data.document_id, doc_id);
+    }
+
+    // CommentData tests
+    #[test]
+    fn test_comment_data_root_comment() {
+        let data = CommentData {
+            id: 1,
+            content: "Root comment".to_string(),
+            document_id: Uuid::new_v4(),
+            user_id: 5,
+            parent_id: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        assert!(data.parent_id.is_none());
+    }
+
+    #[test]
+    fn test_comment_data_reply_comment() {
+        let data = CommentData {
+            id: 2,
+            content: "This is a reply".to_string(),
+            document_id: Uuid::new_v4(),
+            user_id: 6,
+            parent_id: Some(1),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        assert_eq!(data.parent_id, Some(1));
+    }
+
+    // CommentWithAuthor tests
+    #[test]
+    fn test_comment_with_author_creation() {
+        let comment = CommentWithAuthor {
+            id: 1,
+            content: "Hello world".to_string(),
+            document_id: Uuid::new_v4(),
+            user_id: 100,
+            author_name: "Bob".to_string(),
+            parent_id: None,
+            replies: vec![],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        assert_eq!(comment.author_name, "Bob");
+        assert!(comment.replies.is_empty());
+    }
+
+    // DeleteResponse tests
+    #[test]
+    fn test_delete_response_creation() {
+        let response = DeleteResponse {
+            success: true,
+            message: "Comment deleted successfully".to_string(),
+        };
+        assert!(response.success);
+        assert!(response.message.contains("deleted"));
+    }
+
+    #[test]
+    fn test_create_comment_request_multiline_content() {
+        let req = CreateCommentRequest {
+            content: "Line 1\nLine 2\nLine 3".to_string(),
+            document_id: Uuid::new_v4(),
+            parent_id: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_comment_request_with_markdown() {
+        let req = CreateCommentRequest {
+            content: "**Bold** and *italic* with `code`".to_string(),
+            document_id: Uuid::new_v4(),
+            parent_id: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+}
