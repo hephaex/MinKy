@@ -190,3 +190,219 @@ async fn compare_versions(
         data: diff,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    // CreateVersionRequest tests
+    #[test]
+    fn test_create_version_request_with_content() {
+        let req = CreateVersionRequest {
+            content: "# Document\n\nSome content here.".to_string(),
+        };
+        assert!(!req.content.is_empty());
+    }
+
+    #[test]
+    fn test_create_version_request_empty_content() {
+        let req = CreateVersionRequest {
+            content: "".to_string(),
+        };
+        assert!(req.content.is_empty());
+    }
+
+    #[test]
+    fn test_create_version_request_long_content() {
+        let req = CreateVersionRequest {
+            content: "x".repeat(100000),
+        };
+        assert_eq!(req.content.len(), 100000);
+    }
+
+    // CompareQuery tests
+    #[test]
+    fn test_compare_query_valid() {
+        let query = CompareQuery { from: 1, to: 3 };
+        assert_eq!(query.from, 1);
+        assert_eq!(query.to, 3);
+    }
+
+    #[test]
+    fn test_compare_query_same_versions() {
+        let query = CompareQuery { from: 2, to: 2 };
+        assert_eq!(query.from, query.to);
+    }
+
+    #[test]
+    fn test_compare_query_reverse_order() {
+        let query = CompareQuery { from: 5, to: 1 };
+        assert!(query.from > query.to);
+    }
+
+    // VersionListResponse tests
+    #[test]
+    fn test_version_list_response_creation() {
+        let versions = vec![VersionWithAuthor {
+            id: 1,
+            document_id: Uuid::new_v4(),
+            content: "Initial content".to_string(),
+            version_number: 1,
+            created_by: 10,
+            author_name: "Alice".to_string(),
+            created_at: Utc::now(),
+        }];
+        let response = VersionListResponse {
+            success: true,
+            data: versions,
+            count: 1,
+        };
+        assert!(response.success);
+        assert_eq!(response.count, 1);
+        assert_eq!(response.data.len(), 1);
+    }
+
+    #[test]
+    fn test_version_list_response_empty() {
+        let response = VersionListResponse {
+            success: true,
+            data: vec![],
+            count: 0,
+        };
+        assert!(response.data.is_empty());
+        assert_eq!(response.count, 0);
+    }
+
+    #[test]
+    fn test_version_list_response_multiple() {
+        let doc_id = Uuid::new_v4();
+        let versions = vec![
+            VersionWithAuthor {
+                id: 1,
+                document_id: doc_id,
+                content: "v1".to_string(),
+                version_number: 1,
+                created_by: 1,
+                author_name: "Alice".to_string(),
+                created_at: Utc::now(),
+            },
+            VersionWithAuthor {
+                id: 2,
+                document_id: doc_id,
+                content: "v2".to_string(),
+                version_number: 2,
+                created_by: 2,
+                author_name: "Bob".to_string(),
+                created_at: Utc::now(),
+            },
+        ];
+        let response = VersionListResponse {
+            success: true,
+            data: versions,
+            count: 2,
+        };
+        assert_eq!(response.data.len(), 2);
+        assert_eq!(response.data[0].version_number, 1);
+        assert_eq!(response.data[1].version_number, 2);
+    }
+
+    // VersionResponse tests
+    #[test]
+    fn test_version_response_creation() {
+        let doc_id = Uuid::new_v4();
+        let data = VersionData {
+            id: 5,
+            document_id: doc_id,
+            content: "Document content".to_string(),
+            version_number: 3,
+            created_by: 42,
+            created_at: Utc::now(),
+        };
+        let response = VersionResponse {
+            success: true,
+            data,
+        };
+        assert!(response.success);
+        assert_eq!(response.data.id, 5);
+        assert_eq!(response.data.version_number, 3);
+    }
+
+    // VersionData tests
+    #[test]
+    fn test_version_data_creation() {
+        let doc_id = Uuid::new_v4();
+        let data = VersionData {
+            id: 1,
+            document_id: doc_id,
+            content: "Test content".to_string(),
+            version_number: 1,
+            created_by: 10,
+            created_at: Utc::now(),
+        };
+        assert_eq!(data.id, 1);
+        assert_eq!(data.document_id, doc_id);
+        assert_eq!(data.version_number, 1);
+    }
+
+    #[test]
+    fn test_version_data_high_version_number() {
+        let data = VersionData {
+            id: 100,
+            document_id: Uuid::new_v4(),
+            content: "Many versions".to_string(),
+            version_number: 999,
+            created_by: 1,
+            created_at: Utc::now(),
+        };
+        assert_eq!(data.version_number, 999);
+    }
+
+    // VersionWithAuthor tests
+    #[test]
+    fn test_version_with_author_creation() {
+        let version = VersionWithAuthor {
+            id: 1,
+            document_id: Uuid::new_v4(),
+            content: "Content".to_string(),
+            version_number: 1,
+            created_by: 5,
+            author_name: "Test User".to_string(),
+            created_at: Utc::now(),
+        };
+        assert_eq!(version.author_name, "Test User");
+        assert_eq!(version.created_by, 5);
+    }
+
+    // CompareResponse tests
+    #[test]
+    fn test_compare_response_creation() {
+        let diff = VersionDiff {
+            additions: 5,
+            deletions: 2,
+            total_changes: 7,
+        };
+        let response = CompareResponse {
+            success: true,
+            data: diff,
+        };
+        assert!(response.success);
+        assert_eq!(response.data.additions, 5);
+        assert_eq!(response.data.deletions, 2);
+        assert_eq!(response.data.total_changes, 7);
+    }
+
+    #[test]
+    fn test_compare_response_no_changes() {
+        let diff = VersionDiff {
+            additions: 0,
+            deletions: 0,
+            total_changes: 0,
+        };
+        let response = CompareResponse {
+            success: true,
+            data: diff,
+        };
+        assert_eq!(response.data.total_changes, 0);
+    }
+}

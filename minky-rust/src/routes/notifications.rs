@@ -136,3 +136,253 @@ async fn delete_notification(
         message: "Notification deleted successfully".to_string(),
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    // ListQuery tests
+    #[test]
+    fn test_list_query_default_values() {
+        let query = ListQuery {
+            include_read: None,
+            limit: None,
+            offset: None,
+        };
+        assert!(query.include_read.is_none());
+        assert!(query.limit.is_none());
+        assert!(query.offset.is_none());
+    }
+
+    #[test]
+    fn test_list_query_with_values() {
+        let query = ListQuery {
+            include_read: Some(false),
+            limit: Some(20),
+            offset: Some(10),
+        };
+        assert_eq!(query.include_read, Some(false));
+        assert_eq!(query.limit, Some(20));
+        assert_eq!(query.offset, Some(10));
+    }
+
+    #[test]
+    fn test_list_query_include_read_default() {
+        let query = ListQuery {
+            include_read: None,
+            limit: None,
+            offset: None,
+        };
+        let include_read = query.include_read.unwrap_or(true);
+        assert!(include_read);
+    }
+
+    #[test]
+    fn test_list_query_limit_default() {
+        let query = ListQuery {
+            include_read: None,
+            limit: None,
+            offset: None,
+        };
+        let limit = query.limit.unwrap_or(50);
+        assert_eq!(limit, 50);
+    }
+
+    #[test]
+    fn test_list_query_offset_default() {
+        let query = ListQuery {
+            include_read: None,
+            limit: None,
+            offset: None,
+        };
+        let offset = query.offset.unwrap_or(0);
+        assert_eq!(offset, 0);
+    }
+
+    // NotificationListResponse tests
+    #[test]
+    fn test_notification_list_response_creation() {
+        let notifications = vec![Notification {
+            id: 1,
+            user_id: 42,
+            notification_type: "comment".to_string(),
+            title: "New comment".to_string(),
+            message: Some("Someone commented".to_string()),
+            is_read: false,
+            data: None,
+            created_at: Utc::now(),
+        }];
+        let response = NotificationListResponse {
+            success: true,
+            data: notifications,
+            unread_count: 1,
+        };
+        assert!(response.success);
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.unread_count, 1);
+    }
+
+    #[test]
+    fn test_notification_list_response_empty() {
+        let response = NotificationListResponse {
+            success: true,
+            data: vec![],
+            unread_count: 0,
+        };
+        assert!(response.data.is_empty());
+        assert_eq!(response.unread_count, 0);
+    }
+
+    #[test]
+    fn test_notification_list_response_multiple() {
+        let notifications = vec![
+            Notification {
+                id: 1,
+                user_id: 1,
+                notification_type: "comment".to_string(),
+                title: "Comment 1".to_string(),
+                message: None,
+                is_read: false,
+                data: None,
+                created_at: Utc::now(),
+            },
+            Notification {
+                id: 2,
+                user_id: 1,
+                notification_type: "mention".to_string(),
+                title: "Mention".to_string(),
+                message: None,
+                is_read: true,
+                data: None,
+                created_at: Utc::now(),
+            },
+        ];
+        let response = NotificationListResponse {
+            success: true,
+            data: notifications,
+            unread_count: 1,
+        };
+        assert_eq!(response.data.len(), 2);
+    }
+
+    // UnreadCountResponse tests
+    #[test]
+    fn test_unread_count_response_zero() {
+        let response = UnreadCountResponse {
+            success: true,
+            count: 0,
+        };
+        assert!(response.success);
+        assert_eq!(response.count, 0);
+    }
+
+    #[test]
+    fn test_unread_count_response_many() {
+        let response = UnreadCountResponse {
+            success: true,
+            count: 99,
+        };
+        assert_eq!(response.count, 99);
+    }
+
+    // NotificationResponse tests
+    #[test]
+    fn test_notification_response_creation() {
+        let notification = Notification {
+            id: 5,
+            user_id: 10,
+            notification_type: "workflow".to_string(),
+            title: "Status changed".to_string(),
+            message: Some("Document approved".to_string()),
+            is_read: true,
+            data: None,
+            created_at: Utc::now(),
+        };
+        let response = NotificationResponse {
+            success: true,
+            data: notification,
+        };
+        assert!(response.success);
+        assert_eq!(response.data.id, 5);
+        assert!(response.data.is_read);
+    }
+
+    // MarkAllReadResponse tests
+    #[test]
+    fn test_mark_all_read_response_zero() {
+        let response = MarkAllReadResponse {
+            success: true,
+            count: 0,
+        };
+        assert!(response.success);
+        assert_eq!(response.count, 0);
+    }
+
+    #[test]
+    fn test_mark_all_read_response_many() {
+        let response = MarkAllReadResponse {
+            success: true,
+            count: 15,
+        };
+        assert_eq!(response.count, 15);
+    }
+
+    // DeleteResponse tests
+    #[test]
+    fn test_delete_response_creation() {
+        let response = DeleteResponse {
+            success: true,
+            message: "Notification deleted successfully".to_string(),
+        };
+        assert!(response.success);
+        assert!(response.message.contains("deleted"));
+    }
+
+    // Notification tests
+    #[test]
+    fn test_notification_unread() {
+        let notification = Notification {
+            id: 1,
+            user_id: 1,
+            notification_type: "system".to_string(),
+            title: "System alert".to_string(),
+            message: None,
+            is_read: false,
+            data: None,
+            created_at: Utc::now(),
+        };
+        assert!(!notification.is_read);
+    }
+
+    #[test]
+    fn test_notification_with_message() {
+        let notification = Notification {
+            id: 2,
+            user_id: 2,
+            notification_type: "comment".to_string(),
+            title: "New reply".to_string(),
+            message: Some("Check it out!".to_string()),
+            is_read: false,
+            data: None,
+            created_at: Utc::now(),
+        };
+        assert!(notification.message.is_some());
+        assert_eq!(notification.message.unwrap(), "Check it out!");
+    }
+
+    #[test]
+    fn test_notification_without_message() {
+        let notification = Notification {
+            id: 3,
+            user_id: 3,
+            notification_type: "mention".to_string(),
+            title: "You were mentioned".to_string(),
+            message: None,
+            is_read: false,
+            data: None,
+            created_at: Utc::now(),
+        };
+        assert!(notification.message.is_none());
+    }
+}

@@ -254,3 +254,319 @@ async fn list_overdue(
         data: workflows,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use uuid::Uuid;
+
+    // CreateWorkflowRequest validation tests
+    #[test]
+    fn test_create_workflow_request_all_none() {
+        let req = CreateWorkflowRequest {
+            assigned_to: None,
+            due_date: None,
+            priority: None,
+            notes: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_workflow_request_with_all_fields() {
+        let req = CreateWorkflowRequest {
+            assigned_to: Some(5),
+            due_date: Some(Utc::now()),
+            priority: Some(3),
+            notes: Some("Review this document".to_string()),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_workflow_request_priority_min() {
+        let req = CreateWorkflowRequest {
+            assigned_to: None,
+            due_date: None,
+            priority: Some(0),
+            notes: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_workflow_request_priority_max() {
+        let req = CreateWorkflowRequest {
+            assigned_to: None,
+            due_date: None,
+            priority: Some(10),
+            notes: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_workflow_request_priority_too_high() {
+        let req = CreateWorkflowRequest {
+            assigned_to: None,
+            due_date: None,
+            priority: Some(11),
+            notes: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_workflow_request_priority_negative() {
+        let req = CreateWorkflowRequest {
+            assigned_to: None,
+            due_date: None,
+            priority: Some(-1),
+            notes: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_workflow_request_notes_max_length() {
+        let req = CreateWorkflowRequest {
+            assigned_to: None,
+            due_date: None,
+            priority: None,
+            notes: Some("x".repeat(1000)),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_workflow_request_notes_too_long() {
+        let req = CreateWorkflowRequest {
+            assigned_to: None,
+            due_date: None,
+            priority: None,
+            notes: Some("x".repeat(1001)),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    // UpdateStatusRequest validation tests
+    #[test]
+    fn test_update_status_request_valid() {
+        let req = UpdateStatusRequest {
+            status: WorkflowStatus::PendingReview,
+            comment: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_status_request_with_comment() {
+        let req = UpdateStatusRequest {
+            status: WorkflowStatus::Approved,
+            comment: Some("Looks good!".to_string()),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_status_request_comment_max_length() {
+        let req = UpdateStatusRequest {
+            status: WorkflowStatus::Rejected,
+            comment: Some("x".repeat(500)),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_status_request_comment_too_long() {
+        let req = UpdateStatusRequest {
+            status: WorkflowStatus::InReview,
+            comment: Some("x".repeat(501)),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    // UpdateAssignmentRequest validation tests
+    #[test]
+    fn test_update_assignment_request_all_none() {
+        let req = UpdateAssignmentRequest {
+            assigned_to: None,
+            due_date: None,
+            priority: None,
+            notes: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_assignment_request_with_values() {
+        let req = UpdateAssignmentRequest {
+            assigned_to: Some(10),
+            due_date: Some(Utc::now()),
+            priority: Some(5),
+            notes: Some("Urgent review needed".to_string()),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_assignment_request_priority_too_high() {
+        let req = UpdateAssignmentRequest {
+            assigned_to: None,
+            due_date: None,
+            priority: Some(15),
+            notes: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    // WorkflowResponse tests
+    #[test]
+    fn test_workflow_response_creation() {
+        let workflow = Workflow {
+            id: 1,
+            document_id: Uuid::new_v4(),
+            status: "draft".to_string(),
+            assigned_to: Some(5),
+            due_date: None,
+            priority: 3,
+            notes: None,
+            created_by: 1,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let response = WorkflowResponse {
+            success: true,
+            data: workflow,
+        };
+        assert!(response.success);
+        assert_eq!(response.data.id, 1);
+    }
+
+    // WorkflowListResponse tests
+    #[test]
+    fn test_workflow_list_response_empty() {
+        let response = WorkflowListResponse {
+            success: true,
+            data: vec![],
+        };
+        assert!(response.data.is_empty());
+    }
+
+    #[test]
+    fn test_workflow_list_response_multiple() {
+        let workflows = vec![
+            Workflow {
+                id: 1,
+                document_id: Uuid::new_v4(),
+                status: "draft".to_string(),
+                assigned_to: None,
+                due_date: None,
+                priority: 0,
+                notes: None,
+                created_by: 1,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            },
+            Workflow {
+                id: 2,
+                document_id: Uuid::new_v4(),
+                status: "in_review".to_string(),
+                assigned_to: Some(2),
+                due_date: None,
+                priority: 5,
+                notes: None,
+                created_by: 1,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            },
+        ];
+        let response = WorkflowListResponse {
+            success: true,
+            data: workflows,
+        };
+        assert_eq!(response.data.len(), 2);
+    }
+
+    // WorkflowHistoryResponse tests
+    #[test]
+    fn test_workflow_history_response_empty() {
+        let response = WorkflowHistoryResponse {
+            success: true,
+            data: vec![],
+        };
+        assert!(response.data.is_empty());
+    }
+
+    #[test]
+    fn test_workflow_history_response_with_entries() {
+        let history = vec![WorkflowHistory {
+            id: 1,
+            workflow_id: 1,
+            from_status: "draft".to_string(),
+            to_status: "pending_review".to_string(),
+            changed_by: 5,
+            comment: Some("Ready for review".to_string()),
+            created_at: Utc::now(),
+        }];
+        let response = WorkflowHistoryResponse {
+            success: true,
+            data: history,
+        };
+        assert_eq!(response.data.len(), 1);
+        assert_eq!(response.data[0].from_status, "draft");
+    }
+
+    // WorkflowStatus parsing tests
+    #[test]
+    fn test_status_string_to_enum_draft() {
+        let status_str = "draft";
+        let status = match status_str {
+            "draft" => WorkflowStatus::Draft,
+            _ => panic!("Unknown status"),
+        };
+        assert!(matches!(status, WorkflowStatus::Draft));
+    }
+
+    #[test]
+    fn test_status_string_to_enum_all() {
+        let cases = vec![
+            ("draft", WorkflowStatus::Draft),
+            ("pending_review", WorkflowStatus::PendingReview),
+            ("in_review", WorkflowStatus::InReview),
+            ("approved", WorkflowStatus::Approved),
+            ("rejected", WorkflowStatus::Rejected),
+            ("published", WorkflowStatus::Published),
+            ("archived", WorkflowStatus::Archived),
+        ];
+        for (s, expected) in cases {
+            let parsed = match s {
+                "draft" => WorkflowStatus::Draft,
+                "pending_review" => WorkflowStatus::PendingReview,
+                "in_review" => WorkflowStatus::InReview,
+                "approved" => WorkflowStatus::Approved,
+                "rejected" => WorkflowStatus::Rejected,
+                "published" => WorkflowStatus::Published,
+                "archived" => WorkflowStatus::Archived,
+                _ => panic!("Unknown status"),
+            };
+            assert!(std::mem::discriminant(&parsed) == std::mem::discriminant(&expected));
+        }
+    }
+}
