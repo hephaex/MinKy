@@ -45,20 +45,71 @@ pub fn openapi_spec() -> Value {
             "/health": {
                 "get": {
                     "tags": ["health"],
-                    "summary": "Health check",
-                    "description": "Returns server and database health status.",
+                    "summary": "Comprehensive health check",
+                    "description": "Returns detailed server health status including database and Redis checks with latency metrics.",
                     "operationId": "getHealth",
                     "responses": {
                         "200": {
-                            "description": "Server is healthy",
+                            "description": "Server is healthy or degraded",
                             "content": {
                                 "application/json": {
                                     "schema": { "$ref": "#/components/schemas/HealthResponse" },
                                     "example": {
-                                        "status": "ok",
+                                        "status": "healthy",
                                         "version": "0.1.0",
-                                        "database": "healthy"
+                                        "uptime_secs": 3600,
+                                        "checks": {
+                                            "database": { "status": "healthy", "latency_ms": 5 },
+                                            "redis": { "status": "healthy", "latency_ms": 2 }
+                                        }
                                     }
+                                }
+                            }
+                        },
+                        "503": {
+                            "description": "Server is unhealthy"
+                        }
+                    }
+                }
+            },
+            "/health/ready": {
+                "get": {
+                    "tags": ["health"],
+                    "summary": "Kubernetes readiness probe",
+                    "description": "Returns whether the service is ready to accept traffic. Checks database connectivity.",
+                    "operationId": "readinessCheck",
+                    "responses": {
+                        "200": {
+                            "description": "Service is ready",
+                            "content": {
+                                "application/json": {
+                                    "example": { "ready": true }
+                                }
+                            }
+                        },
+                        "503": {
+                            "description": "Service is not ready",
+                            "content": {
+                                "application/json": {
+                                    "example": { "ready": false, "reason": "Database connection failed" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/health/live": {
+                "get": {
+                    "tags": ["health"],
+                    "summary": "Kubernetes liveness probe",
+                    "description": "Returns whether the service process is alive.",
+                    "operationId": "livenessCheck",
+                    "responses": {
+                        "200": {
+                            "description": "Service is alive",
+                            "content": {
+                                "application/json": {
+                                    "example": { "alive": true }
                                 }
                             }
                         }

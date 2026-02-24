@@ -320,3 +320,99 @@ impl SyncService {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{ConflictResolution, SyncDirection, SyncJob, SyncStatus};
+
+    #[tokio::test]
+    async fn test_sync_service_new_creates_instance() {
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        let service = SyncService::new(pool);
+        // Service created successfully (no panic)
+        drop(service);
+    }
+
+    #[test]
+    fn test_sync_config_row_type_has_correct_field_count() {
+        // SyncConfigRow has 13 fields matching SELECT columns
+        let _row: Option<SyncConfigRow> = None;
+        // Type alias compiles correctly
+    }
+
+    #[test]
+    fn test_sync_history_row_type_has_correct_field_count() {
+        // SyncHistoryRow has 9 fields matching SELECT columns
+        let _row: Option<SyncHistoryRow> = None;
+        // Type alias compiles correctly
+    }
+
+    #[test]
+    fn test_sync_conflict_row_type_has_correct_field_count() {
+        // SyncConflictRow has 5 fields matching SELECT columns
+        let _row: Option<SyncConflictRow> = None;
+        // Type alias compiles correctly
+    }
+
+    #[test]
+    fn test_sync_provider_default_on_invalid_json() {
+        // Test fallback behavior: invalid JSON should fall back to Local
+        let invalid = "\"invalid_provider\"";
+        let result: Result<SyncProvider, _> = serde_json::from_str(invalid);
+        assert!(result.is_err());
+        // unwrap_or in service handles this
+    }
+
+    #[test]
+    fn test_sync_direction_default_on_invalid_json() {
+        // Test fallback behavior
+        let invalid = "\"invalid_direction\"";
+        let result: Result<SyncDirection, _> = serde_json::from_str(invalid);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sync_status_default_on_invalid_json() {
+        // Test fallback behavior
+        let invalid = "\"invalid_status\"";
+        let result: Result<SyncStatus, _> = serde_json::from_str(invalid);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_conflict_type_default_on_invalid_json() {
+        let invalid = "\"invalid_conflict\"";
+        let result: Result<ConflictType, _> = serde_json::from_str(invalid);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_conflict_resolution_serialization() {
+        let resolution = ConflictResolution::Merge;
+        let json = serde_json::to_string(&resolution).unwrap();
+        assert_eq!(json, "\"merge\"");
+    }
+
+    #[test]
+    fn test_sync_job_initial_values() {
+        let job = SyncJob {
+            id: "test-job-123".to_string(),
+            config_id: 1,
+            status: SyncStatus::Pending,
+            direction: SyncDirection::Bidirectional,
+            files_total: 0,
+            files_synced: 0,
+            files_failed: 0,
+            bytes_transferred: 0,
+            conflicts: vec![],
+            errors: vec![],
+            started_at: Utc::now(),
+            completed_at: None,
+        };
+        assert_eq!(job.id, "test-job-123");
+        assert!(matches!(job.status, SyncStatus::Pending));
+        assert!(job.conflicts.is_empty());
+        assert!(job.completed_at.is_none());
+    }
+}

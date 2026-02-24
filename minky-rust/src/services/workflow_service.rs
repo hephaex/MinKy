@@ -250,3 +250,142 @@ impl WorkflowService {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::WorkflowStatus;
+
+    #[tokio::test]
+    async fn test_workflow_service_new_creates_instance() {
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        let service = WorkflowService::new(pool);
+        drop(service);
+    }
+
+    #[test]
+    fn test_workflow_status_to_string_draft() {
+        let status = WorkflowStatus::Draft;
+        assert_eq!(status.to_string(), "draft");
+    }
+
+    #[test]
+    fn test_workflow_status_to_string_pending_review() {
+        let status = WorkflowStatus::PendingReview;
+        assert_eq!(status.to_string(), "pending_review");
+    }
+
+    #[test]
+    fn test_workflow_status_to_string_in_review() {
+        let status = WorkflowStatus::InReview;
+        assert_eq!(status.to_string(), "in_review");
+    }
+
+    #[test]
+    fn test_workflow_status_to_string_approved() {
+        let status = WorkflowStatus::Approved;
+        assert_eq!(status.to_string(), "approved");
+    }
+
+    #[test]
+    fn test_workflow_status_to_string_rejected() {
+        let status = WorkflowStatus::Rejected;
+        assert_eq!(status.to_string(), "rejected");
+    }
+
+    #[test]
+    fn test_workflow_status_to_string_published() {
+        let status = WorkflowStatus::Published;
+        assert_eq!(status.to_string(), "published");
+    }
+
+    #[test]
+    fn test_workflow_status_to_string_archived() {
+        let status = WorkflowStatus::Archived;
+        assert_eq!(status.to_string(), "archived");
+    }
+
+    #[test]
+    fn test_is_valid_transition_draft_to_pending_review() {
+        assert!(is_valid_transition(
+            &WorkflowStatus::Draft,
+            &WorkflowStatus::PendingReview
+        ));
+    }
+
+    #[test]
+    fn test_is_valid_transition_pending_review_to_in_review() {
+        assert!(is_valid_transition(
+            &WorkflowStatus::PendingReview,
+            &WorkflowStatus::InReview
+        ));
+    }
+
+    #[test]
+    fn test_is_valid_transition_in_review_to_approved() {
+        assert!(is_valid_transition(
+            &WorkflowStatus::InReview,
+            &WorkflowStatus::Approved
+        ));
+    }
+
+    #[test]
+    fn test_is_valid_transition_in_review_to_rejected() {
+        assert!(is_valid_transition(
+            &WorkflowStatus::InReview,
+            &WorkflowStatus::Rejected
+        ));
+    }
+
+    #[test]
+    fn test_is_valid_transition_approved_to_published() {
+        assert!(is_valid_transition(
+            &WorkflowStatus::Approved,
+            &WorkflowStatus::Published
+        ));
+    }
+
+    #[test]
+    fn test_is_valid_transition_published_to_archived() {
+        assert!(is_valid_transition(
+            &WorkflowStatus::Published,
+            &WorkflowStatus::Archived
+        ));
+    }
+
+    #[test]
+    fn test_is_invalid_transition_draft_to_published() {
+        // Cannot skip directly to published
+        assert!(!is_valid_transition(
+            &WorkflowStatus::Draft,
+            &WorkflowStatus::Published
+        ));
+    }
+
+    #[test]
+    fn test_is_valid_transition_archived_to_draft() {
+        // Can restore from archived to draft
+        assert!(is_valid_transition(
+            &WorkflowStatus::Archived,
+            &WorkflowStatus::Draft
+        ));
+    }
+
+    #[test]
+    fn test_is_invalid_transition_archived_to_published() {
+        // Cannot go directly from archived to published
+        assert!(!is_valid_transition(
+            &WorkflowStatus::Archived,
+            &WorkflowStatus::Published
+        ));
+    }
+
+    #[test]
+    fn test_is_valid_transition_rejected_to_draft() {
+        // Can revise after rejection
+        assert!(is_valid_transition(
+            &WorkflowStatus::Rejected,
+            &WorkflowStatus::Draft
+        ));
+    }
+}
