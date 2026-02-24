@@ -85,6 +85,89 @@
   gap: 0.5rem;
 }
 
+/* Tag Filter Section */
+.tag-filter-section {
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+}
+
+.tag-filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.tag-filter-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+}
+
+.tag-filter-clear {
+  font-size: 12px;
+  color: #007bff;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.tag-filter-clear:hover {
+  text-decoration: underline;
+}
+
+.tag-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #555;
+}
+
+.tag-filter-chip:hover {
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.tag-filter-chip.active {
+  background: #007bff;
+  border-color: #007bff;
+  color: white;
+}
+
+.tag-filter-chip.active:hover {
+  background: #0056b3;
+  border-color: #0056b3;
+}
+
+.tag-filter-count {
+  font-size: 11px;
+  padding: 1px 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  color: inherit;
+}
+
+.tag-filter-chip.active .tag-filter-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 .upload-section {
   background: #f9fafb;
   border: 1px solid #e5e7eb;

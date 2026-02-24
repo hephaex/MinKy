@@ -6,6 +6,7 @@ import Pagination from '../components/Pagination';
 import FileUpload from '../components/FileUpload';
 import DocumentCard from '../components/DocumentCard';
 import useCategories from '../hooks/useCategories';
+import useTags from '../hooks/useTags';
 import { logError } from '../utils/logger';
 import { formatDate } from '../utils/dateUtils';
 import './DocumentList.css';
@@ -42,10 +43,12 @@ const DocumentList = () => {
   });
   const navigate = useNavigate();
 
-  // Use custom hook for categories
+  // Use custom hooks for categories and tags
   const { categories } = useCategories();
+  const { tags: availableTags } = useTags({ popular: true });
+  const [selectedTags, setSelectedTags] = useState([]);
 
-  const fetchDocuments = async (page = 1, search = '', categoryId = null, sort = sortBy) => {
+  const fetchDocuments = async (page = 1, search = '', categoryId = null, sort = sortBy, tags = selectedTags) => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -54,6 +57,9 @@ const DocumentList = () => {
       if (search) params.append('search', search);
       if (categoryId) params.append('category_id', categoryId);
       if (sort) params.append('sort', sort);
+      if (tags && tags.length > 0) {
+        params.append('tags', tags.join(','));
+      }
 
       const response = await api.get(`/documents?${params.toString()}`);
       setDocuments(response.data.documents);
@@ -69,8 +75,8 @@ const DocumentList = () => {
   };
 
   useEffect(() => {
-    fetchDocuments(1, searchQuery, selectedCategory, sortBy);
-  }, [searchQuery, selectedCategory, sortBy]);
+    fetchDocuments(1, searchQuery, selectedCategory, sortBy, selectedTags);
+  }, [searchQuery, selectedCategory, sortBy, selectedTags]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -78,7 +84,22 @@ const DocumentList = () => {
   };
 
   const handlePageChange = (page) => {
-    fetchDocuments(page, searchQuery, selectedCategory, sortBy);
+    fetchDocuments(page, searchQuery, selectedCategory, sortBy, selectedTags);
+  };
+
+  const handleTagToggle = (tagSlug) => {
+    setSelectedTags(prev => {
+      if (prev.includes(tagSlug)) {
+        return prev.filter(t => t !== tagSlug);
+      }
+      return [...prev, tagSlug];
+    });
+    setCurrentPage(1);
+  };
+
+  const clearTagFilters = () => {
+    setSelectedTags([]);
+    setCurrentPage(1);
   };
 
   const handleCategoryChange = (categoryId) => {
@@ -217,6 +238,34 @@ const DocumentList = () => {
           </div>
         </div>
       </div>
+
+      {/* Tag Filter */}
+      {availableTags.length > 0 && (
+        <div className="tag-filter-section">
+          <div className="tag-filter-header">
+            <span className="tag-filter-label">Filter by tags:</span>
+            {selectedTags.length > 0 && (
+              <button className="tag-filter-clear" onClick={clearTagFilters}>
+                Clear all
+              </button>
+            )}
+          </div>
+          <div className="tag-filter-chips">
+            {availableTags.slice(0, 15).map(tag => (
+              <button
+                key={tag.slug || tag.name}
+                className={`tag-filter-chip${selectedTags.includes(tag.slug || tag.name) ? ' active' : ''}`}
+                onClick={() => handleTagToggle(tag.slug || tag.name)}
+              >
+                {tag.name}
+                {tag.count !== undefined && (
+                  <span className="tag-filter-count">{tag.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Upload Status Messages */}
       {uploadStatus && (
