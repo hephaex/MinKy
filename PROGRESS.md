@@ -5,7 +5,50 @@
 
 ---
 
-## 현재 진행 상황 (2026-02-24) - Rust 1,076개 테스트 달성
+## 현재 진행 상황 (2026-02-24) - Rust 1,130개 테스트 달성
+
+### 33차 세션: 라우트 테스트 확장 II (2026-02-24)
+
+#### 1. routes/notifications.rs 테스트 추가 (커밋 `3bf64efc`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `routes/notifications.rs` | 17개 |
+
+**테스트 항목:**
+- ListQuery 기본값 및 파라미터 처리
+- NotificationListResponse/UnreadCountResponse 구조
+- NotificationResponse/MarkAllReadResponse/DeleteResponse 구조
+- Notification 읽음/안읽음 상태 검증
+
+#### 2. routes/workflows.rs 테스트 추가 (커밋 `3bf64efc`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `routes/workflows.rs` | 22개 |
+
+**테스트 항목:**
+- CreateWorkflowRequest 검증 (priority 0-10, notes 최대 1000자)
+- UpdateStatusRequest 검증 (comment 최대 500자)
+- UpdateAssignmentRequest 검증
+- WorkflowResponse/WorkflowListResponse/WorkflowHistoryResponse 구조
+- WorkflowStatus 문자열 파싱
+
+#### 3. routes/versions.rs 테스트 추가 (커밋 `3bf64efc`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `routes/versions.rs` | 15개 |
+
+**테스트 항목:**
+- CreateVersionRequest 콘텐츠 검증
+- CompareQuery 버전 비교 파라미터
+- VersionListResponse/VersionResponse/CompareResponse 구조
+- VersionData/VersionWithAuthor 필드 검증
+
+**결과:** Rust 1,130개 테스트 통과 (1,076 → 1,130, +54개)
+
+---
 
 ### 32차 세션: 라우트 테스트 확장 (2026-02-24)
 
