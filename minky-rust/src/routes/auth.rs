@@ -390,3 +390,200 @@ async fn me(
         "data": user_response
     })))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_cookie_development() {
+        let cookie = build_cookie("test_cookie", "test_value", 3600, false);
+        assert!(cookie.contains("test_cookie=test_value"));
+        assert!(cookie.contains("HttpOnly"));
+        assert!(cookie.contains("SameSite=Strict"));
+        assert!(cookie.contains("Path=/"));
+        assert!(cookie.contains("Max-Age=3600"));
+        assert!(!cookie.contains("Secure"));
+    }
+
+    #[test]
+    fn test_build_cookie_production() {
+        let cookie = build_cookie("session", "abc123", 900, true);
+        assert!(cookie.contains("session=abc123"));
+        assert!(cookie.contains("Secure"));
+        assert!(cookie.contains("Max-Age=900"));
+    }
+
+    #[test]
+    fn test_build_delete_cookie() {
+        let cookie = build_delete_cookie("access_token");
+        assert!(cookie.contains("access_token="));
+        assert!(cookie.contains("Max-Age=0"));
+        assert!(cookie.contains("HttpOnly"));
+    }
+
+    #[test]
+    fn test_access_token_cookie_name() {
+        assert_eq!(ACCESS_TOKEN_COOKIE, "access_token");
+    }
+
+    #[test]
+    fn test_refresh_token_cookie_name() {
+        assert_eq!(REFRESH_TOKEN_COOKIE, "refresh_token");
+    }
+
+    #[test]
+    fn test_access_token_max_age_15_minutes() {
+        assert_eq!(ACCESS_TOKEN_MAX_AGE, 900);
+    }
+
+    #[test]
+    fn test_refresh_token_max_age_7_days() {
+        assert_eq!(REFRESH_TOKEN_MAX_AGE, 604800);
+    }
+
+    #[test]
+    fn test_login_request_deserialize() {
+        let json = r#"{"email": "test@example.com", "password": "password123"}"#;
+        let req: LoginRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.email, "test@example.com");
+        assert_eq!(req.password, "password123");
+    }
+
+    #[test]
+    fn test_register_request_deserialize() {
+        let json = r#"{"email": "new@example.com", "username": "newuser", "password": "securepass"}"#;
+        let req: RegisterRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.email, "new@example.com");
+        assert_eq!(req.username, "newuser");
+        assert_eq!(req.password, "securepass");
+    }
+
+    #[test]
+    fn test_refresh_request_with_token() {
+        let json = r#"{"refresh_token": "some-token"}"#;
+        let req: RefreshRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.refresh_token, Some("some-token".to_string()));
+    }
+
+    #[test]
+    fn test_refresh_request_without_token() {
+        let json = r#"{}"#;
+        let req: RefreshRequest = serde_json::from_str(json).unwrap();
+        assert!(req.refresh_token.is_none());
+    }
+
+    #[test]
+    fn test_auth_response_serialize() {
+        let response = AuthResponse {
+            success: true,
+            access_token: None,
+            refresh_token: None,
+            user: Some(UserInfo {
+                id: 1,
+                email: "test@example.com".to_string(),
+                username: "testuser".to_string(),
+                role: "user".to_string(),
+            }),
+        };
+        let json = serde_json::to_value(&response).unwrap();
+        assert_eq!(json["success"], true);
+        assert!(json["access_token"].is_null());
+        assert_eq!(json["user"]["id"], 1);
+        assert_eq!(json["user"]["email"], "test@example.com");
+    }
+
+    #[test]
+    fn test_user_info_serialize() {
+        let user = UserInfo {
+            id: 42,
+            email: "admin@example.com".to_string(),
+            username: "admin".to_string(),
+            role: "admin".to_string(),
+        };
+        let json = serde_json::to_value(&user).unwrap();
+        assert_eq!(json["id"], 42);
+        assert_eq!(json["role"], "admin");
+    }
+
+    #[test]
+    fn test_login_request_validation_email() {
+        let req = LoginRequest {
+            email: "invalid-email".to_string(),
+            password: "password123".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_login_request_validation_password_too_short() {
+        let req = LoginRequest {
+            email: "test@example.com".to_string(),
+            password: "short".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_login_request_validation_success() {
+        let req = LoginRequest {
+            email: "test@example.com".to_string(),
+            password: "validpassword".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_register_request_validation_username_too_short() {
+        let req = RegisterRequest {
+            email: "test@example.com".to_string(),
+            username: "ab".to_string(),
+            password: "password123".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_register_request_validation_success() {
+        let req = RegisterRequest {
+            email: "test@example.com".to_string(),
+            username: "validuser".to_string(),
+            password: "password123".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_extract_cookie_value_found() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::COOKIE,
+            axum::http::HeaderValue::from_str("access_token=abc123; refresh_token=xyz789").unwrap(),
+        );
+        let value = extract_cookie_value(&headers, "access_token");
+        assert_eq!(value, Some("abc123".to_string()));
+    }
+
+    #[test]
+    fn test_extract_cookie_value_not_found() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::COOKIE,
+            axum::http::HeaderValue::from_str("other_cookie=value").unwrap(),
+        );
+        let value = extract_cookie_value(&headers, "access_token");
+        assert!(value.is_none());
+    }
+
+    #[test]
+    fn test_extract_cookie_value_no_header() {
+        let headers = axum::http::HeaderMap::new();
+        let value = extract_cookie_value(&headers, "access_token");
+        assert!(value.is_none());
+    }
+}

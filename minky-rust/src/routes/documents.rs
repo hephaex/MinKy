@@ -308,3 +308,394 @@ async fn delete_document(
         message: format!("Document {} deleted successfully", id),
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    // ListQuery tests
+    #[test]
+    fn test_list_query_default_values() {
+        let query = ListQuery {
+            page: None,
+            limit: None,
+            category_id: None,
+            search: None,
+        };
+        assert!(query.page.is_none());
+        assert!(query.limit.is_none());
+        assert!(query.category_id.is_none());
+        assert!(query.search.is_none());
+    }
+
+    #[test]
+    fn test_list_query_with_values() {
+        let query = ListQuery {
+            page: Some(2),
+            limit: Some(50),
+            category_id: Some(5),
+            search: Some("test".to_string()),
+        };
+        assert_eq!(query.page, Some(2));
+        assert_eq!(query.limit, Some(50));
+        assert_eq!(query.category_id, Some(5));
+        assert_eq!(query.search, Some("test".to_string()));
+    }
+
+    // Pagination calculation tests
+    #[test]
+    fn test_page_min_value_clamped_to_1() {
+        let query = ListQuery {
+            page: Some(0),
+            limit: None,
+            category_id: None,
+            search: None,
+        };
+        let page = query.page.unwrap_or(1).max(1);
+        assert_eq!(page, 1);
+    }
+
+    #[test]
+    fn test_page_negative_clamped_to_1() {
+        let query = ListQuery {
+            page: Some(-5),
+            limit: None,
+            category_id: None,
+            search: None,
+        };
+        let page = query.page.unwrap_or(1).max(1);
+        assert_eq!(page, 1);
+    }
+
+    #[test]
+    fn test_limit_default_is_20() {
+        let query = ListQuery {
+            page: None,
+            limit: None,
+            category_id: None,
+            search: None,
+        };
+        let limit = query.limit.unwrap_or(20).clamp(1, 100);
+        assert_eq!(limit, 20);
+    }
+
+    #[test]
+    fn test_limit_max_clamped_to_100() {
+        let query = ListQuery {
+            page: None,
+            limit: Some(500),
+            category_id: None,
+            search: None,
+        };
+        let limit = query.limit.unwrap_or(20).clamp(1, 100);
+        assert_eq!(limit, 100);
+    }
+
+    #[test]
+    fn test_limit_min_clamped_to_1() {
+        let query = ListQuery {
+            page: None,
+            limit: Some(0),
+            category_id: None,
+            search: None,
+        };
+        let limit = query.limit.unwrap_or(20).clamp(1, 100);
+        assert_eq!(limit, 1);
+    }
+
+    #[test]
+    fn test_offset_calculation() {
+        let page = 3;
+        let limit = 20;
+        let offset = (page - 1) * limit;
+        assert_eq!(offset, 40);
+    }
+
+    #[test]
+    fn test_offset_first_page() {
+        let page = 1;
+        let limit = 20;
+        let offset = (page - 1) * limit;
+        assert_eq!(offset, 0);
+    }
+
+    // DocumentResponse tests
+    #[test]
+    fn test_document_response_creation() {
+        let doc = DocumentResponse {
+            id: Uuid::new_v4(),
+            title: "Test Doc".to_string(),
+            content: "Content here".to_string(),
+            category_id: Some(1),
+            user_id: 42,
+            is_public: true,
+            view_count: 10,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        assert_eq!(doc.title, "Test Doc");
+        assert_eq!(doc.user_id, 42);
+        assert!(doc.is_public);
+    }
+
+    #[test]
+    fn test_document_response_private() {
+        let doc = DocumentResponse {
+            id: Uuid::new_v4(),
+            title: "Private Doc".to_string(),
+            content: "Secret".to_string(),
+            category_id: None,
+            user_id: 1,
+            is_public: false,
+            view_count: 0,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        assert!(!doc.is_public);
+        assert!(doc.category_id.is_none());
+    }
+
+    // PaginationMeta tests
+    #[test]
+    fn test_pagination_meta_creation() {
+        let meta = PaginationMeta {
+            total: 100,
+            page: 1,
+            limit: 20,
+            total_pages: 5,
+        };
+        assert_eq!(meta.total, 100);
+        assert_eq!(meta.total_pages, 5);
+    }
+
+    #[test]
+    fn test_total_pages_calculation() {
+        let total: i64 = 95;
+        let limit = 20;
+        let total_pages = ((total as f64) / (limit as f64)).ceil() as i32;
+        assert_eq!(total_pages, 5);
+    }
+
+    #[test]
+    fn test_total_pages_exact_division() {
+        let total: i64 = 100;
+        let limit = 20;
+        let total_pages = ((total as f64) / (limit as f64)).ceil() as i32;
+        assert_eq!(total_pages, 5);
+    }
+
+    #[test]
+    fn test_total_pages_single_page() {
+        let total: i64 = 15;
+        let limit = 20;
+        let total_pages = ((total as f64) / (limit as f64)).ceil() as i32;
+        assert_eq!(total_pages, 1);
+    }
+
+    #[test]
+    fn test_total_pages_empty() {
+        let total: i64 = 0;
+        let limit = 20;
+        let total_pages = ((total as f64) / (limit as f64)).ceil() as i32;
+        assert_eq!(total_pages, 0);
+    }
+
+    // CreateDocumentRequest validation tests
+    #[test]
+    fn test_create_document_request_valid() {
+        let req = CreateDocumentRequest {
+            title: "Valid Title".to_string(),
+            content: "Some content".to_string(),
+            category_id: None,
+            is_public: Some(true),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_document_request_empty_title_fails() {
+        let req = CreateDocumentRequest {
+            title: "".to_string(),
+            content: "Content".to_string(),
+            category_id: None,
+            is_public: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_document_request_title_too_long_fails() {
+        let req = CreateDocumentRequest {
+            title: "x".repeat(501),
+            content: "Content".to_string(),
+            category_id: None,
+            is_public: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_document_request_max_title_length_ok() {
+        let req = CreateDocumentRequest {
+            title: "x".repeat(500),
+            content: "Content".to_string(),
+            category_id: None,
+            is_public: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_document_is_public_default_false() {
+        let req = CreateDocumentRequest {
+            title: "Test".to_string(),
+            content: "Content".to_string(),
+            category_id: None,
+            is_public: None,
+        };
+        let is_public = req.is_public.unwrap_or(false);
+        assert!(!is_public);
+    }
+
+    // UpdateDocumentRequest validation tests
+    #[test]
+    fn test_update_document_request_all_none() {
+        let req = UpdateDocumentRequest {
+            title: None,
+            content: None,
+            category_id: None,
+            is_public: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_document_request_partial() {
+        let req = UpdateDocumentRequest {
+            title: Some("New Title".to_string()),
+            content: None,
+            category_id: None,
+            is_public: None,
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_document_request_empty_title_fails() {
+        let req = UpdateDocumentRequest {
+            title: Some("".to_string()),
+            content: None,
+            category_id: None,
+            is_public: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_document_request_title_too_long_fails() {
+        let req = UpdateDocumentRequest {
+            title: Some("x".repeat(501)),
+            content: None,
+            category_id: None,
+            is_public: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    // ListResponse tests
+    #[test]
+    fn test_list_response_creation() {
+        let docs = vec![DocumentResponse {
+            id: Uuid::new_v4(),
+            title: "Test".to_string(),
+            content: "Content".to_string(),
+            category_id: None,
+            user_id: 1,
+            is_public: false,
+            view_count: 0,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }];
+        let response = ListResponse {
+            success: true,
+            data: docs,
+            meta: PaginationMeta {
+                total: 1,
+                page: 1,
+                limit: 20,
+                total_pages: 1,
+            },
+        };
+        assert!(response.success);
+        assert_eq!(response.data.len(), 1);
+    }
+
+    #[test]
+    fn test_list_response_empty() {
+        let response: ListResponse<DocumentResponse> = ListResponse {
+            success: true,
+            data: vec![],
+            meta: PaginationMeta {
+                total: 0,
+                page: 1,
+                limit: 20,
+                total_pages: 0,
+            },
+        };
+        assert!(response.data.is_empty());
+        assert_eq!(response.meta.total, 0);
+    }
+
+    // SingleResponse tests
+    #[test]
+    fn test_single_response_creation() {
+        let doc = DocumentResponse {
+            id: Uuid::new_v4(),
+            title: "Single".to_string(),
+            content: "Content".to_string(),
+            category_id: Some(5),
+            user_id: 10,
+            is_public: true,
+            view_count: 100,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        let response = SingleResponse {
+            success: true,
+            data: doc,
+        };
+        assert!(response.success);
+        assert_eq!(response.data.title, "Single");
+    }
+
+    // DeleteResponse tests
+    #[test]
+    fn test_delete_response_creation() {
+        let id = Uuid::new_v4();
+        let response = DeleteResponse {
+            success: true,
+            message: format!("Document {} deleted successfully", id),
+        };
+        assert!(response.success);
+        assert!(response.message.contains("deleted successfully"));
+    }
+
+    #[test]
+    fn test_delete_response_contains_uuid() {
+        let id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let response = DeleteResponse {
+            success: true,
+            message: format!("Document {} deleted successfully", id),
+        };
+        assert!(response.message.contains("550e8400-e29b-41d4-a716-446655440000"));
+    }
+}
