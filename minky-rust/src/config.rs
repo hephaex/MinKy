@@ -19,6 +19,22 @@ pub struct Config {
     #[serde(default = "default_max_connections")]
     pub database_max_connections: u32,
 
+    /// Minimum number of connections to maintain in the pool
+    #[serde(default = "default_min_connections")]
+    pub database_min_connections: u32,
+
+    /// Connection acquire timeout in seconds
+    #[serde(default = "default_acquire_timeout")]
+    pub database_acquire_timeout_secs: u64,
+
+    /// Maximum connection lifetime in seconds (0 = unlimited)
+    #[serde(default = "default_max_lifetime")]
+    pub database_max_lifetime_secs: u64,
+
+    /// Idle connection timeout in seconds (0 = unlimited)
+    #[serde(default = "default_idle_timeout")]
+    pub database_idle_timeout_secs: u64,
+
     pub jwt_secret: SecretString,
 
     #[serde(default = "default_jwt_expiration")]
@@ -69,6 +85,22 @@ fn default_max_connections() -> u32 {
     10
 }
 
+fn default_min_connections() -> u32 {
+    2
+}
+
+fn default_acquire_timeout() -> u64 {
+    30
+}
+
+fn default_max_lifetime() -> u64 {
+    1800 // 30 minutes
+}
+
+fn default_idle_timeout() -> u64 {
+    600 // 10 minutes
+}
+
 fn default_jwt_expiration() -> i64 {
     24
 }
@@ -102,6 +134,10 @@ mod tests {
             port: 8000,
             database_url: "postgres://localhost/test".to_string(),
             database_max_connections: 5,
+            database_min_connections: 1,
+            database_acquire_timeout_secs: 30,
+            database_max_lifetime_secs: 1800,
+            database_idle_timeout_secs: 600,
             jwt_secret: SecretString::from(secret),
             jwt_expiration_hours: 24,
             opensearch_url: None,

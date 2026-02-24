@@ -33,9 +33,25 @@ pub struct AppState {
 
 /// Create the application with all routes and middleware
 pub async fn create_app(config: Config) -> Result<Router> {
-    // Create database connection pool
-    let db = PgPoolOptions::new()
+    // Create database connection pool with production-ready settings
+    let mut pool_options = PgPoolOptions::new()
         .max_connections(config.database_max_connections)
+        .min_connections(config.database_min_connections)
+        .acquire_timeout(std::time::Duration::from_secs(config.database_acquire_timeout_secs));
+
+    // Apply max lifetime if set (0 = unlimited)
+    if config.database_max_lifetime_secs > 0 {
+        pool_options = pool_options
+            .max_lifetime(std::time::Duration::from_secs(config.database_max_lifetime_secs));
+    }
+
+    // Apply idle timeout if set (0 = unlimited)
+    if config.database_idle_timeout_secs > 0 {
+        pool_options = pool_options
+            .idle_timeout(std::time::Duration::from_secs(config.database_idle_timeout_secs));
+    }
+
+    let db = pool_options
         .connect(&config.database_url)
         .await?;
 
