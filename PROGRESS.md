@@ -5,7 +5,45 @@
 
 ---
 
-## 현재 진행 상황 (2026-02-24) - 테스트 강화 완료
+## 현재 진행 상황 (2026-02-24) - Rust 931개 테스트 달성
+
+### 30차 세션: 서비스 테스트 확장 (2026-02-24)
+
+#### 1. sync_service.rs 테스트 추가 (커밋 `b5bc6f9f`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `services/sync_service.rs` | 10개 |
+
+**테스트 항목:**
+- 서비스 인스턴스 생성
+- SyncConfigRow/SyncHistoryRow/SyncConflictRow 타입 검증
+- SyncProvider/SyncDirection/SyncStatus JSON 역직렬화 실패 처리
+- ConflictResolution 직렬화
+- SyncJob 초기값 검증
+
+#### 2. workflow_service.rs 테스트 추가 (커밋 `b5bc6f9f`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `services/workflow_service.rs` | 18개 |
+
+**테스트 항목:**
+- WorkflowStatus 7개 변형 to_string() 검증
+- is_valid_transition() 상태 전이 검증 (10개 시나리오)
+- 서비스 인스턴스 생성
+
+#### 3. OpenAPI 스펙 최신화 (커밋 `b5bc6f9f`)
+
+| 엔드포인트 | 설명 |
+|------------|------|
+| `GET /health` | 종합 헬스체크 (DB, Redis, 레이턴시) |
+| `GET /health/ready` | K8s readiness probe |
+| `GET /health/live` | K8s liveness probe |
+
+**결과:** Rust 931개 테스트 통과 (903 → 931, +28개)
+
+---
 
 ### 29차 세션: 테스트 커버리지 향상 (2026-02-24)
 
