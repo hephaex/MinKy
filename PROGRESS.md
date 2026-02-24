@@ -5,7 +5,48 @@
 
 ---
 
-## 현재 진행 상황 (2026-02-24) - Rust 931개 테스트 달성
+## 현재 진행 상황 (2026-02-24) - Rust 1,015개 테스트 달성
+
+### 31차 세션: 라우트/유틸리티 테스트 확장 (2026-02-24)
+
+#### 1. routes/auth.rs 테스트 추가 (커밋 `11f89d1d`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `routes/auth.rs` | 21개 |
+
+**테스트 항목:**
+- Cookie 빌드 (Secure, HttpOnly, SameSite, max-age)
+- Cookie value 추출 및 파싱
+- LoginRequest/RegisterRequest 검증
+- JWT access/refresh token 만료 시간
+
+#### 2. routes/documents.rs 테스트 추가 (커밋 `11f89d1d`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `routes/documents.rs` | 30개 |
+
+**테스트 항목:**
+- ListQuery 기본값 및 파라미터 처리
+- Pagination 계산 (page, limit, offset, total_pages)
+- CreateDocumentRequest/UpdateDocumentRequest 검증
+- DocumentResponse/ListResponse/SingleResponse/DeleteResponse 구조
+
+#### 3. utils/validation.rs 테스트 추가 (커밋 `11f89d1d`)
+
+| 파일 | 테스트 수 |
+|------|-----------|
+| `utils/validation.rs` | 16개 (기존 18개 + 16개) |
+
+**테스트 항목:**
+- validate_request() 구조체 검증 (경계값, 에러 메시지)
+- sanitize_html() 추가 케이스 (nested tags, emoji, URL 인코딩)
+- sanitize_title() 추가 케이스 (CR 제거, escape sequence, form feed)
+
+**결과:** Rust 1,015개 테스트 통과 (931 → 1,015, +84개)
+
+---
 
 ### 30차 세션: 서비스 테스트 확장 (2026-02-24)
 
