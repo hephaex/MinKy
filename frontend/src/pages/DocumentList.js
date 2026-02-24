@@ -10,6 +10,22 @@ import { logError } from '../utils/logger';
 import { formatDate } from '../utils/dateUtils';
 import './DocumentList.css';
 
+// Sort options configuration
+const SORT_OPTIONS = [
+  { value: 'updated_desc', label: 'Recently Updated' },
+  { value: 'updated_asc', label: 'Oldest Updated' },
+  { value: 'created_desc', label: 'Recently Created' },
+  { value: 'created_asc', label: 'Oldest Created' },
+  { value: 'title_asc', label: 'Title (A-Z)' },
+  { value: 'title_desc', label: 'Title (Z-A)' },
+];
+
+// View mode options
+const VIEW_MODES = {
+  GRID: 'grid',
+  LIST: 'list',
+};
+
 const DocumentList = () => {
   const [documents, setDocuments] = useState([]);
   const [pagination, setPagination] = useState({});
@@ -20,12 +36,16 @@ const DocumentList = () => {
   const [showUpload, setShowUpload] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [sortBy, setSortBy] = useState('updated_desc');
+  const [viewMode, setViewMode] = useState(() => {
+    return localStorage.getItem('documentViewMode') || VIEW_MODES.GRID;
+  });
   const navigate = useNavigate();
 
   // Use custom hook for categories
   const { categories } = useCategories();
 
-  const fetchDocuments = async (page = 1, search = '', categoryId = null) => {
+  const fetchDocuments = async (page = 1, search = '', categoryId = null, sort = sortBy) => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -33,7 +53,8 @@ const DocumentList = () => {
       params.append('per_page', 10);
       if (search) params.append('search', search);
       if (categoryId) params.append('category_id', categoryId);
-      
+      if (sort) params.append('sort', sort);
+
       const response = await api.get(`/documents?${params.toString()}`);
       setDocuments(response.data.documents);
       setPagination(response.data.pagination);
@@ -48,8 +69,8 @@ const DocumentList = () => {
   };
 
   useEffect(() => {
-    fetchDocuments(1, searchQuery, selectedCategory);
-  }, [searchQuery, selectedCategory]);
+    fetchDocuments(1, searchQuery, selectedCategory, sortBy);
+  }, [searchQuery, selectedCategory, sortBy]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
@@ -57,12 +78,22 @@ const DocumentList = () => {
   };
 
   const handlePageChange = (page) => {
-    fetchDocuments(page, searchQuery, selectedCategory);
+    fetchDocuments(page, searchQuery, selectedCategory, sortBy);
   };
 
   const handleCategoryChange = (categoryId) => {
     setSelectedCategory(categoryId);
     setCurrentPage(1);
+  };
+
+  const handleSortChange = (sort) => {
+    setSortBy(sort);
+    setCurrentPage(1);
+  };
+
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem('documentViewMode', mode);
   };
 
   const handleUploadSuccess = (response) => {
@@ -119,9 +150,9 @@ const DocumentList = () => {
         <h2>Documents</h2>
         <div className="header-actions">
           <SearchBar onSearch={handleSearch} initialValue={searchQuery} />
-          <select 
+          <select
             className="category-filter"
-            value={selectedCategory} 
+            value={selectedCategory}
             onChange={(e) => handleCategoryChange(e.target.value)}
           >
             <option value="">All Categories</option>
@@ -131,12 +162,51 @@ const DocumentList = () => {
               </option>
             ))}
           </select>
+          <select
+            className="sort-filter"
+            value={sortBy}
+            onChange={(e) => handleSortChange(e.target.value)}
+            aria-label="Sort documents"
+          >
+            {SORT_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="view-toggle">
+            <button
+              className={`view-toggle-btn${viewMode === VIEW_MODES.GRID ? ' active' : ''}`}
+              onClick={() => handleViewModeChange(VIEW_MODES.GRID)}
+              aria-label="Grid view"
+              title="Grid view"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="1" y="1" width="6" height="6" rx="1" />
+                <rect x="9" y="1" width="6" height="6" rx="1" />
+                <rect x="1" y="9" width="6" height="6" rx="1" />
+                <rect x="9" y="9" width="6" height="6" rx="1" />
+              </svg>
+            </button>
+            <button
+              className={`view-toggle-btn${viewMode === VIEW_MODES.LIST ? ' active' : ''}`}
+              onClick={() => handleViewModeChange(VIEW_MODES.LIST)}
+              aria-label="List view"
+              title="List view"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <rect x="1" y="1" width="14" height="3" rx="1" />
+                <rect x="1" y="6" width="14" height="3" rx="1" />
+                <rect x="1" y="11" width="14" height="3" rx="1" />
+              </svg>
+            </button>
+          </div>
           <div className="action-buttons">
             <Link to="/documents/new" className="btn btn-primary">
               + New Document
             </Link>
-            <button 
-              className="btn btn-secondary" 
+            <button
+              className="btn btn-secondary"
               onClick={() => setShowUpload(!showUpload)}
             >
               📁 Upload *.md
@@ -192,15 +262,45 @@ const DocumentList = () => {
         </div>
       ) : (
         <>
-          <div className="documents-grid">
+          <div className={`documents-${viewMode}`}>
             {documents.map((doc) => (
-              <DocumentCard
-                key={doc.id}
-                document={doc}
-                searchQuery={searchQuery}
-                showPreview={true}
-                formatDate={formatDate}
-              />
+              viewMode === VIEW_MODES.LIST ? (
+                <Link key={doc.id} to={`/documents/${doc.id}`} className="document-list-item">
+                  <div className="document-list-item-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" fill="none" stroke="white" strokeWidth="2"/>
+                    </svg>
+                  </div>
+                  <div className="document-list-item-content">
+                    <span className="document-list-item-title">{doc.title}</span>
+                    <span className="document-list-item-meta">
+                      {doc.author && <span className="document-list-item-author">{doc.author}</span>}
+                      <span className="document-list-item-date">{formatDate(doc.updated_at)}</span>
+                    </span>
+                  </div>
+                  {doc.tags && doc.tags.length > 0 && (
+                    <div className="document-list-item-tags">
+                      {doc.tags.slice(0, 2).map(tag => (
+                        <span key={tag.name || tag} className="document-list-item-tag">
+                          {tag.name || tag}
+                        </span>
+                      ))}
+                      {doc.tags.length > 2 && (
+                        <span className="document-list-item-tag-more">+{doc.tags.length - 2}</span>
+                      )}
+                    </div>
+                  )}
+                </Link>
+              ) : (
+                <DocumentCard
+                  key={doc.id}
+                  document={doc}
+                  searchQuery={searchQuery}
+                  showPreview={true}
+                  formatDate={formatDate}
+                />
+              )
             ))}
           </div>
 

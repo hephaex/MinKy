@@ -227,7 +227,9 @@ describe('DocumentList', () => {
       render(<DocumentList />);
 
       await waitFor(() => {
-        expect(screen.getByRole('combobox')).toBeInTheDocument();
+        // There are now two comboboxes (category and sort)
+        const comboboxes = screen.getAllByRole('combobox');
+        expect(comboboxes.length).toBeGreaterThanOrEqual(2);
       });
       expect(screen.getByText('All Categories')).toBeInTheDocument();
     });
@@ -245,16 +247,71 @@ describe('DocumentList', () => {
       render(<DocumentList />);
 
       await waitFor(() => {
-        expect(screen.getByRole('combobox')).toBeInTheDocument();
+        expect(screen.getByText('All Categories')).toBeInTheDocument();
       });
 
-      const categorySelect = screen.getByRole('combobox');
+      // Find the category filter by its default option text
+      const categorySelect = screen.getByText('All Categories').closest('select');
       fireEvent.change(categorySelect, { target: { value: '1' } });
 
       await waitFor(() => {
         expect(api.get).toHaveBeenCalledWith(
           expect.stringContaining('category_id=1')
         );
+      });
+    });
+  });
+
+  describe('sort filter', () => {
+    it('renders sort dropdown with options', async () => {
+      render(<DocumentList />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Recently Updated')).toBeInTheDocument();
+      });
+    });
+
+    it('changes sort order when selected', async () => {
+      render(<DocumentList />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Recently Updated')).toBeInTheDocument();
+      });
+
+      const sortSelect = screen.getByLabelText('Sort documents');
+      fireEvent.change(sortSelect, { target: { value: 'title_asc' } });
+
+      await waitFor(() => {
+        expect(api.get).toHaveBeenCalledWith(
+          expect.stringContaining('sort=title_asc')
+        );
+      });
+    });
+  });
+
+  describe('view toggle', () => {
+    it('renders view toggle buttons', async () => {
+      render(<DocumentList />);
+
+      await waitFor(() => {
+        expect(screen.getByTitle('Grid view')).toBeInTheDocument();
+        expect(screen.getByTitle('List view')).toBeInTheDocument();
+      });
+    });
+
+    it('switches to list view when list button clicked', async () => {
+      render(<DocumentList />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Document 1')).toBeInTheDocument();
+      });
+
+      const listButton = screen.getByTitle('List view');
+      fireEvent.click(listButton);
+
+      // List view should have document-list-item class
+      await waitFor(() => {
+        expect(document.querySelector('.documents-list')).toBeInTheDocument();
       });
     });
   });
