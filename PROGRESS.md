@@ -30,6 +30,25 @@
 
 **결과:** E2E 테스트 11개 → 17개 파일 (2,465줄 → 4,384줄, +1,919줄)
 
+#### 2. Frontend ESLint/Prettier 설정 (커밋 `eeb423e5`)
+
+| 항목 | 내용 |
+|------|------|
+| ESLint 설정 | `.eslintrc.js` (React, Hooks, JSX-A11y, Prettier) |
+| Prettier 설정 | `.prettierrc` (singleQuote, trailingComma, printWidth) |
+| npm 스크립트 | `lint`, `lint:fix`, `lint:strict`, `format`, `format:check` |
+
+**설치된 패키지:**
+- eslint@8.57.1, eslint-plugin-react, eslint-plugin-react-hooks
+- eslint-plugin-jsx-a11y (접근성), eslint-plugin-prettier
+- prettier@3.8.1
+
+**결과:**
+- 에러: 0개
+- 경고: 592개 (점진적 개선 예정)
+- 100+ 파일 자동 포맷팅 적용
+- 테스트: 520개 모두 통과
+
 ---
 
 ### 33차 세션: 라우트 테스트 확장 II (2026-02-24)
