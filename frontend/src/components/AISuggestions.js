@@ -207,6 +207,9 @@ const AISuggestions = ({
               key={index}
               className={`suggestion-item ${suggestion.type}`}
               onClick={() => handleSuggestionClick(suggestion)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSuggestionClick(suggestion)}
+              role="button"
+              tabIndex={0}
             >
               <div className="suggestion-type">
                 {suggestion.type === 'completion' ? '💡' : '✏️'}

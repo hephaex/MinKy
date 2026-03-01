@@ -167,6 +167,9 @@ const DocumentImport = ({
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
           >
             <div className="drop-zone-content">
               <div className="upload-icon">📁</div>

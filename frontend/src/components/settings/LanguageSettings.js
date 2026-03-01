@@ -6,8 +6,8 @@ const LanguageSettings = () => {
       <h3>Language Settings</h3>
       <p>Select your preferred language for the interface</p>
       <div className="language-setting">
-        <label>Interface Language:</label>
-        <LanguageSelector />
+        <label htmlFor="interface-language">Interface Language:</label>
+        <LanguageSelector id="interface-language" />
       </div>
     </div>
   );

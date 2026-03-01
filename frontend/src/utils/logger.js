@@ -14,6 +14,7 @@ const isDevelopment = process.env.NODE_ENV === 'development';
  */
 export const logError = (context, error, metadata = {}) => {
   if (isDevelopment) {
+    // eslint-disable-next-line no-console
     console.error(`[${context}]`, error, metadata);
   }
   // In production, could send to error tracking service (Sentry, etc.)
@@ -26,6 +27,7 @@ export const logError = (context, error, metadata = {}) => {
  */
 export const logWarning = (context, message) => {
   if (isDevelopment) {
+    // eslint-disable-next-line no-console
     console.warn(`[${context}]`, message);
   }
 };
@@ -37,6 +39,7 @@ export const logWarning = (context, message) => {
  */
 export const logInfo = (context, message) => {
   if (isDevelopment) {
+    // eslint-disable-next-line no-console
     console.info(`[${context}]`, message);
   }
 };

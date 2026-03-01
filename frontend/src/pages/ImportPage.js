@@ -102,25 +102,34 @@ const ImportPage = () => {
         )}
 
         <div className="import-modes">
-          <div className="mode-tabs">
-            <div
+          <div className="mode-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
               className={`tab ${activeTab === 'upload-md' ? 'active' : ''}`}
               onClick={() => setActiveTab('upload-md')}
+              aria-selected={activeTab === 'upload-md'}
             >
               📄 Upload *.md
-            </div>
-            <div
+            </button>
+            <button
+              type="button"
+              role="tab"
               className={`tab ${activeTab === 'convert' ? 'active' : ''}`}
               onClick={() => setActiveTab('convert')}
+              aria-selected={activeTab === 'convert'}
             >
               📄 Document Conversion
-            </div>
-            <div
+            </button>
+            <button
+              type="button"
+              role="tab"
               className={`tab ${activeTab === 'ocr' ? 'active' : ''}`}
               onClick={() => setActiveTab('ocr')}
+              aria-selected={activeTab === 'ocr'}
             >
               📷 OCR Text Extraction
-            </div>
+            </button>
           </div>
 
           <div className="tab-content">

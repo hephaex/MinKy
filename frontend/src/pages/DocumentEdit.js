@@ -217,7 +217,7 @@ const DocumentEdit = () => {
         </div>
 
         <div className="form-group">
-          <label>Content *</label>
+          <span className="form-label">Content *</span>
           <CollaborativeEditor
             documentId={id}
             initialValue={formData.markdown_content}

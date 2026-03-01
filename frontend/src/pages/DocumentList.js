@@ -82,6 +82,7 @@ const DocumentList = () => {
 
   useEffect(() => {
     fetchDocuments(1, searchQuery, selectedCategory, sortBy, selectedTags);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, selectedCategory, sortBy, selectedTags]);
 
   const handleSearch = (query) => {

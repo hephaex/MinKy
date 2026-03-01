@@ -236,6 +236,9 @@ const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
                 cursor: 'pointer',
               }}
               onClick={() => onDocumentClick?.(doc)}
+              onKeyDown={(e) => e.key === 'Enter' && onDocumentClick?.(doc)}
+              role="button"
+              tabIndex={0}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
                 e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';

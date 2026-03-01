@@ -86,7 +86,9 @@ describe('useAsync', () => {
       await act(async () => {
         try {
           await result.current.execute();
-        } catch (e) {}
+        } catch {
+          // Expected error - intentionally ignored
+        }
       });
       expect(result.current.error).not.toBeNull();
 

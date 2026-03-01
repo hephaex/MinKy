@@ -205,8 +205,9 @@ const AISettings = () => {
           <ConnectionStatusIcon status={connectionStatus.ocr} />
         </div>
         <div className="config-item">
-          <label>OCR Provider:</label>
+          <label htmlFor="ocr-provider">OCR Provider:</label>
           <select
+            id="ocr-provider"
             value={aiConfig.ocrService}
             onChange={(e) => handleConfigChange('ocrService', e.target.value)}
           >
@@ -219,8 +220,9 @@ const AISettings = () => {
         </div>
         {aiConfig.ocrService !== 'tesseract' && (
           <div className="config-item">
-            <label>OCR API Key:</label>
+            <label htmlFor="ocr-api-key">OCR API Key:</label>
             <input
+              id="ocr-api-key"
               type="password"
               value={aiConfig.ocrApiKey}
               onChange={(e) => handleConfigChange('ocrApiKey', e.target.value)}
@@ -244,8 +246,9 @@ const AISettings = () => {
           <ConnectionStatusIcon status={connectionStatus.llm} />
         </div>
         <div className="config-item">
-          <label>LLM Provider:</label>
+          <label htmlFor="llm-provider">LLM Provider:</label>
           <select
+            id="llm-provider"
             value={aiConfig.llmProvider}
             onChange={(e) => handleConfigChange('llmProvider', e.target.value)}
           >
@@ -257,8 +260,11 @@ const AISettings = () => {
           </select>
         </div>
         <div className="config-item">
-          <label>{aiConfig.llmProvider === 'local' ? 'Server URL:' : 'API Key:'}</label>
+          <label htmlFor="llm-api-key">
+            {aiConfig.llmProvider === 'local' ? 'Server URL:' : 'API Key:'}
+          </label>
           <input
+            id="llm-api-key"
             type={aiConfig.llmProvider === 'local' ? 'text' : 'password'}
             value={aiConfig.llmApiKey}
             onChange={(e) => handleConfigChange('llmApiKey', e.target.value)}
@@ -270,8 +276,9 @@ const AISettings = () => {
           />
         </div>
         <div className="config-item">
-          <label>Model:</label>
+          <label htmlFor="llm-model">Model:</label>
           <select
+            id="llm-model"
             value={aiConfig.llmModel}
             onChange={(e) => handleConfigChange('llmModel', e.target.value)}
           >

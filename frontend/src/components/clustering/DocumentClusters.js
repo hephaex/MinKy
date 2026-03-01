@@ -22,8 +22,9 @@ const DocumentClusters = ({
       <div className="clustering-config">
         <div className="config-row">
           <div className="config-group">
-            <label>Clustering Method:</label>
+            <label htmlFor="clustering-method">Clustering Method:</label>
             <select
+              id="clustering-method"
               value={clusteringConfig.method}
               onChange={(e) => handleConfigChange('method', e.target.value)}
               className="form-control"
@@ -36,8 +37,9 @@ const DocumentClusters = ({
           </div>
 
           <div className="config-group">
-            <label>Number of Clusters:</label>
+            <label htmlFor="n-clusters">Number of Clusters:</label>
             <input
+              id="n-clusters"
               type="number"
               value={clusteringConfig.n_clusters || ''}
               onChange={(e) =>
@@ -51,8 +53,9 @@ const DocumentClusters = ({
           </div>
 
           <div className="config-group">
-            <label>Scope:</label>
+            <label htmlFor="clustering-scope">Scope:</label>
             <select
+              id="clustering-scope"
               value={clusteringConfig.scope}
               onChange={(e) => handleConfigChange('scope', e.target.value)}
               className="form-control"
@@ -63,8 +66,9 @@ const DocumentClusters = ({
           </div>
 
           <div className="config-group">
-            <label>Max Documents:</label>
+            <label htmlFor="max-documents">Max Documents:</label>
             <input
+              id="max-documents"
               type="number"
               value={clusteringConfig.max_documents}
               onChange={(e) => handleConfigChange('max_documents', parseInt(e.target.value))}

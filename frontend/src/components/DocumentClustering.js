@@ -24,6 +24,7 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
     if (documentId && activeTab === 'similar') {
       loadSimilarDocuments();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, activeTab]);
 
   const loadClusteringStatus = async () => {

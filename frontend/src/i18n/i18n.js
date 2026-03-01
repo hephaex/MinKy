@@ -246,7 +246,7 @@ I18nProvider.propTypes = {
 };
 
 // Language selector component
-export const LanguageSelector = ({ className = '', showFlags = true }) => {
+export const LanguageSelector = ({ className = '', showFlags = true, id }) => {
   const { language, changeLanguage, languages, t } = useI18n();
 
   const languageFlags = {
@@ -259,6 +259,7 @@ export const LanguageSelector = ({ className = '', showFlags = true }) => {
   return (
     <div className={`language-selector ${className}`}>
       <select
+        id={id}
         value={language}
         onChange={(e) => changeLanguage(e.target.value)}
         className="language-select"
@@ -277,11 +278,13 @@ export const LanguageSelector = ({ className = '', showFlags = true }) => {
 LanguageSelector.propTypes = {
   className: PropTypes.string,
   showFlags: PropTypes.bool,
+  id: PropTypes.string,
 };
 
 LanguageSelector.defaultProps = {
   className: '',
   showFlags: true,
+  id: undefined,
 };
 
 // Text direction utilities

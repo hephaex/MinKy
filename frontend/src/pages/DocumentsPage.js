@@ -25,7 +25,16 @@ const DocumentsPage = () => {
     <div className="documents-page">
       <TreeSidebar isVisible={sidebarVisible} onToggle={toggleSidebar} />
 
-      {sidebarVisible && isMobile && <div className="sidebar-overlay" onClick={toggleSidebar} />}
+      {sidebarVisible && isMobile && (
+        <div
+          className="sidebar-overlay"
+          onClick={toggleSidebar}
+          onKeyDown={(e) => e.key === 'Escape' && toggleSidebar()}
+          role="button"
+          tabIndex={0}
+          aria-label="Close sidebar"
+        />
+      )}
 
       <div className={`documents-main ${sidebarVisible ? 'with-sidebar' : ''}`}>
         <div className="documents-header">

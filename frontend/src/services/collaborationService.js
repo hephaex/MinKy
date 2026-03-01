@@ -233,13 +233,15 @@ class CollaborationService {
         case 'insert':
           return content.substring(0, position) + operation.text + content.substring(position);
 
-        case 'delete':
+        case 'delete': {
           const endPos = Math.min(position + operation.length, content.length);
           return content.substring(0, position) + content.substring(endPos);
+        }
 
-        case 'replace':
+        case 'replace': {
           const replaceEndPos = Math.min(position + operation.length, content.length);
           return content.substring(0, position) + operation.text + content.substring(replaceEndPos);
+        }
 
         default:
           logWarning('CollaborationService', `Unknown operation type: ${type}`);

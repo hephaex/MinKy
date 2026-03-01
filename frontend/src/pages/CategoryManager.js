@@ -168,7 +168,14 @@ const CategoryManager = () => {
 
       {showCreateForm && (
         <div className="category-form-modal">
-          <div className="category-form-overlay" onClick={handleCancel}></div>
+          <div
+            className="category-form-overlay"
+            onClick={handleCancel}
+            onKeyDown={(e) => e.key === 'Escape' && handleCancel()}
+            role="button"
+            tabIndex={0}
+            aria-label="Close form"
+          ></div>
           <div className="category-form">
             <h2>{editingCategory ? 'Edit Category' : 'Create New Category'}</h2>
             <form onSubmit={handleSubmit}>

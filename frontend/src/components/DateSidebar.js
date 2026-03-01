@@ -74,6 +74,9 @@ const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
         <div
           className={`timeline-item-content level-${level} ${isSelected ? 'selected' : ''}`}
           onClick={() => handleItemClick(item)}
+          onKeyDown={(e) => e.key === 'Enter' && handleItemClick(item)}
+          role="button"
+          tabIndex={0}
           style={{ paddingLeft: `${level * 20 + 12}px` }}
         >
           {hasChildren && <span className={`expand-icon ${isExpanded ? 'expanded' : ''}`}>▶</span>}

@@ -18,6 +18,7 @@ const MLAnalytics = ({ documentId, showCorpusAnalysis = false }) => {
     } else if (showCorpusAnalysis && activeTab === 'corpus') {
       loadCorpusInsights();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, activeTab, showCorpusAnalysis]);
 
   const loadMLStatus = async () => {

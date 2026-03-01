@@ -76,15 +76,15 @@ const GitSettings = () => {
       <h3>Git Integration</h3>
       <div className="git-config">
         <div className="config-item">
-          <label>Repository URL:</label>
+          <span className="config-label">Repository URL:</span>
           <div className="config-value">{gitConfig.repository}</div>
         </div>
         <div className="config-item">
-          <label>Username:</label>
+          <span className="config-label">Username:</span>
           <div className="config-value">{gitConfig.username}</div>
         </div>
         <div className="config-item">
-          <label>Email:</label>
+          <span className="config-label">Email:</span>
           <div className="config-value">{gitConfig.email}</div>
         </div>
       </div>

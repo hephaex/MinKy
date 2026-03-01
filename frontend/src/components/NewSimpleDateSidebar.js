@@ -153,6 +153,9 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
                     {item.children && Object.keys(item.children).length > 0 && (
                       <span
                         onClick={() => handleArrowClick(item.key)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleArrowClick(item.key)}
+                        role="button"
+                        tabIndex={0}
                         style={{
                           marginRight: '8px',
                           transform: expandedItems.has(item.key) ? 'rotate(90deg)' : 'rotate(0deg)',
@@ -166,6 +169,9 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
                     <span
                       style={{ flex: 1, cursor: 'pointer' }}
                       onClick={() => handleItemClick(item.key)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleItemClick(item.key)}
+                      role="button"
+                      tabIndex={0}
                     >
                       {item.label}
                     </span>
@@ -180,6 +186,9 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
                         cursor: 'pointer',
                       }}
                       onClick={() => handleItemClick(item.key)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleItemClick(item.key)}
+                      role="button"
+                      tabIndex={0}
                     >
                       ({item.count})
                     </span>
@@ -193,6 +202,9 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
                           <div
                             key={child.key}
                             onClick={() => handleItemClick(child.key)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleItemClick(child.key)}
+                            role="button"
+                            tabIndex={0}
                             style={{
                               display: 'flex',
                               alignItems: 'center',

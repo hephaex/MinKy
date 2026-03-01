@@ -200,7 +200,7 @@ const DocumentCreate = () => {
         </div>
 
         <div className="form-group">
-          <label>Content *</label>
+          <span className="form-label">Content *</span>
           <MarkdownEditor
             value={formData.markdown_content}
             onChange={handleMarkdownChange}

@@ -190,6 +190,7 @@ const TreeView = ({ nodes, onSelect, className }) => {
       ref={treeRef}
       className={`tree-view ${className || ''}`}
       role="tree"
+      tabIndex={0}
       onKeyDown={handleTreeKeyDown}
     >
       {nodes.map((node) => (

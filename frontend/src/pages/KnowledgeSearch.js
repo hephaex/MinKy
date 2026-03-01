@@ -53,7 +53,7 @@ const KnowledgeSearch = () => {
         </p>
       </div>
 
-      <nav className="kb-tabs" role="tablist" aria-label="검색 모드">
+      <div className="kb-tabs" role="tablist" aria-label="검색 모드">
         {TABS.map((tab) => (
           <button
             key={tab.id}
@@ -67,7 +67,7 @@ const KnowledgeSearch = () => {
             <span className="kb-tab-desc">{tab.description}</span>
           </button>
         ))}
-      </nav>
+      </div>
 
       <div className="kb-tab-content" role="tabpanel">
         {activeTab === 'ask' && <AskQuestion />}
