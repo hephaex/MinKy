@@ -83,27 +83,29 @@
 - ✅ Redis 프로덕션 설정 (커밋 `a8129087`)
   - 메모리 제한 (256mb 기본), LRU 퇴거 정책, AOF 영속성
 
-**E2E 테스트 결과 (2026-02-19):**
+**E2E 테스트 결과:**
 1. [x] PostgreSQL 데이터베이스 마이그레이션 실행
    - pgvector 0.8.0 소스 빌드 및 설치 완료
-   - minky_rust_db 생성 및 4개 마이그레이션 적용 완료 (004: search_history 추가)
-   - Axum 0.8 라우트 문법 수정 (/:param -> /{param})
-   - 빌드: 0 errors, 0 warnings (경고 80개 모두 제거 완료)
+   - minky_rust_db 생성 및 4개 마이그레이션 적용 완료
+   - 빌드: 0 errors, 0 warnings
 2. [ ] OpenAI API 크레딧 부족 - 새 API 키 또는 크레딧 보충 필요
 3. [x] Rust 서버 기동 확인 (/api/health 응답 정상)
-4. [x] 프론트엔드-백엔드 통합 테스트 완료 (포트 8000으로 업데이트)
+4. [x] 프론트엔드-백엔드 통합 테스트 완료
 5. [ ] RAG 파이프라인 E2E 테스트 (API 키/크레딧 필요)
-   - ANTHROPIC_API_KEY 설정 필요 (문서 이해 분석)
-   - OpenAI 크레딧 보충 필요 (임베딩, 시맨틱 검색)
-6. [x] documents CRUD DB 연동 구현 (2026-02-19 완료)
+6. [x] documents CRUD DB 연동 구현 완료
 
-**코드 품질 개선 (2026-02-19):**
+**코드 품질 개선:**
 - [x] Rust clippy 경고 80개 → 0개 (type alias, Display impl, derive, allow)
-- [x] Frontend 테스트 228/228 통과 (DocumentView 버그 수정)
+- [x] Frontend 테스트 520개 통과
+- [x] Rust 단위 테스트 1,130개 통과
 - [x] Auth 라우트 실제 구현 (login, register, refresh, /me)
 - [x] Documents 인증 연동 (AuthUser 추출기로 user_id 교체)
-- [x] Rust 단위 테스트 27개 → 67개 (category tree, user model, attachment, version diff, comment tree, embeddings)
 - [x] AuthUser 연동 (tags, categories, comments, notifications, workflows, versions, attachments)
+- [x] **ESLint 경고 592 → 29개** (2026-03-01 완료, 95% 감소)
+  - PropTypes 추가 (27개 컴포넌트)
+  - 접근성 개선 (jsx-a11y: onKeyDown, role, tabIndex)
+  - label-input 연결 (htmlFor/id)
+  - 코드 품질 수정 (no-case-declarations, eslint-disable)
 
 **사용 방법:**
 ```
