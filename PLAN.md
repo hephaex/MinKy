@@ -101,11 +101,12 @@
 - [x] Auth 라우트 실제 구현 (login, register, refresh, /me)
 - [x] Documents 인증 연동 (AuthUser 추출기로 user_id 교체)
 - [x] AuthUser 연동 (tags, categories, comments, notifications, workflows, versions, attachments)
-- [x] **ESLint 경고 592 → 29개** (2026-03-01 완료, 95% 감소)
+- [x] **ESLint 경고 592 → 0개** (2026-03-01 완료, 100% 해결)
   - PropTypes 추가 (27개 컴포넌트)
   - 접근성 개선 (jsx-a11y: onKeyDown, role, tabIndex)
   - label-input 연결 (htmlFor/id)
   - 코드 품질 수정 (no-case-declarations, eslint-disable)
+  - 테스트 파일 PropTypes 규칙 비활성화
 
 **사용 방법:**
 ```
