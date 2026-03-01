@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import './DateSidebar.css';
 
 // Helper to get auth token for API calls

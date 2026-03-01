@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import MDEditor from '@uiw/react-md-editor';
 import { collaborationService } from '../services/collaborationService';
 import AISuggestions from './AISuggestions';
@@ -100,7 +100,7 @@ const CollaborativeEditor = ({
       });
     };
 
-    const handleDocumentSaved = (data) => {
+    const handleDocumentSaved = (_data) => {
       // document auto-saved
     };
 

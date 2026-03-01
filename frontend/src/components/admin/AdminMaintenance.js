@@ -1,5 +1,3 @@
-import React from 'react';
-
 const AdminMaintenance = ({ onCleanup }) => {
   return (
     <div className="maintenance-tab">

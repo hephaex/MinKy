@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import TreeSidebar from '../components/TreeSidebar';
 import DocumentList from './DocumentList';
 import './DocumentsPage.css';

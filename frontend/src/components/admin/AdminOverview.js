@@ -1,5 +1,3 @@
-import React from 'react';
-
 const StatCard = ({ title, value, subtitle, className = '' }) => (
   <div className={`admin-stat-card ${className}`}>
     <h3>{title}</h3>

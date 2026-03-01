@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -274,7 +274,7 @@ const DocumentView = () => {
                   return children;
                 },
                 // 이미지 컴포넌트 - 반응형 스타일링 보장
-                img({ node, src, alt, title, ...props }) {
+                img({ src, alt, title, ...props }) {
                   return (
                     <img
                       src={src}
@@ -292,7 +292,7 @@ const DocumentView = () => {
                     />
                   );
                 },
-                code({ node, inline, className, children, ...props }) {
+                code({ inline, className, children, ...props }) {
                   const match = /language-(\w+)/.exec(className || '');
                   return !inline && match ? (
                     <SyntaxHighlighter style={tomorrow} language={match[1]} PreTag="div" {...props}>

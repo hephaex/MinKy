@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import KnowledgeGraph from '../components/KnowledgeGraph';
 import './KnowledgeGraphPage.css';
 
@@ -457,7 +457,7 @@ function KnowledgeGraphPage() {
       <div className="kg-page__header">
         <div className="kg-page__header-left">
           <h1 className="kg-page__title">Knowledge Graph</h1>
-          <p className="kg-page__subtitle">Explore how your team's knowledge connects</p>
+          <p className="kg-page__subtitle">Explore how your team&apos;s knowledge connects</p>
         </div>
 
         {!apiAvailable && !loading && (

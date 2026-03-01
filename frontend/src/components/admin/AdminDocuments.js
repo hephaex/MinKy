@@ -1,5 +1,3 @@
-import React from 'react';
-
 const DocumentCard = ({ doc }) => (
   <div className="document-card">
     <div className="document-header">

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import Pagination from './Pagination';
-import { formatDateTime, formatDateRange as formatDateRangeUtil } from '../utils/dateUtils';
+import { formatDateTime } from '../utils/dateUtils';
 import './DocumentsByDate.css';
 
 // SECURITY: Helper to get auth token for API calls
@@ -21,7 +21,7 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
     currentPage: 1,
   });
 
-  const fetchDocumentsByDate = React.useCallback(
+  const fetchDocumentsByDate = useCallback(
     async (page = 1) => {
       if (!dateKey) return;
 
@@ -61,7 +61,7 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
     }
   }, [dateKey, fetchDocumentsByDate]);
 
-  const handlePageChange = React.useCallback(
+  const handlePageChange = useCallback(
     (page) => {
       fetchDocumentsByDate(page);
     },

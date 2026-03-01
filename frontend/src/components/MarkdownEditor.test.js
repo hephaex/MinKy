@@ -1,9 +1,8 @@
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import MarkdownEditor from './MarkdownEditor';
 
 jest.mock('@uiw/react-md-editor', () => {
-  return function MockMDEditor({ value, onChange, preview, textareaProps }) {
+  return function MockMDEditor({ value, onChange, textareaProps }) {
     return (
       <textarea
         data-testid="md-editor"

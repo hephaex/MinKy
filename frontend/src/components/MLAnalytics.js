@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { authService } from '../services/api';
 import { DocumentInsights, CorpusInsights } from './ml-analytics';
 import './MLAnalytics.css';

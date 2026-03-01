@@ -252,7 +252,7 @@ class CollaborationService {
   }
 
   // Transform operation against another operation (basic OT)
-  transformOperation(op1, op2, isOwnOperation = false) {
+  transformOperation(op1, op2, _isOwnOperation = false) {
     if (op1.type === 'insert' && op2.type === 'insert') {
       if (op1.position <= op2.position) {
         return {

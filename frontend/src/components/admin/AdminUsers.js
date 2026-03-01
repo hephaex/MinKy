@@ -1,5 +1,3 @@
-import React from 'react';
-
 const UserRow = ({ user, onUpdate }) => (
   <tr>
     <td>{user.username}</td>

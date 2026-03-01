@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import OCRUpload from '../components/OCRUpload';
 import './OCRPage.css';
@@ -11,7 +10,7 @@ const OCRPage = () => {
     navigate(`/documents/${document.id}`);
   };
 
-  const handleTextExtracted = (result) => {
+  const handleTextExtracted = (_result) => {
     // Could show a success message or store extracted text for later use
     // text extracted
   };

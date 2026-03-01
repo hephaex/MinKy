@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import ChatMessage from './ChatMessage';
 import ChatInput from './ChatInput';
@@ -21,14 +21,14 @@ const EmptyState = () => (
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
     </div>
-    <h2 className="chat-empty__title">Ask your team's knowledge</h2>
+    <h2 className="chat-empty__title">Ask your team&apos;s knowledge</h2>
     <p className="chat-empty__subtitle">
       Search across documents, notes, and team conversations using natural language.
     </p>
     <ul className="chat-empty__suggestions">
-      <li>"How did we solve the authentication issue last quarter?"</li>
-      <li>"What's our approach to database migrations?"</li>
-      <li>"Summarize our onboarding process"</li>
+      <li>&quot;How did we solve the authentication issue last quarter?&quot;</li>
+      <li>&quot;What&apos;s our approach to database migrations?&quot;</li>
+      <li>&quot;Summarize our onboarding process&quot;</li>
     </ul>
   </div>
 );

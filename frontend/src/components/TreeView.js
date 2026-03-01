@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, focusedId, onFocusChange }) => {
   const nodeRef = useRef(null);

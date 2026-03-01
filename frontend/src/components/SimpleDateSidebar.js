@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 // SECURITY: Helper to get auth token for API calls
 const getAuthHeaders = () => {

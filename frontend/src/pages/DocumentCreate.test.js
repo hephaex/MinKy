@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '../test-utils';
 import DocumentCreate from './DocumentCreate';
 import { documentService } from '../services/api';

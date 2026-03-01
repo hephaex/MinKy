@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import SearchBar from '../components/SearchBar';
@@ -296,7 +296,7 @@ const DocumentList = () => {
           {searchQuery ? (
             <>
               <h3>No documents found</h3>
-              <p>No documents match your search for "{searchQuery}"</p>
+              <p>No documents match your search for &quot;{searchQuery}&quot;</p>
               <button className="btn btn-secondary" onClick={() => handleSearch('')}>
                 Clear Search
               </button>

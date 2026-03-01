@@ -130,7 +130,7 @@ export const useChat = () => {
           // Add initial empty message for streaming
           setMessages((prev) => [...prev, buildAssistantMessage(aiMsgId, '', [], true)]);
 
-          let sources = [];
+          // Sources are handled by streaming callbacks
 
           await chatService.sendMessageStream(
             content,
@@ -141,7 +141,6 @@ export const useChat = () => {
             },
             {
               onSources: (receivedSources) => {
-                sources = receivedSources;
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === aiMsgId ? { ...msg, sources: receivedSources } : msg

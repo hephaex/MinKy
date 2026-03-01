@@ -1,4 +1,3 @@
-import React from 'react';
 import { LanguageSettings, AISettings, GitSettings, ExportSettings } from '../components/settings';
 import './Settings.css';
 

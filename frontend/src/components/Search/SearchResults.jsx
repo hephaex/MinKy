@@ -1,4 +1,3 @@
-import React from 'react';
 import PropTypes from 'prop-types';
 import SearchResultItem from './SearchResultItem';
 import LoadingSpinner from '../LoadingSpinner';
@@ -51,7 +50,8 @@ const SearchResults = ({
         </svg>
         <p className="kb-results-empty-title">검색 결과가 없습니다</p>
         <p className="kb-results-empty-desc">
-          <strong>"{query}"</strong>에 대한 문서를 찾을 수 없습니다. 다른 키워드로 검색해보세요.
+          <strong>&quot;{query}&quot;</strong>에 대한 문서를 찾을 수 없습니다. 다른 키워드로
+          검색해보세요.
         </p>
       </div>
     );
@@ -73,7 +73,7 @@ const SearchResults = ({
           {query && (
             <>
               {' '}
-              — <span className="kb-results-query">"{query}"</span>
+              — <span className="kb-results-query">&quot;{query}&quot;</span>
             </>
           )}
         </p>

@@ -1,5 +1,3 @@
-import React from 'react';
-
 const OCRDropzone = ({ file, onFileChange, onFileRemove, dragActive, onDrag, onDrop }) => {
   const isValidFileType = (file) => {
     if (!file) return false;

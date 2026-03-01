@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { documentService, authService, tagService } from './api';
 
 // Mock axios

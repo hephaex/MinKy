@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -48,7 +48,7 @@ CodeBlock.defaultProps = {
 };
 
 const markdownComponents = {
-  code({ node, inline, className, children, ...props }) {
+  code({ inline, className, children, ...props }) {
     const match = /language-(\w+)/.exec(className || '');
     if (!inline && match) {
       return <CodeBlock language={match[1]}>{children}</CodeBlock>;

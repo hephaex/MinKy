@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { AskQuestion } from '../components/Knowledge';
 import { SearchBar, SearchResults } from '../components/Search';
 import { searchService } from '../services/api';

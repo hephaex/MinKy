@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { useState } from 'react';
+import { render, screen } from '@testing-library/react';
 import ErrorBoundary from './ErrorBoundary';
 
 // Component that throws an error
@@ -10,9 +10,9 @@ const ThrowError = ({ shouldThrow }) => {
   return <div>Child component</div>;
 };
 
-// Component that can toggle error state
-const ToggleError = () => {
-  const [shouldThrow, setShouldThrow] = useState(true);
+// Component that can toggle error state (unused but kept for potential future tests)
+const _ToggleError = () => {
+  const [shouldThrow, _setShouldThrow] = useState(true);
 
   if (shouldThrow) {
     throw new Error('Test error');

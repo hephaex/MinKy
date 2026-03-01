@@ -1,5 +1,3 @@
-import React from 'react';
-
 const DuplicateDetection = ({ duplicates, onDetect }) => {
   return (
     <div className="duplicate-detection">

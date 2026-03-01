@@ -1,5 +1,3 @@
-import React from 'react';
-
 const DocumentInsights = ({ analytics, onLoadSimilar }) => {
   return (
     <div className="document-insights">

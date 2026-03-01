@@ -2,19 +2,7 @@ import { searchService, embeddingService } from './api';
 
 // Mock the entire api module
 jest.mock('./api', () => {
-  const mockApi = {
-    get: jest.fn(),
-    post: jest.fn(),
-    put: jest.fn(),
-    delete: jest.fn(),
-    interceptors: {
-      request: { use: jest.fn() },
-      response: { use: jest.fn() },
-    },
-    defaults: { headers: { common: {} } },
-  };
-
-  // Re-implement the service objects using the mock
+  // Re-implement the service objects using mocks
   return {
     searchService: {
       ask: jest.fn(),

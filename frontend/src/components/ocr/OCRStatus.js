@@ -1,5 +1,3 @@
-import React from 'react';
-
 const OCRStatusLoading = () => (
   <div className="ocr-upload">
     <div className="loading">Loading OCR capabilities...</div>

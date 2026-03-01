@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { tagService } from '../services/api';
 import Pagination from '../components/Pagination';
@@ -151,7 +151,7 @@ const TagDetail = () => {
         {documents.length === 0 ? (
           <div className="no-documents">
             <h3>No documents found</h3>
-            <p>No documents are currently tagged with "{tagData.name}"</p>
+            <p>No documents are currently tagged with &quot;{tagData.name}&quot;</p>
             <Link to="/documents/new" className="btn btn-primary">
               Create New Document
             </Link>

@@ -1,4 +1,3 @@
-import React from 'react';
 import { LanguageSelector } from '../../i18n/i18n';
 
 const LanguageSettings = () => {

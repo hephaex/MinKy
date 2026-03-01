@@ -1,4 +1,3 @@
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SimpleDateSidebar from './SimpleDateSidebar';
 
@@ -312,8 +311,9 @@ describe('SimpleDateSidebar', () => {
 
     await waitFor(() => {
       // Find nested month elements by their text content
-      const month01 = screen.getByText('2025-01');
-      const month02 = screen.getByText('2025-02');
+      // Verify elements exist
+      expect(screen.getByText('2025-01')).toBeInTheDocument();
+      expect(screen.getByText('2025-02')).toBeInTheDocument();
 
       // Get their positions in the document
       const allElements = container.querySelectorAll('[style*="font-size: 14px"]');

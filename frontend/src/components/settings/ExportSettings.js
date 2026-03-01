@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { documentService } from '../../services/api';
 
 const DownloadIcon = () => (

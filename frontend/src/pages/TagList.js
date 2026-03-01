@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { tagService } from '../services/api';
 import SearchBar from '../components/SearchBar';
@@ -173,7 +173,7 @@ const TagList = () => {
           {searchQuery ? (
             <>
               <h3>No tags found</h3>
-              <p>No tags match your search for "{searchQuery}"</p>
+              <p>No tags match your search for &quot;{searchQuery}&quot;</p>
               <button className="btn btn-secondary" onClick={() => handleSearch('')}>
                 Clear Search
               </button>

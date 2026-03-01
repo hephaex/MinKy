@@ -11,7 +11,7 @@ export const highlightText = (text, searchQuery) => {
   const parts = text.split(regex);
 
   return parts
-    .map((part, index) => {
+    .map((part) => {
       if (regex.test(part)) {
         return `<mark class="search-highlight">${part}</mark>`;
       }

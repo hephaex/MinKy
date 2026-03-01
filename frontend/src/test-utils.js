@@ -37,7 +37,7 @@ export const mockI18n = {
   tn: (key, count) => `${key}.${count === 1 ? 'one' : 'other'}`,
   tDate: (date) => new Date(date).toLocaleDateString(),
   tNumber: (num) => num.toString(),
-  tRelative: (date) => 'recently',
+  tRelative: (_date) => 'recently',
 };
 
 /**

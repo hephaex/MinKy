@@ -1,5 +1,3 @@
-import React from 'react';
-
 const CorpusInsights = ({ analytics }) => {
   return (
     <div className="corpus-insights">

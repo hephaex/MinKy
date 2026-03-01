@@ -1,5 +1,3 @@
-import React from 'react';
-
 const SimilarDocuments = ({ documentId, similarDocs, onRefresh }) => {
   if (!documentId) {
     return (

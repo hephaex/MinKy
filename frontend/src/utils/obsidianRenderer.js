@@ -1,5 +1,4 @@
 // 옵시디언 스타일 마크다운 렌더링 유틸리티
-import React from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import DOMPurify from 'dompurify';
@@ -125,7 +124,7 @@ export const createCustomMarkdownComponents = (navigate, documentLookup = {}) =>
     },
 
     // 코드 블록 처리 (기존 로직 유지)
-    code({ node, inline, className, children, ...props }) {
+    code({ inline, className, children, ...props }) {
       const match = /language-(\w+)/.exec(className || '');
       return !inline && match ? (
         <SyntaxHighlighter style={tomorrow} language={match[1]} PreTag="div" {...props}>

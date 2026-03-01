@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import MDEditor from '@uiw/react-md-editor';
 import AISuggestions from './AISuggestions';
 import './MarkdownEditor.css';

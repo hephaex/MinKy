@@ -1,5 +1,3 @@
-import React from 'react';
-
 const OCRDocumentForm = ({ formData, onChange }) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;

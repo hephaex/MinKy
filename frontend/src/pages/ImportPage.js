@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import OCRUpload from '../components/OCRUpload';
 import DocumentImport from '../components/DocumentImport';
@@ -23,7 +23,7 @@ const ImportPage = () => {
     navigate(`/documents/${document.id}`);
   };
 
-  const handleTextExtracted = (result) => {
+  const handleTextExtracted = (_result) => {
     // Could show a success message or store extracted text for later use
     // text extracted
   };
@@ -244,8 +244,8 @@ const ImportPage = () => {
                 </ul>
                 <p>
                   <em>
-                    Note: Image files (.png, .jpg, .jpeg) should use the "OCR Text Extraction" tab
-                    for better results.
+                    Note: Image files (.png, .jpg, .jpeg) should use the &quot;OCR Text
+                    Extraction&quot; tab for better results.
                   </em>
                 </p>
               </div>

@@ -1,7 +1,5 @@
-import React from 'react';
 import { render, screen } from '@testing-library/react';
 import LanguageSettings from './LanguageSettings';
-import * as i18n from '../../i18n/i18n';
 
 jest.mock('../../i18n/i18n', () => ({
   LanguageSelector: () => <div data-testid="language-selector">Language Selector</div>,

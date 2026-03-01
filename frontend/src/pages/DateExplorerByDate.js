@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import NewSimpleDateSidebar from '../components/NewSimpleDateSidebar';
 import SimpleDocumentsByDate from '../components/SimpleDocumentsByDate';

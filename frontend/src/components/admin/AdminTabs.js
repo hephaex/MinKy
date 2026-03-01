@@ -1,6 +1,4 @@
-import React from 'react';
-
-const TabButton = ({ tab, label, active, onClick }) => (
+const TabButton = ({ label, active, onClick }) => (
   <button className={`tab-button ${active ? 'active' : ''}`} onClick={onClick}>
     {label}
   </button>

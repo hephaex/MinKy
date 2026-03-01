@@ -1,5 +1,3 @@
-import React from 'react';
-
 const OCRResult = ({ result, mode }) => {
   const getText = () => result.ocr_result?.text || result.text;
   const getMethod = () => result.ocr_result?.method || result.method;
