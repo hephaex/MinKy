@@ -77,12 +77,13 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['**/*.test.js', '**/*.test.jsx', '**/*.spec.js', '**/*.spec.jsx'],
+      files: ['**/*.test.js', '**/*.test.jsx', '**/*.spec.js', '**/*.spec.jsx', '**/test-utils.js'],
       env: {
         jest: true,
       },
       rules: {
         'no-console': 'off',
+        'react/prop-types': 'off', // Mock components in tests don't need PropTypes
       },
     },
   ],
