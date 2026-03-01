@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SimpleDateSidebar from './SimpleDateSidebar';
 
 const mockTimeline = {
-  '2025': {
+  2025: {
     key: '2025',
     label: '2025',
     count: 12,
@@ -11,16 +11,16 @@ const mockTimeline = {
       '2025-01': {
         key: '2025-01',
         label: '2025-01',
-        count: 5
+        count: 5,
       },
       '2025-02': {
         key: '2025-02',
         label: '2025-02',
-        count: 7
-      }
-    }
+        count: 7,
+      },
+    },
   },
-  '2026': {
+  2026: {
     key: '2026',
     label: '2026',
     count: 8,
@@ -28,10 +28,10 @@ const mockTimeline = {
       '2026-02': {
         key: '2026-02',
         label: '2026-02',
-        count: 8
-      }
-    }
-  }
+        count: 8,
+      },
+    },
+  },
 };
 
 global.fetch = jest.fn();
@@ -45,10 +45,17 @@ beforeEach(() => {
 describe('SimpleDateSidebar', () => {
   it('renders loading state initially', async () => {
     global.fetch.mockImplementationOnce(
-      () => new Promise(resolve => setTimeout(() => resolve({
-        ok: true,
-        json: async () => ({ timeline: mockTimeline })
-      }), 100))
+      () =>
+        new Promise((resolve) =>
+          setTimeout(
+            () =>
+              resolve({
+                ok: true,
+                json: async () => ({ timeline: mockTimeline }),
+              }),
+            100
+          )
+        )
     );
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -68,7 +75,7 @@ describe('SimpleDateSidebar', () => {
   it('renders timeline data after loading', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -82,7 +89,7 @@ describe('SimpleDateSidebar', () => {
   it('renders empty state when no timeline data', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: {} })
+      json: async () => ({ timeline: {} }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -95,13 +102,13 @@ describe('SimpleDateSidebar', () => {
   it('sorts timeline items in descending order', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     const { container } = render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
 
     await waitFor(() => {
-      const labels = Array.from(container.querySelectorAll('span')).map(el => el.textContent);
+      const labels = Array.from(container.querySelectorAll('span')).map((el) => el.textContent);
       const year2026Index = labels.indexOf('2026');
       const year2025Index = labels.indexOf('2025');
       expect(year2026Index).toBeLessThan(year2025Index);
@@ -111,7 +118,7 @@ describe('SimpleDateSidebar', () => {
   it('expands year when arrow is clicked', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -127,7 +134,7 @@ describe('SimpleDateSidebar', () => {
   it('collapses year when arrow is clicked again', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -148,7 +155,7 @@ describe('SimpleDateSidebar', () => {
     const mockOnSelect = jest.fn();
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={mockOnSelect} />);
@@ -167,7 +174,7 @@ describe('SimpleDateSidebar', () => {
     const mockOnSelect = jest.fn();
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={mockOnSelect} />);
@@ -186,7 +193,7 @@ describe('SimpleDateSidebar', () => {
     const mockOnSelect = jest.fn();
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={mockOnSelect} />);
@@ -204,7 +211,7 @@ describe('SimpleDateSidebar', () => {
   it('highlights selected date key', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     const { container } = render(
@@ -221,7 +228,7 @@ describe('SimpleDateSidebar', () => {
     localStorage.setItem('token', 'test-token-123');
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: {} })
+      json: async () => ({ timeline: {} }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -230,7 +237,7 @@ describe('SimpleDateSidebar', () => {
       expect(global.fetch).toHaveBeenCalledWith(
         '/api/documents/timeline?group_by=month',
         expect.objectContaining({
-          headers: { 'Authorization': 'Bearer test-token-123' }
+          headers: { Authorization: 'Bearer test-token-123' },
         })
       );
     });
@@ -239,7 +246,7 @@ describe('SimpleDateSidebar', () => {
   it('handles fetch without auth token', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: {} })
+      json: async () => ({ timeline: {} }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -248,7 +255,7 @@ describe('SimpleDateSidebar', () => {
       expect(global.fetch).toHaveBeenCalledWith(
         '/api/documents/timeline?group_by=month',
         expect.objectContaining({
-          headers: {}
+          headers: {},
         })
       );
     });
@@ -257,7 +264,7 @@ describe('SimpleDateSidebar', () => {
   it('renders document header', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -270,7 +277,7 @@ describe('SimpleDateSidebar', () => {
   it('displays count for each timeline item', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -284,7 +291,7 @@ describe('SimpleDateSidebar', () => {
   it('renders nested months under expanded year', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -298,7 +305,7 @@ describe('SimpleDateSidebar', () => {
   it('sorts nested months in descending order', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: mockTimeline })
+      json: async () => ({ timeline: mockTimeline }),
     });
 
     const { container } = render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
@@ -310,11 +317,11 @@ describe('SimpleDateSidebar', () => {
 
       // Get their positions in the document
       const allElements = container.querySelectorAll('[style*="font-size: 14px"]');
-      const labels = Array.from(allElements).map(el => el.textContent);
+      const labels = Array.from(allElements).map((el) => el.textContent);
 
       // 2025-02 should come before 2025-01 (descending order)
-      const idx02 = labels.findIndex(l => l.includes('2025-02'));
-      const idx01 = labels.findIndex(l => l.includes('2025-01'));
+      const idx02 = labels.findIndex((l) => l.includes('2025-02'));
+      const idx01 = labels.findIndex((l) => l.includes('2025-01'));
 
       expect(idx02).toBeLessThan(idx01);
     });
@@ -322,24 +329,24 @@ describe('SimpleDateSidebar', () => {
 
   it('handles months without expandable arrow', async () => {
     const timelineWithoutChildren = {
-      '2025': {
+      2025: {
         key: '2025',
         label: '2025',
         count: 5,
-        children: {}
-      }
+        children: {},
+      },
     };
 
     global.fetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ timeline: timelineWithoutChildren })
+      json: async () => ({ timeline: timelineWithoutChildren }),
     });
 
     const { container } = render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);
 
     await waitFor(() => {
       const arrowSpans = container.querySelectorAll('span');
-      const hasArrow = Array.from(arrowSpans).some(span => span.textContent === '▶');
+      const hasArrow = Array.from(arrowSpans).some((span) => span.textContent === '▶');
       expect(hasArrow).toBe(false);
     });
   });
@@ -347,7 +354,7 @@ describe('SimpleDateSidebar', () => {
   it('handles HTTP error response', async () => {
     global.fetch.mockResolvedValueOnce({
       ok: false,
-      status: 500
+      status: 500,
     });
 
     render(<SimpleDateSidebar onDocumentSelect={jest.fn()} />);

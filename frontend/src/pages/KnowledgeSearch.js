@@ -14,29 +14,32 @@ const KnowledgeSearch = () => {
   const [activeTab, setActiveTab] = useState('ask');
   const [semanticQuery, setSemanticQuery] = useState('');
 
-  const fetchSemantic = useCallback(
-    (query) => searchService.semantic(query),
-    []
-  );
+  const fetchSemantic = useCallback((query) => searchService.semantic(query), []);
 
   const { execute: runSemanticSearch, loading, error, data, reset } = useAsync(fetchSemantic);
 
-  const handleSemanticSearch = useCallback(async (query) => {
-    setSemanticQuery(query);
-    try {
-      await runSemanticSearch(query);
-    } catch (_) {
-      // error handled by useAsync
-    }
-  }, [runSemanticSearch]);
+  const handleSemanticSearch = useCallback(
+    async (query) => {
+      setSemanticQuery(query);
+      try {
+        await runSemanticSearch(query);
+      } catch (_) {
+        // error handled by useAsync
+      }
+    },
+    [runSemanticSearch]
+  );
 
-  const handleTabChange = useCallback((tab) => {
-    setActiveTab(tab);
-    if (tab === 'ask') {
-      reset();
-      setSemanticQuery('');
-    }
-  }, [reset]);
+  const handleTabChange = useCallback(
+    (tab) => {
+      setActiveTab(tab);
+      if (tab === 'ask') {
+        reset();
+        setSemanticQuery('');
+      }
+    },
+    [reset]
+  );
 
   const semanticResults = data?.results || data?.data || [];
   const totalCount = data?.total || data?.meta?.total || null;
@@ -67,17 +70,11 @@ const KnowledgeSearch = () => {
       </nav>
 
       <div className="kb-tab-content" role="tabpanel">
-        {activeTab === 'ask' && (
-          <AskQuestion />
-        )}
+        {activeTab === 'ask' && <AskQuestion />}
 
         {activeTab === 'semantic' && (
           <div className="kb-semantic">
-            <SearchBar
-              onSearch={handleSemanticSearch}
-              mode="semantic"
-              loading={loading}
-            />
+            <SearchBar onSearch={handleSemanticSearch} mode="semantic" loading={loading} />
             <SearchResults
               results={semanticResults}
               query={semanticQuery}

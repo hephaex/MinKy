@@ -41,9 +41,7 @@ describe('FileUpload', () => {
   });
 
   it('rejects non-markdown files with error', async () => {
-    const { container } = render(
-      <FileUpload onUploadError={mockOnUploadError} />
-    );
+    const { container } = render(<FileUpload onUploadError={mockOnUploadError} />);
 
     const input = getFileInput(container);
     const file = new File(['content'], 'test.txt', { type: 'text/plain' });
@@ -58,9 +56,7 @@ describe('FileUpload', () => {
   });
 
   it('rejects files larger than 10MB', async () => {
-    const { container } = render(
-      <FileUpload onUploadError={mockOnUploadError} />
-    );
+    const { container } = render(<FileUpload onUploadError={mockOnUploadError} />);
 
     const input = getFileInput(container);
     // Create a mock file with size > 10MB
@@ -70,20 +66,16 @@ describe('FileUpload', () => {
     fireEvent.change(input, { target: { files: [largeFile] } });
 
     await waitFor(() => {
-      expect(mockOnUploadError).toHaveBeenCalledWith(
-        expect.stringContaining('too large')
-      );
+      expect(mockOnUploadError).toHaveBeenCalledWith(expect.stringContaining('too large'));
     });
   });
 
   it('successfully uploads valid markdown file', async () => {
     documentService.uploadDocument.mockResolvedValueOnce({
-      document: { id: 1, name: 'test.md' }
+      document: { id: 1, name: 'test.md' },
     });
 
-    const { container } = render(
-      <FileUpload onUploadSuccess={mockOnUploadSuccess} />
-    );
+    const { container } = render(<FileUpload onUploadSuccess={mockOnUploadSuccess} />);
 
     const input = getFileInput(container);
     const file = new File(['# Test'], 'test.md', { type: 'text/markdown' });
@@ -96,13 +88,9 @@ describe('FileUpload', () => {
   });
 
   it('handles upload error gracefully', async () => {
-    documentService.uploadDocument.mockRejectedValueOnce(
-      new Error('Network error')
-    );
+    documentService.uploadDocument.mockRejectedValueOnce(new Error('Network error'));
 
-    const { container } = render(
-      <FileUpload onUploadError={mockOnUploadError} />
-    );
+    const { container } = render(<FileUpload onUploadError={mockOnUploadError} />);
 
     const input = getFileInput(container);
     const file = new File(['# Test'], 'test.md');
@@ -116,60 +104,46 @@ describe('FileUpload', () => {
 
   it('handles multiple file uploads', async () => {
     documentService.uploadDocument.mockResolvedValue({
-      document: { id: 1 }
+      document: { id: 1 },
     });
 
-    const { container } = render(
-      <FileUpload onUploadSuccess={mockOnUploadSuccess} />
-    );
+    const { container } = render(<FileUpload onUploadSuccess={mockOnUploadSuccess} />);
 
     const input = getFileInput(container);
-    const files = [
-      new File(['# Test 1'], 'test1.md'),
-      new File(['# Test 2'], 'test2.md')
-    ];
+    const files = [new File(['# Test 1'], 'test1.md'), new File(['# Test 2'], 'test2.md')];
 
     fireEvent.change(input, { target: { files } });
 
-    await waitFor(() => {
-      expect(mockOnUploadSuccess).toHaveBeenCalled();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(mockOnUploadSuccess).toHaveBeenCalled();
+      },
+      { timeout: 5000 }
+    );
   });
 
   it('filters out non-markdown files from multiple selection', async () => {
-    const { container } = render(
-      <FileUpload onUploadError={mockOnUploadError} />
-    );
+    const { container } = render(<FileUpload onUploadError={mockOnUploadError} />);
 
     const input = getFileInput(container);
-    const files = [
-      new File(['# Test'], 'test.md'),
-      new File(['content'], 'test.txt')
-    ];
+    const files = [new File(['# Test'], 'test.md'), new File(['content'], 'test.txt')];
 
     fireEvent.change(input, { target: { files } });
 
     await waitFor(() => {
-      expect(mockOnUploadError).toHaveBeenCalledWith(
-        expect.stringContaining('markdown files')
-      );
+      expect(mockOnUploadError).toHaveBeenCalledWith(expect.stringContaining('markdown files'));
     });
   });
 
   it('shows uploading state', async () => {
     documentService.uploadDocument.mockImplementationOnce(
-      () => new Promise(resolve => setTimeout(() => resolve({ document: { id: 1 } }), 200))
+      () => new Promise((resolve) => setTimeout(() => resolve({ document: { id: 1 } }), 200))
     );
 
-    const { container } = render(
-      <FileUpload onUploadSuccess={mockOnUploadSuccess} />
-    );
+    const { container } = render(<FileUpload onUploadSuccess={mockOnUploadSuccess} />);
 
     const input = getFileInput(container);
-    const files = [
-      new File(['# Test 1'], 'test1.md'),
-      new File(['# Test 2'], 'test2.md')
-    ];
+    const files = [new File(['# Test 1'], 'test1.md'), new File(['# Test 2'], 'test2.md')];
 
     fireEvent.change(input, { target: { files } });
 
@@ -178,16 +152,13 @@ describe('FileUpload', () => {
 
   it('disables input while uploading', async () => {
     documentService.uploadDocument.mockImplementationOnce(
-      () => new Promise(resolve => setTimeout(() => resolve({ document: { id: 1 } }), 200))
+      () => new Promise((resolve) => setTimeout(() => resolve({ document: { id: 1 } }), 200))
     );
 
     const { container } = render(<FileUpload />);
 
     const input = getFileInput(container);
-    const files = [
-      new File(['# Test 1'], 'test1.md'),
-      new File(['# Test 2'], 'test2.md')
-    ];
+    const files = [new File(['# Test 1'], 'test1.md'), new File(['# Test 2'], 'test2.md')];
 
     fireEvent.change(input, { target: { files } });
 
@@ -196,19 +167,17 @@ describe('FileUpload', () => {
 
   it('handles drag and drop', async () => {
     documentService.uploadDocument.mockResolvedValueOnce({
-      document: { id: 1 }
+      document: { id: 1 },
     });
 
-    const { container } = render(
-      <FileUpload onUploadSuccess={mockOnUploadSuccess} />
-    );
+    const { container } = render(<FileUpload onUploadSuccess={mockOnUploadSuccess} />);
 
     const dropzone = container.querySelector('.file-upload-dropzone');
     const file = new File(['# Test'], 'test.md');
     const dataTransfer = {
       files: [file],
       items: [{ kind: 'file', type: 'text/markdown', getAsFile: () => file }],
-      types: ['Files']
+      types: ['Files'],
     };
 
     fireEvent.dragOver(dropzone, { dataTransfer });
@@ -244,13 +213,11 @@ describe('FileUpload', () => {
     documentService.uploadDocument.mockRejectedValueOnce({
       response: {
         status: 400,
-        data: { error: 'Invalid file format' }
-      }
+        data: { error: 'Invalid file format' },
+      },
     });
 
-    const { container } = render(
-      <FileUpload onUploadError={mockOnUploadError} />
-    );
+    const { container } = render(<FileUpload onUploadError={mockOnUploadError} />);
 
     const input = getFileInput(container);
     const file = new File(['# Test'], 'test.md');
@@ -266,18 +233,13 @@ describe('FileUpload', () => {
 
   it('shows progress for multiple file uploads', async () => {
     documentService.uploadDocument.mockImplementation(
-      () => new Promise(resolve => setTimeout(() => resolve({ document: { id: 1 } }), 100))
+      () => new Promise((resolve) => setTimeout(() => resolve({ document: { id: 1 } }), 100))
     );
 
-    const { container } = render(
-      <FileUpload onUploadSuccess={mockOnUploadSuccess} />
-    );
+    const { container } = render(<FileUpload onUploadSuccess={mockOnUploadSuccess} />);
 
     const input = getFileInput(container);
-    const files = [
-      new File(['# Test 1'], 'test1.md'),
-      new File(['# Test 2'], 'test2.md')
-    ];
+    const files = [new File(['# Test 1'], 'test1.md'), new File(['# Test 2'], 'test2.md')];
 
     fireEvent.change(input, { target: { files } });
 
@@ -290,13 +252,11 @@ describe('FileUpload', () => {
     documentService.uploadDocument.mockRejectedValueOnce({
       response: {
         status: 201,
-        data: { document: { id: 1 } }
-      }
+        data: { document: { id: 1 } },
+      },
     });
 
-    const { container } = render(
-      <FileUpload onUploadSuccess={mockOnUploadSuccess} />
-    );
+    const { container } = render(<FileUpload onUploadSuccess={mockOnUploadSuccess} />);
 
     const input = getFileInput(container);
     const file = new File(['# Test'], 'test.md');
@@ -309,9 +269,7 @@ describe('FileUpload', () => {
   });
 
   it('does not handle null/empty files', async () => {
-    const { container } = render(
-      <FileUpload onUploadSuccess={mockOnUploadSuccess} />
-    );
+    const { container } = render(<FileUpload onUploadSuccess={mockOnUploadSuccess} />);
 
     const input = getFileInput(container);
 
@@ -330,16 +288,16 @@ describe('FileUpload', () => {
     );
 
     const input = getFileInput(container);
-    const files = [
-      new File(['# Test 1'], 'test1.md'),
-      new File(['# Test 2'], 'test2.md')
-    ];
+    const files = [new File(['# Test 1'], 'test1.md'), new File(['# Test 2'], 'test2.md')];
 
     fireEvent.change(input, { target: { files } });
 
     // Wait for both uploads to complete
-    await waitFor(() => {
-      expect(mockOnUploadSuccess).toHaveBeenCalled();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(mockOnUploadSuccess).toHaveBeenCalled();
+      },
+      { timeout: 5000 }
+    );
   });
 });

@@ -48,7 +48,13 @@ const DocumentList = () => {
   const { tags: availableTags } = useTags({ popular: true });
   const [selectedTags, setSelectedTags] = useState([]);
 
-  const fetchDocuments = async (page = 1, search = '', categoryId = null, sort = sortBy, tags = selectedTags) => {
+  const fetchDocuments = async (
+    page = 1,
+    search = '',
+    categoryId = null,
+    sort = sortBy,
+    tags = selectedTags
+  ) => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -88,9 +94,9 @@ const DocumentList = () => {
   };
 
   const handleTagToggle = (tagSlug) => {
-    setSelectedTags(prev => {
+    setSelectedTags((prev) => {
       if (prev.includes(tagSlug)) {
-        return prev.filter(t => t !== tagSlug);
+        return prev.filter((t) => t !== tagSlug);
       }
       return [...prev, tagSlug];
     });
@@ -122,23 +128,23 @@ const DocumentList = () => {
       // Multiple files uploaded
       setUploadStatus({
         type: 'success',
-        message: response.message
+        message: response.message,
       });
       setShowUpload(false);
-      
+
       // Refresh document list
       fetchDocuments(currentPage, searchQuery);
     } else {
       // Single file uploaded
       setUploadStatus({
         type: 'success',
-        message: `File uploaded successfully! Document "${response.document.title}" has been created.`
+        message: `File uploaded successfully! Document "${response.document.title}" has been created.`,
       });
       setShowUpload(false);
-      
+
       // Refresh document list
       fetchDocuments(currentPage, searchQuery);
-      
+
       // Navigate to the new document after a brief delay
       setTimeout(() => {
         navigate(`/documents/${response.document.id}`);
@@ -149,7 +155,7 @@ const DocumentList = () => {
   const handleUploadError = (error) => {
     setUploadStatus({
       type: 'error',
-      message: error
+      message: error,
     });
   };
 
@@ -177,7 +183,7 @@ const DocumentList = () => {
             onChange={(e) => handleCategoryChange(e.target.value)}
           >
             <option value="">All Categories</option>
-            {categories.map(category => (
+            {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.path}
               </option>
@@ -189,7 +195,7 @@ const DocumentList = () => {
             onChange={(e) => handleSortChange(e.target.value)}
             aria-label="Sort documents"
           >
-            {SORT_OPTIONS.map(option => (
+            {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -226,10 +232,7 @@ const DocumentList = () => {
             <Link to="/documents/new" className="btn btn-primary">
               + New Document
             </Link>
-            <button
-              className="btn btn-secondary"
-              onClick={() => setShowUpload(!showUpload)}
-            >
+            <button className="btn btn-secondary" onClick={() => setShowUpload(!showUpload)}>
               📁 Upload *.md
             </button>
             <Link to="/import" className="btn btn-secondary">
@@ -251,16 +254,14 @@ const DocumentList = () => {
             )}
           </div>
           <div className="tag-filter-chips">
-            {availableTags.slice(0, 15).map(tag => (
+            {availableTags.slice(0, 15).map((tag) => (
               <button
                 key={tag.slug || tag.name}
                 className={`tag-filter-chip${selectedTags.includes(tag.slug || tag.name) ? ' active' : ''}`}
                 onClick={() => handleTagToggle(tag.slug || tag.name)}
               >
                 {tag.name}
-                {tag.count !== undefined && (
-                  <span className="tag-filter-count">{tag.count}</span>
-                )}
+                {tag.count !== undefined && <span className="tag-filter-count">{tag.count}</span>}
               </button>
             ))}
           </div>
@@ -271,7 +272,9 @@ const DocumentList = () => {
       {uploadStatus && (
         <div className={`upload-status ${uploadStatus.type}`}>
           <span>{uploadStatus.message}</span>
-          <button className="close-btn" onClick={clearUploadStatus}>×</button>
+          <button className="close-btn" onClick={clearUploadStatus}>
+            ×
+          </button>
         </div>
       )}
 
@@ -280,12 +283,11 @@ const DocumentList = () => {
         <div className="upload-section">
           <div className="upload-header">
             <h3>Upload Markdown File</h3>
-            <button className="close-btn" onClick={() => setShowUpload(false)}>×</button>
+            <button className="close-btn" onClick={() => setShowUpload(false)}>
+              ×
+            </button>
           </div>
-          <FileUpload 
-            onUploadSuccess={handleUploadSuccess}
-            onUploadError={handleUploadError}
-          />
+          <FileUpload onUploadSuccess={handleUploadSuccess} onUploadError={handleUploadError} />
         </div>
       )}
 
@@ -312,25 +314,32 @@ const DocumentList = () => {
       ) : (
         <>
           <div className={`documents-${viewMode}`}>
-            {documents.map((doc) => (
+            {documents.map((doc) =>
               viewMode === VIEW_MODES.LIST ? (
                 <Link key={doc.id} to={`/documents/${doc.id}`} className="document-list-item">
                   <div className="document-list-item-icon">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                      <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" fill="none" stroke="white" strokeWidth="2"/>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <path
+                        d="M14 2v6h6M16 13H8M16 17H8M10 9H8"
+                        fill="none"
+                        stroke="white"
+                        strokeWidth="2"
+                      />
                     </svg>
                   </div>
                   <div className="document-list-item-content">
                     <span className="document-list-item-title">{doc.title}</span>
                     <span className="document-list-item-meta">
-                      {doc.author && <span className="document-list-item-author">{doc.author}</span>}
+                      {doc.author && (
+                        <span className="document-list-item-author">{doc.author}</span>
+                      )}
                       <span className="document-list-item-date">{formatDate(doc.updated_at)}</span>
                     </span>
                   </div>
                   {doc.tags && doc.tags.length > 0 && (
                     <div className="document-list-item-tags">
-                      {doc.tags.slice(0, 2).map(tag => (
+                      {doc.tags.slice(0, 2).map((tag) => (
                         <span key={tag.name || tag} className="document-list-item-tag">
                           {tag.name || tag}
                         </span>
@@ -350,7 +359,7 @@ const DocumentList = () => {
                   formatDate={formatDate}
                 />
               )
-            ))}
+            )}
           </div>
 
           <Pagination
@@ -360,7 +369,6 @@ const DocumentList = () => {
           />
         </>
       )}
-
     </div>
   );
 };

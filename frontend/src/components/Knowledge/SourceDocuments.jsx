@@ -15,7 +15,15 @@ const SourceDocuments = ({ sources = [], query = '' }) => {
   return (
     <aside className="kb-sources" aria-label="참조 문서">
       <div className="kb-sources-header">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
@@ -26,12 +34,19 @@ const SourceDocuments = ({ sources = [], query = '' }) => {
         {visibleSources.map((source, i) => (
           <li key={source.id || i} className="kb-source-item">
             <Link to={`/documents/${source.id}`} className="kb-source-link">
-              <span className="kb-source-index" aria-hidden="true">{i + 1}</span>
+              <span className="kb-source-index" aria-hidden="true">
+                {i + 1}
+              </span>
               <span className="kb-source-title">
-                {query ? highlightTextReact(source.title || '제목 없음', query) : (source.title || '제목 없음')}
+                {query
+                  ? highlightTextReact(source.title || '제목 없음', query)
+                  : source.title || '제목 없음'}
               </span>
               {source.score != null && (
-                <span className="kb-source-relevance" aria-label={`관련도 ${Math.round(source.score * 100)}%`}>
+                <span
+                  className="kb-source-relevance"
+                  aria-label={`관련도 ${Math.round(source.score * 100)}%`}
+                >
                   {Math.round(source.score * 100)}%
                 </span>
               )}

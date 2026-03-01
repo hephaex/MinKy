@@ -28,8 +28,8 @@ class CollaborationService {
       transports: ['websocket'],
       autoConnect: true,
       auth: {
-        token: token
-      }
+        token: token,
+      },
     });
 
     this.socket.on('connect', () => {
@@ -104,7 +104,7 @@ class CollaborationService {
 
     this.currentDocument = documentId;
     this.socket.emit('join_document', {
-      document_id: documentId
+      document_id: documentId,
     });
   }
 
@@ -114,7 +114,7 @@ class CollaborationService {
     }
 
     this.socket.emit('leave_document', {
-      document_id: documentId
+      document_id: documentId,
     });
 
     if (this.currentDocument === documentId) {
@@ -129,7 +129,7 @@ class CollaborationService {
 
     this.socket.emit('text_operation', {
       document_id: documentId,
-      operation: operation
+      operation: operation,
     });
   }
 
@@ -140,7 +140,7 @@ class CollaborationService {
 
     this.socket.emit('cursor_update', {
       document_id: documentId,
-      cursor_data: cursorData
+      cursor_data: cursorData,
     });
   }
 
@@ -150,7 +150,7 @@ class CollaborationService {
     }
 
     this.socket.emit('save_document', {
-      document_id: documentId
+      document_id: documentId,
     });
   }
 
@@ -160,7 +160,7 @@ class CollaborationService {
     }
 
     this.socket.emit('get_session_info', {
-      document_id: documentId
+      document_id: documentId,
     });
   }
 
@@ -173,7 +173,7 @@ class CollaborationService {
 
     this.isApplyingOperation = true;
     this.emit('remote_operation', data);
-    
+
     // Process queued operations
     setTimeout(() => {
       this.isApplyingOperation = false;
@@ -188,7 +188,7 @@ class CollaborationService {
     this.userCursors.set(data.user_id, {
       username: data.username,
       cursor_data: data.cursor_data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     this.emit('cursor_update', data);
@@ -199,7 +199,7 @@ class CollaborationService {
     return {
       type: 'insert',
       position: position,
-      text: text
+      text: text,
     };
   }
 
@@ -207,7 +207,7 @@ class CollaborationService {
     return {
       type: 'delete',
       position: position,
-      length: length
+      length: length,
     };
   }
 
@@ -216,7 +216,7 @@ class CollaborationService {
       type: 'replace',
       position: position,
       length: length,
-      text: text
+      text: text,
     };
   }
 
@@ -231,20 +231,15 @@ class CollaborationService {
 
       switch (type) {
         case 'insert':
-          return content.substring(0, position) + 
-                 operation.text + 
-                 content.substring(position);
+          return content.substring(0, position) + operation.text + content.substring(position);
 
         case 'delete':
           const endPos = Math.min(position + operation.length, content.length);
-          return content.substring(0, position) + 
-                 content.substring(endPos);
+          return content.substring(0, position) + content.substring(endPos);
 
         case 'replace':
           const replaceEndPos = Math.min(position + operation.length, content.length);
-          return content.substring(0, position) + 
-                 operation.text + 
-                 content.substring(replaceEndPos);
+          return content.substring(0, position) + operation.text + content.substring(replaceEndPos);
 
         default:
           logWarning('CollaborationService', `Unknown operation type: ${type}`);
@@ -262,7 +257,7 @@ class CollaborationService {
       if (op1.position <= op2.position) {
         return {
           ...op2,
-          position: op2.position + op1.text.length
+          position: op2.position + op1.text.length,
         };
       }
       return op2;
@@ -272,7 +267,7 @@ class CollaborationService {
       if (op1.position < op2.position) {
         return {
           ...op2,
-          position: Math.max(op1.position, op2.position - op1.length)
+          position: Math.max(op1.position, op2.position - op1.length),
         };
       }
       return op2;
@@ -282,7 +277,7 @@ class CollaborationService {
       if (op1.position <= op2.position) {
         return {
           ...op2,
-          position: op2.position + op1.text.length
+          position: op2.position + op1.text.length,
         };
       }
       return op2;
@@ -293,7 +288,7 @@ class CollaborationService {
         return {
           ...op2,
           position: Math.max(op1.position, op2.position - op1.length),
-          length: op2.length
+          length: op2.length,
         };
       } else if (op1.position >= op2.position + op2.length) {
         return op2;
@@ -328,7 +323,7 @@ class CollaborationService {
     if (!this.eventHandlers[event]) {
       return;
     }
-    this.eventHandlers[event].forEach(handler => {
+    this.eventHandlers[event].forEach((handler) => {
       try {
         handler(data);
       } catch (error) {
@@ -340,7 +335,7 @@ class CollaborationService {
   getUserCursors() {
     return Array.from(this.userCursors.entries()).map(([userId, data]) => ({
       userId,
-      ...data
+      ...data,
     }));
   }
 

@@ -62,7 +62,7 @@ function KnowledgeGraph({
     const container = containerRef.current;
     if (!container) return;
 
-    const observer = new ResizeObserver(entries => {
+    const observer = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
       setDimensions({
         width: width || DEFAULT_WIDTH,
@@ -110,7 +110,7 @@ function KnowledgeGraph({
   // Path edge and node IDs
   const pathEdgeIds = useMemo(() => {
     if (!pathResult?.found) return new Set();
-    return new Set((pathResult.edges || []).map(e => e.id));
+    return new Set((pathResult.edges || []).map((e) => e.id));
   }, [pathResult]);
 
   const pathNodeIds = useMemo(() => {
@@ -140,29 +140,25 @@ function KnowledgeGraph({
     const focus = hoveredNode || selectedNode;
     if (!focus) return new Set();
     return new Set(
-      edges
-        .filter(e => e.source === focus.id || e.target === focus.id)
-        .map(e => e.id)
+      edges.filter((e) => e.source === focus.id || e.target === focus.id).map((e) => e.id)
     );
   }, [hoveredNode, selectedNode, edges, pathResult, pathEdgeIds]);
 
   // Edges connected to the selected node (for detail panel)
   const selectedNodeEdges = useMemo(() => {
     if (!selectedNode) return [];
-    return edges.filter(
-      e => e.source === selectedNode.id || e.target === selectedNode.id
-    );
+    return edges.filter((e) => e.source === selectedNode.id || e.target === selectedNode.id);
   }, [selectedNode, edges]);
 
   const handleNodeSelect = useCallback(
-    node => {
-      setSelectedNode(prev => (prev?.id === node.id ? null : node));
+    (node) => {
+      setSelectedNode((prev) => (prev?.id === node.id ? null : node));
       if (onNodeClick) onNodeClick(node);
     },
     [onNodeClick]
   );
 
-  const handleNodeHover = useCallback(node => {
+  const handleNodeHover = useCallback((node) => {
     setHoveredNode(node);
   }, []);
 
@@ -170,31 +166,31 @@ function KnowledgeGraph({
     setSelectedNode(null);
   }, []);
 
-  const handleNavigateToNode = useCallback(node => {
+  const handleNavigateToNode = useCallback((node) => {
     setSelectedNode(node);
   }, []);
 
   // Zoom controls
-  const handleZoomIn = () => setZoom(z => Math.min(z + ZOOM_STEP, ZOOM_MAX));
-  const handleZoomOut = () => setZoom(z => Math.max(z - ZOOM_STEP, ZOOM_MIN));
+  const handleZoomIn = () => setZoom((z) => Math.min(z + ZOOM_STEP, ZOOM_MAX));
+  const handleZoomOut = () => setZoom((z) => Math.max(z - ZOOM_STEP, ZOOM_MIN));
   const handleZoomReset = () => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
   };
 
   // Pan via mouse drag
-  const handleMouseDown = useCallback(e => {
+  const handleMouseDown = useCallback((e) => {
     if (e.target.closest('.graph-node')) return;
     setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
   }, []);
 
   const handleMouseMove = useCallback(
-    e => {
+    (e) => {
       if (!isDragging) return;
       const dx = e.clientX - dragStart.x;
       const dy = e.clientY - dragStart.y;
-      setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+      setPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
       setDragStart({ x: e.clientX, y: e.clientY });
     },
     [isDragging, dragStart]
@@ -205,10 +201,10 @@ function KnowledgeGraph({
   }, []);
 
   // Zoom via scroll wheel
-  const handleWheel = useCallback(e => {
+  const handleWheel = useCallback((e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-    setZoom(z => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z + delta)));
+    setZoom((z) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z + delta)));
   }, []);
 
   if (loading) {
@@ -267,9 +263,7 @@ function KnowledgeGraph({
           onWheel={handleWheel}
         >
           {!layoutDone && (
-            <div className="knowledge-graph__layout-indicator">
-              Computing layout...
-            </div>
+            <div className="knowledge-graph__layout-indicator">Computing layout...</div>
           )}
 
           <svg
@@ -294,9 +288,9 @@ function KnowledgeGraph({
 
             <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
               {/* Edges (drawn below nodes) */}
-              {edges.map(edge => {
-                const src = positionedNodes.find(n => n.id === edge.source);
-                const tgt = positionedNodes.find(n => n.id === edge.target);
+              {edges.map((edge) => {
+                const src = positionedNodes.find((n) => n.id === edge.source);
+                const tgt = positionedNodes.find((n) => n.id === edge.target);
                 return (
                   <GraphEdge
                     key={edge.id}
@@ -309,7 +303,7 @@ function KnowledgeGraph({
               })}
 
               {/* Nodes */}
-              {positionedNodes.map(node => {
+              {positionedNodes.map((node) => {
                 const degree = degreeMap[node.id] || 0;
                 const isSelected = selectedNode?.id === node.id;
                 const isPathSource = pathSource === node.id;
@@ -325,8 +319,8 @@ function KnowledgeGraph({
                 } else if (hoveredNode) {
                   isHighlighted =
                     hoveredNode.id === node.id ||
-                    Array.from(highlightedEdgeIds).some(eid => {
-                      const edge = edges.find(e => e.id === eid);
+                    Array.from(highlightedEdgeIds).some((eid) => {
+                      const edge = edges.find((e) => e.id === eid);
                       return edge && (edge.source === node.id || edge.target === node.id);
                     });
                 }
@@ -393,9 +387,7 @@ function KnowledgeGraph({
         >
           Reset
         </button>
-        <span className="knowledge-graph__zoom-level">
-          {Math.round(zoom * 100)}%
-        </span>
+        <span className="knowledge-graph__zoom-level">{Math.round(zoom * 100)}%</span>
       </div>
 
       {/* Legend */}

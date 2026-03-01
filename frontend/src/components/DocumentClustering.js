@@ -15,7 +15,7 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
     method: 'auto',
     n_clusters: null,
     scope: 'user',
-    max_documents: 100
+    max_documents: 100,
   });
 
   useEffect(() => {
@@ -29,7 +29,7 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
     try {
       // SECURITY: Include auth headers for consistency
       const token = authService.getToken();
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       const response = await fetch('/api/clustering/status', { headers });
       const data = await response.json();
@@ -52,9 +52,12 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`/api/clustering/similar/${documentId}?threshold=0.1&max_results=10`, {
-        headers
-      });
+      const response = await fetch(
+        `/api/clustering/similar/${documentId}?threshold=0.1&max_results=10`,
+        {
+          headers,
+        }
+      );
 
       const data = await response.json();
 
@@ -77,7 +80,7 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
     try {
       const token = authService.getToken();
       const headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       };
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
@@ -86,7 +89,7 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
       const response = await fetch('/api/clustering/cluster', {
         method: 'POST',
         headers,
-        body: JSON.stringify(clusteringConfig)
+        body: JSON.stringify(clusteringConfig),
       });
 
       const data = await response.json();
@@ -110,7 +113,7 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
     try {
       const token = authService.getToken();
       const headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       };
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
@@ -122,8 +125,8 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
         body: JSON.stringify({
           threshold: 0.8,
           scope: 'user',
-          max_documents: 500
-        })
+          max_documents: 500,
+        }),
       });
 
       const data = await response.json();
@@ -152,7 +155,9 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
         <div className="clustering-status">
           <div className="status-item">
             <span className="label">Scikit-learn:</span>
-            <span className={`status ${clusteringStatus.sklearn_available ? 'available' : 'unavailable'}`}>
+            <span
+              className={`status ${clusteringStatus.sklearn_available ? 'available' : 'unavailable'}`}
+            >
               {clusteringStatus.sklearn_available ? 'Available' : 'Not Available'}
             </span>
           </div>
@@ -211,10 +216,7 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
         )}
 
         {activeTab === 'duplicates' && showFullInterface && (
-          <DuplicateDetection
-            duplicates={duplicates}
-            onDetect={detectDuplicates}
-          />
+          <DuplicateDetection duplicates={duplicates} onDetect={detectDuplicates} />
         )}
       </div>
     </div>

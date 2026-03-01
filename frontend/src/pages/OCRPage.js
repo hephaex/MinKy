@@ -22,14 +22,11 @@ const OCRPage = () => {
         <div className="header-content">
           <h1>OCR Text Extraction</h1>
           <p>
-            Extract text from images and PDF documents using optical character recognition.
-            Create new documents from extracted text or use the text for other purposes.
+            Extract text from images and PDF documents using optical character recognition. Create
+            new documents from extracted text or use the text for other purposes.
           </p>
         </div>
-        <button 
-          className="btn btn-secondary"
-          onClick={() => navigate(-1)}
-        >
+        <button className="btn btn-secondary" onClick={() => navigate(-1)}>
           ← Back
         </button>
       </div>
@@ -37,13 +34,11 @@ const OCRPage = () => {
       <div className="ocr-content">
         <div className="ocr-modes">
           <div className="mode-tabs">
-            <div className="tab active">
-              📄 Create Document from OCR
-            </div>
+            <div className="tab active">📄 Create Document from OCR</div>
           </div>
 
           <div className="tab-content">
-            <OCRUpload 
+            <OCRUpload
               mode="create"
               onDocumentCreated={handleDocumentCreated}
               onTextExtracted={handleTextExtracted}
@@ -76,8 +71,8 @@ const OCRPage = () => {
           <div className="info-section">
             <h3>Supported languages</h3>
             <p>
-              The OCR service supports multiple languages including English, Korean, Japanese, 
-              Chinese (Simplified/Traditional), French, German, Spanish, Italian, Portuguese, 
+              The OCR service supports multiple languages including English, Korean, Japanese,
+              Chinese (Simplified/Traditional), French, German, Spanish, Italian, Portuguese,
               Russian, Arabic, Hindi, Thai, and Vietnamese.
             </p>
           </div>

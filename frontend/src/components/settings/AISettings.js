@@ -7,7 +7,7 @@ const ConnectionStatusIcon = ({ status }) => {
       return (
         <span className="connection-status connected" title="Connected">
           <svg viewBox="0 0 16 16" fill="currentColor" className="status-icon">
-            <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.061L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+            <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.061L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z" />
           </svg>
           Connected
         </span>
@@ -16,7 +16,7 @@ const ConnectionStatusIcon = ({ status }) => {
       return (
         <span className="connection-status disconnected" title="Connection Failed">
           <svg viewBox="0 0 16 16" fill="currentColor" className="status-icon">
-            <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/>
+            <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z" />
           </svg>
           Disconnected
         </span>
@@ -25,7 +25,7 @@ const ConnectionStatusIcon = ({ status }) => {
       return (
         <span className="connection-status testing" title="Testing Connection">
           <svg viewBox="0 0 16 16" fill="currentColor" className="status-icon spinning">
-            <path d="M8 0a8 8 0 0 1 7.74 6h-1.26A7 7 0 1 0 8 15v1a8 8 0 0 1 0-16z"/>
+            <path d="M8 0a8 8 0 0 1 7.74 6h-1.26A7 7 0 1 0 8 15v1a8 8 0 0 1 0-16z" />
           </svg>
           Testing...
         </span>
@@ -34,8 +34,8 @@ const ConnectionStatusIcon = ({ status }) => {
       return (
         <span className="connection-status unknown" title="Connection Status Unknown">
           <svg viewBox="0 0 16 16" fill="currentColor" className="status-icon">
-            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-            <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"/>
+            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z" />
+            <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z" />
           </svg>
           Unknown
         </span>
@@ -86,7 +86,10 @@ const AISettings = () => {
       if (response.data.success) {
         setAiConfig(response.data.config);
       } else {
-        setAiStatus({ type: 'warning', message: 'Could not load AI configuration. Using defaults.' });
+        setAiStatus({
+          type: 'warning',
+          message: 'Could not load AI configuration. Using defaults.',
+        });
       }
     } catch (error) {
       setAiStatus({ type: 'warning', message: 'Could not load AI configuration. Using defaults.' });
@@ -126,10 +129,17 @@ const AISettings = () => {
         await loadAiConfig();
         await performHealthCheck();
       } else {
-        setAiStatus({ type: 'error', message: response.data.error || 'Failed to save AI configuration' });
+        setAiStatus({
+          type: 'error',
+          message: response.data.error || 'Failed to save AI configuration',
+        });
       }
     } catch (error) {
-      setAiStatus({ type: 'error', message: 'Failed to save AI configuration: ' + (error.response?.data?.error || error.message) });
+      setAiStatus({
+        type: 'error',
+        message:
+          'Failed to save AI configuration: ' + (error.response?.data?.error || error.message),
+      });
     } finally {
       setSaving(false);
     }
@@ -141,14 +151,25 @@ const AISettings = () => {
       const response = await api.post(`/ai/test/${service}`, aiConfig);
       if (response.data.success) {
         setConnectionStatus((prev) => ({ ...prev, [service]: true }));
-        setAiStatus({ type: 'success', message: response.data.message || `${service.toUpperCase()} connection test successful` });
+        setAiStatus({
+          type: 'success',
+          message: response.data.message || `${service.toUpperCase()} connection test successful`,
+        });
       } else {
         setConnectionStatus((prev) => ({ ...prev, [service]: false }));
-        setAiStatus({ type: 'error', message: response.data.error || `${service.toUpperCase()} connection test failed` });
+        setAiStatus({
+          type: 'error',
+          message: response.data.error || `${service.toUpperCase()} connection test failed`,
+        });
       }
     } catch (error) {
       setConnectionStatus((prev) => ({ ...prev, [service]: false }));
-      setAiStatus({ type: 'error', message: `${service.toUpperCase()} connection test failed: ` + (error.response?.data?.error || error.message) });
+      setAiStatus({
+        type: 'error',
+        message:
+          `${service.toUpperCase()} connection test failed: ` +
+          (error.response?.data?.error || error.message),
+      });
     }
   };
 
@@ -162,7 +183,9 @@ const AISettings = () => {
       {aiStatus && (
         <div className={`status-message ${aiStatus.type}`}>
           <span>{aiStatus.message}</span>
-          <button className="close-btn" onClick={clearStatus}>x</button>
+          <button className="close-btn" onClick={clearStatus}>
+            x
+          </button>
         </div>
       )}
 
@@ -174,9 +197,14 @@ const AISettings = () => {
         </div>
         <div className="config-item">
           <label>OCR Provider:</label>
-          <select value={aiConfig.ocrService} onChange={(e) => handleConfigChange('ocrService', e.target.value)}>
+          <select
+            value={aiConfig.ocrService}
+            onChange={(e) => handleConfigChange('ocrService', e.target.value)}
+          >
             {OCR_PROVIDERS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
             ))}
           </select>
         </div>
@@ -191,7 +219,11 @@ const AISettings = () => {
             />
           </div>
         )}
-        <button className="btn btn-secondary" onClick={() => testConnection('ocr')} disabled={connectionStatus.ocr === 'testing'}>
+        <button
+          className="btn btn-secondary"
+          onClick={() => testConnection('ocr')}
+          disabled={connectionStatus.ocr === 'testing'}
+        >
           {connectionStatus.ocr === 'testing' ? 'Testing...' : 'Test OCR Connection'}
         </button>
       </div>
@@ -204,9 +236,14 @@ const AISettings = () => {
         </div>
         <div className="config-item">
           <label>LLM Provider:</label>
-          <select value={aiConfig.llmProvider} onChange={(e) => handleConfigChange('llmProvider', e.target.value)}>
+          <select
+            value={aiConfig.llmProvider}
+            onChange={(e) => handleConfigChange('llmProvider', e.target.value)}
+          >
             {LLM_PROVIDERS.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
             ))}
           </select>
         </div>
@@ -216,18 +253,31 @@ const AISettings = () => {
             type={aiConfig.llmProvider === 'local' ? 'text' : 'password'}
             value={aiConfig.llmApiKey}
             onChange={(e) => handleConfigChange('llmApiKey', e.target.value)}
-            placeholder={aiConfig.llmProvider === 'local' ? 'http://localhost:8080' : 'Enter API key for LLM service'}
+            placeholder={
+              aiConfig.llmProvider === 'local'
+                ? 'http://localhost:8080'
+                : 'Enter API key for LLM service'
+            }
           />
         </div>
         <div className="config-item">
           <label>Model:</label>
-          <select value={aiConfig.llmModel} onChange={(e) => handleConfigChange('llmModel', e.target.value)}>
+          <select
+            value={aiConfig.llmModel}
+            onChange={(e) => handleConfigChange('llmModel', e.target.value)}
+          >
             {(LLM_MODELS[aiConfig.llmProvider] || []).map((model) => (
-              <option key={model} value={model}>{model}</option>
+              <option key={model} value={model}>
+                {model}
+              </option>
             ))}
           </select>
         </div>
-        <button className="btn btn-secondary" onClick={() => testConnection('llm')} disabled={connectionStatus.llm === 'testing'}>
+        <button
+          className="btn btn-secondary"
+          onClick={() => testConnection('llm')}
+          disabled={connectionStatus.llm === 'testing'}
+        >
           {connectionStatus.llm === 'testing' ? 'Testing...' : 'Test LLM Connection'}
         </button>
       </div>
@@ -237,13 +287,21 @@ const AISettings = () => {
         <h4>AI Features</h4>
         <div className="config-item checkbox-item">
           <label>
-            <input type="checkbox" checked={aiConfig.enableAiTags} onChange={(e) => handleConfigChange('enableAiTags', e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={aiConfig.enableAiTags}
+              onChange={(e) => handleConfigChange('enableAiTags', e.target.checked)}
+            />
             Enable AI-powered automatic tagging
           </label>
         </div>
         <div className="config-item checkbox-item">
           <label>
-            <input type="checkbox" checked={aiConfig.enableAiSummary} onChange={(e) => handleConfigChange('enableAiSummary', e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={aiConfig.enableAiSummary}
+              onChange={(e) => handleConfigChange('enableAiSummary', e.target.checked)}
+            />
             Enable AI-powered document summaries
           </label>
         </div>

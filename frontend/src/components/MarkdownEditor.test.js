@@ -20,9 +20,7 @@ jest.mock('./AISuggestions', () => {
   return function MockAISuggestions({ isVisible, onSuggestionSelect }) {
     return isVisible ? (
       <div data-testid="ai-suggestions">
-        <button onClick={() => onSuggestionSelect('test suggestion')}>
-          Use Suggestion
-        </button>
+        <button onClick={() => onSuggestionSelect('test suggestion')}>Use Suggestion</button>
       </div>
     ) : null;
   };
@@ -38,46 +36,25 @@ describe('MarkdownEditor', () => {
   });
 
   it('renders markdown editor', () => {
-    render(
-      <MarkdownEditor
-        value=""
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="" onChange={mockOnChange} />);
     expect(screen.getByTestId('md-editor')).toBeInTheDocument();
   });
 
   it('displays placeholder text', () => {
     const customPlaceholder = 'Write your notes here';
-    render(
-      <MarkdownEditor
-        value=""
-        onChange={mockOnChange}
-        placeholder={customPlaceholder}
-      />
-    );
+    render(<MarkdownEditor value="" onChange={mockOnChange} placeholder={customPlaceholder} />);
     expect(screen.getByPlaceholderText(customPlaceholder)).toBeInTheDocument();
   });
 
   it('renders mode tabs', () => {
-    render(
-      <MarkdownEditor
-        value=""
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="" onChange={mockOnChange} />);
     expect(screen.getByText('Edit')).toBeInTheDocument();
     expect(screen.getByText('Preview')).toBeInTheDocument();
     expect(screen.getByText('Split')).toBeInTheDocument();
   });
 
   it('switches to preview mode', () => {
-    render(
-      <MarkdownEditor
-        value="# Test"
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="# Test" onChange={mockOnChange} />);
     const previewButton = screen.getByText('Preview');
     fireEvent.click(previewButton);
 
@@ -86,12 +63,7 @@ describe('MarkdownEditor', () => {
   });
 
   it('switches to split mode', () => {
-    render(
-      <MarkdownEditor
-        value="# Test"
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="# Test" onChange={mockOnChange} />);
     const splitButton = screen.getByText('Split');
     fireEvent.click(splitButton);
 
@@ -99,12 +71,7 @@ describe('MarkdownEditor', () => {
   });
 
   it('switches back to edit mode', () => {
-    render(
-      <MarkdownEditor
-        value="# Test"
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="# Test" onChange={mockOnChange} />);
     const previewButton = screen.getByText('Preview');
     fireEvent.click(previewButton);
 
@@ -116,12 +83,7 @@ describe('MarkdownEditor', () => {
   });
 
   it('calls onChange when editor content changes', () => {
-    render(
-      <MarkdownEditor
-        value=""
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="" onChange={mockOnChange} />);
     const editor = screen.getByTestId('md-editor');
     fireEvent.change(editor, { target: { value: 'New content' } });
 
@@ -130,12 +92,7 @@ describe('MarkdownEditor', () => {
 
   it('displays value in editor', () => {
     const content = '# Hello World\n\nThis is a test';
-    render(
-      <MarkdownEditor
-        value={content}
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value={content} onChange={mockOnChange} />);
     expect(screen.getByTestId('md-editor')).toHaveValue(content);
   });
 
@@ -161,33 +118,18 @@ describe('MarkdownEditor', () => {
   });
 
   it('does not show AI suggestions for short content', () => {
-    render(
-      <MarkdownEditor
-        value="Short"
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="Short" onChange={mockOnChange} />);
     expect(screen.queryByTestId('ai-suggestions')).not.toBeInTheDocument();
   });
 
   it('does not show AI suggestions for empty content', () => {
-    render(
-      <MarkdownEditor
-        value=""
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="" onChange={mockOnChange} />);
     expect(screen.queryByTestId('ai-suggestions')).not.toBeInTheDocument();
   });
 
   it('inserts suggestion at cursor position', () => {
     const initialContent = 'Hello world';
-    render(
-      <MarkdownEditor
-        value={initialContent}
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value={initialContent} onChange={mockOnChange} />);
 
     const editor = screen.getByTestId('md-editor');
     // Simulate cursor in middle of text
@@ -202,12 +144,7 @@ describe('MarkdownEditor', () => {
 
   it('passes cursor position to AI suggestions', () => {
     const content = 'This is a test with enough content for suggestions';
-    render(
-      <MarkdownEditor
-        value={content}
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value={content} onChange={mockOnChange} />);
     expect(screen.getByTestId('ai-suggestions')).toBeInTheDocument();
   });
 
@@ -234,53 +171,28 @@ describe('MarkdownEditor', () => {
   });
 
   it('renders editor container with correct class', () => {
-    const { container } = render(
-      <MarkdownEditor
-        value=""
-        onChange={mockOnChange}
-      />
-    );
+    const { container } = render(<MarkdownEditor value="" onChange={mockOnChange} />);
     expect(container.querySelector('.markdown-editor-container')).toBeInTheDocument();
   });
 
   it('renders editor toolbar', () => {
-    const { container } = render(
-      <MarkdownEditor
-        value=""
-        onChange={mockOnChange}
-      />
-    );
+    const { container } = render(<MarkdownEditor value="" onChange={mockOnChange} />);
     expect(container.querySelector('.editor-toolbar')).toBeInTheDocument();
   });
 
   it('renders editor content area', () => {
-    const { container } = render(
-      <MarkdownEditor
-        value=""
-        onChange={mockOnChange}
-      />
-    );
+    const { container } = render(<MarkdownEditor value="" onChange={mockOnChange} />);
     expect(container.querySelector('.editor-content')).toBeInTheDocument();
   });
 
   it('has correct default placeholder', () => {
-    render(
-      <MarkdownEditor
-        value=""
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="" onChange={mockOnChange} />);
     expect(screen.getByPlaceholderText(/Start writing your markdown/)).toBeInTheDocument();
   });
 
   it('tracks cursor position on selection', () => {
     const content = 'Test content here';
-    render(
-      <MarkdownEditor
-        value={content}
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value={content} onChange={mockOnChange} />);
     const editor = screen.getByTestId('md-editor');
 
     fireEvent.select(editor, { target: { selectionStart: 5 } });
@@ -290,22 +202,12 @@ describe('MarkdownEditor', () => {
   });
 
   it('maintains edit mode as default', () => {
-    render(
-      <MarkdownEditor
-        value="# Test"
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="# Test" onChange={mockOnChange} />);
     expect(screen.getByText('Edit')).toHaveClass('active');
   });
 
   it('passes correct props to MDEditor component', () => {
-    render(
-      <MarkdownEditor
-        value="Test"
-        onChange={mockOnChange}
-      />
-    );
+    render(<MarkdownEditor value="Test" onChange={mockOnChange} />);
     const editor = screen.getByTestId('md-editor');
     expect(editor).toHaveValue('Test');
   });

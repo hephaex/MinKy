@@ -15,21 +15,24 @@ const useAsync = (asyncFunction, immediate = false) => {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
 
-  const execute = useCallback(async (...args) => {
-    setLoading(true);
-    setError(null);
+  const execute = useCallback(
+    async (...args) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const result = await asyncFunction(...args);
-      setData(result);
-      return result;
-    } catch (err) {
-      setError(err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [asyncFunction]);
+      try {
+        const result = await asyncFunction(...args);
+        setData(result);
+        return result;
+      } catch (err) {
+        setError(err);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [asyncFunction]
+  );
 
   const reset = useCallback(() => {
     setLoading(false);
@@ -44,7 +47,7 @@ const useAsync = (asyncFunction, immediate = false) => {
     data,
     reset,
     setData,
-    setError
+    setError,
   };
 };
 

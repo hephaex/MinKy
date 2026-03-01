@@ -43,11 +43,14 @@ const TreeSidebar = ({ isVisible, onToggle }) => {
     setSearchQuery('');
   }, []);
 
-  const handleSelect = useCallback((node) => {
-    if (node.documentId) {
-      navigate(`/documents/${node.documentId}`);
-    }
-  }, [navigate]);
+  const handleSelect = useCallback(
+    (node) => {
+      if (node.documentId) {
+        navigate(`/documents/${node.documentId}`);
+      }
+    },
+    [navigate]
+  );
 
   const handleNewDocument = useCallback(() => {
     navigate('/documents/new');
@@ -65,16 +68,15 @@ const TreeSidebar = ({ isVisible, onToggle }) => {
         return node.label.toLowerCase().includes(query) ? { ...node } : null;
       }
 
-      const filteredChildren = (node.children || [])
-        .map(filterNode)
-        .filter(Boolean);
+      const filteredChildren = (node.children || []).map(filterNode).filter(Boolean);
 
       if (filteredChildren.length > 0 || node.label.toLowerCase().includes(query)) {
         return {
           ...node,
           children: filteredChildren,
-          count: filteredChildren.filter((c) => c.type === 'document').length +
-                 filteredChildren.reduce((sum, c) => sum + (c.count || 0), 0)
+          count:
+            filteredChildren.filter((c) => c.type === 'document').length +
+            filteredChildren.reduce((sum, c) => sum + (c.count || 0), 0),
         };
       }
 
@@ -89,7 +91,7 @@ const TreeSidebar = ({ isVisible, onToggle }) => {
       <div className="sidebar-header">
         <button className="sidebar-toggle" onClick={onToggle}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+            <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
           </svg>
         </button>
         <h2>Documents</h2>
@@ -108,7 +110,9 @@ const TreeSidebar = ({ isVisible, onToggle }) => {
         <div className="sidebar-section">
           <div className="section-item">
             <div className="item-icon">📥</div>
-            <Link to="/import" className="item-link">Import</Link>
+            <Link to="/import" className="item-link">
+              Import
+            </Link>
           </div>
         </div>
 
@@ -145,10 +149,7 @@ const TreeSidebar = ({ isVisible, onToggle }) => {
           ) : error ? (
             <div className="empty-state">{error}</div>
           ) : (
-            <TreeView
-              nodes={filteredTree}
-              onSelect={handleSelect}
-            />
+            <TreeView nodes={filteredTree} onSelect={handleSelect} />
           )}
         </div>
       </div>

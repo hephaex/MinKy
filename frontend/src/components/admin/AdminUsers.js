@@ -56,28 +56,19 @@ const AdminUsers = ({ users, currentPage, onPageChange, onUserUpdate }) => {
             </tr>
           </thead>
           <tbody>
-            {users.map(user => (
-              <UserRow
-                key={user.id}
-                user={user}
-                onUpdate={onUserUpdate}
-              />
+            {users.map((user) => (
+              <UserRow key={user.id} user={user} onUpdate={onUserUpdate} />
             ))}
           </tbody>
         </table>
       </div>
 
       <div className="pagination">
-        <button
-          disabled={currentPage === 1}
-          onClick={() => onPageChange(currentPage - 1)}
-        >
+        <button disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)}>
           Previous
         </button>
         <span>Page {currentPage}</span>
-        <button onClick={() => onPageChange(currentPage + 1)}>
-          Next
-        </button>
+        <button onClick={() => onPageChange(currentPage + 1)}>Next</button>
       </div>
     </div>
   );

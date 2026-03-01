@@ -1,10 +1,15 @@
 import React from 'react';
 
-const DocumentClusters = ({ clusteringResults, clusteringConfig, setClusteringConfig, onCluster }) => {
+const DocumentClusters = ({
+  clusteringResults,
+  clusteringConfig,
+  setClusteringConfig,
+  onCluster,
+}) => {
   const handleConfigChange = (key, value) => {
-    setClusteringConfig(prev => ({
+    setClusteringConfig((prev) => ({
       ...prev,
-      [key]: value
+      [key]: value,
     }));
   };
 
@@ -35,7 +40,9 @@ const DocumentClusters = ({ clusteringResults, clusteringConfig, setClusteringCo
             <input
               type="number"
               value={clusteringConfig.n_clusters || ''}
-              onChange={(e) => handleConfigChange('n_clusters', e.target.value ? parseInt(e.target.value) : null)}
+              onChange={(e) =>
+                handleConfigChange('n_clusters', e.target.value ? parseInt(e.target.value) : null)
+              }
               placeholder="Auto-detect"
               min="2"
               max="20"
@@ -90,14 +97,15 @@ const DocumentClusters = ({ clusteringResults, clusteringConfig, setClusteringCo
                 <span className="overview-label">Documents Processed:</span>
                 <span className="overview-value">{clusteringResults.documents_processed}</span>
               </div>
-              {clusteringResults.quality_metrics && clusteringResults.quality_metrics.silhouette_score && (
-                <div className="overview-item">
-                  <span className="overview-label">Quality Score:</span>
-                  <span className="overview-value">
-                    {clusteringResults.quality_metrics.silhouette_score.toFixed(3)}
-                  </span>
-                </div>
-              )}
+              {clusteringResults.quality_metrics &&
+                clusteringResults.quality_metrics.silhouette_score && (
+                  <div className="overview-item">
+                    <span className="overview-label">Quality Score:</span>
+                    <span className="overview-value">
+                      {clusteringResults.quality_metrics.silhouette_score.toFixed(3)}
+                    </span>
+                  </div>
+                )}
             </div>
           </div>
 
@@ -109,29 +117,38 @@ const DocumentClusters = ({ clusteringResults, clusteringConfig, setClusteringCo
                   <span className="cluster-size">{docs.length} documents</span>
                 </div>
 
-                {clusteringResults.cluster_insights && clusteringResults.cluster_insights[clusterId] && (
-                  <div className="cluster-insights">
-                    <div className="cluster-topics">
-                      <span className="topics-label">Key terms:</span>
-                      <div className="topics-list">
-                        {clusteringResults.cluster_insights[clusterId].top_terms.map((term, i) => (
-                          <span key={i} className="topic-tag">{term}</span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {clusteringResults.cluster_insights[clusterId].common_tags.length > 0 && (
-                      <div className="cluster-tags">
-                        <span className="tags-label">Common tags:</span>
-                        <div className="tags-list">
-                          {clusteringResults.cluster_insights[clusterId].common_tags.map((tag, i) => (
-                            <span key={i} className="tag-badge">{tag}</span>
-                          ))}
+                {clusteringResults.cluster_insights &&
+                  clusteringResults.cluster_insights[clusterId] && (
+                    <div className="cluster-insights">
+                      <div className="cluster-topics">
+                        <span className="topics-label">Key terms:</span>
+                        <div className="topics-list">
+                          {clusteringResults.cluster_insights[clusterId].top_terms.map(
+                            (term, i) => (
+                              <span key={i} className="topic-tag">
+                                {term}
+                              </span>
+                            )
+                          )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
+
+                      {clusteringResults.cluster_insights[clusterId].common_tags.length > 0 && (
+                        <div className="cluster-tags">
+                          <span className="tags-label">Common tags:</span>
+                          <div className="tags-list">
+                            {clusteringResults.cluster_insights[clusterId].common_tags.map(
+                              (tag, i) => (
+                                <span key={i} className="tag-badge">
+                                  {tag}
+                                </span>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                 <div className="cluster-documents">
                   {docs.slice(0, 5).map((doc) => (
@@ -143,9 +160,7 @@ const DocumentClusters = ({ clusteringResults, clusteringConfig, setClusteringCo
                     </div>
                   ))}
                   {docs.length > 5 && (
-                    <div className="more-docs">
-                      +{docs.length - 5} more documents
-                    </div>
+                    <div className="more-docs">+{docs.length - 5} more documents</div>
                   )}
                 </div>
               </div>

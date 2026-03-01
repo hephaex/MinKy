@@ -5,7 +5,7 @@ import {
   AdminUsers,
   AdminDocuments,
   AdminMaintenance,
-  AdminTabs
+  AdminTabs,
 } from '../components/admin';
 import '../styles/AdminPanel.css';
 
@@ -114,9 +114,7 @@ const AdminPanel = () => {
       )}
 
       <div className="admin-content">
-        {activeTab === 'overview' && (
-          <AdminOverview systemStats={systemStats} />
-        )}
+        {activeTab === 'overview' && <AdminOverview systemStats={systemStats} />}
 
         {activeTab === 'users' && (
           <AdminUsers
@@ -135,9 +133,7 @@ const AdminPanel = () => {
           />
         )}
 
-        {activeTab === 'maintenance' && (
-          <AdminMaintenance onCleanup={performCleanup} />
-        )}
+        {activeTab === 'maintenance' && <AdminMaintenance onCleanup={performCleanup} />}
       </div>
     </div>
   );

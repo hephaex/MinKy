@@ -26,13 +26,13 @@ const TagList = () => {
     try {
       setLoading(true);
       let data;
-      
+
       if (viewMode === 'popular') {
         data = await tagService.getTags(page, 20, search, true);
       } else {
         data = await tagService.getTags(page, 20, search, false);
       }
-      
+
       setTags(data.tags || []);
       setPagination(data.pagination || {});
       setCurrentPage(page);
@@ -71,7 +71,7 @@ const TagList = () => {
   const getTagsByType = () => {
     const tagList = tags || [];
     if (viewMode === 'auto-generated') {
-      return tagList.filter(tag => !tag.description);
+      return tagList.filter((tag) => !tag.description);
     }
     return tagList;
   };
@@ -97,7 +97,11 @@ const TagList = () => {
       <div className="tag-list-header">
         <h2>Tags</h2>
         <div className="header-actions">
-          <SearchBar onSearch={handleSearch} initialValue={searchQuery} placeholder="Search tags..." />
+          <SearchBar
+            onSearch={handleSearch}
+            initialValue={searchQuery}
+            placeholder="Search tags..."
+          />
         </div>
       </div>
 
@@ -143,19 +147,19 @@ const TagList = () => {
 
       {/* View Mode Tabs */}
       <div className="view-mode-tabs">
-        <button 
+        <button
           className={`tab ${viewMode === 'all' ? 'active' : ''}`}
           onClick={() => handleViewModeChange('all')}
         >
           All Tags ({statistics?.total_tags || 0})
         </button>
-        <button 
+        <button
           className={`tab ${viewMode === 'popular' ? 'active' : ''}`}
           onClick={() => handleViewModeChange('popular')}
         >
           Popular
         </button>
-        <button 
+        <button
           className={`tab ${viewMode === 'auto-generated' ? 'active' : ''}`}
           onClick={() => handleViewModeChange('auto-generated')}
         >
@@ -188,13 +192,10 @@ const TagList = () => {
               <div key={tag.slug} className="tag-card">
                 <Link to={`/tags/${tag.slug}`} className="tag-link">
                   <div className="tag-header">
-                    <div 
-                      className="tag-color" 
-                      style={{ backgroundColor: tag.color }}
-                    ></div>
+                    <div className="tag-color" style={{ backgroundColor: tag.color }}></div>
                     <h3 className="tag-name">{tag.name}</h3>
                   </div>
-                  
+
                   <div className="tag-meta">
                     <span className="tag-usage">
                       {formatUsageCount(tag.usage_count || tag.document_count || 0)}
@@ -203,11 +204,9 @@ const TagList = () => {
                       <span className="tag-badge auto-generated">Auto-generated</span>
                     )}
                   </div>
-                  
-                  {tag.description && (
-                    <p className="tag-description">{tag.description}</p>
-                  )}
-                  
+
+                  {tag.description && <p className="tag-description">{tag.description}</p>}
+
                   <div className="tag-dates">
                     <small>Created: {new Date(tag.created_at).toLocaleDateString()}</small>
                   </div>

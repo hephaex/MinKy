@@ -5,7 +5,7 @@ const OCRDocumentForm = ({ formData, onChange }) => {
     const { name, value, type, checked } = e.target;
     onChange({
       ...formData,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : value,
     });
   };
 

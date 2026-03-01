@@ -74,7 +74,8 @@ const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, focusedId, o
         )}
 
         <span className="tree-node-label" title={node.label}>
-          {isDocument ? '📄 ' : ''}{node.label}
+          {isDocument ? '📄 ' : ''}
+          {node.label}
         </span>
 
         {!isDocument && node.count !== undefined && (
@@ -133,31 +134,30 @@ const TreeView = ({ nodes, onSelect, className }) => {
     });
   }, []);
 
-  const handleTreeKeyDown = useCallback((e) => {
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      const ids = getAllVisibleIds();
-      if (ids.length === 0) return;
+  const handleTreeKeyDown = useCallback(
+    (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const ids = getAllVisibleIds();
+        if (ids.length === 0) return;
 
-      const currentIndex = focusedId ? ids.indexOf(focusedId) : -1;
-      let nextIndex;
+        const currentIndex = focusedId ? ids.indexOf(focusedId) : -1;
+        let nextIndex;
 
-      if (e.key === 'ArrowDown') {
-        nextIndex = currentIndex < ids.length - 1 ? currentIndex + 1 : 0;
-      } else {
-        nextIndex = currentIndex > 0 ? currentIndex - 1 : ids.length - 1;
+        if (e.key === 'ArrowDown') {
+          nextIndex = currentIndex < ids.length - 1 ? currentIndex + 1 : 0;
+        } else {
+          nextIndex = currentIndex > 0 ? currentIndex - 1 : ids.length - 1;
+        }
+
+        setFocusedId(ids[nextIndex]);
       }
-
-      setFocusedId(ids[nextIndex]);
-    }
-  }, [focusedId, getAllVisibleIds]);
+    },
+    [focusedId, getAllVisibleIds]
+  );
 
   if (!nodes || nodes.length === 0) {
-    return (
-      <div className="tree-empty">
-        문서가 없습니다
-      </div>
-    );
+    return <div className="tree-empty">문서가 없습니다</div>;
   }
 
   return (

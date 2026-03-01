@@ -42,10 +42,11 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
 
       logError('FileUpload', error, {
         status: error.response?.status,
-        data: error.response?.data
+        data: error.response?.data,
       });
 
-      const errorMessage = error.response?.data?.error || error.message || 'Upload failed. Please try again.';
+      const errorMessage =
+        error.response?.data?.error || error.message || 'Upload failed. Please try again.';
       onUploadError?.(`${file.name}: ${errorMessage}`);
       return false;
     }
@@ -55,8 +56,8 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
     if (!files || files.length === 0) return;
 
     const fileArray = Array.from(files);
-    const mdFiles = fileArray.filter(file => file.name.toLowerCase().endsWith('.md'));
-    
+    const mdFiles = fileArray.filter((file) => file.name.toLowerCase().endsWith('.md'));
+
     if (mdFiles.length === 0) {
       onUploadError?.('No markdown files found');
       return;
@@ -74,17 +75,17 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
 
     for (let i = 0; i < mdFiles.length; i++) {
       setUploadProgress({ current: i + 1, total: mdFiles.length });
-      
+
       const success = await handleFileUpload(mdFiles[i]);
       if (success) {
         successCount++;
       } else {
         failCount++;
       }
-      
+
       // Small delay between uploads to prevent overwhelming the server
       if (i < mdFiles.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
 
@@ -92,9 +93,9 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
     setUploadProgress({ current: 0, total: 0 });
 
     if (successCount > 0) {
-      onUploadSuccess?.({ 
+      onUploadSuccess?.({
         message: `Successfully uploaded ${successCount} files${failCount > 0 ? `, ${failCount} failed` : ''}`,
-        count: successCount
+        count: successCount,
       });
     }
   };
@@ -123,7 +124,7 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
-    
+
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       if (files.length === 1) {
@@ -156,10 +157,9 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
             <div className="upload-progress">
               <div className="spinner"></div>
               <span>
-                {uploadProgress.total > 1 
+                {uploadProgress.total > 1
                   ? `Uploading ${uploadProgress.current}/${uploadProgress.total} files...`
-                  : 'Uploading...'
-                }
+                  : 'Uploading...'}
               </span>
             </div>
           ) : (
@@ -181,12 +181,12 @@ const FileUpload = ({ onUploadSuccess, onUploadError }) => {
 
 FileUpload.propTypes = {
   onUploadSuccess: PropTypes.func,
-  onUploadError: PropTypes.func
+  onUploadError: PropTypes.func,
 };
 
 FileUpload.defaultProps = {
   onUploadSuccess: null,
-  onUploadError: null
+  onUploadError: null,
 };
 
 export default FileUpload;

@@ -9,7 +9,7 @@ const LoadingSpinner = ({ size = 'medium', message = '', fullScreen = false }) =
   const sizeClasses = {
     small: 'spinner-small',
     medium: 'spinner-medium',
-    large: 'spinner-large'
+    large: 'spinner-large',
   };
 
   const spinner = (
@@ -20,11 +20,7 @@ const LoadingSpinner = ({ size = 'medium', message = '', fullScreen = false }) =
   );
 
   if (fullScreen) {
-    return (
-      <div className="loading-fullscreen">
-        {spinner}
-      </div>
-    );
+    return <div className="loading-fullscreen">{spinner}</div>;
   }
 
   return spinner;
@@ -33,7 +29,7 @@ const LoadingSpinner = ({ size = 'medium', message = '', fullScreen = false }) =
 LoadingSpinner.propTypes = {
   size: PropTypes.oneOf(['small', 'medium', 'large']),
   message: PropTypes.string,
-  fullScreen: PropTypes.bool
+  fullScreen: PropTypes.bool,
 };
 
 export default LoadingSpinner;

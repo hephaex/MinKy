@@ -81,7 +81,9 @@ const ChatInput = ({ onSend, disabled = false }) => {
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
-              <span className={`chat-input__counter ${isCritical ? 'chat-input__counter--warn' : ''}`}>
+              <span
+                className={`chat-input__counter ${isCritical ? 'chat-input__counter--warn' : ''}`}
+              >
                 {remaining} / {MAX_LENGTH}
               </span>
             </>

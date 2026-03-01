@@ -10,7 +10,7 @@ const OCRDropzone = ({ file, onFileChange, onFileRemove, dragActive, onDrag, onD
       'image/jpg',
       'image/tiff',
       'image/bmp',
-      'image/gif'
+      'image/gif',
     ];
     return allowedTypes.includes(file.type) || /\.(pdf|png|jpe?g|tiff?|bmp|gif)$/i.test(file.name);
   };
@@ -41,20 +41,14 @@ const OCRDropzone = ({ file, onFileChange, onFileRemove, dragActive, onDrag, onD
         <div className="file-selected">
           <div className="file-info">
             <span className="file-name">{file.name}</span>
-            <span className="file-size">
-              ({(file.size / 1024 / 1024).toFixed(2)} MB)
-            </span>
+            <span className="file-size">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
           </div>
           {!isValidFileType(file) && (
             <div className="file-error">
               Unsupported file type. Please select a PDF or image file.
             </div>
           )}
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={onFileRemove}
-          >
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onFileRemove}>
             Remove
           </button>
         </div>

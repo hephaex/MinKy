@@ -52,7 +52,7 @@ const useCategories = (options = {}) => {
     loading,
     error,
     refetch: fetchCategories,
-    setCategories
+    setCategories,
   };
 };
 

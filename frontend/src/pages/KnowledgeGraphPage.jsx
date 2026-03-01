@@ -8,14 +8,66 @@ import './KnowledgeGraphPage.css';
  */
 function buildSampleGraph() {
   const nodes = [
-    { id: 'doc1', label: 'RAG Architecture', type: 'document', documentId: 'doc1', documentCount: 0, summary: 'Retrieval-Augmented Generation patterns for knowledge systems', topics: ['RAG', 'AI', 'Search'], created_at: '2026-02-15T10:00:00Z' },
-    { id: 'doc2', label: 'pgvector Setup', type: 'document', documentId: 'doc2', documentCount: 0, summary: 'Setting up pgvector for semantic search in PostgreSQL', topics: ['PostgreSQL', 'Embeddings', 'Database'], created_at: '2026-02-10T14:30:00Z' },
-    { id: 'doc3', label: 'Embedding APIs', type: 'document', documentId: 'doc3', documentCount: 0, summary: 'Comparison of OpenAI and Voyage AI embedding APIs', topics: ['OpenAI', 'Embeddings', 'API'], created_at: '2026-01-25T09:00:00Z' },
-    { id: 't1', label: 'Embeddings', type: 'topic', documentCount: 3, topics: ['Vector Search', 'Semantic'] },
-    { id: 't2', label: 'PostgreSQL', type: 'technology', documentCount: 2, topics: ['Database', 'SQL'] },
+    {
+      id: 'doc1',
+      label: 'RAG Architecture',
+      type: 'document',
+      documentId: 'doc1',
+      documentCount: 0,
+      summary: 'Retrieval-Augmented Generation patterns for knowledge systems',
+      topics: ['RAG', 'AI', 'Search'],
+      created_at: '2026-02-15T10:00:00Z',
+    },
+    {
+      id: 'doc2',
+      label: 'pgvector Setup',
+      type: 'document',
+      documentId: 'doc2',
+      documentCount: 0,
+      summary: 'Setting up pgvector for semantic search in PostgreSQL',
+      topics: ['PostgreSQL', 'Embeddings', 'Database'],
+      created_at: '2026-02-10T14:30:00Z',
+    },
+    {
+      id: 'doc3',
+      label: 'Embedding APIs',
+      type: 'document',
+      documentId: 'doc3',
+      documentCount: 0,
+      summary: 'Comparison of OpenAI and Voyage AI embedding APIs',
+      topics: ['OpenAI', 'Embeddings', 'API'],
+      created_at: '2026-01-25T09:00:00Z',
+    },
+    {
+      id: 't1',
+      label: 'Embeddings',
+      type: 'topic',
+      documentCount: 3,
+      topics: ['Vector Search', 'Semantic'],
+    },
+    {
+      id: 't2',
+      label: 'PostgreSQL',
+      type: 'technology',
+      documentCount: 2,
+      topics: ['Database', 'SQL'],
+    },
     { id: 't3', label: 'RAG', type: 'topic', documentCount: 2, topics: ['LLM', 'Search'] },
-    { id: 't4', label: 'Claude API', type: 'technology', documentCount: 1, topics: ['Anthropic', 'LLM'] },
-    { id: 't5', label: 'Knowledge Graph', type: 'insight', documentCount: 1, summary: 'Connecting related knowledge automatically', topics: ['Graph', 'Visualization'] },
+    {
+      id: 't4',
+      label: 'Claude API',
+      type: 'technology',
+      documentCount: 1,
+      topics: ['Anthropic', 'LLM'],
+    },
+    {
+      id: 't5',
+      label: 'Knowledge Graph',
+      type: 'insight',
+      documentCount: 1,
+      summary: 'Connecting related knowledge automatically',
+      topics: ['Graph', 'Visualization'],
+    },
     { id: 'p1', label: 'Team Dev', type: 'person', documentCount: 3 },
   ];
 
@@ -40,7 +92,7 @@ function buildSampleGraph() {
  * Convert export data to CSV format.
  */
 function exportToCsv(data) {
-  const escapeCsv = str => `"${String(str || '').replace(/"/g, '""')}"`;
+  const escapeCsv = (str) => `"${String(str || '').replace(/"/g, '""')}"`;
 
   let csv = '# Nodes\n';
   csv += 'id,label,type,documentCount,created_at\n';
@@ -147,8 +199,8 @@ function KnowledgeGraphPage() {
     loadGraphData();
   }, []);
 
-  const handleToggleType = useCallback(type => {
-    setActiveTypes(prev => {
+  const handleToggleType = useCallback((type) => {
+    setActiveTypes((prev) => {
       const next = new Set(prev);
       if (next.has(type)) {
         next.delete(type);
@@ -183,28 +235,31 @@ function KnowledgeGraphPage() {
     }
   }, []);
 
-  const handleNodeClick = useCallback(node => {
-    if (pathMode) {
-      // In path mode, set source or target
-      if (!pathSource) {
-        setPathSource(node.id);
-        setPathResult(null);
-      } else if (!pathTarget && node.id !== pathSource) {
-        setPathTarget(node.id);
-        findPath(pathSource, node.id);
-      } else {
-        // Reset and start new selection
-        setPathSource(node.id);
-        setPathTarget(null);
-        setPathResult(null);
+  const handleNodeClick = useCallback(
+    (node) => {
+      if (pathMode) {
+        // In path mode, set source or target
+        if (!pathSource) {
+          setPathSource(node.id);
+          setPathResult(null);
+        } else if (!pathTarget && node.id !== pathSource) {
+          setPathTarget(node.id);
+          findPath(pathSource, node.id);
+        } else {
+          // Reset and start new selection
+          setPathSource(node.id);
+          setPathTarget(null);
+          setPathResult(null);
+        }
+      } else if (node.documentId) {
+        // Navigate to document (optional)
       }
-    } else if (node.documentId) {
-      // Navigate to document (optional)
-    }
-  }, [pathMode, pathSource, pathTarget, findPath]);
+    },
+    [pathMode, pathSource, pathTarget, findPath]
+  );
 
   const togglePathMode = useCallback(() => {
-    setPathMode(prev => !prev);
+    setPathMode((prev) => !prev);
     setPathSource(null);
     setPathTarget(null);
     setPathResult(null);
@@ -241,11 +296,11 @@ function KnowledgeGraphPage() {
     if (!clusterMode && !clusterData) {
       loadClusters();
     }
-    setClusterMode(prev => !prev);
+    setClusterMode((prev) => !prev);
   }, [clusterMode, clusterData, loadClusters]);
 
   // Quick action: Set path source from detail panel
-  const handleSetPathSource = useCallback(node => {
+  const handleSetPathSource = useCallback((node) => {
     setPathMode(true);
     setPathSource(node.id);
     setPathTarget(null);
@@ -255,8 +310,8 @@ function KnowledgeGraphPage() {
   // Quick action: Filter to show only this node and its connections
   const [focusedNodeId, setFocusedNodeId] = useState(null);
 
-  const handleFilterToNode = useCallback(node => {
-    setFocusedNodeId(prev => (prev === node.id ? null : node.id));
+  const handleFilterToNode = useCallback((node) => {
+    setFocusedNodeId((prev) => (prev === node.id ? null : node.id));
   }, []);
 
   // Quick action: Export node's connections as JSON
@@ -270,7 +325,7 @@ function KnowledgeGraphPage() {
         topics: node.topics,
         created_at: node.created_at,
       },
-      connections: relatedNodes.map(r => ({
+      connections: relatedNodes.map((r) => ({
         id: r.id,
         label: r.label,
         type: r.type,
@@ -296,13 +351,13 @@ function KnowledgeGraphPage() {
     ? new Set([
         focusedNodeId,
         ...graphData.edges
-          .filter(e => e.source === focusedNodeId || e.target === focusedNodeId)
-          .flatMap(e => [e.source, e.target]),
+          .filter((e) => e.source === focusedNodeId || e.target === focusedNodeId)
+          .flatMap((e) => [e.source, e.target]),
       ])
     : null;
 
   // Filter nodes by type, search query, date range, and focused node
-  const filteredNodes = graphData.nodes.filter(node => {
+  const filteredNodes = graphData.nodes.filter((node) => {
     // If focusing on a specific node, only show it and its connections
     if (focusedConnectedIds && !focusedConnectedIds.has(node.id)) {
       return false;
@@ -312,7 +367,7 @@ function KnowledgeGraphPage() {
     const matchesSearch =
       !searchQuery ||
       node.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (node.topics || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+      (node.topics || []).some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
 
     // Timeline filtering (only applies to document nodes with created_at)
     let matchesDate = true;
@@ -330,13 +385,13 @@ function KnowledgeGraphPage() {
   });
 
   // Only include edges where both endpoints are visible
-  const visibleNodeIds = new Set(filteredNodes.map(n => n.id));
+  const visibleNodeIds = new Set(filteredNodes.map((n) => n.id));
   const filteredEdges = graphData.edges.filter(
-    edge => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
+    (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)
   );
 
   // Export graph data
-  const handleExport = async format => {
+  const handleExport = async (format) => {
     setExporting(true);
     try {
       if (apiAvailable) {
@@ -359,14 +414,14 @@ function KnowledgeGraphPage() {
       } else {
         // Export current demo data
         const exportData = {
-          nodes: filteredNodes.map(n => ({
+          nodes: filteredNodes.map((n) => ({
             id: n.id,
             label: n.label,
             type: n.type,
             documentCount: n.documentCount,
             created_at: n.created_at,
           })),
-          edges: filteredEdges.map(e => ({
+          edges: filteredEdges.map((e) => ({
             source: e.source,
             target: e.target,
             weight: e.weight,
@@ -374,11 +429,12 @@ function KnowledgeGraphPage() {
           exported_at: new Date().toISOString(),
         };
 
-        const content = format === 'json'
-          ? JSON.stringify(exportData, null, 2)
-          : exportToCsv(exportData);
+        const content =
+          format === 'json' ? JSON.stringify(exportData, null, 2) : exportToCsv(exportData);
 
-        const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/csv' });
+        const blob = new Blob([content], {
+          type: format === 'json' ? 'application/json' : 'text/csv',
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -401,15 +457,11 @@ function KnowledgeGraphPage() {
       <div className="kg-page__header">
         <div className="kg-page__header-left">
           <h1 className="kg-page__title">Knowledge Graph</h1>
-          <p className="kg-page__subtitle">
-            Explore how your team's knowledge connects
-          </p>
+          <p className="kg-page__subtitle">Explore how your team's knowledge connects</p>
         </div>
 
         {!apiAvailable && !loading && (
-          <div className="kg-page__demo-badge">
-            Demo data - connect API for real graph
-          </div>
+          <div className="kg-page__demo-badge">Demo data - connect API for real graph</div>
         )}
       </div>
 
@@ -421,7 +473,7 @@ function KnowledgeGraphPage() {
             className="kg-page__search-input"
             placeholder="Filter nodes by name or topic..."
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Filter knowledge graph nodes"
             disabled={pathMode}
           />
@@ -436,10 +488,7 @@ function KnowledgeGraphPage() {
           )}
         </div>
 
-        <GraphFilters
-          activeTypes={activeTypes}
-          onToggleType={handleToggleType}
-        />
+        <GraphFilters activeTypes={activeTypes} onToggleType={handleToggleType} />
 
         {/* Cluster Mode Toggle */}
         <div className="kg-page__cluster-controls">
@@ -479,21 +528,13 @@ function KnowledgeGraphPage() {
               ) : pathResult ? (
                 <span className="kg-page__path-not-found">No path found</span>
               ) : pathSource ? (
-                <span className="kg-page__path-hint">
-                  Now click the target node
-                </span>
+                <span className="kg-page__path-hint">Now click the target node</span>
               ) : (
-                <span className="kg-page__path-hint">
-                  Click the source node
-                </span>
+                <span className="kg-page__path-hint">Click the source node</span>
               )}
 
               {(pathSource || pathTarget) && (
-                <button
-                  className="kg-page__path-clear"
-                  onClick={clearPath}
-                  title="Clear selection"
-                >
+                <button className="kg-page__path-clear" onClick={clearPath} title="Clear selection">
                   Clear
                 </button>
               )}
@@ -505,7 +546,7 @@ function KnowledgeGraphPage() {
         <div className="kg-page__timeline-controls">
           <button
             className={`kg-page__timeline-btn${timelineMode ? ' kg-page__timeline-btn--active' : ''}`}
-            onClick={() => setTimelineMode(prev => !prev)}
+            onClick={() => setTimelineMode((prev) => !prev)}
             title={timelineMode ? 'Disable timeline filter' : 'Filter by date range'}
           >
             {timelineMode ? 'Hide Timeline' : 'Timeline'}
@@ -519,7 +560,7 @@ function KnowledgeGraphPage() {
                   type="date"
                   className="kg-page__timeline-date"
                   value={dateRange.start}
-                  onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                  onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))}
                   aria-label="Start date"
                 />
               </label>
@@ -529,7 +570,7 @@ function KnowledgeGraphPage() {
                   type="date"
                   className="kg-page__timeline-date"
                   value={dateRange.end}
-                  onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  onChange={(e) => setDateRange((prev) => ({ ...prev, end: e.target.value }))}
                   aria-label="End date"
                 />
               </label>
@@ -550,7 +591,8 @@ function KnowledgeGraphPage() {
         {focusedNodeId && (
           <div className="kg-page__focus-indicator">
             <span className="kg-page__focus-label">
-              Showing connections for: {graphData.nodes.find(n => n.id === focusedNodeId)?.label || focusedNodeId}
+              Showing connections for:{' '}
+              {graphData.nodes.find((n) => n.id === focusedNodeId)?.label || focusedNodeId}
             </span>
             <button
               className="kg-page__focus-clear"

@@ -35,7 +35,14 @@ const aiMsg = {
   role: 'assistant',
   content: 'Response text',
   timestamp: '2026-02-19T10:00:05Z',
-  sources: [{ document_title: 'Doc A', document_id: 'doc-1', chunk_text: 'Preview text for the document...', similarity: 0.95 }],
+  sources: [
+    {
+      document_title: 'Doc A',
+      document_id: 'doc-1',
+      chunk_text: 'Preview text for the document...',
+      similarity: 0.95,
+    },
+  ],
 };
 
 describe('ChatMessage', () => {

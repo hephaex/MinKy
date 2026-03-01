@@ -65,7 +65,13 @@ describe('ChatContainer', () => {
   it('renders messages when provided', () => {
     mockUseChat.messages = [
       { id: 'm1', role: 'user', content: 'Hello from user', timestamp: '2026-02-19T10:00:00Z' },
-      { id: 'm2', role: 'assistant', content: 'Hello from AI', timestamp: '2026-02-19T10:00:01Z', sources: [] },
+      {
+        id: 'm2',
+        role: 'assistant',
+        content: 'Hello from AI',
+        timestamp: '2026-02-19T10:00:01Z',
+        sources: [],
+      },
     ];
     render(<ChatContainer />);
     expect(screen.getByText('Hello from user')).toBeInTheDocument();
@@ -108,9 +114,7 @@ describe('ChatContainer', () => {
   });
 
   it('passes correct props to ChatHistory', () => {
-    const sessions = [
-      { id: 's1', title: 'Chat 1', updatedAt: '2026-02-19T09:00:00Z' },
-    ];
+    const sessions = [{ id: 's1', title: 'Chat 1', updatedAt: '2026-02-19T09:00:00Z' }];
     mockUseChat.sessions = sessions;
     mockUseChat.activeSessionId = 's1';
     render(<ChatContainer />);
@@ -165,7 +169,13 @@ describe('ChatContainer', () => {
   it('shows multiple messages in order', () => {
     mockUseChat.messages = [
       { id: 'm1', role: 'user', content: 'First message', timestamp: '2026-02-19T10:00:00Z' },
-      { id: 'm2', role: 'assistant', content: 'Second message', timestamp: '2026-02-19T10:00:01Z', sources: [] },
+      {
+        id: 'm2',
+        role: 'assistant',
+        content: 'Second message',
+        timestamp: '2026-02-19T10:00:01Z',
+        sources: [],
+      },
       { id: 'm3', role: 'user', content: 'Third message', timestamp: '2026-02-19T10:00:02Z' },
     ];
     render(<ChatContainer />);

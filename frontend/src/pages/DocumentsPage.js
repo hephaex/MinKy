@@ -23,21 +23,16 @@ const DocumentsPage = () => {
 
   return (
     <div className="documents-page">
-      <TreeSidebar
-        isVisible={sidebarVisible}
-        onToggle={toggleSidebar}
-      />
+      <TreeSidebar isVisible={sidebarVisible} onToggle={toggleSidebar} />
 
-      {sidebarVisible && isMobile && (
-        <div className="sidebar-overlay" onClick={toggleSidebar} />
-      )}
+      {sidebarVisible && isMobile && <div className="sidebar-overlay" onClick={toggleSidebar} />}
 
       <div className={`documents-main ${sidebarVisible ? 'with-sidebar' : ''}`}>
         <div className="documents-header">
           {!sidebarVisible && (
             <button className="sidebar-toggle-btn" onClick={toggleSidebar}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+                <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
               </svg>
             </button>
           )}

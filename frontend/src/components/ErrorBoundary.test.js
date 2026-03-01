@@ -91,6 +91,8 @@ describe('ErrorBoundary', () => {
         <ThrowError shouldThrow={true} />
       </ErrorBoundary>
     );
-    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('페이지를 표시할 수 없습니다');
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(
+      '페이지를 표시할 수 없습니다'
+    );
   });
 });

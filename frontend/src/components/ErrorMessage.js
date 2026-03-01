@@ -9,11 +9,10 @@ const ErrorMessage = ({
   error,
   title = '오류가 발생했습니다',
   onRetry = null,
-  showDetails = false
+  showDetails = false,
 }) => {
-  const errorMessage = typeof error === 'string'
-    ? error
-    : error?.message || '알 수 없는 오류가 발생했습니다.';
+  const errorMessage =
+    typeof error === 'string' ? error : error?.message || '알 수 없는 오류가 발생했습니다.';
 
   return (
     <div className="error-message">
@@ -46,12 +45,12 @@ ErrorMessage.propTypes = {
     PropTypes.string,
     PropTypes.shape({
       message: PropTypes.string,
-      stack: PropTypes.string
-    })
+      stack: PropTypes.string,
+    }),
   ]).isRequired,
   title: PropTypes.string,
   onRetry: PropTypes.func,
-  showDetails: PropTypes.bool
+  showDetails: PropTypes.bool,
 };
 
 export default ErrorMessage;

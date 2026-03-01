@@ -16,7 +16,7 @@ export const LANGUAGES = {
   en: { code: 'en', name: 'English', nativeName: 'English' },
   ko: { code: 'ko', name: 'Korean', nativeName: '한국어' },
   ja: { code: 'ja', name: 'Japanese', nativeName: '日本語' },
-  zh: { code: 'zh', name: 'Chinese', nativeName: '中文' }
+  zh: { code: 'zh', name: 'Chinese', nativeName: '中文' },
 };
 
 // Translation resources
@@ -24,7 +24,7 @@ const resources = {
   en,
   ko,
   ja,
-  zh
+  zh,
 };
 
 // Default language
@@ -40,26 +40,25 @@ const detectLanguage = () => {
 
   // Check browser language
   const browserLanguage = navigator.language || navigator.userLanguage;
-  
+
   // Map browser languages to supported languages
   const languageMap = {
-    'ko': 'ko',
+    ko: 'ko',
     'ko-KR': 'ko',
     'ko-KP': 'ko',
-    'ja': 'ja',
+    ja: 'ja',
     'ja-JP': 'ja',
-    'zh': 'zh',
+    zh: 'zh',
     'zh-CN': 'zh',
     'zh-TW': 'zh',
     'zh-HK': 'zh',
-    'en': 'en',
+    en: 'en',
     'en-US': 'en',
-    'en-GB': 'en'
+    'en-GB': 'en',
   };
 
-  const detectedLanguage = languageMap[browserLanguage] || 
-                          languageMap[browserLanguage.split('-')[0]] || 
-                          DEFAULT_LANGUAGE;
+  const detectedLanguage =
+    languageMap[browserLanguage] || languageMap[browserLanguage.split('-')[0]] || DEFAULT_LANGUAGE;
 
   return detectedLanguage;
 };
@@ -93,7 +92,7 @@ const translate = (key, params = {}, language = DEFAULT_LANGUAGE) => {
 
   // Replace parameters in translation
   let result = translation;
-  Object.keys(params).forEach(param => {
+  Object.keys(params).forEach((param) => {
     const placeholder = `{{${param}}}`;
     result = result.replace(new RegExp(placeholder, 'g'), params[param]);
   });
@@ -109,23 +108,33 @@ const pluralize = (key, count, params = {}, language = DEFAULT_LANGUAGE) => {
 
 // Date and number formatting
 const formatDate = (date, options = {}, language = DEFAULT_LANGUAGE) => {
-  const locale = language === 'ko' ? 'ko-KR' : 
-                language === 'ja' ? 'ja-JP' :
-                language === 'zh' ? 'zh-CN' : 'en-US';
-  
+  const locale =
+    language === 'ko'
+      ? 'ko-KR'
+      : language === 'ja'
+        ? 'ja-JP'
+        : language === 'zh'
+          ? 'zh-CN'
+          : 'en-US';
+
   return new Intl.DateTimeFormat(locale, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    ...options
+    ...options,
   }).format(new Date(date));
 };
 
 const formatNumber = (number, options = {}, language = DEFAULT_LANGUAGE) => {
-  const locale = language === 'ko' ? 'ko-KR' : 
-                language === 'ja' ? 'ja-JP' :
-                language === 'zh' ? 'zh-CN' : 'en-US';
-  
+  const locale =
+    language === 'ko'
+      ? 'ko-KR'
+      : language === 'ja'
+        ? 'ja-JP'
+        : language === 'zh'
+          ? 'zh-CN'
+          : 'en-US';
+
   return new Intl.NumberFormat(locale, options).format(number);
 };
 
@@ -133,10 +142,15 @@ const formatNumber = (number, options = {}, language = DEFAULT_LANGUAGE) => {
 const formatRelativeTime = (date, language = DEFAULT_LANGUAGE) => {
   // locale reserved for future Intl.RelativeTimeFormat support
   // eslint-disable-next-line no-unused-vars
-  const locale = language === 'ko' ? 'ko-KR' :
-                language === 'ja' ? 'ja-JP' :
-                language === 'zh' ? 'zh-CN' : 'en-US';
-  
+  const locale =
+    language === 'ko'
+      ? 'ko-KR'
+      : language === 'ja'
+        ? 'ja-JP'
+        : language === 'zh'
+          ? 'zh-CN'
+          : 'en-US';
+
   const now = new Date();
   const targetDate = new Date(date);
   const diffInSeconds = Math.floor((now - targetDate) / 1000);
@@ -184,16 +198,16 @@ export const I18nProvider = ({ children }) => {
   useEffect(() => {
     // Save language to localStorage
     localStorage.setItem('minky_language', language);
-    
+
     // Set document language and direction
     document.documentElement.lang = language;
-    
+
     // Set RTL for languages that require it (Arabic, Hebrew, etc.)
     const rtlLanguages = ['ar', 'he', 'fa'];
     const shouldBeRTL = rtlLanguages.includes(language);
     setIsRTL(shouldBeRTL);
     document.documentElement.dir = shouldBeRTL ? 'rtl' : 'ltr';
-    
+
     // Add language class to body for CSS styling
     document.body.className = document.body.className.replace(/lang-\w+/, '');
     document.body.classList.add(`lang-${language}`);
@@ -220,14 +234,10 @@ export const I18nProvider = ({ children }) => {
     tn,
     tDate,
     tNumber,
-    tRelative
+    tRelative,
   };
 
-  return (
-    <I18nContext.Provider value={value}>
-      {children}
-    </I18nContext.Provider>
-  );
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 };
 
 // Language selector component
@@ -238,7 +248,7 @@ export const LanguageSelector = ({ className = '', showFlags = true }) => {
     en: '🇺🇸',
     ko: '🇰🇷',
     ja: '🇯🇵',
-    zh: '🇨🇳'
+    zh: '🇨🇳',
   };
 
   return (
@@ -271,7 +281,13 @@ export const getLanguageClass = (language) => {
 };
 
 // Export translation functions for use outside React components
-export { translate as t, pluralize as tn, formatDate as tDate, formatNumber as tNumber, formatRelativeTime as tRelative };
+export {
+  translate as t,
+  pluralize as tn,
+  formatDate as tDate,
+  formatNumber as tNumber,
+  formatRelativeTime as tRelative,
+};
 
 const i18nExports = {
   I18nProvider,
@@ -284,7 +300,7 @@ const i18nExports = {
   formatNumber,
   formatRelativeTime,
   getTextDirection,
-  getLanguageClass
+  getLanguageClass,
 };
 
 export default i18nExports;

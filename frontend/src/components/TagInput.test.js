@@ -131,17 +131,13 @@ describe('TagInput', () => {
   });
 
   it('displays AI suggestions when suggestedTags are provided', () => {
-    render(
-      <TagInput {...defaultProps} suggestedTags={['ai-tag-1', 'ai-tag-2']} />
-    );
+    render(<TagInput {...defaultProps} suggestedTags={['ai-tag-1', 'ai-tag-2']} />);
     expect(screen.getByText('ai-tag-1')).toBeInTheDocument();
     expect(screen.getByText('ai-tag-2')).toBeInTheDocument();
   });
 
   it('shows AI suggestions panel header', () => {
-    render(
-      <TagInput {...defaultProps} suggestedTags={['ai-tag']} />
-    );
+    render(<TagInput {...defaultProps} suggestedTags={['ai-tag']} />);
     expect(screen.getByText(/AI Tags Auto-Applied/)).toBeInTheDocument();
   });
 });

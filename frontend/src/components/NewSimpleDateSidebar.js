@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 // SECURITY: Helper to get auth token for API calls
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
+  return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
 const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
@@ -18,10 +18,10 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
         setLoading(true);
         // SECURITY: Include auth headers for consistency
         const response = await fetch('/api/documents/timeline?group_by=month', {
-          headers: getAuthHeaders()
+          headers: getAuthHeaders(),
         });
         if (!response.ok) throw new Error('Failed to fetch timeline');
-        
+
         const data = await response.json();
         setTimeline(data.timeline);
         setError(null);
@@ -48,23 +48,25 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
   const handleItemClick = (itemKey) => {
     onDocumentSelect?.(itemKey);
   };
-  
+
   const handleArrowClick = (itemKey) => {
     toggleExpanded(itemKey);
   };
 
   if (loading) {
     return (
-      <div style={{
-        width: '280px',
-        height: 'calc(100vh - 80px)',
-        background: '#f8f9fa',
-        borderRight: '1px solid #e0e0e0',
-        position: 'fixed',
-        left: '0',
-        top: '80px',
-        padding: '20px'
-      }}>
+      <div
+        style={{
+          width: '280px',
+          height: 'calc(100vh - 80px)',
+          background: '#f8f9fa',
+          borderRight: '1px solid #e0e0e0',
+          position: 'fixed',
+          left: '0',
+          top: '80px',
+          padding: '20px',
+        }}
+      >
         <h3>문서 탐색</h3>
         <p>로딩 중...</p>
       </div>
@@ -73,16 +75,18 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
 
   if (error) {
     return (
-      <div style={{
-        width: '280px',
-        height: 'calc(100vh - 80px)',
-        background: '#f8f9fa',
-        borderRight: '1px solid #e0e0e0',
-        position: 'fixed',
-        left: '0',
-        top: '80px',
-        padding: '20px'
-      }}>
+      <div
+        style={{
+          width: '280px',
+          height: 'calc(100vh - 80px)',
+          background: '#f8f9fa',
+          borderRight: '1px solid #e0e0e0',
+          position: 'fixed',
+          left: '0',
+          top: '80px',
+          padding: '20px',
+        }}
+      >
         <h3>문서 탐색</h3>
         <p style={{ color: 'red' }}>오류: {error}</p>
       </div>
@@ -90,22 +94,26 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
   }
 
   return (
-    <div style={{
-      width: '280px',
-      height: 'calc(100vh - 80px)',
-      background: '#f8f9fa',
-      borderRight: '1px solid #e0e0e0',
-      position: 'fixed',
-      left: '0',
-      top: '80px',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      <div style={{
-        padding: '20px 16px 16px',
-        background: '#fff',
-        borderBottom: '1px solid #e0e0e0'
-      }}>
+    <div
+      style={{
+        width: '280px',
+        height: 'calc(100vh - 80px)',
+        background: '#f8f9fa',
+        borderRight: '1px solid #e0e0e0',
+        position: 'fixed',
+        left: '0',
+        top: '80px',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <div
+        style={{
+          padding: '20px 16px 16px',
+          background: '#fff',
+          borderBottom: '1px solid #e0e0e0',
+        }}
+      >
         <h3 style={{ margin: '0 0 12px 0', fontSize: '18px' }}>문서 탐색</h3>
       </div>
 
@@ -118,9 +126,9 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
           <div>
             {Object.values(timeline)
               .sort((a, b) => b.key.localeCompare(a.key))
-              .map(item => (
+              .map((item) => (
                 <div key={item.key}>
-                  <div 
+                  <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -129,31 +137,38 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
                       fontSize: '15px',
                       fontWeight: '600',
                       color: '#333',
-                      borderLeft: selectedDateKey === item.key ? '3px solid #2196f3' : '3px solid transparent',
-                      backgroundColor: selectedDateKey === item.key ? '#e3f2fd' : 'transparent'
+                      borderLeft:
+                        selectedDateKey === item.key
+                          ? '3px solid #2196f3'
+                          : '3px solid transparent',
+                      backgroundColor: selectedDateKey === item.key ? '#e3f2fd' : 'transparent',
                     }}
-                    onMouseEnter={(e) => e.target.style.backgroundColor = '#e9ecef'}
-                    onMouseLeave={(e) => e.target.style.backgroundColor = selectedDateKey === item.key ? '#e3f2fd' : 'transparent'}
+                    onMouseEnter={(e) => (e.target.style.backgroundColor = '#e9ecef')}
+                    onMouseLeave={(e) =>
+                      (e.target.style.backgroundColor =
+                        selectedDateKey === item.key ? '#e3f2fd' : 'transparent')
+                    }
                   >
                     {item.children && Object.keys(item.children).length > 0 && (
-                      <span 
+                      <span
                         onClick={() => handleArrowClick(item.key)}
                         style={{
                           marginRight: '8px',
                           transform: expandedItems.has(item.key) ? 'rotate(90deg)' : 'rotate(0deg)',
                           transition: 'transform 0.2s ease',
-                          cursor: 'pointer'
-                        }}>
+                          cursor: 'pointer',
+                        }}
+                      >
                         ▶
                       </span>
                     )}
-                    <span 
+                    <span
                       style={{ flex: 1, cursor: 'pointer' }}
                       onClick={() => handleItemClick(item.key)}
                     >
                       {item.label}
                     </span>
-                    <span 
+                    <span
                       style={{
                         marginLeft: '8px',
                         fontSize: '12px',
@@ -161,7 +176,7 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
                         background: '#f0f0f0',
                         padding: '2px 6px',
                         borderRadius: '10px',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
                       }}
                       onClick={() => handleItemClick(item.key)}
                     >
@@ -173,8 +188,8 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
                     <div style={{ marginLeft: '20px', borderLeft: '1px solid #e0e0e0' }}>
                       {Object.values(item.children)
                         .sort((a, b) => b.key.localeCompare(a.key))
-                        .map(child => (
-                          <div 
+                        .map((child) => (
+                          <div
                             key={child.key}
                             onClick={() => handleItemClick(child.key)}
                             style={{
@@ -185,21 +200,30 @@ const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
                               fontSize: '14px',
                               fontWeight: '500',
                               color: '#555',
-                              borderLeft: selectedDateKey === child.key ? '3px solid #2196f3' : '3px solid transparent',
-                              backgroundColor: selectedDateKey === child.key ? '#e3f2fd' : 'transparent'
+                              borderLeft:
+                                selectedDateKey === child.key
+                                  ? '3px solid #2196f3'
+                                  : '3px solid transparent',
+                              backgroundColor:
+                                selectedDateKey === child.key ? '#e3f2fd' : 'transparent',
                             }}
-                            onMouseEnter={(e) => e.target.style.backgroundColor = '#e9ecef'}
-                            onMouseLeave={(e) => e.target.style.backgroundColor = selectedDateKey === child.key ? '#e3f2fd' : 'transparent'}
+                            onMouseEnter={(e) => (e.target.style.backgroundColor = '#e9ecef')}
+                            onMouseLeave={(e) =>
+                              (e.target.style.backgroundColor =
+                                selectedDateKey === child.key ? '#e3f2fd' : 'transparent')
+                            }
                           >
                             <span style={{ flex: 1 }}>{child.label}</span>
-                            <span style={{
-                              marginLeft: '8px',
-                              fontSize: '12px',
-                              color: '#999',
-                              background: '#f0f0f0',
-                              padding: '2px 6px',
-                              borderRadius: '10px'
-                            }}>
+                            <span
+                              style={{
+                                marginLeft: '8px',
+                                fontSize: '12px',
+                                color: '#999',
+                                background: '#f0f0f0',
+                                padding: '2px 6px',
+                                borderRadius: '10px',
+                              }}
+                            >
                               ({child.count})
                             </span>
                           </div>

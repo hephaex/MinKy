@@ -4,13 +4,13 @@ import api from '../services/api';
 import { logError } from '../utils/logger';
 import './AISuggestions.css';
 
-const AISuggestions = ({ 
-  content, 
-  cursorPosition, 
-  onSuggestionSelect, 
+const AISuggestions = ({
+  content,
+  cursorPosition,
+  onSuggestionSelect,
   onTitleSuggestion,
   onTagSuggestions,
-  isVisible = true 
+  isVisible = true,
 }) => {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -47,7 +47,7 @@ const AISuggestions = ({
         const response = await api.post('/ai/suggestions', {
           content: currentContent,
           cursor_position: cursor,
-          max_suggestions: 3
+          max_suggestions: 3,
         });
 
         if (response.data.success) {
@@ -84,7 +84,7 @@ const AISuggestions = ({
     try {
       const response = await api.post('/ai/autocomplete', {
         content,
-        cursor_position: cursorPosition
+        cursor_position: cursorPosition,
       });
 
       if (response.data.success && response.data.completion) {
@@ -102,7 +102,7 @@ const AISuggestions = ({
 
     try {
       const response = await api.post('/ai/suggest-title', {
-        content
+        content,
       });
 
       if (response.data.success && response.data.suggested_title) {
@@ -121,7 +121,7 @@ const AISuggestions = ({
     try {
       const response = await api.post('/ai/suggest-tags', {
         content,
-        title: '' // Could be passed as prop if needed
+        title: '', // Could be passed as prop if needed
       });
 
       if (response.data.success && response.data.suggested_tags) {
@@ -140,7 +140,7 @@ const AISuggestions = ({
     try {
       setLoading(true);
       const response = await api.post('/ai/writing-suggestions', {
-        content
+        content,
       });
 
       if (response.data.success) {
@@ -162,44 +162,28 @@ const AISuggestions = ({
     <div className="ai-suggestions">
       <div className="ai-suggestions-header">
         <h4>✨ AI Assistant</h4>
-        {!aiEnabled && (
-          <span className="ai-status-badge disabled">
-            Limited Mode
-          </span>
-        )}
-        {aiEnabled && (
-          <span className="ai-status-badge enabled">
-            AI Powered
-          </span>
-        )}
+        {!aiEnabled && <span className="ai-status-badge disabled">Limited Mode</span>}
+        {aiEnabled && <span className="ai-status-badge enabled">AI Powered</span>}
       </div>
 
       <div className="ai-actions">
-        <button 
+        <button
           className="ai-action-btn"
           onClick={getAutoCompletion}
           disabled={!aiEnabled || loading}
         >
           🔮 Auto Complete
         </button>
-        
-        <button 
-          className="ai-action-btn"
-          onClick={suggestTitle}
-          disabled={loading}
-        >
+
+        <button className="ai-action-btn" onClick={suggestTitle} disabled={loading}>
           📝 Suggest Title
         </button>
-        
-        <button 
-          className="ai-action-btn"
-          onClick={suggestTags}
-          disabled={loading}
-        >
+
+        <button className="ai-action-btn" onClick={suggestTags} disabled={loading}>
           🏷️ Suggest Tags
         </button>
-        
-        <button 
+
+        <button
           className="ai-action-btn"
           onClick={getWritingSuggestions}
           disabled={!aiEnabled || loading}
@@ -219,7 +203,7 @@ const AISuggestions = ({
         <div className="ai-suggestions-list">
           <h5>Content Suggestions</h5>
           {suggestions.map((suggestion, index) => (
-            <div 
+            <div
               key={index}
               className={`suggestion-item ${suggestion.type}`}
               onClick={() => handleSuggestionClick(suggestion)}
@@ -227,9 +211,7 @@ const AISuggestions = ({
               <div className="suggestion-type">
                 {suggestion.type === 'completion' ? '💡' : '✏️'}
               </div>
-              <div className="suggestion-text">
-                {suggestion.text}
-              </div>
+              <div className="suggestion-text">{suggestion.text}</div>
             </div>
           ))}
         </div>
@@ -239,19 +221,14 @@ const AISuggestions = ({
         <div className="writing-suggestions">
           <div className="writing-suggestions-header">
             <h5>Writing Suggestions</h5>
-            <button 
-              className="close-btn"
-              onClick={() => setShowWritingSuggestions(false)}
-            >
+            <button className="close-btn" onClick={() => setShowWritingSuggestions(false)}>
               ×
             </button>
           </div>
           {writingSuggestions.map((suggestion, index) => (
             <div key={index} className="writing-suggestion-item">
               <div className="suggestion-icon">💡</div>
-              <div className="suggestion-content">
-                {suggestion.text}
-              </div>
+              <div className="suggestion-content">{suggestion.text}</div>
             </div>
           ))}
         </div>
@@ -279,7 +256,7 @@ AISuggestions.propTypes = {
   onSuggestionSelect: PropTypes.func,
   onTitleSuggestion: PropTypes.func,
   onTagSuggestions: PropTypes.func,
-  isVisible: PropTypes.bool
+  isVisible: PropTypes.bool,
 };
 
 AISuggestions.defaultProps = {
@@ -288,7 +265,7 @@ AISuggestions.defaultProps = {
   onSuggestionSelect: null,
   onTitleSuggestion: null,
   onTagSuggestions: null,
-  isVisible: true
+  isVisible: true,
 };
 
 export default AISuggestions;

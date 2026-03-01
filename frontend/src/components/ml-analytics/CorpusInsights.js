@@ -19,7 +19,10 @@ const CorpusInsights = ({ analytics }) => {
         <div className="insight-section">
           <h4>Document Clusters</h4>
           <div className="cluster-info">
-            <p>Found {analytics.cluster_analysis.n_clusters} clusters with {analytics.cluster_analysis.silhouette_score?.toFixed(3)} quality score</p>
+            <p>
+              Found {analytics.cluster_analysis.n_clusters} clusters with{' '}
+              {analytics.cluster_analysis.silhouette_score?.toFixed(3)} quality score
+            </p>
           </div>
           <div className="clusters">
             {Object.entries(analytics.cluster_analysis.clusters).map(([clusterId, docs]) => (
@@ -30,7 +33,9 @@ const CorpusInsights = ({ analytics }) => {
                 </div>
                 <div className="cluster-topics">
                   {analytics.cluster_analysis.cluster_topics[clusterId]?.map((topic, i) => (
-                    <span key={i} className="cluster-topic">{topic}</span>
+                    <span key={i} className="cluster-topic">
+                      {topic}
+                    </span>
                   ))}
                 </div>
                 <div className="cluster-docs">
@@ -57,9 +62,13 @@ const CorpusInsights = ({ analytics }) => {
                 <h5>Topic {topic.topic_id}</h5>
                 <div className="topic-words">
                   {topic.words.slice(0, 5).map((word, i) => (
-                    <span key={i} className="topic-word" style={{
-                      opacity: topic.weights[i] / Math.max(...topic.weights)
-                    }}>
+                    <span
+                      key={i}
+                      className="topic-word"
+                      style={{
+                        opacity: topic.weights[i] / Math.max(...topic.weights),
+                      }}
+                    >
                       {word}
                     </span>
                   ))}
@@ -77,11 +86,15 @@ const CorpusInsights = ({ analytics }) => {
           <div className="trend-analysis">
             <div className="trend-item">
               <span className="trend-label">Recent Activity (7 days)</span>
-              <span className="trend-value">{analytics.trend_analysis.recent_activity?.last_week || 0} documents</span>
+              <span className="trend-value">
+                {analytics.trend_analysis.recent_activity?.last_week || 0} documents
+              </span>
             </div>
             <div className="trend-item">
               <span className="trend-label">Monthly Activity</span>
-              <span className="trend-value">{analytics.trend_analysis.recent_activity?.last_month || 0} documents</span>
+              <span className="trend-value">
+                {analytics.trend_analysis.recent_activity?.last_month || 0} documents
+              </span>
             </div>
             <div className="trend-item">
               <span className="trend-label">Average Word Count</span>
@@ -116,11 +129,15 @@ const CorpusInsights = ({ analytics }) => {
             </div>
             <div className="collab-item">
               <span className="collab-label">Total Comments</span>
-              <span className="collab-value">{analytics.collaboration_patterns.total_comments}</span>
+              <span className="collab-value">
+                {analytics.collaboration_patterns.total_comments}
+              </span>
             </div>
             <div className="collab-item">
               <span className="collab-label">Unique Contributors</span>
-              <span className="collab-value">{analytics.collaboration_patterns.unique_contributors}</span>
+              <span className="collab-value">
+                {analytics.collaboration_patterns.unique_contributors}
+              </span>
             </div>
           </div>
         </div>

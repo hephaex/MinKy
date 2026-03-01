@@ -22,11 +22,7 @@ const CodeBlock = ({ language, children }) => {
     <div className="chat-code-block">
       <div className="chat-code-header">
         <span className="chat-code-lang">{language || 'text'}</span>
-        <button
-          className="chat-code-copy"
-          onClick={handleCopy}
-          aria-label="Copy code"
-        >
+        <button className="chat-code-copy" onClick={handleCopy} aria-label="Copy code">
           {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
@@ -66,7 +62,9 @@ const markdownComponents = {
 };
 
 const StreamingCursor = () => (
-  <span className="chat-streaming-cursor" aria-label="Generating response">▊</span>
+  <span className="chat-streaming-cursor" aria-label="Generating response">
+    ▊
+  </span>
 );
 
 const SourceCard = ({ source, index }) => {
@@ -84,7 +82,8 @@ const SourceCard = ({ source, index }) => {
       </div>
       {preview && (
         <p className="chat-source-card__preview">
-          {preview}{chunk_text?.length > 100 ? '...' : ''}
+          {preview}
+          {chunk_text?.length > 100 ? '...' : ''}
         </p>
       )}
     </>
@@ -92,7 +91,10 @@ const SourceCard = ({ source, index }) => {
 
   if (document_id) {
     return (
-      <Link to={`/documents/${document_id}`} className="chat-source-card chat-source-card--clickable">
+      <Link
+        to={`/documents/${document_id}`}
+        className="chat-source-card chat-source-card--clickable"
+      >
         {cardContent}
       </Link>
     );
@@ -133,7 +135,9 @@ const ChatMessage = ({ message, onCopy = null }) => {
     isUser ? 'chat-message--user' : 'chat-message--ai',
     isStreaming ? 'chat-message--streaming' : '',
     isError ? 'chat-message--error' : '',
-  ].filter(Boolean).join(' ');
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div className={messageClass}>
@@ -146,10 +150,7 @@ const ChatMessage = ({ message, onCopy = null }) => {
             <p className="chat-message__text">{content}</p>
           ) : (
             <>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
-              >
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                 {content || (isStreaming ? '' : 'Generating response...')}
               </ReactMarkdown>
               {isStreaming && <StreamingCursor />}
@@ -159,9 +160,7 @@ const ChatMessage = ({ message, onCopy = null }) => {
         {sources && sources.length > 0 && (
           <div className="chat-message__sources">
             <details className="chat-message__sources-details" open={!isStreaming}>
-              <summary className="chat-message__sources-label">
-                Sources ({sources.length})
-              </summary>
+              <summary className="chat-message__sources-label">Sources ({sources.length})</summary>
               <div className="chat-message__sources-list">
                 {sources.map((source, i) => (
                   <SourceCard key={source.document_id || i} source={source} index={i} />
@@ -171,9 +170,7 @@ const ChatMessage = ({ message, onCopy = null }) => {
           </div>
         )}
         <div className="chat-message__meta">
-          {formattedTime && (
-            <span className="chat-message__time">{formattedTime}</span>
-          )}
+          {formattedTime && <span className="chat-message__time">{formattedTime}</span>}
           {tokensUsed && (
             <span className="chat-message__tokens" title={`Model: ${model || 'unknown'}`}>
               {tokensUsed} tokens
@@ -187,11 +184,27 @@ const ChatMessage = ({ message, onCopy = null }) => {
               title="Copy message"
             >
               {copied ? (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  aria-hidden="true"
+                >
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               ) : (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                 </svg>

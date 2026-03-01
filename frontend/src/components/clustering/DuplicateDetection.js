@@ -21,7 +21,9 @@ const DuplicateDetection = ({ duplicates, onDetect }) => {
                 </div>
                 <div className="stat-item">
                   <span className="stat-label">Documents Analyzed:</span>
-                  <span className="stat-value">{duplicates.duplicate_stats.documents_analyzed}</span>
+                  <span className="stat-value">
+                    {duplicates.duplicate_stats.documents_analyzed}
+                  </span>
                 </div>
                 <div className="stat-item">
                   <span className="stat-label">Average Similarity:</span>
@@ -34,7 +36,9 @@ const DuplicateDetection = ({ duplicates, onDetect }) => {
               {duplicates.duplicates.map((duplicate, index) => (
                 <div key={index} className="duplicate-pair">
                   <div className="duplicate-header">
-                    <span className={`duplicate-type ${duplicate.duplicate_type.replace(/_/g, '-')}`}>
+                    <span
+                      className={`duplicate-type ${duplicate.duplicate_type.replace(/_/g, '-')}`}
+                    >
                       {duplicate.duplicate_type.replace(/_/g, ' ').toUpperCase()}
                     </span>
                     <span className="similarity-score">

@@ -16,51 +16,60 @@ const useTagSuggestions = ({ initialTags = [], onTagsChange } = {}) => {
   /**
    * Update tags and notify parent component
    */
-  const updateTags = useCallback((newTags) => {
-    setTags(newTags);
-    onTagsChange?.(newTags);
-  }, [onTagsChange]);
+  const updateTags = useCallback(
+    (newTags) => {
+      setTags(newTags);
+      onTagsChange?.(newTags);
+    },
+    [onTagsChange]
+  );
 
   /**
    * Handle AI-suggested tags by merging with existing tags.
    * Auto-applies suggested tags that don't already exist.
    */
-  const handleTagSuggestions = useCallback((suggestedTagsList) => {
-    if (!suggestedTagsList || suggestedTagsList.length === 0) {
-      return;
-    }
+  const handleTagSuggestions = useCallback(
+    (suggestedTagsList) => {
+      if (!suggestedTagsList || suggestedTagsList.length === 0) {
+        return;
+      }
 
-    setTags(currentTags => {
-      const newTags = [...currentTags];
+      setTags((currentTags) => {
+        const newTags = [...currentTags];
 
-      // Add suggested tags that aren't already present
-      suggestedTagsList.forEach(suggestedTag => {
-        const normalizedSuggested = suggestedTag.toLowerCase().trim();
-        const exists = newTags.some(existingTag =>
-          existingTag.toLowerCase().trim() === normalizedSuggested
-        );
+        // Add suggested tags that aren't already present
+        suggestedTagsList.forEach((suggestedTag) => {
+          const normalizedSuggested = suggestedTag.toLowerCase().trim();
+          const exists = newTags.some(
+            (existingTag) => existingTag.toLowerCase().trim() === normalizedSuggested
+          );
 
-        if (!exists) {
-          newTags.push(suggestedTag);
-        }
+          if (!exists) {
+            newTags.push(suggestedTag);
+          }
+        });
+
+        // Notify parent of change
+        onTagsChange?.(newTags);
+        return newTags;
       });
 
-      // Notify parent of change
-      onTagsChange?.(newTags);
-      return newTags;
-    });
-
-    // Set suggested tags for display (user can still see what was added)
-    setSuggestedTags(suggestedTagsList);
-  }, [onTagsChange]);
+      // Set suggested tags for display (user can still see what was added)
+      setSuggestedTags(suggestedTagsList);
+    },
+    [onTagsChange]
+  );
 
   /**
    * Handle direct tag changes (from TagInput component)
    */
-  const handleTagsChange = useCallback((newTags) => {
-    setTags(newTags);
-    onTagsChange?.(newTags);
-  }, [onTagsChange]);
+  const handleTagsChange = useCallback(
+    (newTags) => {
+      setTags(newTags);
+      onTagsChange?.(newTags);
+    },
+    [onTagsChange]
+  );
 
   /**
    * Clear suggested tags display
@@ -72,34 +81,40 @@ const useTagSuggestions = ({ initialTags = [], onTagsChange } = {}) => {
   /**
    * Add a single tag
    */
-  const addTag = useCallback((tag) => {
-    const normalizedTag = tag.toLowerCase().trim();
+  const addTag = useCallback(
+    (tag) => {
+      const normalizedTag = tag.toLowerCase().trim();
 
-    setTags(currentTags => {
-      const exists = currentTags.some(existingTag =>
-        existingTag.toLowerCase().trim() === normalizedTag
-      );
+      setTags((currentTags) => {
+        const exists = currentTags.some(
+          (existingTag) => existingTag.toLowerCase().trim() === normalizedTag
+        );
 
-      if (exists) {
-        return currentTags;
-      }
+        if (exists) {
+          return currentTags;
+        }
 
-      const newTags = [...currentTags, tag];
-      onTagsChange?.(newTags);
-      return newTags;
-    });
-  }, [onTagsChange]);
+        const newTags = [...currentTags, tag];
+        onTagsChange?.(newTags);
+        return newTags;
+      });
+    },
+    [onTagsChange]
+  );
 
   /**
    * Remove a tag by index
    */
-  const removeTag = useCallback((index) => {
-    setTags(currentTags => {
-      const newTags = currentTags.filter((_, i) => i !== index);
-      onTagsChange?.(newTags);
-      return newTags;
-    });
-  }, [onTagsChange]);
+  const removeTag = useCallback(
+    (index) => {
+      setTags((currentTags) => {
+        const newTags = currentTags.filter((_, i) => i !== index);
+        onTagsChange?.(newTags);
+        return newTags;
+      });
+    },
+    [onTagsChange]
+  );
 
   /**
    * Set tags directly (useful for initialization)

@@ -132,6 +132,9 @@ describe('logInfo', () => {
     process.env.NODE_ENV = 'development';
     logInfo = require('./logger').logInfo;
     logInfo('Component', 'Message with émojis 🎉 and spéciål chars');
-    expect(consoleSpy).toHaveBeenCalledWith('[Component]', 'Message with émojis 🎉 and spéciål chars');
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[Component]',
+      'Message with émojis 🎉 and spéciål chars'
+    );
   });
 });

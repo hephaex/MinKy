@@ -46,7 +46,7 @@ const TagDetail = () => {
 
   const formatAuthor = (author) => {
     if (!author) return '';
-    
+
     // Handle case where author might be a JSON string/array
     if (typeof author === 'string') {
       try {
@@ -61,12 +61,12 @@ const TagDetail = () => {
         // If parsing fails, use the string as-is
       }
     }
-    
+
     // Handle array case
     if (Array.isArray(author) && author.length > 0) {
       author = author[0];
     }
-    
+
     // Clean up the author string
     if (typeof author === 'string') {
       author = author.trim();
@@ -77,7 +77,7 @@ const TagDetail = () => {
       // Remove quotes
       author = author.replace(/^["']|["']$/g, '');
     }
-    
+
     return author;
   };
 
@@ -102,24 +102,25 @@ const TagDetail = () => {
       {/* Tag Header */}
       <div className="tag-header-section">
         <div className="tag-breadcrumb">
-          <Link to="/tags" className="breadcrumb-link">Tags</Link>
+          <Link to="/tags" className="breadcrumb-link">
+            Tags
+          </Link>
           <span className="breadcrumb-separator">/</span>
           <span className="breadcrumb-current">{tagData.name}</span>
         </div>
 
         <div className="tag-info">
           <div className="tag-title-section">
-            <div 
-              className="tag-color-large"
-              style={{ backgroundColor: tagData.color }}
-            ></div>
+            <div className="tag-color-large" style={{ backgroundColor: tagData.color }}></div>
             <div className="tag-title-content">
               <h1 className="tag-title">{tagData.name}</h1>
               <div className="tag-stats">
                 <span className="tag-stat">
-                  {documents.length === 0 ? 'No documents' : 
-                   documents.length === 1 ? '1 document' : 
-                   `${pagination.total || documents.length} documents`}
+                  {documents.length === 0
+                    ? 'No documents'
+                    : documents.length === 1
+                      ? '1 document'
+                      : `${pagination.total || documents.length} documents`}
                 </span>
                 {!tagData.description && (
                   <span className="tag-badge auto-generated">Auto-generated</span>
@@ -146,7 +147,7 @@ const TagDetail = () => {
       {/* Documents Section */}
       <div className="tag-documents-section">
         <h2>Documents with this tag</h2>
-        
+
         {documents.length === 0 ? (
           <div className="no-documents">
             <h3>No documents found</h3>
@@ -162,7 +163,7 @@ const TagDetail = () => {
                 <div key={doc.id} className="document-card">
                   <Link to={`/documents/${doc.id}`} className="document-link">
                     <h3 className="document-title">{doc.title}</h3>
-                    
+
                     <div className="document-meta">
                       {doc.author && (
                         <span className="document-author">By {formatAuthor(doc.author)}</span>
@@ -171,24 +172,27 @@ const TagDetail = () => {
                         Updated {formatDateTime(doc.updated_at)}
                       </span>
                     </div>
-                    
+
                     <div className="document-preview">
                       {doc.markdown_content.substring(0, 150)}
                       {doc.markdown_content.length > 150 && '...'}
                     </div>
-                    
+
                     {doc.tag_names && doc.tag_names.length > 1 && (
                       <div className="document-tags">
-                        {doc.tag_names.filter(tag => tag !== tagData.name).slice(0, 3).map((tag) => (
-                          <Link
-                            key={tag}
-                            to={`/tags/${tag.toLowerCase()}`}
-                            className="document-tag"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {tag}
-                          </Link>
-                        ))}
+                        {doc.tag_names
+                          .filter((tag) => tag !== tagData.name)
+                          .slice(0, 3)
+                          .map((tag) => (
+                            <Link
+                              key={tag}
+                              to={`/tags/${tag.toLowerCase()}`}
+                              className="document-tag"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {tag}
+                            </Link>
+                          ))}
                         {doc.tag_names.length > 4 && (
                           <span className="more-tags">+{doc.tag_names.length - 4} more</span>
                         )}

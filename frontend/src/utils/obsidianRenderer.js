@@ -12,7 +12,7 @@ const escapeHtml = (text) => {
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
-    "'": '&#039;'
+    "'": '&#039;',
   };
   return String(text).replace(/[&<>"']/g, (m) => map[m]);
 };
@@ -52,46 +52,51 @@ export const processHashtags = (content) => {
 export const extractFrontmatter = (content) => {
   const frontmatterPattern = /^---\s*\n(.*?)\n---\s*\n/s;
   const match = content.match(frontmatterPattern);
-  
+
   if (match) {
     try {
       // 간단한 YAML 파싱 (프론트엔드용)
       const yamlContent = match[1];
       const metadata = {};
-      
-      yamlContent.split('\n').forEach(line => {
+
+      yamlContent.split('\n').forEach((line) => {
         const colonIndex = line.indexOf(':');
         if (colonIndex > 0) {
           const key = line.substring(0, colonIndex).trim();
           let value = line.substring(colonIndex + 1).trim();
-          
+
           // 따옴표 제거
-          if ((value.startsWith('"') && value.endsWith('"')) || 
-              (value.startsWith("'") && value.endsWith("'"))) {
+          if (
+            (value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))
+          ) {
             value = value.slice(1, -1);
           }
-          
+
           // 배열 처리 (간단한 형태)
           if (value.startsWith('[') && value.endsWith(']')) {
-            value = value.slice(1, -1).split(',').map(v => v.trim().replace(/['"]/g, ''));
+            value = value
+              .slice(1, -1)
+              .split(',')
+              .map((v) => v.trim().replace(/['"]/g, ''));
           }
-          
+
           metadata[key] = value;
         }
       });
-      
+
       return {
         metadata,
-        content: content.substring(match[0].length)
+        content: content.substring(match[0].length),
       };
     } catch (error) {
       logWarning('obsidianRenderer.parseFrontMatter', '프론트매터 파싱 실패', { error });
     }
   }
-  
+
   return {
     metadata: {},
-    content
+    content,
   };
 };
 
@@ -100,35 +105,30 @@ export const createCustomMarkdownComponents = (navigate, documentLookup = {}) =>
     // 텍스트 노드에서 내부 링크와 해시태그 처리
     text({ children }) {
       if (typeof children !== 'string') return children;
-      
+
       // 내부 링크 처리
       let processed = processInternalLinks(children, navigate, documentLookup);
-      
+
       // 해시태그 처리
       processed = processHashtags(processed);
-      
+
       // HTML이 포함되어 있으면 DOMPurify로 살균 후 dangerouslySetInnerHTML 사용
       if (processed !== children && (processed.includes('<a') || processed.includes('<span'))) {
         const sanitized = DOMPurify.sanitize(processed, {
           ALLOWED_TAGS: ['a', 'span'],
-          ALLOWED_ATTR: ['href', 'class', 'data-target', 'title']
+          ALLOWED_ATTR: ['href', 'class', 'data-target', 'title'],
         });
         return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
       }
-      
+
       return children;
     },
-    
+
     // 코드 블록 처리 (기존 로직 유지)
     code({ node, inline, className, children, ...props }) {
       const match = /language-(\w+)/.exec(className || '');
       return !inline && match ? (
-        <SyntaxHighlighter
-          style={tomorrow}
-          language={match[1]}
-          PreTag="div"
-          {...props}
-        >
+        <SyntaxHighlighter style={tomorrow} language={match[1]} PreTag="div" {...props}>
           {String(children).replace(/\n$/, '')}
         </SyntaxHighlighter>
       ) : (
@@ -136,6 +136,6 @@ export const createCustomMarkdownComponents = (navigate, documentLookup = {}) =>
           {children}
         </code>
       );
-    }
+    },
   };
 };

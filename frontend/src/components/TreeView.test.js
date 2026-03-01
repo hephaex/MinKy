@@ -6,9 +6,7 @@ import TreeView from './TreeView';
 describe('TreeView', () => {
   const mockOnSelect = jest.fn();
 
-  const singleNode = [
-    { id: '1', label: 'Document 1', type: 'document' }
-  ];
+  const singleNode = [{ id: '1', label: 'Document 1', type: 'document' }];
 
   const createNestedNodes = () => [
     {
@@ -17,8 +15,8 @@ describe('TreeView', () => {
       type: 'folder',
       children: [
         { id: '2', label: 'Document 2', type: 'document' },
-        { id: '3', label: 'Document 3', type: 'document' }
-      ]
+        { id: '3', label: 'Document 3', type: 'document' },
+      ],
     },
     {
       id: '4',
@@ -29,12 +27,10 @@ describe('TreeView', () => {
           id: '5',
           label: 'Subfolder',
           type: 'folder',
-          children: [
-            { id: '6', label: 'Document 6', type: 'document' }
-          ]
-        }
-      ]
-    }
+          children: [{ id: '6', label: 'Document 6', type: 'document' }],
+        },
+      ],
+    },
   ];
 
   beforeEach(() => {
@@ -226,8 +222,8 @@ describe('TreeView', () => {
         label: 'Folder with count',
         type: 'folder',
         count: 5,
-        children: []
-      }
+        children: [],
+      },
     ];
 
     render(<TreeView nodes={nodesWithCount} onSelect={mockOnSelect} />);
@@ -241,8 +237,8 @@ describe('TreeView', () => {
         label: 'Colored Folder',
         type: 'folder',
         color: '#FF5733',
-        children: []
-      }
+        children: [],
+      },
     ];
 
     const { container } = render(<TreeView nodes={nodesWithColor} onSelect={mockOnSelect} />);
@@ -288,14 +284,12 @@ describe('TreeView', () => {
                 id: '3',
                 label: 'Level 3',
                 type: 'folder',
-                children: [
-                  { id: '4', label: 'Document 4', type: 'document' }
-                ]
-              }
-            ]
-          }
-        ]
-      }
+                children: [{ id: '4', label: 'Document 4', type: 'document' }],
+              },
+            ],
+          },
+        ],
+      },
     ];
 
     const { container } = render(<TreeView nodes={deepNodes} onSelect={mockOnSelect} />);
@@ -324,7 +318,9 @@ describe('TreeView', () => {
   });
 
   it('maintains state across re-renders', async () => {
-    const { container, rerender } = render(<TreeView nodes={createNestedNodes()} onSelect={mockOnSelect} />);
+    const { container, rerender } = render(
+      <TreeView nodes={createNestedNodes()} onSelect={mockOnSelect} />
+    );
 
     // Expand folder
     const folder1Item = container.querySelector('[role="treeitem"]');

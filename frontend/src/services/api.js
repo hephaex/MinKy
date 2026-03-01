@@ -162,7 +162,7 @@ export const authService = {
   refreshToken: async () => {
     const response = await api.post('/auth/refresh', {});
     return response.data;
-  }
+  },
 };
 
 export const tagService = {

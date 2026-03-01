@@ -5,17 +5,12 @@ import { highlightTextReact, truncateWithHighlight } from '../utils/highlightTex
 import { formatDateTime } from '../utils/dateUtils';
 import './DocumentCard.css';
 
-const DocumentCard = ({ 
-  document, 
-  searchQuery = '', 
-  showPreview = false,
-  formatDate 
-}) => {
+const DocumentCard = ({ document, searchQuery = '', showPreview = false, formatDate }) => {
   const dateFormatter = formatDate || formatDateTime;
-  
+
   const formatAuthor = (author) => {
     if (!author) return '';
-    
+
     // Handle case where author might be a JSON string/array
     if (typeof author === 'string') {
       try {
@@ -30,12 +25,12 @@ const DocumentCard = ({
         // If parsing fails, use the string as-is
       }
     }
-    
+
     // Handle array case
     if (Array.isArray(author) && author.length > 0) {
       author = author[0];
     }
-    
+
     // Clean up the author string
     if (typeof author === 'string') {
       author = author.trim();
@@ -46,10 +41,10 @@ const DocumentCard = ({
       // Remove quotes
       author = author.replace(/^["']|["']$/g, '');
     }
-    
+
     return author;
   };
-  
+
   // Show max 3 tags, with overflow indicator
   const maxVisibleTags = 3;
   const visibleTags = document.tags ? document.tags.slice(0, maxVisibleTags) : [];
@@ -60,8 +55,8 @@ const DocumentCard = ({
       <Link to={`/documents/${document.id}`} className="document-link">
         <div className="document-header">
           <svg className="document-icon" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M4 1h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2zm0 1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H4z"/>
-            <path d="M4.5 5.5A.5.5 0 0 1 5 5h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zM5 7a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z"/>
+            <path d="M4 1h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2zm0 1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H4z" />
+            <path d="M4.5 5.5A.5.5 0 0 1 5 5h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zM5 7a.5.5 0 0 0 0 1h6a.5.5 0 0 0 0-1H5zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H5z" />
           </svg>
           <div className="document-content">
             <h3 className="document-title">
@@ -69,14 +64,16 @@ const DocumentCard = ({
             </h3>
           </div>
         </div>
-        
+
         <div className="document-meta">
           <span>Updated {dateFormatter(document.updated_at)}</span>
           {document.author && (
             <>
               <span className="meta-separator">•</span>
               <span className="document-author">
-                {searchQuery ? highlightTextReact(formatAuthor(document.author), searchQuery) : formatAuthor(document.author)}
+                {searchQuery
+                  ? highlightTextReact(formatAuthor(document.author), searchQuery)
+                  : formatAuthor(document.author)}
               </span>
             </>
           )}
@@ -91,9 +88,7 @@ const DocumentCard = ({
               </span>
             ))}
             {remainingTagsCount > 0 && (
-              <span className="document-tag document-tag-overflow">
-                +{remainingTagsCount}
-              </span>
+              <span className="document-tag document-tag-overflow">+{remainingTagsCount}</span>
             )}
           </div>
         )}
@@ -101,11 +96,12 @@ const DocumentCard = ({
         {/* Optional preview text */}
         {showPreview && document.markdown_content && (
           <div className="document-preview">
-            {searchQuery ? 
+            {searchQuery ? (
               highlightTextReact(
                 truncateWithHighlight(document.markdown_content, searchQuery, 150),
                 searchQuery
-              ) : (
+              )
+            ) : (
               <>
                 {document.markdown_content.substring(0, 150)}
                 {document.markdown_content.length > 150 && '...'}
@@ -122,30 +118,27 @@ DocumentCard.propTypes = {
   document: PropTypes.shape({
     id: PropTypes.number.isRequired,
     title: PropTypes.string,
-    author: PropTypes.oneOfType([
-      PropTypes.string,
-      PropTypes.array
-    ]),
+    author: PropTypes.oneOfType([PropTypes.string, PropTypes.array]),
     tags: PropTypes.arrayOf(
       PropTypes.oneOfType([
         PropTypes.string,
         PropTypes.shape({
-          name: PropTypes.string
-        })
+          name: PropTypes.string,
+        }),
       ])
     ),
     updated_at: PropTypes.string,
-    markdown_content: PropTypes.string
+    markdown_content: PropTypes.string,
   }).isRequired,
   searchQuery: PropTypes.string,
   showPreview: PropTypes.bool,
-  formatDate: PropTypes.func
+  formatDate: PropTypes.func,
 };
 
 DocumentCard.defaultProps = {
   searchQuery: '',
   showPreview: false,
-  formatDate: null
+  formatDate: null,
 };
 
 export default DocumentCard;

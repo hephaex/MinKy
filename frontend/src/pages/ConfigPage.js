@@ -11,32 +11,32 @@ const ConfigPage = () => {
       title: t('navigation.settings'),
       description: t('config.settings_desc'),
       path: '/settings',
-      icon: '⚙️'
+      icon: '⚙️',
     },
     {
       title: t('navigation.user_management'),
       description: t('config.user_management_desc'),
       path: '/admin',
-      icon: '👥'
+      icon: '👥',
     },
     {
       title: t('navigation.system_overview'),
       description: t('config.system_overview_desc'),
       path: '/admin',
-      icon: '📋'
+      icon: '📋',
     },
     {
       title: t('navigation.maintenance'),
       description: t('config.maintenance_desc'),
       path: '/admin',
-      icon: '🔧'
+      icon: '🔧',
     },
     {
       title: t('navigation.sync_git'),
       description: t('config.sync_git_desc'),
       path: '/sync',
-      icon: '🔄'
-    }
+      icon: '🔄',
+    },
   ];
 
   return (

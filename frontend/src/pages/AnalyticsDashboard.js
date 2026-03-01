@@ -33,9 +33,11 @@ const AnalyticsDashboard = () => {
     <div className="stat-card">
       <div className="stat-header">
         <h3>{title}</h3>
-        {trend && <span className={`trend ${trend > 0 ? 'positive' : 'negative'}`}>
-          {trend > 0 ? '↗' : '↘'} {Math.abs(trend)}%
-        </span>}
+        {trend && (
+          <span className={`trend ${trend > 0 ? 'positive' : 'negative'}`}>
+            {trend > 0 ? '↗' : '↘'} {Math.abs(trend)}%
+          </span>
+        )}
       </div>
       <div className="stat-value">{value?.toLocaleString() || 0}</div>
       {subtitle && <div className="stat-subtitle">{subtitle}</div>}
@@ -46,7 +48,7 @@ const AnalyticsDashboard = () => {
     title: PropTypes.string.isRequired,
     value: PropTypes.number,
     subtitle: PropTypes.string,
-    trend: PropTypes.number
+    trend: PropTypes.number,
   };
 
   const ChartPlaceholder = ({ title, data }) => (
@@ -55,7 +57,11 @@ const AnalyticsDashboard = () => {
       <div className="chart-placeholder">
         <div className="chart-bars">
           {data?.slice(0, 10).map((item, index) => (
-            <div key={index} className="chart-bar" style={{height: `${Math.max(item.count * 5, 10)}px`}}>
+            <div
+              key={index}
+              className="chart-bar"
+              style={{ height: `${Math.max(item.count * 5, 10)}px` }}
+            >
               <div className="bar-label">{item.name || item.date}</div>
               <div className="bar-value">{item.count}</div>
             </div>
@@ -71,9 +77,9 @@ const AnalyticsDashboard = () => {
       PropTypes.shape({
         name: PropTypes.string,
         date: PropTypes.string,
-        count: PropTypes.number.isRequired
+        count: PropTypes.number.isRequired,
       })
-    )
+    ),
   };
 
   if (loading) {
@@ -107,8 +113,8 @@ const AnalyticsDashboard = () => {
       <div className="dashboard-header">
         <h1>Analytics Dashboard</h1>
         <div className="dashboard-controls">
-          <select 
-            value={timeRange} 
+          <select
+            value={timeRange}
             onChange={(e) => setTimeRange(parseInt(e.target.value))}
             className="time-range-select"
           >
@@ -144,24 +150,20 @@ const AnalyticsDashboard = () => {
 
       {/* Overview Stats */}
       <div className="stats-grid">
-        <StatCard 
-          title="Total Documents" 
+        <StatCard
+          title="Total Documents"
           value={stats?.overview?.total_documents}
           subtitle={`${stats?.recent_activity?.documents_last_30_days || 0} this month`}
           trend={performance?.growth_metrics?.growth_rate_percent}
         />
-        <StatCard 
-          title="Total Users" 
+        <StatCard
+          title="Total Users"
           value={stats?.overview?.total_users}
           subtitle="Registered users"
         />
-        <StatCard 
-          title="Tags" 
-          value={stats?.overview?.total_tags}
-          subtitle="Unique tags"
-        />
-        <StatCard 
-          title="Comments" 
+        <StatCard title="Tags" value={stats?.overview?.total_tags} subtitle="Unique tags" />
+        <StatCard
+          title="Comments"
           value={stats?.overview?.total_comments}
           subtitle={`${stats?.recent_activity?.comments_last_30_days || 0} this month`}
         />
@@ -169,15 +171,9 @@ const AnalyticsDashboard = () => {
 
       {/* Activity Timeline */}
       <div className="charts-grid">
-        <ChartPlaceholder 
-          title="Document Activity Timeline" 
-          data={timeline} 
-        />
-        
-        <ChartPlaceholder 
-          title="Popular Tags" 
-          data={stats?.top_tags} 
-        />
+        <ChartPlaceholder title="Document Activity Timeline" data={timeline} />
+
+        <ChartPlaceholder title="Popular Tags" data={stats?.top_tags} />
       </div>
 
       {/* Content Analytics */}
@@ -186,7 +182,9 @@ const AnalyticsDashboard = () => {
         <div className="content-stats">
           <div className="content-metric">
             <h4>Average Document Length</h4>
-            <span>{content?.document_metrics?.average_length?.toLocaleString() || 0} characters</span>
+            <span>
+              {content?.document_metrics?.average_length?.toLocaleString() || 0} characters
+            </span>
           </div>
           <div className="content-metric">
             <h4>Total Versions</h4>
@@ -236,10 +234,10 @@ const AnalyticsDashboard = () => {
             <span className="label">Public Documents</span>
             <span className="value">{stats?.overview?.published_documents || 0}</span>
             <div className="bar">
-              <div 
-                className="bar-fill public" 
+              <div
+                className="bar-fill public"
                 style={{
-                  width: `${(stats?.overview?.published_documents / Math.max(stats?.overview?.total_documents, 1)) * 100}%`
+                  width: `${(stats?.overview?.published_documents / Math.max(stats?.overview?.total_documents, 1)) * 100}%`,
                 }}
               ></div>
             </div>
@@ -248,10 +246,10 @@ const AnalyticsDashboard = () => {
             <span className="label">Private Documents</span>
             <span className="value">{stats?.overview?.private_documents || 0}</span>
             <div className="bar">
-              <div 
-                className="bar-fill private" 
+              <div
+                className="bar-fill private"
                 style={{
-                  width: `${(stats?.overview?.private_documents / Math.max(stats?.overview?.total_documents, 1)) * 100}%`
+                  width: `${(stats?.overview?.private_documents / Math.max(stats?.overview?.total_documents, 1)) * 100}%`,
                 }}
               ></div>
             </div>
@@ -261,7 +259,10 @@ const AnalyticsDashboard = () => {
 
       {/* Footer */}
       <div className="dashboard-footer">
-        <p>Last updated: {analytics?.generated_at ? new Date(analytics.generated_at).toLocaleString() : 'Unknown'}</p>
+        <p>
+          Last updated:{' '}
+          {analytics?.generated_at ? new Date(analytics.generated_at).toLocaleString() : 'Unknown'}
+        </p>
       </div>
     </div>
   );

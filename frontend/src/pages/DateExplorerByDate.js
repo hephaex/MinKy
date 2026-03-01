@@ -18,16 +18,18 @@ const DateExplorerByDate = () => {
 
   return (
     <div style={{ display: 'flex', minHeight: 'calc(100vh - 80px)', marginTop: '80px' }}>
-      <NewSimpleDateSidebar 
-        onDocumentSelect={handleDateSelect}
-        selectedDateKey={selectedDateKey}
-      />
-      
-      <div style={{ flex: 1, marginLeft: '280px', background: 'white', minHeight: 'calc(100vh - 80px)', overflowY: 'auto' }}>
-        <SimpleDocumentsByDate 
-          dateKey={selectedDateKey}
-          onDocumentClick={handleDocumentClick}
-        />
+      <NewSimpleDateSidebar onDocumentSelect={handleDateSelect} selectedDateKey={selectedDateKey} />
+
+      <div
+        style={{
+          flex: 1,
+          marginLeft: '280px',
+          background: 'white',
+          minHeight: 'calc(100vh - 80px)',
+          overflowY: 'auto',
+        }}
+      >
+        <SimpleDocumentsByDate dateKey={selectedDateKey} onDocumentClick={handleDocumentClick} />
       </div>
     </div>
   );

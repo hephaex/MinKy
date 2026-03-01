@@ -50,14 +50,14 @@ const TagInput = ({ tags = [], onChange, suggestedTags = [], onSuggestionApply }
 
   const addTag = (tagName) => {
     if (!tagName) return;
-    
+
     const normalizedTagName = tagName.toLowerCase().trim();
-    const existingTag = tags.find(tag => tag.toLowerCase() === normalizedTagName);
-    
+    const existingTag = tags.find((tag) => tag.toLowerCase() === normalizedTagName);
+
     if (!existingTag) {
       onChange([...tags, tagName]);
     }
-    
+
     setInputValue('');
     setShowSuggestions(false);
     inputRef.current?.focus();
@@ -79,9 +79,9 @@ const TagInput = ({ tags = [], onChange, suggestedTags = [], onSuggestionApply }
   // eslint-disable-next-line no-unused-vars
   const applyAllSuggestedTags = () => {
     const newTags = [...tags];
-    suggestedTags.forEach(tag => {
+    suggestedTags.forEach((tag) => {
       const normalizedTagName = tag.toLowerCase().trim();
-      const exists = newTags.some(existingTag => existingTag.toLowerCase() === normalizedTagName);
+      const exists = newTags.some((existingTag) => existingTag.toLowerCase() === normalizedTagName);
       if (!exists) {
         newTags.push(tag);
       }
@@ -119,11 +119,11 @@ const TagInput = ({ tags = [], onChange, suggestedTags = [], onSuggestionApply }
             onKeyDown={handleInputKeyDown}
             onFocus={() => setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            placeholder={tags.length === 0 ? "Add tags..." : ""}
+            placeholder={tags.length === 0 ? 'Add tags...' : ''}
             className="tag-input"
           />
         </div>
-        
+
         {showSuggestions && suggestions.length > 0 && (
           <div className="tag-suggestions">
             {suggestions.map((suggestion, index) => (
@@ -157,8 +157,8 @@ const TagInput = ({ tags = [], onChange, suggestedTags = [], onSuggestionApply }
           </div>
           <div className="ai-suggested-tags">
             {suggestedTags.map((tag, index) => {
-              const isAlreadyAdded = tags.some(existingTag => 
-                existingTag.toLowerCase() === tag.toLowerCase()
+              const isAlreadyAdded = tags.some(
+                (existingTag) => existingTag.toLowerCase() === tag.toLowerCase()
               );
               return (
                 <div
@@ -191,13 +191,13 @@ TagInput.propTypes = {
   tags: PropTypes.arrayOf(PropTypes.string),
   onChange: PropTypes.func.isRequired,
   suggestedTags: PropTypes.arrayOf(PropTypes.string),
-  onSuggestionApply: PropTypes.func
+  onSuggestionApply: PropTypes.func,
 };
 
 TagInput.defaultProps = {
   tags: [],
   suggestedTags: [],
-  onSuggestionApply: null
+  onSuggestionApply: null,
 };
 
 export default TagInput;

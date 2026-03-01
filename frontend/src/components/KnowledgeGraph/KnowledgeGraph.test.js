@@ -180,7 +180,13 @@ describe('graphLayout', () => {
 // ============================================================
 
 const sampleNodes = [
-  { id: 'n1', label: 'React Hooks', type: 'topic', documentCount: 3, topics: ['React', 'JavaScript'] },
+  {
+    id: 'n1',
+    label: 'React Hooks',
+    type: 'topic',
+    documentCount: 3,
+    topics: ['React', 'JavaScript'],
+  },
   { id: 'n2', label: 'State Management', type: 'topic', documentCount: 1 },
   { id: 'n3', label: 'Performance Guide', type: 'document', documentId: 'doc-abc' },
 ];
@@ -197,42 +203,22 @@ describe('KnowledgeGraph component', () => {
   });
 
   test('renders empty state when no nodes', () => {
-    render(
-      <KnowledgeGraph
-        nodes={[]}
-        edges={[]}
-        emptyMessage="Start by uploading documents"
-      />
-    );
+    render(<KnowledgeGraph nodes={[]} edges={[]} emptyMessage="Start by uploading documents" />);
     expect(screen.getByText('Start by uploading documents')).toBeInTheDocument();
   });
 
   test('renders default empty message when emptyMessage not provided', () => {
     render(<KnowledgeGraph nodes={[]} edges={[]} />);
-    expect(
-      screen.getByText('No knowledge connections to display yet.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('No knowledge connections to display yet.')).toBeInTheDocument();
   });
 
   test('renders graph title when provided', () => {
-    render(
-      <KnowledgeGraph
-        nodes={sampleNodes}
-        edges={sampleEdges}
-        title="Team Knowledge Map"
-      />
-    );
+    render(<KnowledgeGraph nodes={sampleNodes} edges={sampleEdges} title="Team Knowledge Map" />);
     expect(screen.getByText('Team Knowledge Map')).toBeInTheDocument();
   });
 
   test('shows node count and edge count in header', () => {
-    render(
-      <KnowledgeGraph
-        nodes={sampleNodes}
-        edges={sampleEdges}
-        title="Test Graph"
-      />
-    );
+    render(<KnowledgeGraph nodes={sampleNodes} edges={sampleEdges} title="Test Graph" />);
     expect(screen.getByText('3 nodes')).toBeInTheDocument();
     expect(screen.getByText('2 connections')).toBeInTheDocument();
   });
@@ -297,13 +283,7 @@ describe('KnowledgeGraph component', () => {
 
   test('calls onNodeClick when provided', () => {
     const handleClick = jest.fn();
-    render(
-      <KnowledgeGraph
-        nodes={sampleNodes}
-        edges={sampleEdges}
-        onNodeClick={handleClick}
-      />
-    );
+    render(<KnowledgeGraph nodes={sampleNodes} edges={sampleEdges} onNodeClick={handleClick} />);
     // Confirm the prop is accepted without error
     expect(handleClick).not.toHaveBeenCalled();
   });

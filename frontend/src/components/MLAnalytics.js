@@ -23,7 +23,7 @@ const MLAnalytics = ({ documentId, showCorpusAnalysis = false }) => {
     try {
       // SECURITY: Include auth headers for consistency
       const token = authService.getToken();
-      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
       const response = await fetch('/api/ml-analytics/status', { headers });
       const data = await response.json();
@@ -47,7 +47,7 @@ const MLAnalytics = ({ documentId, showCorpusAnalysis = false }) => {
       }
 
       const response = await fetch(`/api/ml-analytics/document/${documentId}/insights`, {
-        headers
+        headers,
       });
 
       const data = await response.json();
@@ -76,7 +76,7 @@ const MLAnalytics = ({ documentId, showCorpusAnalysis = false }) => {
       }
 
       const response = await fetch('/api/ml-analytics/corpus/insights?scope=user', {
-        headers
+        headers,
       });
 
       const data = await response.json();
@@ -105,15 +105,15 @@ const MLAnalytics = ({ documentId, showCorpusAnalysis = false }) => {
       }
 
       const response = await fetch(`/api/ml-analytics/document/${documentId}/similar`, {
-        headers
+        headers,
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setAnalytics(prev => ({
+        setAnalytics((prev) => ({
           ...prev,
-          similar_documents: data.similar_documents
+          similar_documents: data.similar_documents,
         }));
       }
     } catch (err) {
@@ -160,7 +160,7 @@ const MLAnalytics = ({ documentId, showCorpusAnalysis = false }) => {
     <div className="ml-analytics">
       <div className="analytics-header">
         <h3>ML Analytics</h3>
-        {(documentId && showCorpusAnalysis) && (
+        {documentId && showCorpusAnalysis && (
           <div className="analytics-tabs">
             <button
               className={`tab ${activeTab === 'insights' ? 'active' : ''}`}
@@ -186,9 +186,7 @@ const MLAnalytics = ({ documentId, showCorpusAnalysis = false }) => {
           {activeTab === 'insights' && documentId && (
             <DocumentInsights analytics={analytics} onLoadSimilar={getSimilarDocuments} />
           )}
-          {activeTab === 'corpus' && (
-            <CorpusInsights analytics={analytics} />
-          )}
+          {activeTab === 'corpus' && <CorpusInsights analytics={analytics} />}
         </div>
       )}
     </div>

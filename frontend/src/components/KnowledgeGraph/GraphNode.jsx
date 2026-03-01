@@ -50,7 +50,7 @@ function GraphNode({
       aria-label={`Node: ${node.label}`}
       role="button"
       tabIndex={0}
-      onKeyDown={e => e.key === 'Enter' && handleClick()}
+      onKeyDown={(e) => e.key === 'Enter' && handleClick()}
     >
       {/* Shadow for depth */}
       <circle
@@ -72,13 +72,7 @@ function GraphNode({
 
       {/* Pulse ring when selected */}
       {isSelected && (
-        <circle
-          r={radius + 6}
-          fill="none"
-          stroke="#FFD700"
-          strokeWidth={1.5}
-          opacity={0.5}
-        />
+        <circle r={radius + 6} fill="none" stroke="#FFD700" strokeWidth={1.5} opacity={0.5} />
       )}
 
       {/* Node label */}

@@ -4,7 +4,7 @@ import './DateSidebar.css';
 // Helper to get auth token for API calls
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
+  return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
 const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
@@ -13,35 +13,35 @@ const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
     expandedItems: new Set(),
     groupBy: 'month',
     loading: true,
-    error: null
+    error: null,
   });
 
   useEffect(() => {
     const fetchTimeline = async () => {
       try {
-        setState(prev => ({ ...prev, loading: true }));
+        setState((prev) => ({ ...prev, loading: true }));
         // SECURITY: Include auth headers for consistency
         const response = await fetch(`/api/documents/timeline?group_by=${state.groupBy}`, {
-          headers: getAuthHeaders()
+          headers: getAuthHeaders(),
         });
         if (!response.ok) throw new Error('Failed to fetch timeline');
-        
+
         const data = await response.json();
-        setState(prev => ({ 
-          ...prev, 
-          timeline: data.timeline, 
-          error: null, 
-          loading: false 
+        setState((prev) => ({
+          ...prev,
+          timeline: data.timeline,
+          error: null,
+          loading: false,
         }));
       } catch (err) {
-        setState(prev => ({ 
-          ...prev, 
-          error: err.message, 
-          loading: false 
+        setState((prev) => ({
+          ...prev,
+          error: err.message,
+          loading: false,
         }));
       }
     };
-    
+
     fetchTimeline();
   }, [state.groupBy]);
 
@@ -52,7 +52,7 @@ const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
     } else {
       newExpanded.add(key);
     }
-    setState(prev => ({ ...prev, expandedItems: newExpanded }));
+    setState((prev) => ({ ...prev, expandedItems: newExpanded }));
   };
 
   const handleItemClick = (item) => {
@@ -70,16 +70,12 @@ const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
 
     return (
       <div key={item.key} className="timeline-item">
-        <div 
+        <div
           className={`timeline-item-content level-${level} ${isSelected ? 'selected' : ''}`}
           onClick={() => handleItemClick(item)}
           style={{ paddingLeft: `${level * 20 + 12}px` }}
         >
-          {hasChildren && (
-            <span className={`expand-icon ${isExpanded ? 'expanded' : ''}`}>
-              ▶
-            </span>
-          )}
+          {hasChildren && <span className={`expand-icon ${isExpanded ? 'expanded' : ''}`}>▶</span>}
           <span className="timeline-label">{item.label}</span>
           <span className="timeline-count">({item.count})</span>
         </div>
@@ -88,7 +84,7 @@ const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
           <div className="timeline-children">
             {Object.values(item.children)
               .sort((a, b) => b.key.localeCompare(a.key))
-              .map(child => renderTimelineItem(child, level + 1))}
+              .map((child) => renderTimelineItem(child, level + 1))}
           </div>
         )}
       </div>
@@ -126,9 +122,9 @@ const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
       <div className="sidebar-header">
         <h3>문서 탐색</h3>
         <div className="view-controls">
-          <select 
-            value={state.groupBy} 
-            onChange={(e) => setState(prev => ({ ...prev, groupBy: e.target.value }))}
+          <select
+            value={state.groupBy}
+            onChange={(e) => setState((prev) => ({ ...prev, groupBy: e.target.value }))}
             className="group-by-select"
           >
             <option value="day">일별</option>
@@ -146,7 +142,7 @@ const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
           <div className="timeline-list">
             {Object.values(state.timeline)
               .sort((a, b) => b.key.localeCompare(a.key))
-              .map(item => renderTimelineItem(item))}
+              .map((item) => renderTimelineItem(item))}
           </div>
         )}
       </div>

@@ -215,9 +215,7 @@ describe('DocumentList', () => {
       fireEvent.submit(searchInput.closest('form') || searchInput);
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(
-          expect.stringContaining('search=search')
-        );
+        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('search=search'));
       });
     });
   });
@@ -255,9 +253,7 @@ describe('DocumentList', () => {
       fireEvent.change(categorySelect, { target: { value: '1' } });
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(
-          expect.stringContaining('category_id=1')
-        );
+        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('category_id=1'));
       });
     });
   });
@@ -282,9 +278,7 @@ describe('DocumentList', () => {
       fireEvent.change(sortSelect, { target: { value: 'title_asc' } });
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith(
-          expect.stringContaining('sort=title_asc')
-        );
+        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('sort=title_asc'));
       });
     });
   });

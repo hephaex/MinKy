@@ -42,7 +42,7 @@ const Pagination = ({ pagination, currentPage, onPageChange }) => {
       <div className="pagination-info">
         Showing page {currentPage} of {pages} ({total} total documents)
       </div>
-      
+
       <div className="pagination-controls">
         <button
           className="pagination-btn"
@@ -82,10 +82,10 @@ Pagination.propTypes = {
     pages: PropTypes.number.isRequired,
     has_prev: PropTypes.bool.isRequired,
     has_next: PropTypes.bool.isRequired,
-    total: PropTypes.number.isRequired
+    total: PropTypes.number.isRequired,
   }).isRequired,
   currentPage: PropTypes.number.isRequired,
-  onPageChange: PropTypes.func.isRequired
+  onPageChange: PropTypes.func.isRequired,
 };
 
 export default Pagination;

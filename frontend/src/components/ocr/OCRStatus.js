@@ -11,8 +11,8 @@ const OCRStatusUnavailable = ({ ocrStatus }) => (
     <div className="ocr-unavailable">
       <h3>OCR Service Unavailable</h3>
       <p>
-        OCR functionality is not available. Please ensure Tesseract is installed
-        or cloud OCR services are configured.
+        OCR functionality is not available. Please ensure Tesseract is installed or cloud OCR
+        services are configured.
       </p>
       <div className="ocr-status">
         <div className="status-item">
@@ -42,9 +42,7 @@ const OCRCapabilities = ({ ocrStatus }) => (
   <div className="ocr-capabilities">
     <div className="capability-item">
       <span className="capability-label">Supported formats:</span>
-      <span className="capability-value">
-        {ocrStatus.supported_formats.join(', ')}
-      </span>
+      <span className="capability-value">{ocrStatus.supported_formats.join(', ')}</span>
     </div>
     <div className="capability-item">
       <span className="capability-label">Max file size:</span>

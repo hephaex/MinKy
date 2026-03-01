@@ -12,7 +12,7 @@ const CategoryManager = () => {
     name: '',
     description: '',
     parent_id: null,
-    color: '#007bff'
+    color: '#007bff',
   });
 
   useEffect(() => {
@@ -41,7 +41,7 @@ const CategoryManager = () => {
       } else {
         await api.post('/categories/', formData);
       }
-      
+
       setFormData({ name: '', description: '', parent_id: null, color: '#007bff' });
       setEditingCategory(null);
       setShowCreateForm(false);
@@ -57,7 +57,7 @@ const CategoryManager = () => {
       name: category.name,
       description: category.description || '',
       parent_id: category.parent_id,
-      color: category.color || '#007bff'
+      color: category.color || '#007bff',
     });
     setShowCreateForm(true);
   };
@@ -82,32 +82,31 @@ const CategoryManager = () => {
   };
 
   const renderCategoryTree = (nodes, level = 0) => {
-    return nodes.map(node => (
-      <div key={node.category.id} className="category-item" style={{ marginLeft: `${level * 20}px` }}>
+    return nodes.map((node) => (
+      <div
+        key={node.category.id}
+        className="category-item"
+        style={{ marginLeft: `${level * 20}px` }}
+      >
         <div className="category-content">
           <div className="category-info">
             <div className="category-header">
-              <span 
-                className="category-color" 
+              <span
+                className="category-color"
                 style={{ backgroundColor: node.category.color }}
               ></span>
               <h3>{node.category.name}</h3>
-              <span className="category-count">
-                ({node.category.document_count} documents)
-              </span>
+              <span className="category-count">({node.category.document_count} documents)</span>
             </div>
             {node.category.description && (
               <p className="category-description">{node.category.description}</p>
             )}
           </div>
           <div className="category-actions">
-            <button 
-              className="btn btn-sm btn-secondary"
-              onClick={() => handleEdit(node.category)}
-            >
+            <button className="btn btn-sm btn-secondary" onClick={() => handleEdit(node.category)}>
               Edit
             </button>
-            <button 
+            <button
               className="btn btn-sm btn-danger"
               onClick={() => handleDelete(node.category.id)}
             >
@@ -116,9 +115,7 @@ const CategoryManager = () => {
           </div>
         </div>
         {node.children && node.children.length > 0 && (
-          <div className="category-children">
-            {renderCategoryTree(node.children, level + 1)}
-          </div>
+          <div className="category-children">{renderCategoryTree(node.children, level + 1)}</div>
         )}
       </div>
     ));
@@ -126,24 +123,24 @@ const CategoryManager = () => {
 
   const renderParentOptions = (nodes, level = 0) => {
     let options = [];
-    
-    nodes.forEach(node => {
+
+    nodes.forEach((node) => {
       // Don't show the category being edited as a parent option
       if (editingCategory && node.category.id === editingCategory.id) {
         return;
       }
-      
+
       options.push(
         <option key={node.category.id} value={node.category.id}>
           {'—'.repeat(level)} {node.category.name}
         </option>
       );
-      
+
       if (node.children && node.children.length > 0) {
         options = options.concat(renderParentOptions(node.children, level + 1));
       }
     });
-    
+
     return options;
   };
 
@@ -155,10 +152,7 @@ const CategoryManager = () => {
     <div className="category-manager">
       <div className="category-header">
         <h1>Category Management</h1>
-        <button 
-          className="btn btn-primary"
-          onClick={() => setShowCreateForm(true)}
-        >
+        <button className="btn btn-primary" onClick={() => setShowCreateForm(true)}>
           Create New Category
         </button>
       </div>
@@ -166,7 +160,9 @@ const CategoryManager = () => {
       {error && (
         <div className="alert alert-danger">
           {error}
-          <button onClick={() => setError(null)} className="alert-close">×</button>
+          <button onClick={() => setError(null)} className="alert-close">
+            ×
+          </button>
         </div>
       )}
 
@@ -182,7 +178,7 @@ const CategoryManager = () => {
                   id="name"
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
                 />
               </div>
@@ -192,7 +188,7 @@ const CategoryManager = () => {
                 <textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows="3"
                 />
               </div>
@@ -202,7 +198,7 @@ const CategoryManager = () => {
                 <select
                   id="parent_id"
                   value={formData.parent_id || ''}
-                  onChange={(e) => setFormData({...formData, parent_id: e.target.value || null})}
+                  onChange={(e) => setFormData({ ...formData, parent_id: e.target.value || null })}
                 >
                   <option value="">None (Root Category)</option>
                   {renderParentOptions(categories)}
@@ -215,7 +211,7 @@ const CategoryManager = () => {
                   id="color"
                   type="color"
                   value={formData.color}
-                  onChange={(e) => setFormData({...formData, color: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                 />
               </div>
 

@@ -3,12 +3,12 @@ import api from '../services/api';
 import { logError } from '../utils/logger';
 import './DocumentImport.css';
 
-const DocumentImport = ({ 
-  onDocumentImported, 
-  acceptedFileTypes = null, 
+const DocumentImport = ({
+  onDocumentImported,
+  acceptedFileTypes = null,
   fileExtensions = null,
-  title = "Document Import",
-  description = "Upload documents to convert them to Markdown format"
+  title = 'Document Import',
+  description = 'Upload documents to convert them to Markdown format',
 }) => {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
@@ -28,7 +28,7 @@ const DocumentImport = ({
     'application/json': '.json',
     'application/xml': '.xml',
     'text/xml': '.xml',
-    'application/zip': '.zip'
+    'application/zip': '.zip',
   };
 
   const handleFileSelect = (event) => {
@@ -54,19 +54,22 @@ const DocumentImport = ({
     // If specific file types are provided, use those for validation
     if (acceptedFileTypes || fileExtensions) {
       const typeMatches = acceptedFileTypes ? acceptedFileTypes.includes(file.type) : true;
-      const extensionMatches = fileExtensions ? 
-        fileExtensions.some(ext => file.name.toLowerCase().endsWith(ext.toLowerCase())) : true;
+      const extensionMatches = fileExtensions
+        ? fileExtensions.some((ext) => file.name.toLowerCase().endsWith(ext.toLowerCase()))
+        : true;
       return typeMatches && extensionMatches;
     }
-    
+
     // Exclude image files - they should use OCR instead
     if (file.type && file.type.startsWith('image/')) {
       return false;
     }
-    
+
     // Otherwise, use the default supported types
-    return Object.keys(supportedTypes).includes(file.type) || 
-           Object.values(supportedTypes).some(ext => file.name.toLowerCase().endsWith(ext));
+    return (
+      Object.keys(supportedTypes).includes(file.type) ||
+      Object.values(supportedTypes).some((ext) => file.name.toLowerCase().endsWith(ext))
+    );
   };
 
   const handleImport = async () => {
@@ -82,7 +85,9 @@ const DocumentImport = ({
     for (const file of files) {
       if (!isFileSupported(file)) {
         if (file.type && file.type.startsWith('image/')) {
-          newErrors.push(`${file.name}: Image files should use the OCR Text Extraction tab instead of Document Conversion`);
+          newErrors.push(
+            `${file.name}: Image files should use the OCR Text Extraction tab instead of Document Conversion`
+          );
         } else {
           newErrors.push(`${file.name}: Unsupported file type (${file.type || 'unknown'})`);
         }
@@ -97,13 +102,13 @@ const DocumentImport = ({
         const response = await api.post('/documents/import', formData, {
           timeout: 120000, // 2 minutes timeout for large files
         });
-        
+
         if (response.data.success) {
           newResults.push({
             filename: file.name,
             document: response.data.document,
             tags: response.data.tags || [],
-            message: response.data.message
+            message: response.data.message,
           });
         } else {
           newErrors.push(`${file.name}: ${response.data.error || 'Import failed'}`);
@@ -111,9 +116,11 @@ const DocumentImport = ({
       } catch (error) {
         logError('DocumentImport', error, {
           status: error.response?.status,
-          data: error.response?.data
+          data: error.response?.data,
         });
-        newErrors.push(`${file.name}: ${error.response?.data?.error || error.message || 'Import failed'}`);
+        newErrors.push(
+          `${file.name}: ${error.response?.data?.error || error.message || 'Import failed'}`
+        );
       }
     }
 
@@ -123,7 +130,7 @@ const DocumentImport = ({
 
     // Call callback with successful imports
     if (newResults.length > 0 && onDocumentImported) {
-      onDocumentImported(newResults.map(r => r.document));
+      onDocumentImported(newResults.map((r) => r.document));
     }
   };
 
@@ -154,7 +161,7 @@ const DocumentImport = ({
     <div className="document-import">
       <div className="import-section">
         <div className="upload-area">
-          <div 
+          <div
             className="drop-zone"
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -163,9 +170,7 @@ const DocumentImport = ({
             <div className="drop-zone-content">
               <div className="upload-icon">📁</div>
               <h3>{title}</h3>
-              <p>
-                {description}
-              </p>
+              <p>{description}</p>
               <div className="supported-formats">
                 <span>.docx</span>
                 <span>.pptx</span>
@@ -182,7 +187,7 @@ const DocumentImport = ({
               </div>
             </div>
           </div>
-          
+
           <input
             ref={fileInputRef}
             type="file"
@@ -203,15 +208,16 @@ const DocumentImport = ({
             </div>
             <div className="files-list">
               {files.map((file, index) => (
-                <div key={index} className={`file-item ${!isFileSupported(file) ? 'unsupported' : ''}`}>
+                <div
+                  key={index}
+                  className={`file-item ${!isFileSupported(file) ? 'unsupported' : ''}`}
+                >
                   <span className="file-icon">{getFileIcon(file)}</span>
                   <div className="file-info">
                     <div className="file-name">{file.name}</div>
                     <div className="file-size">{(file.size / 1024 / 1024).toFixed(2)} MB</div>
                   </div>
-                  {!isFileSupported(file) && (
-                    <span className="unsupported-badge">Unsupported</span>
-                  )}
+                  {!isFileSupported(file) && <span className="unsupported-badge">Unsupported</span>}
                 </div>
               ))}
             </div>
@@ -219,7 +225,7 @@ const DocumentImport = ({
         )}
 
         <div className="import-actions">
-          <button 
+          <button
             className="btn btn-primary"
             onClick={handleImport}
             disabled={files.length === 0 || uploading}
@@ -230,9 +236,7 @@ const DocumentImport = ({
                 Importing...
               </>
             ) : (
-              <>
-                📥 Import Documents
-              </>
+              <>📥 Import Documents</>
             )}
           </button>
         </div>
@@ -242,7 +246,7 @@ const DocumentImport = ({
       {(results.length > 0 || errors.length > 0) && (
         <div className="import-results">
           <h4>Import Results</h4>
-          
+
           {results.length > 0 && (
             <div className="success-results">
               <h5>✅ Successfully Imported ({results.length})</h5>
@@ -266,9 +270,7 @@ const DocumentImport = ({
                         ))}
                       </div>
                     )}
-                    {result.message && (
-                      <div className="result-message">{result.message}</div>
-                    )}
+                    {result.message && <div className="result-message">{result.message}</div>}
                   </div>
                 </div>
               ))}

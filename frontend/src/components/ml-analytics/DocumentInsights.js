@@ -10,7 +10,9 @@ const DocumentInsights = ({ analytics, onLoadSimilar }) => {
           <div className="stats-grid">
             <div className="stat-item">
               <span className="stat-label">Words</span>
-              <span className="stat-value">{analytics.basic_stats.word_count.toLocaleString()}</span>
+              <span className="stat-value">
+                {analytics.basic_stats.word_count.toLocaleString()}
+              </span>
             </div>
             <div className="stat-item">
               <span className="stat-label">Reading Time</span>
@@ -49,18 +51,22 @@ const DocumentInsights = ({ analytics, onLoadSimilar }) => {
                   style={{ width: `${analytics.content_analysis.complexity_score}%` }}
                 ></div>
               </div>
-              <span className="analysis-value">{analytics.content_analysis.complexity_score.toFixed(1)}/100</span>
+              <span className="analysis-value">
+                {analytics.content_analysis.complexity_score.toFixed(1)}/100
+              </span>
             </div>
 
             {analytics.content_analysis.keyword_density && (
               <div className="keyword-density">
                 <h5>Top Keywords</h5>
                 <div className="keywords">
-                  {Object.entries(analytics.content_analysis.keyword_density).map(([keyword, density]) => (
-                    <span key={keyword} className="keyword-tag">
-                      {keyword} ({density.toFixed(1)}%)
-                    </span>
-                  ))}
+                  {Object.entries(analytics.content_analysis.keyword_density).map(
+                    ([keyword, density]) => (
+                      <span key={keyword} className="keyword-tag">
+                        {keyword} ({density.toFixed(1)}%)
+                      </span>
+                    )
+                  )}
                 </div>
               </div>
             )}

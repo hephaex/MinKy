@@ -53,7 +53,7 @@ const useTags = (options = {}) => {
     loading,
     error,
     refetch: fetchTags,
-    setTags
+    setTags,
   };
 };
 

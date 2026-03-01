@@ -6,7 +6,7 @@ import {
   OCRStatusUnavailable,
   OCRCapabilities,
   OCRResult,
-  OCRDocumentForm
+  OCRDocumentForm,
 } from './ocr';
 import './OCRUpload.css';
 
@@ -22,7 +22,7 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
   const [formData, setFormData] = useState({
     title: '',
     author: '',
-    is_public: true
+    is_public: true,
   });
 
   useEffect(() => {
@@ -30,7 +30,7 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
       try {
         // SECURITY: Include auth headers for consistency
         const token = authService.getToken();
-        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
         const statusResponse = await fetch('/api/ocr/status', { headers });
         const statusData = await statusResponse.json();
@@ -90,7 +90,7 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
       'image/jpg',
       'image/tiff',
       'image/bmp',
-      'image/gif'
+      'image/gif',
     ];
     return allowedTypes.includes(file.type) || /\.(pdf|png|jpe?g|tiff?|bmp|gif)$/i.test(file.name);
   };
@@ -122,7 +122,7 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
       const response = await fetch('/api/ocr/extract', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: formDataObj
+        body: formDataObj,
       });
 
       const data = await response.json();
@@ -163,7 +163,7 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
       const response = await fetch('/api/ocr/extract-and-create', {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: formDataObj
+        body: formDataObj,
       });
 
       const data = await response.json();
@@ -185,10 +185,14 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
 
   const handleOCRError = (errorMessage) => {
     const msg = errorMessage || 'OCR extraction failed';
-    if (msg.toLowerCase().includes('service unavailable') ||
-        msg.toLowerCase().includes('not available') ||
-        msg.toLowerCase().includes('unavailable')) {
-      setError('OCR Service is currently unavailable. Please check that Tesseract is installed or cloud OCR services are configured.');
+    if (
+      msg.toLowerCase().includes('service unavailable') ||
+      msg.toLowerCase().includes('not available') ||
+      msg.toLowerCase().includes('unavailable')
+    ) {
+      setError(
+        'OCR Service is currently unavailable. Please check that Tesseract is installed or cloud OCR services are configured.'
+      );
     } else {
       setError(msg);
     }
@@ -196,7 +200,9 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
 
   const handleNetworkError = (err) => {
     if (err.message.includes('Failed to fetch') || err.message.includes('Network Error')) {
-      setError('Unable to connect to OCR service. Please ensure the server is running and try again.');
+      setError(
+        'Unable to connect to OCR service. Please ensure the server is running and try again.'
+      );
     } else {
       setError('Error during OCR processing: ' + err.message);
     }
@@ -237,7 +243,7 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
             onChange={(e) => setLanguage(e.target.value)}
             className="form-control"
           >
-            {supportedLanguages.map(lang => (
+            {supportedLanguages.map((lang) => (
               <option key={lang.code} value={lang.code}>
                 {lang.name}
               </option>
@@ -246,12 +252,7 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
         </div>
       )}
 
-      {mode === 'create' && (
-        <OCRDocumentForm
-          formData={formData}
-          onChange={setFormData}
-        />
-      )}
+      {mode === 'create' && <OCRDocumentForm formData={formData} onChange={setFormData} />}
 
       <div className="ocr-actions">
         {mode === 'extract' ? (

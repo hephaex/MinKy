@@ -109,9 +109,7 @@ export const useChat = () => {
       try {
         if (!sessionId) {
           try {
-            const session = await chatService.createSession(
-              content.slice(0, 60)
-            );
+            const session = await chatService.createSession(content.slice(0, 60));
             sessionId = session.id;
             setSessions((prev) => [session, ...prev]);
             setActiveSessionId(sessionId);
@@ -130,10 +128,7 @@ export const useChat = () => {
           setStreamingMessageId(aiMsgId);
 
           // Add initial empty message for streaming
-          setMessages((prev) => [
-            ...prev,
-            buildAssistantMessage(aiMsgId, '', [], true),
-          ]);
+          setMessages((prev) => [...prev, buildAssistantMessage(aiMsgId, '', [], true)]);
 
           let sources = [];
 
@@ -149,9 +144,7 @@ export const useChat = () => {
                 sources = receivedSources;
                 setMessages((prev) =>
                   prev.map((msg) =>
-                    msg.id === aiMsgId
-                      ? { ...msg, sources: receivedSources }
-                      : msg
+                    msg.id === aiMsgId ? { ...msg, sources: receivedSources } : msg
                   )
                 );
               },
@@ -159,9 +152,7 @@ export const useChat = () => {
                 streamingContentRef.current += text;
                 setMessages((prev) =>
                   prev.map((msg) =>
-                    msg.id === aiMsgId
-                      ? { ...msg, content: streamingContentRef.current }
-                      : msg
+                    msg.id === aiMsgId ? { ...msg, content: streamingContentRef.current } : msg
                   )
                 );
               },
@@ -216,7 +207,11 @@ export const useChat = () => {
         setSessions((prev) =>
           prev.map((s) =>
             s.id === sessionId
-              ? { ...s, title: s.title === 'New Chat' ? content.slice(0, 60) : s.title, updatedAt: new Date().toISOString() }
+              ? {
+                  ...s,
+                  title: s.title === 'New Chat' ? content.slice(0, 60) : s.title,
+                  updatedAt: new Date().toISOString(),
+                }
               : s
           )
         );

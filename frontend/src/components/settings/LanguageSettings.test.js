@@ -4,7 +4,7 @@ import LanguageSettings from './LanguageSettings';
 import * as i18n from '../../i18n/i18n';
 
 jest.mock('../../i18n/i18n', () => ({
-  LanguageSelector: () => <div data-testid="language-selector">Language Selector</div>
+  LanguageSelector: () => <div data-testid="language-selector">Language Selector</div>,
 }));
 
 describe('LanguageSettings', () => {

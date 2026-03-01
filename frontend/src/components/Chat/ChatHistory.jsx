@@ -35,9 +35,7 @@ const ChatHistory = ({ sessions, activeId = null, onSelect, onNew, onDelete = nu
             >
               <span className="chat-history__item-title">{session.title || 'Untitled'}</span>
               <span className="chat-history__item-date">
-                {session.updatedAt
-                  ? new Date(session.updatedAt).toLocaleDateString()
-                  : ''}
+                {session.updatedAt ? new Date(session.updatedAt).toLocaleDateString() : ''}
               </span>
             </button>
             {onDelete && (

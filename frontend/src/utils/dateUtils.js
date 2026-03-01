@@ -16,7 +16,7 @@ export const formatDate = (dateString, locale = 'en-US') => {
     return new Date(dateString).toLocaleDateString(locale, {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     });
   } catch {
     return '';
@@ -38,7 +38,7 @@ export const formatDateTime = (dateString, locale = 'en-US') => {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   } catch {
     return '';

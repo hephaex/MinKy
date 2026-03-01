@@ -9,15 +9,12 @@ import { I18nProvider } from './i18n/i18n';
 const AllTheProviders = ({ children }) => {
   return (
     <BrowserRouter>
-      <I18nProvider>
-        {children}
-      </I18nProvider>
+      <I18nProvider>{children}</I18nProvider>
     </BrowserRouter>
   );
 };
 
-const customRender = (ui, options) =>
-  render(ui, { wrapper: AllTheProviders, ...options });
+const customRender = (ui, options) => render(ui, { wrapper: AllTheProviders, ...options });
 
 // Re-export everything
 export * from '@testing-library/react';
@@ -48,9 +45,5 @@ export const mockI18n = {
  */
 export const MockI18nProvider = ({ children, value = mockI18n }) => {
   const I18nContext = React.createContext(value);
-  return (
-    <I18nContext.Provider value={value}>
-      {children}
-    </I18nContext.Provider>
-  );
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 };

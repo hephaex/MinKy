@@ -45,11 +45,11 @@ const SearchBar = ({ onSearch, initialValue = '' }) => {
 
 SearchBar.propTypes = {
   onSearch: PropTypes.func.isRequired,
-  initialValue: PropTypes.string
+  initialValue: PropTypes.string,
 };
 
 SearchBar.defaultProps = {
-  initialValue: ''
+  initialValue: '',
 };
 
 export default SearchBar;

@@ -1,10 +1,7 @@
 import React from 'react';
 
 const TabButton = ({ tab, label, active, onClick }) => (
-  <button
-    className={`tab-button ${active ? 'active' : ''}`}
-    onClick={onClick}
-  >
+  <button className={`tab-button ${active ? 'active' : ''}`} onClick={onClick}>
     {label}
   </button>
 );
@@ -19,7 +16,7 @@ const AdminTabs = ({ activeTab, onTabChange }) => {
 
   return (
     <div className="admin-tabs">
-      {tabs.map(tab => (
+      {tabs.map((tab) => (
         <TabButton
           key={tab.id}
           tab={tab.id}

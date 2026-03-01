@@ -8,7 +8,7 @@ describe('AdminOverview', () => {
       total: 50,
       active: 42,
       admins: 3,
-      new_this_week: 5
+      new_this_week: 5,
     },
     content: {
       documents: 250,
@@ -16,12 +16,12 @@ describe('AdminOverview', () => {
       tags: 45,
       comments: 320,
       new_documents_week: 12,
-      new_comments_week: 35
+      new_comments_week: 35,
     },
     storage: {
       estimated_kb: 512000,
-      avg_document_size: 2048
-    }
+      avg_document_size: 2048,
+    },
   };
 
   it('returns null when systemStats is not provided', () => {
@@ -131,7 +131,7 @@ describe('AdminOverview', () => {
   it('formats large numbers with locale string', () => {
     const largeStats = {
       ...mockSystemStats,
-      users: { ...mockSystemStats.users, total: 1000000 }
+      users: { ...mockSystemStats.users, total: 1000000 },
     };
     render(<AdminOverview systemStats={largeStats} />);
     expect(screen.getByText(/1,000,000/)).toBeInTheDocument();
@@ -140,8 +140,15 @@ describe('AdminOverview', () => {
   it('handles zero values', () => {
     const zeroStats = {
       users: { total: 0, active: 0, admins: 0, new_this_week: 0 },
-      content: { documents: 0, public_documents: 0, tags: 0, comments: 0, new_documents_week: 0, new_comments_week: 0 },
-      storage: { estimated_kb: 0, avg_document_size: 0 }
+      content: {
+        documents: 0,
+        public_documents: 0,
+        tags: 0,
+        comments: 0,
+        new_documents_week: 0,
+        new_comments_week: 0,
+      },
+      storage: { estimated_kb: 0, avg_document_size: 0 },
     };
     render(<AdminOverview systemStats={zeroStats} />);
     expect(screen.getByText('0 active, 0 admins')).toBeInTheDocument();

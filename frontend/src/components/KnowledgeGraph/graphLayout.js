@@ -59,8 +59,8 @@ function runIteration(nodes, edges, width, height) {
 
   // Attraction forces along edges
   for (const edge of edges) {
-    const sourceIndex = nodes.findIndex(n => n.id === edge.source);
-    const targetIndex = nodes.findIndex(n => n.id === edge.target);
+    const sourceIndex = nodes.findIndex((n) => n.id === edge.source);
+    const targetIndex = nodes.findIndex((n) => n.id === edge.target);
 
     if (sourceIndex === -1 || targetIndex === -1) continue;
 

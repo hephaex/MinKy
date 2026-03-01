@@ -43,9 +43,9 @@ const ImportPage = () => {
       // Multiple files uploaded
       setUploadStatus({
         type: 'success',
-        message: response.message
+        message: response.message,
       });
-      
+
       // Navigate to documents page after successful upload
       setTimeout(() => {
         navigate('/');
@@ -54,9 +54,9 @@ const ImportPage = () => {
       // Single file uploaded
       setUploadStatus({
         type: 'success',
-        message: `File uploaded successfully! Document "${response.document.title}" has been created.`
+        message: `File uploaded successfully! Document "${response.document.title}" has been created.`,
       });
-      
+
       // Navigate to the new document after a brief delay
       setTimeout(() => {
         navigate(`/documents/${response.document.id}`);
@@ -67,7 +67,7 @@ const ImportPage = () => {
   const handleUploadError = (error) => {
     setUploadStatus({
       type: 'error',
-      message: error
+      message: error,
     });
   };
 
@@ -81,14 +81,11 @@ const ImportPage = () => {
         <div className="header-content">
           <h1>Import Documents</h1>
           <p>
-            Import documents from various sources: extract text from images/PDFs using OCR, 
-            or convert documents from multiple formats (Office, PDF, HTML, etc.) to Markdown.
+            Import documents from various sources: extract text from images/PDFs using OCR, or
+            convert documents from multiple formats (Office, PDF, HTML, etc.) to Markdown.
           </p>
         </div>
-        <button 
-          className="btn btn-secondary"
-          onClick={() => navigate(-1)}
-        >
+        <button className="btn btn-secondary" onClick={() => navigate(-1)}>
           ← Back
         </button>
       </div>
@@ -98,25 +95,27 @@ const ImportPage = () => {
         {uploadStatus && (
           <div className={`upload-status ${uploadStatus.type}`}>
             <span>{uploadStatus.message}</span>
-            <button className="close-btn" onClick={clearUploadStatus}>×</button>
+            <button className="close-btn" onClick={clearUploadStatus}>
+              ×
+            </button>
           </div>
         )}
 
         <div className="import-modes">
           <div className="mode-tabs">
-            <div 
+            <div
               className={`tab ${activeTab === 'upload-md' ? 'active' : ''}`}
               onClick={() => setActiveTab('upload-md')}
             >
               📄 Upload *.md
             </div>
-            <div 
+            <div
               className={`tab ${activeTab === 'convert' ? 'active' : ''}`}
               onClick={() => setActiveTab('convert')}
             >
               📄 Document Conversion
             </div>
-            <div 
+            <div
               className={`tab ${activeTab === 'ocr' ? 'active' : ''}`}
               onClick={() => setActiveTab('ocr')}
             >
@@ -131,19 +130,17 @@ const ImportPage = () => {
                   <h3>Upload Markdown Files</h3>
                   <p>Upload your .md files directly to your document library</p>
                 </div>
-                <FileUpload 
+                <FileUpload
                   onUploadSuccess={handleUploadSuccess}
                   onUploadError={handleUploadError}
                 />
               </div>
             )}
             {activeTab === 'convert' && (
-              <DocumentImport 
-                onDocumentImported={handleDocumentImported}
-              />
+              <DocumentImport onDocumentImported={handleDocumentImported} />
             )}
             {activeTab === 'ocr' && (
-              <OCRUpload 
+              <OCRUpload
                 mode="create"
                 onDocumentCreated={handleDocumentCreated}
                 onTextExtracted={handleTextExtracted}
@@ -205,8 +202,8 @@ const ImportPage = () => {
               <div className="info-section">
                 <h3>Supported languages</h3>
                 <p>
-                  The OCR service supports multiple languages including English, Korean, Japanese, 
-                  Chinese (Simplified/Traditional), French, German, Spanish, Italian, Portuguese, 
+                  The OCR service supports multiple languages including English, Korean, Japanese,
+                  Chinese (Simplified/Traditional), French, German, Spanish, Italian, Portuguese,
                   Russian, Arabic, Hindi, Thai, and Vietnamese.
                 </p>
               </div>
@@ -229,13 +226,28 @@ const ImportPage = () => {
               <div className="info-section">
                 <h3>Supported file formats</h3>
                 <ul>
-                  <li><strong>Office Documents:</strong> .docx, .pptx, .xlsx</li>
-                  <li><strong>PDF Documents:</strong> .pdf (text extraction and conversion)</li>
-                  <li><strong>Web Formats:</strong> .html, .htm</li>
-                  <li><strong>Text Formats:</strong> .txt, .csv, .json, .xml</li>
-                  <li><strong>Archives:</strong> .zip (extracts and processes contents)</li>
+                  <li>
+                    <strong>Office Documents:</strong> .docx, .pptx, .xlsx
+                  </li>
+                  <li>
+                    <strong>PDF Documents:</strong> .pdf (text extraction and conversion)
+                  </li>
+                  <li>
+                    <strong>Web Formats:</strong> .html, .htm
+                  </li>
+                  <li>
+                    <strong>Text Formats:</strong> .txt, .csv, .json, .xml
+                  </li>
+                  <li>
+                    <strong>Archives:</strong> .zip (extracts and processes contents)
+                  </li>
                 </ul>
-                <p><em>Note: Image files (.png, .jpg, .jpeg) should use the "OCR Text Extraction" tab for better results.</em></p>
+                <p>
+                  <em>
+                    Note: Image files (.png, .jpg, .jpeg) should use the "OCR Text Extraction" tab
+                    for better results.
+                  </em>
+                </p>
               </div>
 
               <div className="info-section">

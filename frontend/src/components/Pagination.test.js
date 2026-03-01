@@ -28,11 +28,7 @@ describe('Pagination', () => {
 
   it('displays current page and total info', () => {
     render(
-      <Pagination
-        pagination={basePagination}
-        currentPage={5}
-        onPageChange={mockOnPageChange}
-      />
+      <Pagination pagination={basePagination} currentPage={5} onPageChange={mockOnPageChange} />
     );
     expect(screen.getByText(/Showing page 5 of 10/)).toBeInTheDocument();
     expect(screen.getByText(/100 total documents/)).toBeInTheDocument();
@@ -62,11 +58,7 @@ describe('Pagination', () => {
 
   it('calls onPageChange with previous page when Previous is clicked', () => {
     render(
-      <Pagination
-        pagination={basePagination}
-        currentPage={5}
-        onPageChange={mockOnPageChange}
-      />
+      <Pagination pagination={basePagination} currentPage={5} onPageChange={mockOnPageChange} />
     );
     fireEvent.click(screen.getByText('Previous'));
     expect(mockOnPageChange).toHaveBeenCalledWith(4);
@@ -74,11 +66,7 @@ describe('Pagination', () => {
 
   it('calls onPageChange with next page when Next is clicked', () => {
     render(
-      <Pagination
-        pagination={basePagination}
-        currentPage={5}
-        onPageChange={mockOnPageChange}
-      />
+      <Pagination pagination={basePagination} currentPage={5} onPageChange={mockOnPageChange} />
     );
     fireEvent.click(screen.getByText('Next'));
     expect(mockOnPageChange).toHaveBeenCalledWith(6);
@@ -86,11 +74,7 @@ describe('Pagination', () => {
 
   it('calls onPageChange when a page number is clicked', () => {
     render(
-      <Pagination
-        pagination={basePagination}
-        currentPage={5}
-        onPageChange={mockOnPageChange}
-      />
+      <Pagination pagination={basePagination} currentPage={5} onPageChange={mockOnPageChange} />
     );
     fireEvent.click(screen.getByText('3'));
     expect(mockOnPageChange).toHaveBeenCalledWith(3);
@@ -98,11 +82,7 @@ describe('Pagination', () => {
 
   it('marks current page button as active', () => {
     render(
-      <Pagination
-        pagination={basePagination}
-        currentPage={5}
-        onPageChange={mockOnPageChange}
-      />
+      <Pagination pagination={basePagination} currentPage={5} onPageChange={mockOnPageChange} />
     );
     const currentPageButton = screen.getByText('5');
     expect(currentPageButton).toHaveClass('active');
@@ -110,11 +90,7 @@ describe('Pagination', () => {
 
   it('shows ellipsis for large page ranges', () => {
     render(
-      <Pagination
-        pagination={basePagination}
-        currentPage={5}
-        onPageChange={mockOnPageChange}
-      />
+      <Pagination pagination={basePagination} currentPage={5} onPageChange={mockOnPageChange} />
     );
     const dots = screen.getAllByText('...');
     expect(dots.length).toBeGreaterThan(0);
@@ -122,11 +98,7 @@ describe('Pagination', () => {
 
   it('always shows first and last page', () => {
     render(
-      <Pagination
-        pagination={basePagination}
-        currentPage={5}
-        onPageChange={mockOnPageChange}
-      />
+      <Pagination pagination={basePagination} currentPage={5} onPageChange={mockOnPageChange} />
     );
     expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText('10')).toBeInTheDocument();

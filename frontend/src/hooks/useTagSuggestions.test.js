@@ -62,9 +62,7 @@ describe('useTagSuggestions', () => {
       });
 
       // Should only have one React tag
-      const reactTags = result.current.tags.filter(t =>
-        t.toLowerCase() === 'react'
-      );
+      const reactTags = result.current.tags.filter((t) => t.toLowerCase() === 'react');
       expect(reactTags).toHaveLength(1);
     });
 
@@ -139,7 +137,7 @@ describe('useTagSuggestions', () => {
       });
 
       // Tag is normalized but original form may be preserved
-      expect(result.current.tags.some(t => t.trim() === 'spaced')).toBe(true);
+      expect(result.current.tags.some((t) => t.trim() === 'spaced')).toBe(true);
     });
 
     it('calls onTagsChange when tag is added', () => {
@@ -156,9 +154,11 @@ describe('useTagSuggestions', () => {
 
   describe('removeTag', () => {
     it('removes tag at specified index', () => {
-      const { result } = renderHook(() => useTagSuggestions({
-        initialTags: ['first', 'second', 'third']
-      }));
+      const { result } = renderHook(() =>
+        useTagSuggestions({
+          initialTags: ['first', 'second', 'third'],
+        })
+      );
 
       act(() => {
         result.current.removeTag(1);
@@ -169,10 +169,12 @@ describe('useTagSuggestions', () => {
 
     it('calls onTagsChange when tag is removed', () => {
       const onTagsChange = jest.fn();
-      const { result } = renderHook(() => useTagSuggestions({
-        initialTags: ['test'],
-        onTagsChange
-      }));
+      const { result } = renderHook(() =>
+        useTagSuggestions({
+          initialTags: ['test'],
+          onTagsChange,
+        })
+      );
 
       act(() => {
         result.current.removeTag(0);

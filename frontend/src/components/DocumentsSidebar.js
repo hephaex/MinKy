@@ -54,7 +54,7 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
       <div className="sidebar-header">
         <button className="sidebar-toggle" onClick={onToggle}>
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+            <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
           </svg>
         </button>
         <h2>Documents</h2>
@@ -73,7 +73,9 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
         <div className="sidebar-section">
           <div className="section-item">
             <div className="item-icon">📥</div>
-            <Link to="/import" className="item-link">Import</Link>
+            <Link to="/import" className="item-link">
+              Import
+            </Link>
           </div>
         </div>
 
@@ -85,17 +87,9 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
           ) : (
             <div className="document-list">
               {recentDocuments.map((doc) => (
-                <Link 
-                  key={doc.id} 
-                  to={`/documents/${doc.id}`} 
-                  className="document-item"
-                >
-                  <div className="document-title">
-                    {truncateTitle(doc.title)}
-                  </div>
-                  <div className="document-date">
-                    {formatDate(doc.created_at)}
-                  </div>
+                <Link key={doc.id} to={`/documents/${doc.id}`} className="document-item">
+                  <div className="document-title">{truncateTitle(doc.title)}</div>
+                  <div className="document-date">{formatDate(doc.created_at)}</div>
                 </Link>
               ))}
               {recentDocuments.length === 0 && !loading && (
@@ -109,35 +103,27 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
         <div className="sidebar-section">
           <div className="section-header">
             <h3 className="section-title">모든 md</h3>
-            <button 
-              className="toggle-btn"
-              onClick={() => setAllMdExpanded(!allMdExpanded)}
-            >
-              <svg 
-                width="12" 
-                height="12" 
-                viewBox="0 0 12 12" 
+            <button className="toggle-btn" onClick={() => setAllMdExpanded(!allMdExpanded)}>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
                 fill="currentColor"
-                style={{ transform: allMdExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                style={{
+                  transform: allMdExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
               >
-                <path d="M4.5 1.5l4 3-4 3z"/>
+                <path d="M4.5 1.5l4 3-4 3z" />
               </svg>
             </button>
           </div>
           {allMdExpanded && (
             <div className="document-list">
               {allDocuments.slice(0, 15).map((doc) => (
-                <Link 
-                  key={doc.id} 
-                  to={`/documents/${doc.id}`} 
-                  className="document-item"
-                >
-                  <div className="document-title">
-                    {truncateTitle(doc.title)}
-                  </div>
-                  <div className="document-date">
-                    {formatDate(doc.updated_at)}
-                  </div>
+                <Link key={doc.id} to={`/documents/${doc.id}`} className="document-item">
+                  <div className="document-title">{truncateTitle(doc.title)}</div>
+                  <div className="document-date">{formatDate(doc.updated_at)}</div>
                 </Link>
               ))}
               {allDocuments.length === 0 && !loading && (
@@ -153,7 +139,7 @@ const DocumentsSidebar = ({ isVisible, onToggle }) => {
 
 DocumentsSidebar.propTypes = {
   isVisible: PropTypes.bool.isRequired,
-  onToggle: PropTypes.func.isRequired
+  onToggle: PropTypes.func.isRequired,
 };
 
 export default DocumentsSidebar;

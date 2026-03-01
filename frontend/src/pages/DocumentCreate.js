@@ -15,7 +15,7 @@ const DocumentCreate = () => {
     title: '',
     author: '',
     markdown_content: '',
-    category_id: null
+    category_id: null,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -23,41 +23,36 @@ const DocumentCreate = () => {
 
   // Use custom hooks
   const { categories } = useCategories();
-  const {
-    tags,
-    suggestedTags,
-    handleTagSuggestions,
-    handleTagsChange,
-    clearSuggestedTags
-  } = useTagSuggestions();
+  const { tags, suggestedTags, handleTagSuggestions, handleTagsChange, clearSuggestedTags } =
+    useTagSuggestions();
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleMarkdownChange = (value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      markdown_content: value || ''
+      markdown_content: value || '',
     }));
   };
 
   const handleTitleSuggestion = (suggestedTitle) => {
     if (suggestedTitle && !formData.title.trim()) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        title: suggestedTitle
+        title: suggestedTitle,
       }));
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.title.trim() || !formData.markdown_content.trim()) {
       setError('Title and content are required');
       return;
@@ -66,15 +61,15 @@ const DocumentCreate = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const document = await documentService.createDocument({
         title: formData.title.trim(),
         author: formData.author.trim() || null,
         markdown_content: formData.markdown_content.trim(),
         category_id: formData.category_id || null,
-        tags: tags
+        tags: tags,
       });
-      
+
       navigate(`/documents/${document.id}`);
     } catch (err) {
       setError('Failed to create document');
@@ -90,7 +85,7 @@ const DocumentCreate = () => {
 
   const handleOCRTextExtracted = (result) => {
     // Pre-fill form with OCR results
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       markdown_content: result.text || '',
       title: prev.title || `OCR Extract from ${result.filename}`,
@@ -103,34 +98,34 @@ const DocumentCreate = () => {
       <div className="document-form-header">
         <h2>Create New Document</h2>
         <div className="form-actions">
-          <button 
-            type="button" 
-            className="btn btn-outline-primary" 
+          <button
+            type="button"
+            className="btn btn-outline-primary"
             onClick={() => setShowOCR(!showOCR)}
             disabled={loading}
             title="Extract text from images or PDFs"
           >
             📄 OCR
           </button>
-          <Link 
-            to="/ocr" 
+          <Link
+            to="/ocr"
             className="btn btn-outline-secondary"
             title="Full OCR page with document creation"
           >
             🔍 Advanced OCR
           </Link>
-          <button 
-            type="button" 
-            className="btn btn-secondary" 
+          <button
+            type="button"
+            className="btn btn-secondary"
             onClick={handleCancel}
             disabled={loading}
           >
             Cancel
           </button>
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             form="document-form"
-            className="btn btn-primary" 
+            className="btn btn-primary"
             disabled={loading || !formData.title.trim() || !formData.markdown_content.trim()}
           >
             {loading ? 'Creating...' : 'Create Document'}
@@ -142,10 +137,7 @@ const DocumentCreate = () => {
 
       {showOCR && (
         <div className="ocr-section">
-          <OCRUpload 
-            mode="extract"
-            onTextExtracted={handleOCRTextExtracted}
-          />
+          <OCRUpload mode="extract" onTextExtracted={handleOCRTextExtracted} />
         </div>
       )}
 
@@ -164,7 +156,7 @@ const DocumentCreate = () => {
               required
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="author">Author</label>
             <input
@@ -177,7 +169,7 @@ const DocumentCreate = () => {
               placeholder="Enter author name (optional)"
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="category_id">Category</label>
             <select
@@ -188,7 +180,7 @@ const DocumentCreate = () => {
               onChange={handleInputChange}
             >
               <option value="">Select a category (optional)</option>
-              {categories.map(category => (
+              {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.path}
                 </option>

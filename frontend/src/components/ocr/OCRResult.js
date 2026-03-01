@@ -13,9 +13,7 @@ const OCRResult = ({ result, mode }) => {
   return (
     <div className="ocr-result">
       <div className="result-header">
-        <h4>
-          {mode === 'create' ? 'Document Created' : 'Text Extracted'} Successfully
-        </h4>
+        <h4>{mode === 'create' ? 'Document Created' : 'Text Extracted'} Successfully</h4>
         <div className="result-meta">
           <span className="meta-item">
             Method: <strong>{getMethod()}</strong>
@@ -51,9 +49,7 @@ const OCRResult = ({ result, mode }) => {
             📋 Copy
           </button>
         </div>
-        <pre className="text-content">
-          {getText()}
-        </pre>
+        <pre className="text-content">{getText()}</pre>
       </div>
     </div>
   );

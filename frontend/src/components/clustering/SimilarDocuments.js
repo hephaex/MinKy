@@ -44,7 +44,9 @@ const SimilarDocuments = ({ documentId, similarDocs, onRefresh }) => {
                     <div className="similarity-reasons">
                       <div className="reason-item">
                         <span className="reason-label">Common words:</span>
-                        <span className="reason-value">{doc.similarity_reasons.common_words_count}</span>
+                        <span className="reason-value">
+                          {doc.similarity_reasons.common_words_count}
+                        </span>
                       </div>
                       <div className="reason-item">
                         <span className="reason-label">Jaccard similarity:</span>
@@ -80,7 +82,9 @@ const SimilarDocuments = ({ documentId, similarDocs, onRefresh }) => {
                 </div>
                 <div className="stat-item">
                   <span className="stat-label">High Similarity Count</span>
-                  <span className="stat-value">{similarDocs.similarity_stats.high_similarity_count}</span>
+                  <span className="stat-value">
+                    {similarDocs.similarity_stats.high_similarity_count}
+                  </span>
                 </div>
               </div>
             </div>

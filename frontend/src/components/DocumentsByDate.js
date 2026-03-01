@@ -8,7 +8,7 @@ import './DocumentsByDate.css';
 // SECURITY: Helper to get auth token for API calls
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
+  return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
 const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
@@ -18,39 +18,42 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
     dateRange: null,
     loading: true,
     error: null,
-    currentPage: 1
+    currentPage: 1,
   });
 
-  const fetchDocumentsByDate = React.useCallback(async (page = 1) => {
-    if (!dateKey) return;
-    
-    try {
-      setState(prev => ({ ...prev, loading: true }));
-      // SECURITY: Include auth headers for consistency
-      const response = await fetch(
-        `/api/documents/by-date?date_key=${encodeURIComponent(dateKey)}&page=${page}&per_page=10`,
-        { headers: getAuthHeaders() }
-      );
-      if (!response.ok) throw new Error('Failed to fetch documents');
-      
-      const data = await response.json();
-      setState(prev => ({
-        ...prev,
-        documents: data.documents,
-        pagination: data.pagination,
-        dateRange: data.date_range,
-        currentPage: page,
-        error: null,
-        loading: false
-      }));
-    } catch (err) {
-      setState(prev => ({
-        ...prev,
-        error: err.message,
-        loading: false
-      }));
-    }
-  }, [dateKey]);
+  const fetchDocumentsByDate = React.useCallback(
+    async (page = 1) => {
+      if (!dateKey) return;
+
+      try {
+        setState((prev) => ({ ...prev, loading: true }));
+        // SECURITY: Include auth headers for consistency
+        const response = await fetch(
+          `/api/documents/by-date?date_key=${encodeURIComponent(dateKey)}&page=${page}&per_page=10`,
+          { headers: getAuthHeaders() }
+        );
+        if (!response.ok) throw new Error('Failed to fetch documents');
+
+        const data = await response.json();
+        setState((prev) => ({
+          ...prev,
+          documents: data.documents,
+          pagination: data.pagination,
+          dateRange: data.date_range,
+          currentPage: page,
+          error: null,
+          loading: false,
+        }));
+      } catch (err) {
+        setState((prev) => ({
+          ...prev,
+          error: err.message,
+          loading: false,
+        }));
+      }
+    },
+    [dateKey]
+  );
 
   useEffect(() => {
     if (dateKey) {
@@ -58,15 +61,18 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
     }
   }, [dateKey, fetchDocumentsByDate]);
 
-  const handlePageChange = React.useCallback((page) => {
-    fetchDocumentsByDate(page);
-  }, [fetchDocumentsByDate]);
+  const handlePageChange = React.useCallback(
+    (page) => {
+      fetchDocumentsByDate(page);
+    },
+    [fetchDocumentsByDate]
+  );
 
   const formatDateRange = (dateRange) => {
     if (!dateRange) return '';
-    
+
     const start = new Date(dateRange.start);
-    
+
     if (dateKey.length === 4) {
       // Year
       return `${dateKey}년`;
@@ -80,14 +86,14 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
-        weekday: 'long'
+        weekday: 'long',
       });
     } else if (dateKey.includes('W')) {
       // Week
       const [year, week] = dateKey.split('-W');
       return `${year}년 ${parseInt(week)}주차`;
     }
-    
+
     return dateKey;
   };
 
@@ -136,9 +142,7 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
     <div className="documents-by-date">
       <div className="documents-header">
         <h2>{formatDateRange(state.dateRange)}</h2>
-        <p className="document-count">
-          총 {state.pagination?.total || 0}개의 문서
-        </p>
+        <p className="document-count">총 {state.pagination?.total || 0}개의 문서</p>
       </div>
 
       {state.documents.length === 0 ? (
@@ -149,33 +153,26 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
       ) : (
         <>
           <div className="documents-grid">
-            {state.documents.map(doc => (
+            {state.documents.map((doc) => (
               <div key={doc.id} className="document-card">
                 <div className="document-header">
                   <h3 className="document-title">
-                    <Link 
-                      to={`/documents/${doc.id}`}
-                      onClick={() => onDocumentClick?.(doc)}
-                    >
+                    <Link to={`/documents/${doc.id}`} onClick={() => onDocumentClick?.(doc)}>
                       {doc.title || '제목 없음'}
                     </Link>
                   </h3>
-                  <span className="document-date">
-                    {formatDateTime(doc.created_at)}
-                  </span>
+                  <span className="document-date">{formatDateTime(doc.created_at)}</span>
                 </div>
-                
+
                 <div className="document-content">
                   <p>{truncateContent(doc.content || doc.markdown_content || '')}</p>
                 </div>
-                
+
                 <div className="document-meta">
-                  {doc.author && (
-                    <span className="document-author">작성자: {doc.author}</span>
-                  )}
+                  {doc.author && <span className="document-author">작성자: {doc.author}</span>}
                   {doc.tags && doc.tags.length > 0 && (
                     <div className="document-tags">
-                      {doc.tags.slice(0, 3).map(tag => (
+                      {doc.tags.slice(0, 3).map((tag) => (
                         <span key={tag.id || tag} className="tag">
                           {tag.name || tag}
                         </span>
@@ -205,12 +202,12 @@ const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
 
 DocumentsByDate.propTypes = {
   dateKey: PropTypes.string,
-  onDocumentClick: PropTypes.func
+  onDocumentClick: PropTypes.func,
 };
 
 DocumentsByDate.defaultProps = {
   dateKey: null,
-  onDocumentClick: null
+  onDocumentClick: null,
 };
 
 export default DocumentsByDate;

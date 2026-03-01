@@ -23,9 +23,8 @@ function NodeDetailPanel({
   const stats = useMemo(() => {
     if (!node) return { degree: 0, avgWeight: 0 };
     const degree = relatedEdges.length;
-    const avgWeight = degree > 0
-      ? relatedEdges.reduce((sum, e) => sum + (e.weight || 0), 0) / degree
-      : 0;
+    const avgWeight =
+      degree > 0 ? relatedEdges.reduce((sum, e) => sum + (e.weight || 0), 0) / degree : 0;
     return { degree, avgWeight };
   }, [node, relatedEdges]);
 
@@ -34,7 +33,7 @@ function NodeDetailPanel({
     if (!node || !clusterMode || !clusterData?.node_cluster_map) return null;
     const clusterId = clusterData.node_cluster_map[node.id];
     if (clusterId === undefined) return null;
-    const cluster = clusterData.clusters?.find(c => c.id === clusterId);
+    const cluster = clusterData.clusters?.find((c) => c.id === clusterId);
     return cluster || null;
   }, [node, clusterMode, clusterData]);
 
@@ -42,12 +41,10 @@ function NodeDetailPanel({
   const relatedNodes = useMemo(() => {
     if (!node) return [];
     return relatedEdges
-      .map(edge => {
+      .map((edge) => {
         const otherId = edge.source === node.id ? edge.target : edge.source;
-        const otherNode = allNodes.find(n => n.id === otherId);
-        return otherNode
-          ? { ...otherNode, weight: edge.weight, edgeLabel: edge.label }
-          : null;
+        const otherNode = allNodes.find((n) => n.id === otherId);
+        return otherNode ? { ...otherNode, weight: edge.weight, edgeLabel: edge.label } : null;
       })
       .filter(Boolean)
       .sort((a, b) => (b.weight || 0) - (a.weight || 0));
@@ -61,14 +58,9 @@ function NodeDetailPanel({
   return (
     <div className="knowledge-graph__panel">
       {/* Header */}
-      <div
-        className="knowledge-graph__panel-header"
-        style={{ borderLeft: `4px solid ${color}` }}
-      >
+      <div className="knowledge-graph__panel-header" style={{ borderLeft: `4px solid ${color}` }}>
         <div>
-          <span className="knowledge-graph__panel-type">
-            {node.type || 'node'}
-          </span>
+          <span className="knowledge-graph__panel-type">{node.type || 'node'}</span>
           <h3 className="knowledge-graph__panel-title">{node.label}</h3>
         </div>
         <button
@@ -90,10 +82,7 @@ function NodeDetailPanel({
       {/* Created date */}
       {node.created_at && (
         <div className="knowledge-graph__panel-section">
-          <span
-            className="knowledge-graph__panel-date"
-            title={formatDate(node.created_at)}
-          >
+          <span className="knowledge-graph__panel-date" title={formatDate(node.created_at)}>
             Created {formatRelativeTime(node.created_at)}
           </span>
         </div>
@@ -130,12 +119,8 @@ function NodeDetailPanel({
               className="knowledge-graph__panel-cluster-badge"
               style={{ backgroundColor: clusterInfo.color }}
             />
-            <span className="knowledge-graph__panel-cluster-label">
-              {clusterInfo.label}
-            </span>
-            <span className="knowledge-graph__panel-cluster-size">
-              ({clusterInfo.size} nodes)
-            </span>
+            <span className="knowledge-graph__panel-cluster-label">{clusterInfo.label}</span>
+            <span className="knowledge-graph__panel-cluster-size">({clusterInfo.size} nodes)</span>
           </div>
         </div>
       )}
@@ -145,7 +130,7 @@ function NodeDetailPanel({
         <div className="knowledge-graph__panel-section">
           <h4 className="knowledge-graph__panel-section-title">Topics</h4>
           <div className="knowledge-graph__panel-tags">
-            {node.topics.map(topic => (
+            {node.topics.map((topic) => (
               <span key={topic} className="knowledge-graph__panel-tag">
                 {topic}
               </span>
@@ -161,16 +146,14 @@ function NodeDetailPanel({
             Connected ({relatedNodes.length})
           </h4>
           <ul className="knowledge-graph__panel-related">
-            {relatedNodes.slice(0, 8).map(related => (
+            {relatedNodes.slice(0, 8).map((related) => (
               <li key={related.id} className="knowledge-graph__panel-related-item">
                 <button
                   className="knowledge-graph__panel-related-btn"
                   onClick={() => onNavigate(related)}
                   style={{ borderLeft: `3px solid ${nodeColor(related.type)}` }}
                 >
-                  <span className="knowledge-graph__panel-related-label">
-                    {related.label}
-                  </span>
+                  <span className="knowledge-graph__panel-related-label">{related.label}</span>
                   {related.weight !== undefined && (
                     <span className="knowledge-graph__panel-related-weight">
                       {(related.weight * 100).toFixed(0)}% match
@@ -186,10 +169,7 @@ function NodeDetailPanel({
       {/* Document link */}
       {node.documentId && (
         <div className="knowledge-graph__panel-section">
-          <a
-            href={`/documents/${node.documentId}`}
-            className="knowledge-graph__panel-link"
-          >
+          <a href={`/documents/${node.documentId}`} className="knowledge-graph__panel-link">
             View document
           </a>
         </div>

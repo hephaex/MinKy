@@ -20,7 +20,11 @@ describe('useChat', () => {
     jest.clearAllMocks();
     mockIdCounter = 0;
     chatService.getSessions.mockResolvedValue([]);
-    chatService.createSession.mockResolvedValue({ id: 'new-session', title: 'New Chat', updatedAt: new Date().toISOString() });
+    chatService.createSession.mockResolvedValue({
+      id: 'new-session',
+      title: 'New Chat',
+      updatedAt: new Date().toISOString(),
+    });
   });
 
   it('initializes with empty state', async () => {

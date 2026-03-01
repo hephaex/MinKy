@@ -10,7 +10,14 @@ import './Chat.css';
 const EmptyState = () => (
   <div className="chat-empty">
     <div className="chat-empty__icon" aria-hidden="true">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <svg
+        width="48"
+        height="48"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      >
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
     </div>
@@ -84,9 +91,7 @@ const ChatContainer = ({ className }) => {
           {messages.length === 0 && !isLoading ? (
             <EmptyState />
           ) : (
-            messages.map((message) => (
-              <ChatMessage key={message.id} message={message} />
-            ))
+            messages.map((message) => <ChatMessage key={message.id} message={message} />)
           )}
           {isLoading && <TypingIndicator />}
           <div ref={messagesEndRef} />

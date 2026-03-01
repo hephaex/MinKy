@@ -7,7 +7,11 @@ import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import DOMPurify from 'dompurify';
 import { logError } from '../utils/logger';
 import { formatDateTime } from '../utils/dateUtils';
-import { extractFrontmatter, processInternalLinks, processHashtags } from '../utils/obsidianRenderer';
+import {
+  extractFrontmatter,
+  processInternalLinks,
+  processHashtags,
+} from '../utils/obsidianRenderer';
 import api, { documentService } from '../services/api';
 import './DocumentView.css';
 
@@ -29,27 +33,27 @@ const DocumentView = () => {
       // Get AI tag suggestions
       const response = await api.post('/ai/suggest-tags', {
         title: documentData.title,
-        content: documentData.markdown_content
+        content: documentData.markdown_content,
       });
-      
+
       if (response.data.success && response.data.suggested_tags?.length > 0) {
         const suggestedTags = response.data.suggested_tags;
         setSuggestedTags(suggestedTags);
-        
+
         // Automatically apply the suggested tags to the document
         const updateResponse = await api.put(`/documents/${documentData.id}`, {
           title: documentData.title,
           author: documentData.author,
           markdown_content: documentData.markdown_content,
-          tags: suggestedTags
+          tags: suggestedTags,
         });
-        
+
         // Update the document state with the new tags
-        setDocument(prevDoc => ({
+        setDocument((prevDoc) => ({
           ...prevDoc,
-          tags: updateResponse.data.tags || suggestedTags.map(tagName => ({ name: tagName }))
+          tags: updateResponse.data.tags || suggestedTags.map((tagName) => ({ name: tagName })),
         }));
-        
+
         // tags applied
       }
     } catch (error) {
@@ -109,7 +113,7 @@ const DocumentView = () => {
 
   const formatAuthor = (author) => {
     if (!author) return '';
-    
+
     // Handle case where author might be a JSON string/array
     if (typeof author === 'string') {
       try {
@@ -124,12 +128,12 @@ const DocumentView = () => {
         // If parsing fails, use the string as-is
       }
     }
-    
+
     // Handle array case
     if (Array.isArray(author) && author.length > 0) {
       author = author[0];
     }
-    
+
     // Clean up the author string
     if (typeof author === 'string') {
       author = author.trim();
@@ -140,7 +144,7 @@ const DocumentView = () => {
       // Remove quotes
       author = author.replace(/^["']|["']$/g, '');
     }
-    
+
     return author;
   };
 
@@ -152,7 +156,9 @@ const DocumentView = () => {
     return (
       <div className="error">
         {error}
-        <Link to="/" className="btn btn-secondary">Back to Documents</Link>
+        <Link to="/" className="btn btn-secondary">
+          Back to Documents
+        </Link>
       </div>
     );
   }
@@ -161,7 +167,9 @@ const DocumentView = () => {
     return (
       <div className="error">
         Document not found
-        <Link to="/" className="btn btn-secondary">Back to Documents</Link>
+        <Link to="/" className="btn btn-secondary">
+          Back to Documents
+        </Link>
       </div>
     );
   }
@@ -170,18 +178,18 @@ const DocumentView = () => {
     <div className="document-view">
       <div className="document-header">
         <div className="document-nav">
-          <Link to="/" className="back-link">← Back to Documents</Link>
+          <Link to="/" className="back-link">
+            ← Back to Documents
+          </Link>
         </div>
-        
+
         <div className="document-title-section">
           <h1 className="document-title">{document.title}</h1>
           {/* Auto-tagging status indicator */}
           {autoTaggingInProgress && (
-            <div className="auto-tagging-status">
-              🤖 Analyzing content and generating tags...
-            </div>
+            <div className="auto-tagging-status">🤖 Analyzing content and generating tags...</div>
           )}
-          
+
           {/* Tags display in 8pt font below title */}
           {document.tags && document.tags.length > 0 && (
             <div className="document-tags">
@@ -192,7 +200,7 @@ const DocumentView = () => {
               ))}
             </div>
           )}
-          
+
           {/* Show recently applied AI tags */}
           {suggestedTags.length > 0 && !autoTaggingInProgress && (
             <div className="ai-tags-applied">
@@ -213,10 +221,7 @@ const DocumentView = () => {
         </div>
 
         <div className="document-actions">
-          <button
-            className="btn btn-secondary"
-            onClick={() => setShowMarkdown(!showMarkdown)}
-          >
+          <button className="btn btn-secondary" onClick={() => setShowMarkdown(!showMarkdown)}>
             {showMarkdown ? 'Show Rendered' : 'Show Markdown'}
           </button>
           <Link to={`/documents/${id}/edit`} className="btn btn-primary">
@@ -243,24 +248,26 @@ const DocumentView = () => {
                 <div className="metadata-grid">
                   {Object.entries(frontmatter).map(([key, value]) => (
                     <div key={key} className="metadata-item">
-                      <strong>{key}:</strong> 
+                      <strong>{key}:</strong>
                       <span>{Array.isArray(value) ? value.join(', ') : String(value)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-            
+
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
                 // 텍스트 노드에서 이미 처리된 HTML을 DOMPurify로 살균 후 렌더링
                 text({ children }) {
-                  if (typeof children === 'string' &&
-                      (children.includes('<a') || children.includes('<span'))) {
+                  if (
+                    typeof children === 'string' &&
+                    (children.includes('<a') || children.includes('<span'))
+                  ) {
                     const sanitized = DOMPurify.sanitize(children, {
                       ALLOWED_TAGS: ['a', 'span'],
-                      ALLOWED_ATTR: ['href', 'class', 'data-target', 'title']
+                      ALLOWED_ATTR: ['href', 'class', 'data-target', 'title'],
                     });
                     return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
                   }
@@ -269,9 +276,9 @@ const DocumentView = () => {
                 // 이미지 컴포넌트 - 반응형 스타일링 보장
                 img({ node, src, alt, title, ...props }) {
                   return (
-                    <img 
-                      src={src} 
-                      alt={alt} 
+                    <img
+                      src={src}
+                      alt={alt}
                       title={title}
                       style={{
                         maxWidth: '100%',
@@ -279,7 +286,7 @@ const DocumentView = () => {
                         display: 'block',
                         margin: '1em auto',
                         borderRadius: '4px',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                       }}
                       {...props}
                     />
@@ -288,12 +295,7 @@ const DocumentView = () => {
                 code({ node, inline, className, children, ...props }) {
                   const match = /language-(\w+)/.exec(className || '');
                   return !inline && match ? (
-                    <SyntaxHighlighter
-                      style={tomorrow}
-                      language={match[1]}
-                      PreTag="div"
-                      {...props}
-                    >
+                    <SyntaxHighlighter style={tomorrow} language={match[1]} PreTag="div" {...props}>
                       {String(children).replace(/\n$/, '')}
                     </SyntaxHighlighter>
                   ) : (
@@ -301,7 +303,7 @@ const DocumentView = () => {
                       {children}
                     </code>
                   );
-                }
+                },
               }}
             >
               {processedContent || document.markdown_content}

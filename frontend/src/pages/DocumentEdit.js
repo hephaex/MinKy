@@ -14,7 +14,7 @@ const DocumentEdit = () => {
     title: '',
     author: '',
     markdown_content: '',
-    category_id: null
+    category_id: null,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -28,7 +28,7 @@ const DocumentEdit = () => {
     handleTagSuggestions,
     handleTagsChange,
     clearSuggestedTags,
-    setTags
+    setTags,
   } = useTagSuggestions();
 
   useEffect(() => {
@@ -41,10 +41,10 @@ const DocumentEdit = () => {
           title: document.title,
           author: document.author || '',
           markdown_content: document.markdown_content,
-          category_id: document.category_id || null
+          category_id: document.category_id || null,
         });
         // Set tags using the hook
-        setTags(document.tags ? document.tags.map(tag => tag.name) : []);
+        setTags(document.tags ? document.tags.map((tag) => tag.name) : []);
         setError(null);
       } catch (err) {
         setError('Failed to fetch document');
@@ -59,34 +59,34 @@ const DocumentEdit = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleMarkdownChange = (value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      markdown_content: value || ''
+      markdown_content: value || '',
     }));
   };
 
   const handleTitleSuggestion = (suggestedTitle) => {
     if (suggestedTitle && window.confirm(`Replace title with: "${suggestedTitle}"?`)) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        title: suggestedTitle
+        title: suggestedTitle,
       }));
     }
   };
 
   const hasChanges = () => {
     if (!originalDocument) return false;
-    const originalTags = originalDocument.tags ? originalDocument.tags.map(tag => tag.name) : [];
-    const tagsChanged = originalTags.length !== tags.length ||
-                       !originalTags.every(tag => tags.includes(tag));
-    
+    const originalTags = originalDocument.tags ? originalDocument.tags.map((tag) => tag.name) : [];
+    const tagsChanged =
+      originalTags.length !== tags.length || !originalTags.every((tag) => tags.includes(tag));
+
     return (
       formData.title !== originalDocument.title ||
       formData.author !== (originalDocument.author || '') ||
@@ -97,7 +97,7 @@ const DocumentEdit = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.title.trim() || !formData.markdown_content.trim()) {
       setError('Title and content are required');
       return;
@@ -106,14 +106,14 @@ const DocumentEdit = () => {
     try {
       setSaving(true);
       setError(null);
-      
+
       const updatedDocument = await documentService.updateDocument(id, {
         title: formData.title.trim(),
         author: formData.author.trim() || null,
         markdown_content: formData.markdown_content.trim(),
-        tags: tags
+        tags: tags,
       });
-      
+
       navigate(`/documents/${updatedDocument.id}`);
     } catch (err) {
       setError('Failed to update document');
@@ -153,19 +153,21 @@ const DocumentEdit = () => {
       <div className="document-form-header">
         <h2>Edit Document</h2>
         <div className="form-actions">
-          <button 
-            type="button" 
-            className="btn btn-secondary" 
+          <button
+            type="button"
+            className="btn btn-secondary"
             onClick={handleCancel}
             disabled={saving}
           >
             Cancel
           </button>
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             form="document-form"
-            className="btn btn-primary" 
-            disabled={saving || !formData.title.trim() || !formData.markdown_content.trim() || !hasChanges()}
+            className="btn btn-primary"
+            disabled={
+              saving || !formData.title.trim() || !formData.markdown_content.trim() || !hasChanges()
+            }
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
@@ -189,7 +191,7 @@ const DocumentEdit = () => {
               required
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="author">Author</label>
             <input

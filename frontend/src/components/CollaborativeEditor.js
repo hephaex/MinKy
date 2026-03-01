@@ -11,8 +11,8 @@ const CollaborativeEditor = ({
   onChange,
   onTitleSuggestion,
   onTagSuggestions,
-  placeholder = "Start writing your markdown...",
-  showAISuggestions = true
+  placeholder = 'Start writing your markdown...',
+  showAISuggestions = true,
 }) => {
   const [value, setValue] = useState(initialValue);
   const [isCollaborating, setIsCollaborating] = useState(false);
@@ -21,7 +21,7 @@ const CollaborativeEditor = ({
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [previewMode, setPreviewMode] = useState('edit');
   const [cursorPosition, setCursorPosition] = useState(0);
-  
+
   const editorRef = useRef(null);
   const lastValueRef = useRef(initialValue);
   const pendingOperationsRef = useRef([]);
@@ -49,7 +49,7 @@ const CollaborativeEditor = ({
     const handleDocumentJoined = (data) => {
       setIsCollaborating(true);
       setActiveUsers(data.active_users || []);
-      
+
       // Update content if different from server
       if (data.content !== value) {
         setValue(data.content);
@@ -61,8 +61,8 @@ const CollaborativeEditor = ({
     };
 
     const handleUserJoined = (data) => {
-      setActiveUsers(prev => {
-        const exists = prev.find(u => u.user_id === data.user_id);
+      setActiveUsers((prev) => {
+        const exists = prev.find((u) => u.user_id === data.user_id);
         if (!exists) {
           return [...prev, data];
         }
@@ -71,8 +71,8 @@ const CollaborativeEditor = ({
     };
 
     const handleUserLeft = (data) => {
-      setActiveUsers(prev => prev.filter(u => u.user_id !== data.user_id));
-      setUserCursors(prev => prev.filter(c => c.userId !== data.user_id));
+      setActiveUsers((prev) => prev.filter((u) => u.user_id !== data.user_id));
+      setUserCursors((prev) => prev.filter((c) => c.userId !== data.user_id));
     };
 
     const handleRemoteOperation = (data) => {
@@ -85,15 +85,18 @@ const CollaborativeEditor = ({
     };
 
     const handleCursorUpdate = (data) => {
-      setUserCursors(prev => {
-        const filtered = prev.filter(c => c.userId !== data.user_id);
-        return [...filtered, {
-          userId: data.user_id,
-          username: data.username,
-          position: data.cursor_data.position,
-          selectionStart: data.cursor_data.selection_start,
-          selectionEnd: data.cursor_data.selection_end
-        }];
+      setUserCursors((prev) => {
+        const filtered = prev.filter((c) => c.userId !== data.user_id);
+        return [
+          ...filtered,
+          {
+            userId: data.user_id,
+            username: data.username,
+            position: data.cursor_data.position,
+            selectionStart: data.cursor_data.selection_start,
+            selectionEnd: data.cursor_data.selection_end,
+          },
+        ];
       });
     };
 
@@ -128,67 +131,73 @@ const CollaborativeEditor = ({
       collaborationService.off('cursor_update', handleCursorUpdate);
       collaborationService.off('document_saved', handleDocumentSaved);
       collaborationService.off('error', handleError);
-      
+
       collaborationService.leaveDocument(documentId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId]);
 
   // Handle local content changes
-  const handleLocalChange = useCallback((newValue) => {
-    if (isApplyingRemoteOperation.current) {
-      return;
-    }
+  const handleLocalChange = useCallback(
+    (newValue) => {
+      if (isApplyingRemoteOperation.current) {
+        return;
+      }
 
-    const oldValue = lastValueRef.current || '';
-    
-    if (newValue === oldValue) {
-      return;
-    }
+      const oldValue = lastValueRef.current || '';
 
-    // Calculate operation
-    const operation = calculateOperation(oldValue, newValue);
-    
-    if (operation && isCollaborating) {
-      // Send operation to server
-      collaborationService.sendTextOperation(documentId, operation);
-    }
+      if (newValue === oldValue) {
+        return;
+      }
 
-    // Update local state
-    setValue(newValue);
-    lastValueRef.current = newValue;
-    
-    if (onChange) {
-      onChange(newValue);
-    }
-  }, [documentId, isCollaborating, onChange]);
+      // Calculate operation
+      const operation = calculateOperation(oldValue, newValue);
 
-  // Apply remote operation
-  const applyRemoteOperation = useCallback((data) => {
-    isApplyingRemoteOperation.current = true;
-    
-    try {
-      const currentValue = lastValueRef.current || '';
-      const newValue = collaborationService.applyOperation(currentValue, data.operation);
-      
+      if (operation && isCollaborating) {
+        // Send operation to server
+        collaborationService.sendTextOperation(documentId, operation);
+      }
+
+      // Update local state
       setValue(newValue);
       lastValueRef.current = newValue;
-      
+
       if (onChange) {
         onChange(newValue);
       }
-    } catch (error) {
-      logError('CollaborativeEditor.applyRemoteOperation', error);
-    } finally {
-      isApplyingRemoteOperation.current = false;
-      
-      // Process pending operations
-      if (pendingOperationsRef.current.length > 0) {
-        const nextOperation = pendingOperationsRef.current.shift();
-        setTimeout(() => applyRemoteOperation(nextOperation), 0);
+    },
+    [documentId, isCollaborating, onChange]
+  );
+
+  // Apply remote operation
+  const applyRemoteOperation = useCallback(
+    (data) => {
+      isApplyingRemoteOperation.current = true;
+
+      try {
+        const currentValue = lastValueRef.current || '';
+        const newValue = collaborationService.applyOperation(currentValue, data.operation);
+
+        setValue(newValue);
+        lastValueRef.current = newValue;
+
+        if (onChange) {
+          onChange(newValue);
+        }
+      } catch (error) {
+        logError('CollaborativeEditor.applyRemoteOperation', error);
+      } finally {
+        isApplyingRemoteOperation.current = false;
+
+        // Process pending operations
+        if (pendingOperationsRef.current.length > 0) {
+          const nextOperation = pendingOperationsRef.current.shift();
+          setTimeout(() => applyRemoteOperation(nextOperation), 0);
+        }
       }
-    }
-  }, [onChange]);
+    },
+    [onChange]
+  );
 
   // Calculate operation between old and new content
   const calculateOperation = (oldContent, newContent) => {
@@ -198,15 +207,16 @@ const CollaborativeEditor = ({
 
     // Simple diff algorithm - find first difference
     let i = 0;
-    while (i < Math.min(oldContent.length, newContent.length) && 
-           oldContent[i] === newContent[i]) {
+    while (i < Math.min(oldContent.length, newContent.length) && oldContent[i] === newContent[i]) {
       i++;
     }
 
     // Find last difference
     let j = 0;
-    while (j < Math.min(oldContent.length - i, newContent.length - i) &&
-           oldContent[oldContent.length - 1 - j] === newContent[newContent.length - 1 - j]) {
+    while (
+      j < Math.min(oldContent.length - i, newContent.length - i) &&
+      oldContent[oldContent.length - 1 - j] === newContent[newContent.length - 1 - j]
+    ) {
       j++;
     }
 
@@ -228,28 +238,31 @@ const CollaborativeEditor = ({
   };
 
   // Handle cursor position updates
-  const handleCursorChange = useCallback((event) => {
-    if (!isCollaborating || !event.target) {
-      return;
-    }
+  const handleCursorChange = useCallback(
+    (event) => {
+      if (!isCollaborating || !event.target) {
+        return;
+      }
 
-    const position = event.target.selectionStart;
-    const selectionStart = event.target.selectionStart;
-    const selectionEnd = event.target.selectionEnd;
+      const position = event.target.selectionStart;
+      const selectionStart = event.target.selectionStart;
+      const selectionEnd = event.target.selectionEnd;
 
-    setCursorPosition(position);
+      setCursorPosition(position);
 
-    // Throttle cursor updates
-    const now = Date.now();
-    if (!handleCursorChange.lastSent || now - handleCursorChange.lastSent > 500) {
-      collaborationService.sendCursorUpdate(documentId, {
-        position,
-        selection_start: selectionStart,
-        selection_end: selectionEnd
-      });
-      handleCursorChange.lastSent = now;
-    }
-  }, [documentId, isCollaborating]);
+      // Throttle cursor updates
+      const now = Date.now();
+      if (!handleCursorChange.lastSent || now - handleCursorChange.lastSent > 500) {
+        collaborationService.sendCursorUpdate(documentId, {
+          position,
+          selection_start: selectionStart,
+          selection_end: selectionEnd,
+        });
+        handleCursorChange.lastSent = now;
+      }
+    },
+    [documentId, isCollaborating]
+  );
 
   // Handle save
   const handleSave = () => {
@@ -296,7 +309,7 @@ const CollaborativeEditor = ({
             </span>
           )}
         </div>
-        
+
         <div className="collaboration-actions">
           {isCollaborating && (
             <button className="save-btn" onClick={handleSave}>
@@ -308,7 +321,7 @@ const CollaborativeEditor = ({
 
       {activeUsers.length > 0 && (
         <div className="active-users-list">
-          {activeUsers.map(user => (
+          {activeUsers.map((user) => (
             <div key={user.user_id} className="user-badge">
               {user.username || `User ${user.user_id}`}
             </div>
@@ -355,11 +368,11 @@ const CollaborativeEditor = ({
               style: {
                 fontSize: 14,
                 lineHeight: 1.5,
-                fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace"
+                fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
               },
               onSelect: handleCursorChange,
               onKeyUp: handleCursorChange,
-              onClick: handleCursorChange
+              onClick: handleCursorChange,
             }}
           />
 
@@ -368,9 +381,8 @@ const CollaborativeEditor = ({
               content={value}
               cursorPosition={cursorPosition}
               onSuggestionSelect={(text) => {
-                const newValue = value.substring(0, cursorPosition) + 
-                                text + 
-                                value.substring(cursorPosition);
+                const newValue =
+                  value.substring(0, cursorPosition) + text + value.substring(cursorPosition);
                 handleLocalChange(newValue);
               }}
               onTitleSuggestion={onTitleSuggestion}
@@ -383,14 +395,16 @@ const CollaborativeEditor = ({
 
       {/* User cursor indicators */}
       <div className="user-cursors">
-        {userCursors.map(cursor => (
+        {userCursors.map((cursor) => (
           <div
             key={cursor.userId}
             className="user-cursor"
-            style={{
-              // This would need more sophisticated positioning
-              // For now, just show as indicators
-            }}
+            style={
+              {
+                // This would need more sophisticated positioning
+                // For now, just show as indicators
+              }
+            }
             title={`${cursor.username} is editing`}
           >
             {cursor.username}

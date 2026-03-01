@@ -1,7 +1,6 @@
 import api, { API_BASE_URL } from './api';
 
-const generateId = () =>
-  `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
 /**
  * Parse SSE stream events from the response body
@@ -31,7 +30,7 @@ const parseSSEStream = async (body, callbacks) => {
       for (const event of events) {
         if (!event.trim()) continue;
 
-        const dataLine = event.split('\n').find(line => line.startsWith('data: '));
+        const dataLine = event.split('\n').find((line) => line.startsWith('data: '));
         if (!dataLine) continue;
 
         const jsonStr = dataLine.slice(6);
