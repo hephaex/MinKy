@@ -5,7 +5,60 @@
 
 ---
 
-## 현재 진행 상황 (2026-03-01) - E2E 테스트 확장
+## 현재 진행 상황 (2026-03-01) - ESLint 경고 대폭 감소
+
+### 35차 세션: ESLint 경고 수정 (2026-03-01)
+
+#### 1. PropTypes 추가 (커밋 `0ab5f45c`)
+
+27개 React 컴포넌트에 PropTypes 추가하여 런타임 타입 검증 강화
+
+| 카테고리 | 파일 |
+|----------|------|
+| ML Analytics | `DocumentInsights.js`, `CorpusInsights.js` |
+| OCR | `OCRDropzone.js`, `OCRDocumentForm.js`, `OCRResult.js`, `OCRStatus.js`, `OCRUpload.js` |
+| Admin | `AdminOverview.js`, `AdminUsers.js`, `AdminDocuments.js`, `AdminTabs.js`, `AdminMaintenance.js` |
+| Clustering | `DuplicateDetection.js` |
+| Settings | `AISettings.js` (ConnectionStatusIcon) |
+| Editor | `MarkdownEditor.js`, `CollaborativeEditor.js`, `DocumentImport.js` |
+| i18n | `I18nProvider`, `LanguageSelector` |
+
+#### 2. 접근성 및 코드 품질 수정 (커밋 `752b3b2b`)
+
+**접근성 개선 (jsx-a11y):**
+- 클릭 핸들러가 있는 요소에 `onKeyDown`, `role="button"`, `tabIndex={0}` 추가
+- label-input 연결을 위한 `htmlFor`/`id` 쌍 추가
+- nav 요소의 interactive role을 div로 변경
+
+**코드 품질:**
+- `while(true)` 패턴에 eslint-disable 추가 (SSE 스트림 처리)
+- switch case 블록 변수 선언을 중괄호로 감쌈 (no-case-declarations)
+- logger.js의 console 사용에 eslint-disable 추가 (의도적 사용)
+
+**수정된 파일 (25개):**
+- components: `AISuggestions.js`, `DateSidebar.js`, `DocumentClustering.js`, `MLAnalytics.js`, `NewSimpleDateSidebar.js`, `SimpleDateSidebar.js`, `SimpleDocumentsByDate.js`, `TreeView.js`
+- clustering: `DocumentClusters.js`
+- settings: `AISettings.js`, `GitSettings.js`, `LanguageSettings.js`
+- pages: `CategoryManager.js`, `DocumentCreate.js`, `DocumentEdit.js`, `DocumentList.js`, `DocumentsPage.js`, `ImportPage.js`, `KnowledgeSearch.js`
+- services: `chatService.js`, `collaborationService.js`
+- utils: `logger.js`
+- i18n: `i18n.js`
+
+#### 3. ESLint 경고 감소 결과
+
+| 단계 | 경고 수 | 변화 |
+|------|---------|------|
+| 초기 | 592 | - |
+| 1차 수정 | 502 | -90 |
+| PropTypes 추가 | 286 | -216 |
+| 접근성 수정 | 87 | -199 |
+| 최종 | 29 | -58 |
+
+**최종 결과:** 592 → 29 경고 (95% 감소)
+
+남은 29개 경고는 모두 테스트 파일(`*.test.js`)의 mock 컴포넌트 PropTypes 경고로, 테스트 코드에서는 허용 가능.
+
+---
 
 ### 34차 세션: E2E 테스트 확장 (2026-03-01)
 
@@ -45,7 +98,7 @@
 
 **결과:**
 - 에러: 0개
-- 경고: 592개 (점진적 개선 예정)
+- 경고: 592 → 29개 (95% 감소, 35차 세션에서 개선)
 - 100+ 파일 자동 포맷팅 적용
 - 테스트: 520개 모두 통과
 
