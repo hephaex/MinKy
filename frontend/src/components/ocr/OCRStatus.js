@@ -1,3 +1,14 @@
+import PropTypes from 'prop-types';
+
+const ocrStatusShape = {
+  tesseract: PropTypes.bool,
+  cloud_ocr: PropTypes.bool,
+  pdf_tools: PropTypes.bool,
+  supported_formats: PropTypes.arrayOf(PropTypes.string),
+  max_file_size: PropTypes.string,
+  features: PropTypes.objectOf(PropTypes.bool),
+};
+
 const OCRStatusLoading = () => (
   <div className="ocr-upload">
     <div className="loading">Loading OCR capabilities...</div>
@@ -57,5 +68,13 @@ const OCRCapabilities = ({ ocrStatus }) => (
     </div>
   </div>
 );
+
+OCRStatusUnavailable.propTypes = {
+  ocrStatus: PropTypes.shape(ocrStatusShape).isRequired,
+};
+
+OCRCapabilities.propTypes = {
+  ocrStatus: PropTypes.shape(ocrStatusShape).isRequired,
+};
 
 export { OCRStatusLoading, OCRStatusUnavailable, OCRCapabilities };

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { authService } from '../services/api';
 import {
   OCRDropzone,
@@ -283,6 +284,18 @@ const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => 
       {result && <OCRResult result={result} mode={mode} />}
     </div>
   );
+};
+
+OCRUpload.propTypes = {
+  onTextExtracted: PropTypes.func,
+  onDocumentCreated: PropTypes.func,
+  mode: PropTypes.oneOf(['extract', 'create']),
+};
+
+OCRUpload.defaultProps = {
+  onTextExtracted: () => {},
+  onDocumentCreated: () => {},
+  mode: 'extract',
 };
 
 export default OCRUpload;

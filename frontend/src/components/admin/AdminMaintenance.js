@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const AdminMaintenance = ({ onCleanup }) => {
   return (
     <div className="maintenance-tab">
@@ -30,6 +32,10 @@ const AdminMaintenance = ({ onCleanup }) => {
       </div>
     </div>
   );
+};
+
+AdminMaintenance.propTypes = {
+  onCleanup: PropTypes.func.isRequired,
 };
 
 export default AdminMaintenance;

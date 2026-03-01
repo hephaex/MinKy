@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const DocumentClusters = ({
   clusteringResults,
   clusteringConfig,
@@ -168,6 +170,42 @@ const DocumentClusters = ({
       )}
     </div>
   );
+};
+
+const clusterDocShape = {
+  id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  title: PropTypes.string.isRequired,
+  author: PropTypes.string,
+};
+
+DocumentClusters.propTypes = {
+  clusteringResults: PropTypes.shape({
+    method: PropTypes.string,
+    n_clusters: PropTypes.number,
+    documents_processed: PropTypes.number,
+    quality_metrics: PropTypes.shape({
+      silhouette_score: PropTypes.number,
+    }),
+    clusters: PropTypes.objectOf(PropTypes.arrayOf(PropTypes.shape(clusterDocShape))),
+    cluster_insights: PropTypes.objectOf(
+      PropTypes.shape({
+        top_terms: PropTypes.arrayOf(PropTypes.string),
+        common_tags: PropTypes.arrayOf(PropTypes.string),
+      })
+    ),
+  }),
+  clusteringConfig: PropTypes.shape({
+    method: PropTypes.string,
+    n_clusters: PropTypes.number,
+    scope: PropTypes.string,
+    max_documents: PropTypes.number,
+  }).isRequired,
+  setClusteringConfig: PropTypes.func.isRequired,
+  onCluster: PropTypes.func.isRequired,
+};
+
+DocumentClusters.defaultProps = {
+  clusteringResults: null,
 };
 
 export default DocumentClusters;

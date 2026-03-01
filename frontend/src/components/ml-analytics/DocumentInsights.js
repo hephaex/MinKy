@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const DocumentInsights = ({ analytics, onLoadSimilar }) => {
   return (
     <div className="document-insights">
@@ -160,6 +162,59 @@ const DocumentInsights = ({ analytics, onLoadSimilar }) => {
       )}
     </div>
   );
+};
+
+DocumentInsights.propTypes = {
+  analytics: PropTypes.shape({
+    basic_stats: PropTypes.shape({
+      word_count: PropTypes.number,
+      reading_time_minutes: PropTypes.number,
+      header_count: PropTypes.number,
+      link_count: PropTypes.number,
+      image_count: PropTypes.number,
+      code_block_count: PropTypes.number,
+    }),
+    content_analysis: PropTypes.shape({
+      complexity_score: PropTypes.number,
+      keyword_density: PropTypes.objectOf(PropTypes.number),
+    }),
+    sentiment_analysis: PropTypes.shape({
+      sentiment: PropTypes.string,
+      polarity: PropTypes.number,
+      confidence: PropTypes.number,
+    }),
+    topic_analysis: PropTypes.shape({
+      topics: PropTypes.arrayOf(
+        PropTypes.shape({
+          term: PropTypes.string,
+          frequency: PropTypes.number,
+          relevance: PropTypes.number,
+        })
+      ),
+    }),
+    similarity_analysis: PropTypes.shape({
+      similar_documents: PropTypes.arrayOf(
+        PropTypes.shape({
+          id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+          title: PropTypes.string,
+          author: PropTypes.string,
+          similarity_score: PropTypes.number,
+        })
+      ),
+    }),
+    recommendations: PropTypes.arrayOf(
+      PropTypes.shape({
+        severity: PropTypes.string,
+        message: PropTypes.string,
+        suggestion: PropTypes.string,
+      })
+    ),
+  }).isRequired,
+  onLoadSimilar: PropTypes.func,
+};
+
+DocumentInsights.defaultProps = {
+  onLoadSimilar: () => {},
 };
 
 export default DocumentInsights;

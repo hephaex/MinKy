@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import PropTypes from 'prop-types';
 
 const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, focusedId, onFocusChange }) => {
   const nodeRef = useRef(null);
@@ -103,6 +104,30 @@ const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, focusedId, o
   );
 };
 
+const nodeShape = {
+  id: PropTypes.string.isRequired,
+  label: PropTypes.string.isRequired,
+  type: PropTypes.oneOf(['document', 'folder']),
+  color: PropTypes.string,
+  count: PropTypes.number,
+};
+// Allow recursive children
+nodeShape.children = PropTypes.arrayOf(PropTypes.shape(nodeShape));
+
+TreeNode.propTypes = {
+  node: PropTypes.shape(nodeShape).isRequired,
+  level: PropTypes.number.isRequired,
+  expandedNodes: PropTypes.instanceOf(Set).isRequired,
+  onToggle: PropTypes.func.isRequired,
+  onSelect: PropTypes.func.isRequired,
+  focusedId: PropTypes.string,
+  onFocusChange: PropTypes.func.isRequired,
+};
+
+TreeNode.defaultProps = {
+  focusedId: null,
+};
+
 const TreeView = ({ nodes, onSelect, className }) => {
   const [expandedNodes, setExpandedNodes] = useState(new Set());
   const [focusedId, setFocusedId] = useState(null);
@@ -181,6 +206,17 @@ const TreeView = ({ nodes, onSelect, className }) => {
       ))}
     </div>
   );
+};
+
+TreeView.propTypes = {
+  nodes: PropTypes.arrayOf(PropTypes.shape(nodeShape)),
+  onSelect: PropTypes.func.isRequired,
+  className: PropTypes.string,
+};
+
+TreeView.defaultProps = {
+  nodes: [],
+  className: '',
 };
 
 export default TreeView;

@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import PropTypes from 'prop-types';
 import api from '../services/api';
 import { logError } from '../utils/logger';
 import './DocumentImport.css';
@@ -291,6 +292,22 @@ const DocumentImport = ({
       )}
     </div>
   );
+};
+
+DocumentImport.propTypes = {
+  onDocumentImported: PropTypes.func,
+  acceptedFileTypes: PropTypes.arrayOf(PropTypes.string),
+  fileExtensions: PropTypes.arrayOf(PropTypes.string),
+  title: PropTypes.string,
+  description: PropTypes.string,
+};
+
+DocumentImport.defaultProps = {
+  onDocumentImported: () => {},
+  acceptedFileTypes: null,
+  fileExtensions: null,
+  title: 'Document Import',
+  description: 'Upload documents to convert them to Markdown format',
 };
 
 export default DocumentImport;

@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const OCRDropzone = ({ file, onFileChange, onFileRemove, dragActive, onDrag, onDrop }) => {
   const isValidFileType = (file) => {
     if (!file) return false;
@@ -61,6 +63,24 @@ const OCRDropzone = ({ file, onFileChange, onFileRemove, dragActive, onDrag, onD
       )}
     </div>
   );
+};
+
+OCRDropzone.propTypes = {
+  file: PropTypes.shape({
+    name: PropTypes.string.isRequired,
+    size: PropTypes.number.isRequired,
+    type: PropTypes.string,
+  }),
+  onFileChange: PropTypes.func.isRequired,
+  onFileRemove: PropTypes.func.isRequired,
+  dragActive: PropTypes.bool,
+  onDrag: PropTypes.func.isRequired,
+  onDrop: PropTypes.func.isRequired,
+};
+
+OCRDropzone.defaultProps = {
+  file: null,
+  dragActive: false,
 };
 
 export default OCRDropzone;

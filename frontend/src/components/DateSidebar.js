@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import './DateSidebar.css';
 
 // Helper to get auth token for API calls
@@ -148,6 +149,16 @@ const DateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
       </div>
     </div>
   );
+};
+
+DateSidebar.propTypes = {
+  onDocumentSelect: PropTypes.func,
+  selectedDateKey: PropTypes.string,
+};
+
+DateSidebar.defaultProps = {
+  onDocumentSelect: () => {},
+  selectedDateKey: null,
 };
 
 export default DateSidebar;

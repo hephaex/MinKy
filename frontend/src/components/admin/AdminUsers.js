@@ -1,3 +1,16 @@
+import PropTypes from 'prop-types';
+
+const userShape = {
+  id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  username: PropTypes.string.isRequired,
+  email: PropTypes.string.isRequired,
+  full_name: PropTypes.string,
+  is_active: PropTypes.bool,
+  is_admin: PropTypes.bool,
+  document_count: PropTypes.number,
+  comment_count: PropTypes.number,
+};
+
 const UserRow = ({ user, onUpdate }) => (
   <tr>
     <td>{user.username}</td>
@@ -70,6 +83,18 @@ const AdminUsers = ({ users, currentPage, onPageChange, onUserUpdate }) => {
       </div>
     </div>
   );
+};
+
+UserRow.propTypes = {
+  user: PropTypes.shape(userShape).isRequired,
+  onUpdate: PropTypes.func.isRequired,
+};
+
+AdminUsers.propTypes = {
+  users: PropTypes.arrayOf(PropTypes.shape(userShape)).isRequired,
+  currentPage: PropTypes.number.isRequired,
+  onPageChange: PropTypes.func.isRequired,
+  onUserUpdate: PropTypes.func.isRequired,
 };
 
 export default AdminUsers;

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import MDEditor from '@uiw/react-md-editor';
 import { collaborationService } from '../services/collaborationService';
 import AISuggestions from './AISuggestions';
@@ -413,6 +414,26 @@ const CollaborativeEditor = ({
       </div>
     </div>
   );
+};
+
+CollaborativeEditor.propTypes = {
+  documentId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  initialValue: PropTypes.string,
+  onChange: PropTypes.func,
+  onTitleSuggestion: PropTypes.func,
+  onTagSuggestions: PropTypes.func,
+  placeholder: PropTypes.string,
+  showAISuggestions: PropTypes.bool,
+};
+
+CollaborativeEditor.defaultProps = {
+  documentId: null,
+  initialValue: '',
+  onChange: () => {},
+  onTitleSuggestion: () => {},
+  onTagSuggestions: () => {},
+  placeholder: 'Start writing your markdown...',
+  showAISuggestions: true,
 };
 
 export default CollaborativeEditor;

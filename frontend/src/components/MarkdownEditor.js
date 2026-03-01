@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import MDEditor from '@uiw/react-md-editor';
 import AISuggestions from './AISuggestions';
 import './MarkdownEditor.css';
@@ -106,6 +107,23 @@ const MarkdownEditor = ({
       </div>
     </div>
   );
+};
+
+MarkdownEditor.propTypes = {
+  value: PropTypes.string,
+  onChange: PropTypes.func.isRequired,
+  placeholder: PropTypes.string,
+  onTitleSuggestion: PropTypes.func,
+  onTagSuggestions: PropTypes.func,
+  showAISuggestions: PropTypes.bool,
+};
+
+MarkdownEditor.defaultProps = {
+  value: '',
+  placeholder: 'Start writing your markdown...',
+  onTitleSuggestion: () => {},
+  onTagSuggestions: () => {},
+  showAISuggestions: true,
 };
 
 export default MarkdownEditor;

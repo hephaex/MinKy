@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { authService } from '../services/api';
 import { SimilarDocuments, DocumentClusters, DuplicateDetection } from './clustering';
 import './DocumentClustering.css';
@@ -221,6 +222,16 @@ const DocumentClustering = ({ documentId, showFullInterface = false }) => {
       </div>
     </div>
   );
+};
+
+DocumentClustering.propTypes = {
+  documentId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  showFullInterface: PropTypes.bool,
+};
+
+DocumentClustering.defaultProps = {
+  documentId: null,
+  showFullInterface: false,
 };
 
 export default DocumentClustering;

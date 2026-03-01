@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const CorpusInsights = ({ analytics }) => {
   return (
     <div className="corpus-insights">
@@ -142,6 +144,45 @@ const CorpusInsights = ({ analytics }) => {
       )}
     </div>
   );
+};
+
+const clusterDocShape = {
+  id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  title: PropTypes.string,
+};
+
+CorpusInsights.propTypes = {
+  analytics: PropTypes.shape({
+    corpus_size: PropTypes.number,
+    cluster_analysis: PropTypes.shape({
+      n_clusters: PropTypes.number,
+      silhouette_score: PropTypes.number,
+      clusters: PropTypes.objectOf(PropTypes.arrayOf(PropTypes.shape(clusterDocShape))),
+      cluster_topics: PropTypes.objectOf(PropTypes.arrayOf(PropTypes.string)),
+    }),
+    topic_modeling: PropTypes.shape({
+      topics: PropTypes.arrayOf(
+        PropTypes.shape({
+          topic_id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+          words: PropTypes.arrayOf(PropTypes.string),
+          weights: PropTypes.arrayOf(PropTypes.number),
+        })
+      ),
+    }),
+    trend_analysis: PropTypes.shape({
+      recent_activity: PropTypes.shape({
+        last_week: PropTypes.number,
+        last_month: PropTypes.number,
+      }),
+      avg_word_count: PropTypes.number,
+      top_authors: PropTypes.objectOf(PropTypes.number),
+    }),
+    collaboration_patterns: PropTypes.shape({
+      collaboration_rate: PropTypes.number,
+      total_comments: PropTypes.number,
+      unique_contributors: PropTypes.number,
+    }),
+  }).isRequired,
 };
 
 export default CorpusInsights;

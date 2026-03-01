@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const SimilarDocuments = ({ documentId, similarDocs, onRefresh }) => {
   if (!documentId) {
     return (
@@ -91,6 +93,36 @@ const SimilarDocuments = ({ documentId, similarDocs, onRefresh }) => {
       )}
     </div>
   );
+};
+
+SimilarDocuments.propTypes = {
+  documentId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  similarDocs: PropTypes.shape({
+    similar_documents: PropTypes.arrayOf(
+      PropTypes.shape({
+        id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+        title: PropTypes.string.isRequired,
+        author: PropTypes.string,
+        created_at: PropTypes.string,
+        similarity_score: PropTypes.number,
+        similarity_reasons: PropTypes.shape({
+          common_words_count: PropTypes.number,
+          jaccard_similarity: PropTypes.number,
+        }),
+      })
+    ),
+    candidates_analyzed: PropTypes.number,
+    similarity_stats: PropTypes.shape({
+      mean_similarity: PropTypes.number,
+      high_similarity_count: PropTypes.number,
+    }),
+  }),
+  onRefresh: PropTypes.func.isRequired,
+};
+
+SimilarDocuments.defaultProps = {
+  documentId: null,
+  similarDocs: null,
 };
 
 export default SimilarDocuments;

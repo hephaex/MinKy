@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import api from '../../services/api';
 
 const ConnectionStatusIcon = ({ status }) => {
@@ -41,6 +42,14 @@ const ConnectionStatusIcon = ({ status }) => {
         </span>
       );
   }
+};
+
+ConnectionStatusIcon.propTypes = {
+  status: PropTypes.oneOfType([PropTypes.bool, PropTypes.string]),
+};
+
+ConnectionStatusIcon.defaultProps = {
+  status: null,
 };
 
 const OCR_PROVIDERS = [

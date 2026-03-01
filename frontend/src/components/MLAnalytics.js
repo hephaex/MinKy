@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { authService } from '../services/api';
 import { DocumentInsights, CorpusInsights } from './ml-analytics';
 import './MLAnalytics.css';
@@ -191,6 +192,16 @@ const MLAnalytics = ({ documentId, showCorpusAnalysis = false }) => {
       )}
     </div>
   );
+};
+
+MLAnalytics.propTypes = {
+  documentId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  showCorpusAnalysis: PropTypes.bool,
+};
+
+MLAnalytics.defaultProps = {
+  documentId: null,
+  showCorpusAnalysis: false,
 };
 
 export default MLAnalytics;

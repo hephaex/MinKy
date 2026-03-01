@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const TabButton = ({ label, active, onClick }) => (
   <button className={`tab-button ${active ? 'active' : ''}`} onClick={onClick}>
     {label}
@@ -25,6 +27,21 @@ const AdminTabs = ({ activeTab, onTabChange }) => {
       ))}
     </div>
   );
+};
+
+TabButton.propTypes = {
+  label: PropTypes.string.isRequired,
+  active: PropTypes.bool,
+  onClick: PropTypes.func.isRequired,
+};
+
+TabButton.defaultProps = {
+  active: false,
+};
+
+AdminTabs.propTypes = {
+  activeTab: PropTypes.string.isRequired,
+  onTabChange: PropTypes.func.isRequired,
 };
 
 export default AdminTabs;

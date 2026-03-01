@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, createContext, useContext } from 'react';
+import PropTypes from 'prop-types';
 import en from './locales/en.json';
 import ko from './locales/ko.json';
 import ja from './locales/ja.json';
@@ -240,6 +241,10 @@ export const I18nProvider = ({ children }) => {
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 };
 
+I18nProvider.propTypes = {
+  children: PropTypes.node.isRequired,
+};
+
 // Language selector component
 export const LanguageSelector = ({ className = '', showFlags = true }) => {
   const { language, changeLanguage, languages, t } = useI18n();
@@ -267,6 +272,16 @@ export const LanguageSelector = ({ className = '', showFlags = true }) => {
       </select>
     </div>
   );
+};
+
+LanguageSelector.propTypes = {
+  className: PropTypes.string,
+  showFlags: PropTypes.bool,
+};
+
+LanguageSelector.defaultProps = {
+  className: '',
+  showFlags: true,
 };
 
 // Text direction utilities

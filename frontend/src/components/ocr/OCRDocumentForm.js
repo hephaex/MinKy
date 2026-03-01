@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const OCRDocumentForm = ({ formData, onChange }) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -48,6 +50,15 @@ const OCRDocumentForm = ({ formData, onChange }) => {
       </div>
     </div>
   );
+};
+
+OCRDocumentForm.propTypes = {
+  formData: PropTypes.shape({
+    title: PropTypes.string,
+    author: PropTypes.string,
+    is_public: PropTypes.bool,
+  }).isRequired,
+  onChange: PropTypes.func.isRequired,
 };
 
 export default OCRDocumentForm;

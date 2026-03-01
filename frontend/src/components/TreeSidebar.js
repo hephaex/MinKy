@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import PropTypes from 'prop-types';
 import { Link, useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
 import TreeView from './TreeView';
@@ -155,6 +156,16 @@ const TreeSidebar = ({ isVisible, onToggle }) => {
       </div>
     </div>
   );
+};
+
+TreeSidebar.propTypes = {
+  isVisible: PropTypes.bool,
+  onToggle: PropTypes.func,
+};
+
+TreeSidebar.defaultProps = {
+  isVisible: true,
+  onToggle: () => {},
 };
 
 export default TreeSidebar;

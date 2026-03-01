@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const DuplicateDetection = ({ duplicates, onDetect }) => {
   return (
     <div className="duplicate-detection">
@@ -86,6 +88,37 @@ const DuplicateDetection = ({ duplicates, onDetect }) => {
       )}
     </div>
   );
+};
+
+const duplicateDocShape = {
+  id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  title: PropTypes.string.isRequired,
+  author: PropTypes.string,
+  created_at: PropTypes.string,
+  word_count: PropTypes.number,
+};
+
+DuplicateDetection.propTypes = {
+  duplicates: PropTypes.shape({
+    duplicates: PropTypes.arrayOf(
+      PropTypes.shape({
+        duplicate_type: PropTypes.string,
+        similarity_score: PropTypes.number,
+        document1: PropTypes.shape(duplicateDocShape).isRequired,
+        document2: PropTypes.shape(duplicateDocShape).isRequired,
+      })
+    ),
+    duplicate_stats: PropTypes.shape({
+      total_duplicates: PropTypes.number,
+      documents_analyzed: PropTypes.number,
+      avg_similarity: PropTypes.number,
+    }),
+  }),
+  onDetect: PropTypes.func.isRequired,
+};
+
+DuplicateDetection.defaultProps = {
+  duplicates: null,
 };
 
 export default DuplicateDetection;

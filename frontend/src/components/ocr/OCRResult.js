@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const OCRResult = ({ result, mode }) => {
   const getText = () => result.ocr_result?.text || result.text;
   const getMethod = () => result.ocr_result?.method || result.method;
@@ -51,6 +53,26 @@ const OCRResult = ({ result, mode }) => {
       </div>
     </div>
   );
+};
+
+OCRResult.propTypes = {
+  result: PropTypes.shape({
+    text: PropTypes.string,
+    method: PropTypes.string,
+    confidence: PropTypes.number,
+    word_count: PropTypes.number,
+    ocr_result: PropTypes.shape({
+      text: PropTypes.string,
+      method: PropTypes.string,
+      confidence: PropTypes.number,
+      word_count: PropTypes.number,
+    }),
+    document: PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      title: PropTypes.string,
+    }),
+  }).isRequired,
+  mode: PropTypes.oneOf(['create', 'extract']).isRequired,
 };
 
 export default OCRResult;

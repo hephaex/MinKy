@@ -1,3 +1,21 @@
+import PropTypes from 'prop-types';
+
+const documentShape = {
+  id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  title: PropTypes.string.isRequired,
+  is_public: PropTypes.bool,
+  owner: PropTypes.shape({
+    username: PropTypes.string,
+  }),
+  created_at: PropTypes.string,
+  updated_at: PropTypes.string,
+  tags: PropTypes.arrayOf(
+    PropTypes.shape({
+      name: PropTypes.string,
+    })
+  ),
+};
+
 const DocumentCard = ({ doc }) => (
   <div className="document-card">
     <div className="document-header">
@@ -35,6 +53,16 @@ const AdminDocuments = ({ documents, currentPage, onPageChange }) => {
       </div>
     </div>
   );
+};
+
+DocumentCard.propTypes = {
+  doc: PropTypes.shape(documentShape).isRequired,
+};
+
+AdminDocuments.propTypes = {
+  documents: PropTypes.arrayOf(PropTypes.shape(documentShape)).isRequired,
+  currentPage: PropTypes.number.isRequired,
+  onPageChange: PropTypes.func.isRequired,
 };
 
 export default AdminDocuments;

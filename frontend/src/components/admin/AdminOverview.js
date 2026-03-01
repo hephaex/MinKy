@@ -1,3 +1,5 @@
+import PropTypes from 'prop-types';
+
 const StatCard = ({ title, value, subtitle, className = '' }) => (
   <div className={`admin-stat-card ${className}`}>
     <h3>{title}</h3>
@@ -79,6 +81,46 @@ const AdminOverview = ({ systemStats }) => {
       </div>
     </div>
   );
+};
+
+StatCard.propTypes = {
+  title: PropTypes.string.isRequired,
+  value: PropTypes.number,
+  subtitle: PropTypes.string,
+  className: PropTypes.string,
+};
+
+StatCard.defaultProps = {
+  value: 0,
+  subtitle: null,
+  className: '',
+};
+
+AdminOverview.propTypes = {
+  systemStats: PropTypes.shape({
+    users: PropTypes.shape({
+      total: PropTypes.number,
+      active: PropTypes.number,
+      admins: PropTypes.number,
+      new_this_week: PropTypes.number,
+    }),
+    content: PropTypes.shape({
+      documents: PropTypes.number,
+      public_documents: PropTypes.number,
+      tags: PropTypes.number,
+      comments: PropTypes.number,
+      new_documents_week: PropTypes.number,
+      new_comments_week: PropTypes.number,
+    }),
+    storage: PropTypes.shape({
+      estimated_kb: PropTypes.number,
+      avg_document_size: PropTypes.number,
+    }),
+  }),
+};
+
+AdminOverview.defaultProps = {
+  systemStats: null,
 };
 
 export default AdminOverview;
