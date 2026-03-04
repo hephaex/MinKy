@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import KnowledgeGraph from '../components/KnowledgeGraph';
 import './KnowledgeGraphPage.css';
 
@@ -136,6 +137,11 @@ function GraphFilters({ activeTypes, onToggleType }) {
     </div>
   );
 }
+
+GraphFilters.propTypes = {
+  activeTypes: PropTypes.instanceOf(Set).isRequired,
+  onToggleType: PropTypes.func.isRequired,
+};
 
 /**
  * KnowledgeGraphPage - Full-page knowledge graph explorer.

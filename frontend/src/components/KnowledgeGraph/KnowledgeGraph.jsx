@@ -253,6 +253,7 @@ function KnowledgeGraph({
 
       <div className="knowledge-graph__body">
         {/* SVG Canvas */}
+        {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Interactive canvas for graph pan/zoom */}
         <div
           className="knowledge-graph__canvas-wrapper"
           style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
