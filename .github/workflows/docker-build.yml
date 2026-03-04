@@ -90,9 +90,21 @@ jobs:
     - name: Create .env file
       run: |
         cat > .env << EOF
-        DATABASE_URL=postgresql://minky:minky_password@db:5432/minky_test
-        SECRET_KEY=test-secret-key
-        JWT_SECRET_KEY=test-jwt-secret-key
+        # Database
+        POSTGRES_USER=minky_user
+        POSTGRES_PASSWORD=test_password_for_ci_only
+        POSTGRES_DB=minky_db
+        DATABASE_URL=postgresql://minky_user:test_password_for_ci_only@db:5432/minky_db
+
+        # Security Keys
+        SECRET_KEY=test-secret-key-for-ci-only
+        JWT_SECRET_KEY=test-jwt-secret-key-for-ci-only
+        JWT_SECRET=test-jwt-secret-for-ci-only
+
+        # OpenSearch
+        OPENSEARCH_INITIAL_ADMIN_PASSWORD=TestPassword123!
+
+        # Flask
         FLASK_ENV=testing
         EOF
 
