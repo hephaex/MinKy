@@ -35,8 +35,8 @@ COPY src ./src
 COPY benches ./benches
 COPY migrations ./migrations
 
-# Touch main.rs so cargo detects the change and recompiles the crate.
-RUN touch src/main.rs && cargo build --release
+# Touch both lib.rs and main.rs to invalidate cached artifacts from dummy build.
+RUN touch src/lib.rs src/main.rs && cargo build --release
 
 # =============================================================================
 # Stage 2: Runtime image
