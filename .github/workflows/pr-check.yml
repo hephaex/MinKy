@@ -172,3 +172,4 @@ ${!allPassed ? 'Please fix the failing checks before merging.' : 'Ready to merge
                 body: comment
               });
             }
+
