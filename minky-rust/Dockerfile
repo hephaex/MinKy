@@ -18,16 +18,21 @@ WORKDIR /app
 # ------------------------------------------------------------------
 COPY Cargo.toml Cargo.lock ./
 
-# Create a dummy lib.rs so cargo can resolve the dependency graph.
-RUN mkdir src && echo "fn main() {}" > src/main.rs && echo "" > src/lib.rs
+# Create dummy source files so cargo can resolve the dependency graph.
+# Include benches directory because Cargo.toml references a bench target.
+RUN mkdir -p src benches && \
+    echo "fn main() {}" > src/main.rs && \
+    echo "" > src/lib.rs && \
+    echo "fn main() {}" > benches/core_functions.rs
 
 # Pre-fetch and compile all dependencies (cached layer).
-RUN cargo build --release && rm -rf src
+RUN cargo build --release && rm -rf src benches
 
 # ------------------------------------------------------------------
 # Now copy the real source and build the actual binary.
 # ------------------------------------------------------------------
 COPY src ./src
+COPY benches ./benches
 COPY migrations ./migrations
 
 # Touch main.rs so cargo detects the change and recompiles the crate.
