@@ -1,16 +1,19 @@
 name: Claude CI Trigger
 
-# Claude Code CI/CD 트리거
-# 이 워크플로우는 특정 이벤트 발생 시 트리거 파일을 생성합니다.
-# Claude Code는 트리거 파일을 감지하여 CI/CD를 자동 실행합니다.
+# Claude Code CI/CD 트리거 (비활성화됨)
+# 이유: .claude/ 디렉토리가 .gitignore에 있어 트리거 파일 커밋 불가
+# 필요시 workflow_dispatch로 수동 실행 가능
+
+# 비활성화: 자동 트리거 제거
+# on:
+#   issues:
+#     types: [opened, labeled]
+#   push:
+#     branches: [main, develop]
+#   schedule:
+#     - cron: '0 */4 * * *'
 
 on:
-  issues:
-    types: [opened, labeled]
-  push:
-    branches: [main, develop]
-  schedule:
-    - cron: '0 */4 * * *'  # 4시간마다
   workflow_dispatch:
     inputs:
       task_type:
