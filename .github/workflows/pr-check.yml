@@ -128,25 +128,30 @@ jobs:
 
             const allPassed = rustStatus === 'success' && frontendStatus === 'success';
 
-            const testSummary = (rustCount || frontendCount)
-              ? `\n### Test Counts\n| Suite | Tests |\n|-------|-------|\n| Rust | ${rustCount || 'N/A'} |\n| Frontend | ${frontendCount || 'N/A'} |`
+            const testTable = (rustCount || frontendCount)
+              ? ['', '### Test Counts', '| Suite | Tests |', '|-------|-------|', `| Rust | ${rustCount || 'N/A'} |`, `| Frontend | ${frontendCount || 'N/A'} |`].join('\n')
               : '';
 
-            const comment = `## PR Check Results
+            const statusMsg = allPassed ? 'All checks passed!' : 'Some checks failed';
+            const actionMsg = allPassed ? 'Ready to merge!' : 'Please fix the failing checks before merging.';
 
-| Check | Status |
-|-------|--------|
-| Rust Build & Test | ${getEmoji(rustStatus)} ${rustStatus} |
-| Frontend Build & Test | ${getEmoji(frontendStatus)} ${frontendStatus} |
+            const comment = [
+              '## PR Check Results',
+              '',
+              '| Check | Status |',
+              '|-------|--------|',
+              `| Rust Build & Test | ${getEmoji(rustStatus)} ${rustStatus} |`,
+              `| Frontend Build & Test | ${getEmoji(frontendStatus)} ${frontendStatus} |`,
+              '',
+              `### Overall: ${statusMsg}`,
+              '',
+              actionMsg,
+              testTable,
+              '',
+              '---',
+              '*Automated check by GitHub Actions*'
+            ].join('\n');
 
-### Overall: ${allPassed ? 'All checks passed!' : 'Some checks failed'}
-
-${!allPassed ? 'Please fix the failing checks before merging.' : 'Ready to merge!'}${testSummary}
-
----
-*Automated check by GitHub Actions*`;
-
-            // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -172,4 +177,3 @@ ${!allPassed ? 'Please fix the failing checks before merging.' : 'Ready to merge
                 body: comment
               });
             }
-
