@@ -7,6 +7,7 @@ on:
       - 'frontend/**'
       - 'e2e/**'
       - 'app/**'
+      - 'migrations/**'
       - '.github/workflows/e2e-tests.yml'
   pull_request:
     branches: [main, develop]
@@ -72,29 +73,56 @@ jobs:
       - name: Build frontend
         run: npm run build --prefix frontend
 
+      - name: Run database migrations
+        env:
+          DATABASE_URL: postgresql://minky:minky_password@localhost:5432/minky_test
+          FLASK_APP: run.py
+          FLASK_ENV: testing
+        run: |
+          echo "Running database migrations..."
+          flask db upgrade
+          echo "Migrations completed successfully"
+
       - name: Start backend server
         env:
           DATABASE_URL: postgresql://minky:minky_password@localhost:5432/minky_test
           SECRET_KEY: ${{ secrets.TEST_SECRET_KEY || 'test-secret-key-for-ci-only-do-not-use-in-prod' }}
           JWT_SECRET_KEY: ${{ secrets.TEST_JWT_SECRET_KEY || 'test-jwt-secret-key-for-ci-only-do-not-use-in-prod' }}
           FLASK_ENV: testing
+          FLASK_APP: run.py
           METRICS_ENABLED: 'false'
         run: |
-          export FLASK_APP=run.py
-          flask db upgrade || true
-          python run.py &
-          sleep 5
-          curl -f http://localhost:5000/api/health || exit 1
+          echo "Starting backend server..."
+          python run.py > /tmp/backend.log 2>&1 &
+          echo "Waiting for backend to be ready..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:5000/api/health > /dev/null 2>&1; then
+              echo "Backend is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/30: Backend not ready yet, waiting..."
+            sleep 2
+          done
+          echo "Backend failed to start. Showing logs:"
+          cat /tmp/backend.log
+          exit 1
 
       - name: Start frontend server
         run: |
           npx serve -s frontend/build -l 3000 &
           sleep 3
+          echo "Frontend server started"
 
       - name: Run Playwright tests
         env:
           CI: true
         run: npm test --prefix e2e -- --project=chromium
+
+      - name: Show backend logs on failure
+        if: failure()
+        run: |
+          echo "=== Backend Server Logs ==="
+          cat /tmp/backend.log || echo "No backend logs found"
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
