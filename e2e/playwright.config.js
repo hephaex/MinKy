@@ -56,17 +56,18 @@ module.exports = defineConfig({
     },
   ],
   /* Run local dev server before starting the tests */
-  webServer: [
+  /* In CI, servers are started manually by the workflow */
+  webServer: process.env.CI ? undefined : [
     {
       command: 'npm run start --prefix ../frontend',
       url: 'http://localhost:3000',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 120 * 1000,
     },
     {
       command: 'cd ../minky-rust && cargo run --release 2>/dev/null',
       url: 'http://localhost:8000/api/health',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: true,
       timeout: 180 * 1000,
     },
   ],

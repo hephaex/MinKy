@@ -71,6 +71,10 @@ jobs:
         run: npx --prefix e2e playwright install --with-deps chromium
 
       - name: Build frontend
+        env:
+          REACT_APP_API_URL: http://localhost:5000/api
+          REACT_APP_SOCKET_URL: http://localhost:5000
+          CI: true
         run: npm run build --prefix frontend
 
       - name: Run database migrations
@@ -90,20 +94,32 @@ jobs:
           JWT_SECRET_KEY: ${{ secrets.TEST_JWT_SECRET_KEY || 'test-jwt-secret-key-for-ci-only-do-not-use-in-prod' }}
           FLASK_ENV: testing
           FLASK_APP: run.py
+          FLASK_RUN_HOST: '127.0.0.1'
+          FLASK_RUN_PORT: '5000'
           METRICS_ENABLED: 'false'
+          PYTHONUNBUFFERED: '1'
         run: |
-          echo "Starting backend server..."
-          python run.py > /tmp/backend.log 2>&1 &
+          echo "Starting backend server on port 5000..."
+          # Use flask run for more reliable background execution in CI
+          flask run --host=127.0.0.1 --port=5000 > /tmp/backend.log 2>&1 &
+          BACKEND_PID=$!
+          echo "Backend PID: $BACKEND_PID"
           echo "Waiting for backend to be ready..."
           for i in {1..30}; do
-            if curl -sf http://localhost:5000/api/health > /dev/null 2>&1; then
+            if curl -sf http://127.0.0.1:5000/api/health > /dev/null 2>&1; then
               echo "Backend is ready!"
               exit 0
+            fi
+            # Check if process is still running
+            if ! kill -0 $BACKEND_PID 2>/dev/null; then
+              echo "Backend process died! Showing logs:"
+              cat /tmp/backend.log
+              exit 1
             fi
             echo "Attempt $i/30: Backend not ready yet, waiting..."
             sleep 2
           done
-          echo "Backend failed to start. Showing logs:"
+          echo "Backend failed to start within timeout. Showing logs:"
           cat /tmp/backend.log
           exit 1
 
