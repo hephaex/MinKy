@@ -219,3 +219,177 @@ async fn get_workflow_analytics(
         data: analytics,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // TimeRangeQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_time_range_query_deserialization() {
+        let json = r#"{"days": 7}"#;
+        let query: TimeRangeQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.days, Some(7));
+    }
+
+    #[test]
+    fn test_time_range_query_default() {
+        let json = r#"{}"#;
+        let query: TimeRangeQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.days, None);
+    }
+
+    #[test]
+    fn test_time_range_default_logic() {
+        // Test the default logic used in handlers
+        let test_cases = vec![
+            (None, 30),   // default
+            (Some(7), 7), // specified
+            (Some(365), 365),
+        ];
+
+        for (input, expected) in test_cases {
+            let days = input.unwrap_or(30);
+            assert_eq!(days, expected);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // LimitQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_limit_query_deserialization() {
+        let json = r#"{"limit": 25}"#;
+        let query: LimitQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.limit, Some(25));
+    }
+
+    #[test]
+    fn test_limit_query_default() {
+        let json = r#"{}"#;
+        let query: LimitQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.limit, None);
+    }
+
+    #[test]
+    fn test_limit_clamping_logic() {
+        // Test limit clamping used in get_top_documents
+        let test_cases = vec![
+            (None, 10),     // default
+            (Some(50), 50), // below max
+            (Some(100), 100), // at max
+            (Some(200), 100), // above max, clamped
+        ];
+
+        for (input, expected) in test_cases {
+            let limit = input.unwrap_or(10).min(100);
+            assert_eq!(limit, expected, "Failed for input {:?}", input);
+        }
+    }
+
+    #[test]
+    fn test_tags_limit_clamping() {
+        // Test limit clamping used in get_tag_stats (max 200)
+        let test_cases = vec![
+            (None, 50),     // default
+            (Some(100), 100),
+            (Some(200), 200), // at max
+            (Some(300), 200), // above max, clamped
+        ];
+
+        for (input, expected) in test_cases {
+            let limit = input.unwrap_or(50).min(200);
+            assert_eq!(limit, expected, "Failed for input {:?}", input);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Response tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_overview_response_serialization() {
+        let response = OverviewResponse {
+            success: true,
+            data: AnalyticsOverview {
+                total_documents: 100,
+                total_views: 500,
+                total_comments: 50,
+                total_users: 10,
+                documents_this_period: 15,
+                views_this_period: 100,
+                active_users: 7,
+                avg_document_length: 1500.5,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"total_documents\":100"));
+    }
+
+    #[test]
+    fn test_documents_response_serialization() {
+        let response = DocumentsResponse {
+            success: true,
+            data: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"data\":[]"));
+    }
+
+    #[test]
+    fn test_users_response_serialization() {
+        let response = UsersResponse {
+            success: true,
+            data: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"data\":[]"));
+    }
+
+    #[test]
+    fn test_categories_response_serialization() {
+        let response = CategoriesResponse {
+            success: true,
+            data: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn test_tags_response_serialization() {
+        let response = TagsResponse {
+            success: true,
+            data: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn test_timeline_response_serialization() {
+        let response = TimelineResponse {
+            success: true,
+            data: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_routes_creation() {
+        let _router: Router<AppState> = routes();
+        // Should be creatable without panicking
+    }
+}

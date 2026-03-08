@@ -176,3 +176,167 @@ async fn generate_embedding(
         data: response,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // SuggestionRequestBody tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_suggestion_request_body_deserialization() {
+        let json = r#"{"content": "This is test content", "suggestion_type": "title"}"#;
+        let request: SuggestionRequestBody = serde_json::from_str(json).unwrap();
+        assert_eq!(request.content, "This is test content");
+        assert!(matches!(request.suggestion_type, SuggestionType::Title));
+        assert!(request.context.is_none());
+    }
+
+    #[test]
+    fn test_suggestion_request_body_with_context() {
+        let json = r#"{"content": "Content", "suggestion_type": "summary", "context": "Tech blog"}"#;
+        let request: SuggestionRequestBody = serde_json::from_str(json).unwrap();
+        assert_eq!(request.context, Some("Tech blog".to_string()));
+    }
+
+    #[test]
+    fn test_suggestion_request_body_all_types() {
+        let types = vec![
+            ("title", SuggestionType::Title),
+            ("summary", SuggestionType::Summary),
+            ("tags", SuggestionType::Tags),
+            ("improve", SuggestionType::Improve),
+        ];
+
+        for (type_str, expected_type) in types {
+            let json = format!(r#"{{"content": "test", "suggestion_type": "{}"}}"#, type_str);
+            let request: SuggestionRequestBody = serde_json::from_str(&json).unwrap();
+            assert!(
+                std::mem::discriminant(&request.suggestion_type) == std::mem::discriminant(&expected_type),
+                "Failed for type: {}", type_str
+            );
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // ContentRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_content_request_deserialization() {
+        let json = r#"{"content": "Some content here"}"#;
+        let request: ContentRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.content, "Some content here");
+        assert!(request.context.is_none());
+    }
+
+    #[test]
+    fn test_content_request_with_context() {
+        let json = r#"{"content": "Content", "context": "Additional context"}"#;
+        let request: ContentRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.context, Some("Additional context".to_string()));
+    }
+
+    // -------------------------------------------------------------------------
+    // EmbeddingRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_embedding_request_deserialization() {
+        let json = r#"{"text": "Text to embed"}"#;
+        let request: EmbeddingRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.text, "Text to embed");
+    }
+
+    // -------------------------------------------------------------------------
+    // SuggestionResponseBody tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_suggestion_response_body_serialization() {
+        let response = SuggestionResponseBody {
+            success: true,
+            data: SuggestionResponse {
+                suggestion: "Generated Title".to_string(),
+                suggestion_type: SuggestionType::Title,
+                tokens_used: 50,
+                model: "claude-3-haiku".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"suggestion\":\"Generated Title\""));
+        assert!(json.contains("\"tokens_used\":50"));
+    }
+
+    #[test]
+    fn test_suggestion_response_all_types() {
+        let types = vec![
+            SuggestionType::Title,
+            SuggestionType::Summary,
+            SuggestionType::Tags,
+            SuggestionType::Improve,
+        ];
+
+        for suggestion_type in types {
+            let response = SuggestionResponseBody {
+                success: true,
+                data: SuggestionResponse {
+                    suggestion: "Test".to_string(),
+                    suggestion_type: suggestion_type.clone(),
+                    tokens_used: 10,
+                    model: "model".to_string(),
+                },
+            };
+            let json = serde_json::to_string(&response).unwrap();
+            assert!(json.contains("\"success\":true"));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // EmbeddingResponseBody tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_embedding_response_body_serialization() {
+        let response = EmbeddingResponseBody {
+            success: true,
+            data: EmbeddingResponse {
+                embedding: vec![0.1, 0.2, 0.3, 0.4, 0.5],
+                dimensions: 5,
+                model: "text-embedding-3-small".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"dimensions\":5"));
+        assert!(json.contains("\"model\":\"text-embedding-3-small\""));
+    }
+
+    #[test]
+    fn test_embedding_response_body_large_dimensions() {
+        let embedding = vec![0.0f32; 1536];
+        let response = EmbeddingResponseBody {
+            success: true,
+            data: EmbeddingResponse {
+                embedding,
+                dimensions: 1536,
+                model: "text-embedding-3-small".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"dimensions\":1536"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_routes_creation() {
+        let _router: Router<AppState> = routes();
+        // Should be creatable without panicking
+    }
+}

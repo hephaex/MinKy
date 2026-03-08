@@ -177,3 +177,116 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}/understand", post(analyze_document))
         .route("/{id}/understanding", get(get_understanding))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::DocumentUnderstandingResponse;
+
+    // -------------------------------------------------------------------------
+    // UnderstandingApiResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_understanding_api_response_serialization() {
+        let response = UnderstandingApiResponse {
+            success: true,
+            document_id: Uuid::new_v4(),
+            data: DocumentUnderstandingResponse {
+                topics: vec!["rust".to_string(), "web".to_string()],
+                summary: "A document about Rust web development".to_string(),
+                problem_solved: Some("How to build APIs".to_string()),
+                insights: vec!["Use async/await".to_string()],
+                technologies: vec!["axum".to_string(), "tokio".to_string()],
+                relevant_for: vec!["backend developers".to_string()],
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"topics\""));
+        assert!(json.contains("\"rust\""));
+        assert!(json.contains("\"summary\""));
+    }
+
+    #[test]
+    fn test_understanding_api_response_with_empty_optional() {
+        let response = UnderstandingApiResponse {
+            success: true,
+            document_id: Uuid::new_v4(),
+            data: DocumentUnderstandingResponse {
+                topics: vec![],
+                summary: "Summary".to_string(),
+                problem_solved: None,
+                insights: vec![],
+                technologies: vec![],
+                relevant_for: vec![],
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"topics\":[]"));
+    }
+
+    // -------------------------------------------------------------------------
+    // CachedUnderstandingResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_cached_understanding_response_serialization() {
+        let response = CachedUnderstandingResponse {
+            success: true,
+            document_id: Uuid::new_v4(),
+            data: DocumentUnderstanding {
+                id: Uuid::new_v4(),
+                document_id: Uuid::new_v4(),
+                topics: vec!["kubernetes".to_string()],
+                summary: Some("K8s guide".to_string()),
+                problem_solved: Some("Container orchestration".to_string()),
+                insights: vec!["Use namespaces".to_string()],
+                technologies: vec!["docker".to_string()],
+                relevant_for: vec!["devops".to_string()],
+                related_document_ids: vec![],
+                analyzed_at: chrono::Utc::now(),
+                analyzer_model: Some("claude-haiku".to_string()),
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"kubernetes\""));
+        assert!(json.contains("\"analyzed_at\""));
+    }
+
+    #[test]
+    fn test_cached_understanding_response_document_id_present() {
+        let doc_id = Uuid::new_v4();
+        let response = CachedUnderstandingResponse {
+            success: true,
+            document_id: doc_id,
+            data: DocumentUnderstanding {
+                id: Uuid::new_v4(),
+                document_id: doc_id,
+                topics: vec![],
+                summary: None,
+                problem_solved: None,
+                insights: vec![],
+                technologies: vec![],
+                relevant_for: vec![],
+                related_document_ids: vec![],
+                analyzed_at: chrono::Utc::now(),
+                analyzer_model: None,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains(&doc_id.to_string()));
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_routes_creation() {
+        let _router: Router<AppState> = routes();
+        // Should be creatable without panicking
+    }
+}

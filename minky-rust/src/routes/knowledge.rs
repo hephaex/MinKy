@@ -221,3 +221,167 @@ pub fn router() -> Router<AppState> {
         .route("/clusters", get(get_graph_clusters))
         .route("/export", get(get_graph_export))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::knowledge_graph::{ExportedEdge, ExportedNode};
+
+    // -------------------------------------------------------------------------
+    // escape_csv tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_escape_csv_no_quotes() {
+        assert_eq!(escape_csv("simple text"), "simple text");
+    }
+
+    #[test]
+    fn test_escape_csv_with_quotes() {
+        assert_eq!(escape_csv(r#"say "hello""#), r#"say ""hello"""#);
+    }
+
+    #[test]
+    fn test_escape_csv_multiple_quotes() {
+        assert_eq!(escape_csv(r#""""#), r#""""""#);
+    }
+
+    #[test]
+    fn test_escape_csv_empty() {
+        assert_eq!(escape_csv(""), "");
+    }
+
+    #[test]
+    fn test_escape_csv_special_chars() {
+        assert_eq!(escape_csv("a,b,c"), "a,b,c"); // commas don't need escaping if quoted
+        assert_eq!(escape_csv("line\nbreak"), "line\nbreak");
+    }
+
+    // -------------------------------------------------------------------------
+    // export_to_csv tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_export_to_csv_empty() {
+        let export = GraphExport {
+            nodes: vec![],
+            edges: vec![],
+            exported_at: "2024-01-15T10:00:00Z".to_string(),
+            node_count: 0,
+            edge_count: 0,
+        };
+        let csv = export_to_csv(&export);
+        assert!(csv.contains("# Nodes"));
+        assert!(csv.contains("# Edges"));
+        assert!(csv.contains("id,label,type,document_count,created_at"));
+        assert!(csv.contains("source,target,weight"));
+    }
+
+    #[test]
+    fn test_export_to_csv_with_nodes() {
+        let export = GraphExport {
+            nodes: vec![
+                ExportedNode {
+                    id: "node-1".to_string(),
+                    label: "Test Node".to_string(),
+                    node_type: "document".to_string(),
+                    document_count: 5,
+                    summary: None,
+                    created_at: Some("2024-01-15".to_string()),
+                },
+                ExportedNode {
+                    id: "node-2".to_string(),
+                    label: "Another Node".to_string(),
+                    node_type: "topic".to_string(),
+                    document_count: 0,
+                    summary: None,
+                    created_at: None,
+                },
+            ],
+            edges: vec![],
+            exported_at: "2024-01-15T10:00:00Z".to_string(),
+            node_count: 2,
+            edge_count: 0,
+        };
+        let csv = export_to_csv(&export);
+        assert!(csv.contains("\"node-1\""));
+        assert!(csv.contains("\"Test Node\""));
+        assert!(csv.contains("\"document\""));
+        assert!(csv.contains(",5,"));
+        assert!(csv.contains("\"node-2\""));
+    }
+
+    #[test]
+    fn test_export_to_csv_with_edges() {
+        let export = GraphExport {
+            nodes: vec![],
+            edges: vec![
+                ExportedEdge {
+                    source: "a".to_string(),
+                    target: "b".to_string(),
+                    weight: 0.85,
+                },
+                ExportedEdge {
+                    source: "b".to_string(),
+                    target: "c".to_string(),
+                    weight: 0.75,
+                },
+            ],
+            exported_at: "2024-01-15T10:00:00Z".to_string(),
+            node_count: 0,
+            edge_count: 2,
+        };
+        let csv = export_to_csv(&export);
+        assert!(csv.contains("\"a\",\"b\",0.8500"));
+        assert!(csv.contains("\"b\",\"c\",0.7500"));
+    }
+
+    #[test]
+    fn test_export_to_csv_with_quotes_in_label() {
+        let export = GraphExport {
+            nodes: vec![ExportedNode {
+                id: "1".to_string(),
+                label: r#"Say "hello""#.to_string(),
+                node_type: "test".to_string(),
+                document_count: 0,
+                summary: None,
+                created_at: None,
+            }],
+            edges: vec![],
+            exported_at: "2024-01-15T10:00:00Z".to_string(),
+            node_count: 1,
+            edge_count: 0,
+        };
+        let csv = export_to_csv(&export);
+        // Quotes should be escaped as ""
+        assert!(csv.contains(r#""Say ""hello""""#));
+    }
+
+    #[test]
+    fn test_export_to_csv_weight_precision() {
+        let export = GraphExport {
+            nodes: vec![],
+            edges: vec![ExportedEdge {
+                source: "x".to_string(),
+                target: "y".to_string(),
+                weight: 0.123456789,
+            }],
+            exported_at: "2024-01-15T10:00:00Z".to_string(),
+            node_count: 0,
+            edge_count: 1,
+        };
+        let csv = export_to_csv(&export);
+        // Should be formatted to 4 decimal places
+        assert!(csv.contains("0.1235")); // rounded
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_router_creation() {
+        let _router: Router<AppState> = router();
+        // Should be creatable without panicking
+    }
+}

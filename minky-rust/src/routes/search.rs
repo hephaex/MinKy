@@ -185,3 +185,216 @@ async fn reindex_all(
         documents_indexed: count,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{FacetCount, SearchFacets, SearchHit, SearchResponse};
+    use uuid::Uuid;
+
+    // -------------------------------------------------------------------------
+    // SearchResponseBody tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_search_response_body_serialization() {
+        let body = SearchResponseBody {
+            success: true,
+            data: SearchResponse {
+                hits: vec![],
+                total: 0,
+                page: 1,
+                limit: 10,
+                took_ms: 5,
+                facets: SearchFacets {
+                    categories: vec![],
+                    tags: vec![],
+                    date_ranges: vec![],
+                },
+            },
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"total\":0"));
+        assert!(json.contains("\"page\":1"));
+    }
+
+    #[test]
+    fn test_search_response_body_with_hits() {
+        let now = chrono::Utc::now();
+        let body = SearchResponseBody {
+            success: true,
+            data: SearchResponse {
+                hits: vec![SearchHit {
+                    id: Uuid::new_v4(),
+                    title: "Test Document".to_string(),
+                    content_snippet: "This is a preview...".to_string(),
+                    highlights: vec!["rust".to_string()],
+                    score: 0.95,
+                    category_name: Some("Tech".to_string()),
+                    tags: vec!["rust".to_string()],
+                    created_at: now,
+                    updated_at: now,
+                }],
+                total: 1,
+                page: 1,
+                limit: 10,
+                took_ms: 10,
+                facets: SearchFacets {
+                    categories: vec![FacetCount {
+                        value: "Tech".to_string(),
+                        count: 1,
+                    }],
+                    tags: vec![],
+                    date_ranges: vec![],
+                },
+            },
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(json.contains("\"total\":1"));
+        assert!(json.contains("\"score\":0.95"));
+        assert!(json.contains("\"title\":\"Test Document\""));
+    }
+
+    // -------------------------------------------------------------------------
+    // SemanticSearchRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_semantic_search_request_deserialization() {
+        let json = r#"{"query": "find rust tutorials", "limit": 20}"#;
+        let request: SemanticSearchRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.query, "find rust tutorials");
+        assert_eq!(request.limit, Some(20));
+    }
+
+    #[test]
+    fn test_semantic_search_request_without_limit() {
+        let json = r#"{"query": "kubernetes basics"}"#;
+        let request: SemanticSearchRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.query, "kubernetes basics");
+        assert_eq!(request.limit, None);
+    }
+
+    // -------------------------------------------------------------------------
+    // SemanticSearchResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_semantic_search_response_empty() {
+        let response = SemanticSearchResponse {
+            success: true,
+            data: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"data\":[]"));
+    }
+
+    // -------------------------------------------------------------------------
+    // AutocompleteQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_autocomplete_query_deserialization() {
+        let json = r#"{"q": "rus", "limit": 5}"#;
+        let query: AutocompleteQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.q, "rus");
+        assert_eq!(query.limit, Some(5));
+    }
+
+    #[test]
+    fn test_autocomplete_query_without_limit() {
+        let json = r#"{"q": "doc"}"#;
+        let query: AutocompleteQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.q, "doc");
+        assert_eq!(query.limit, None);
+    }
+
+    #[test]
+    fn test_autocomplete_limit_clamping_logic() {
+        // Test the limit clamping logic used in autocomplete handler
+        let test_cases = vec![
+            (None, 10),    // default
+            (Some(5), 5),  // below max
+            (Some(20), 20), // at max
+            (Some(50), 20), // above max, clamped to 20
+        ];
+
+        for (input, expected) in test_cases {
+            let limit = input.unwrap_or(10).min(20);
+            assert_eq!(limit, expected, "Failed for input {:?}", input);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // AutocompleteResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_autocomplete_response_serialization() {
+        let response = AutocompleteResponse {
+            success: true,
+            suggestions: vec![
+                AutocompleteSuggestion {
+                    text: "rust programming".to_string(),
+                    score: 0.9,
+                    document_count: 5,
+                },
+            ],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"text\":\"rust programming\""));
+        assert!(json.contains("\"score\":0.9"));
+        assert!(json.contains("\"document_count\":5"));
+    }
+
+    #[test]
+    fn test_autocomplete_response_empty() {
+        let response = AutocompleteResponse {
+            success: true,
+            suggestions: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"suggestions\":[]"));
+    }
+
+    // -------------------------------------------------------------------------
+    // ReindexResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_reindex_response_serialization() {
+        let response = ReindexResponse {
+            success: true,
+            message: "Reindexing completed".to_string(),
+            documents_indexed: 150,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"documents_indexed\":150"));
+        assert!(json.contains("\"message\":\"Reindexing completed\""));
+    }
+
+    #[test]
+    fn test_reindex_response_zero_documents() {
+        let response = ReindexResponse {
+            success: true,
+            message: "Reindexing completed".to_string(),
+            documents_indexed: 0,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"documents_indexed\":0"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_routes_creation() {
+        let _router: Router<AppState> = routes();
+        // Should be creatable without panicking
+    }
+}

@@ -167,3 +167,66 @@ pub fn router() -> Router<AppState> {
         .route("/synonyms", get(get_synonyms).post(create_synonym_group))
         .route("/stopwords", get(get_stopwords))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // SpellCheckRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_spell_check_request_deserialization() {
+        let json = r#"{"text": "맞춤법 검사할 텍스트"}"#;
+        let request: SpellCheckRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.text, "맞춤법 검사할 텍스트");
+    }
+
+    #[test]
+    fn test_spell_check_request_empty_text() {
+        let json = r#"{"text": ""}"#;
+        let request: SpellCheckRequest = serde_json::from_str(json).unwrap();
+        assert!(request.text.is_empty());
+    }
+
+    // -------------------------------------------------------------------------
+    // ExtractKeywordsRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_extract_keywords_request_with_limit() {
+        let json = r#"{"text": "키워드 추출 테스트", "limit": 5}"#;
+        let request: ExtractKeywordsRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.text, "키워드 추출 테스트");
+        assert_eq!(request.limit, Some(5));
+    }
+
+    #[test]
+    fn test_extract_keywords_request_without_limit() {
+        let json = r#"{"text": "키워드 추출"}"#;
+        let request: ExtractKeywordsRequest = serde_json::from_str(json).unwrap();
+        assert!(request.limit.is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // NormalizeRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_normalize_request_deserialization() {
+        let json = r#"{"text": "정규화할 텍스트"}"#;
+        let request: NormalizeRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.text, "정규화할 텍스트");
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_router_creation() {
+        let _router: Router<AppState> = router();
+        // Should be creatable without panicking
+    }
+}

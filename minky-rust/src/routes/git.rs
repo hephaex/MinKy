@@ -246,3 +246,261 @@ async fn stage_files(
         message: format!("Staged {} file(s)", payload.files.len()),
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{FileStatus, GitFileChange};
+
+    // -------------------------------------------------------------------------
+    // LogQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_log_query_deserialization() {
+        let json = r#"{"limit": 50}"#;
+        let query: LogQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.limit, Some(50));
+    }
+
+    #[test]
+    fn test_log_query_empty() {
+        let json = r#"{}"#;
+        let query: LogQuery = serde_json::from_str(json).unwrap();
+        assert!(query.limit.is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // DiffQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_diff_query_deserialization() {
+        let json = r#"{"staged": true}"#;
+        let query: DiffQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.staged, Some(true));
+    }
+
+    #[test]
+    fn test_diff_query_staged_false() {
+        let json = r#"{"staged": false}"#;
+        let query: DiffQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.staged, Some(false));
+    }
+
+    #[test]
+    fn test_diff_query_empty() {
+        let json = r#"{}"#;
+        let query: DiffQuery = serde_json::from_str(json).unwrap();
+        assert!(query.staged.is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // StageRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_stage_request_deserialization() {
+        let json = r#"{"files": ["src/main.rs", "Cargo.toml"]}"#;
+        let request: StageRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.files.len(), 2);
+        assert_eq!(request.files[0], "src/main.rs");
+    }
+
+    #[test]
+    fn test_stage_request_empty_files() {
+        let json = r#"{"files": []}"#;
+        let request: StageRequest = serde_json::from_str(json).unwrap();
+        assert!(request.files.is_empty());
+    }
+
+    // -------------------------------------------------------------------------
+    // RepositoryResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_repository_response_serialization() {
+        let now = chrono::Utc::now();
+        let response = RepositoryResponse {
+            success: true,
+            data: GitRepository {
+                path: "/home/user/project".to_string(),
+                remote_url: Some("https://github.com/user/repo.git".to_string()),
+                current_branch: "main".to_string(),
+                is_clean: true,
+                last_commit: Some(GitCommit {
+                    hash: "abc123def456".to_string(),
+                    short_hash: "abc123d".to_string(),
+                    message: "Initial commit".to_string(),
+                    author: "John Doe".to_string(),
+                    author_email: "john@example.com".to_string(),
+                    date: now,
+                }),
+                uncommitted_changes: 0,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"current_branch\":\"main\""));
+    }
+
+    // -------------------------------------------------------------------------
+    // StatusResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_status_response_serialization() {
+        let response = StatusResponse {
+            success: true,
+            data: GitStatus {
+                branch: "feature/new".to_string(),
+                ahead: 2,
+                behind: 0,
+                staged: vec![GitFileChange {
+                    path: "src/lib.rs".to_string(),
+                    status: FileStatus::Modified,
+                }],
+                unstaged: vec![],
+                untracked: vec!["temp.txt".to_string()],
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"branch\":\"feature/new\""));
+        assert!(json.contains("\"ahead\":2"));
+    }
+
+    // -------------------------------------------------------------------------
+    // LogResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_log_response_serialization() {
+        let now = chrono::Utc::now();
+        let response = LogResponse {
+            success: true,
+            data: vec![GitLogEntry {
+                hash: "abcdef123456".to_string(),
+                short_hash: "abcdef1".to_string(),
+                message: "feat: add new feature".to_string(),
+                author: "Jane Doe".to_string(),
+                date: now,
+                files_changed: 3,
+                insertions: 50,
+                deletions: 10,
+            }],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"files_changed\":3"));
+        assert!(json.contains("\"insertions\":50"));
+    }
+
+    // -------------------------------------------------------------------------
+    // BranchesResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_branches_response_serialization() {
+        let response = BranchesResponse {
+            success: true,
+            data: vec![GitBranch {
+                name: "main".to_string(),
+                is_current: true,
+                is_remote: false,
+                last_commit: None,
+                tracking: Some("origin/main".to_string()),
+            }],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"name\":\"main\""));
+        assert!(json.contains("\"is_current\":true"));
+    }
+
+    // -------------------------------------------------------------------------
+    // BranchResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_branch_response_serialization() {
+        let response = BranchResponse {
+            success: true,
+            data: GitBranch {
+                name: "feature/test".to_string(),
+                is_current: false,
+                is_remote: false,
+                last_commit: None,
+                tracking: None,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"name\":\"feature/test\""));
+    }
+
+    // -------------------------------------------------------------------------
+    // MessageResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_message_response_serialization() {
+        let response = MessageResponse {
+            success: true,
+            message: "Operation successful".to_string(),
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"message\":\"Operation successful\""));
+    }
+
+    // -------------------------------------------------------------------------
+    // CommitResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_commit_response_serialization() {
+        let now = chrono::Utc::now();
+        let response = CommitResponse {
+            success: true,
+            data: GitCommit {
+                hash: "fedcba654321".to_string(),
+                short_hash: "fedcba6".to_string(),
+                message: "fix: resolve bug".to_string(),
+                author: "Developer".to_string(),
+                author_email: "dev@example.com".to_string(),
+                date: now,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"message\":\"fix: resolve bug\""));
+    }
+
+    // -------------------------------------------------------------------------
+    // DiffResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_diff_response_serialization() {
+        let response = DiffResponse {
+            success: true,
+            data: GitDiff {
+                files: vec![],
+                stats: crate::models::GitDiffStats {
+                    files_changed: 2,
+                    insertions: 30,
+                    deletions: 5,
+                },
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"files_changed\":2"));
+        assert!(json.contains("\"insertions\":30"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_routes_creation() {
+        let _router: Router<AppState> = routes();
+        // Should be creatable without panicking
+    }
+}

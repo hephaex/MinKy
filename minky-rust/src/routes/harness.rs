@@ -204,3 +204,74 @@ pub fn router() -> Router<AppState> {
         // Statistics
         .route("/stats", get(get_stats))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // ListQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_list_query_with_limit() {
+        let json = r#"{"limit": 25}"#;
+        let query: ListQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.limit, Some(25));
+    }
+
+    #[test]
+    fn test_list_query_empty() {
+        let json = r#"{}"#;
+        let query: ListQuery = serde_json::from_str(json).unwrap();
+        assert!(query.limit.is_none());
+    }
+
+    #[test]
+    fn test_list_query_with_null_limit() {
+        let json = r#"{"limit": null}"#;
+        let query: ListQuery = serde_json::from_str(json).unwrap();
+        assert!(query.limit.is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // StartHarnessRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_start_harness_request_minimal() {
+        let json = r#"{"issue_number": 123}"#;
+        let request: StartHarnessRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.issue_number, 123);
+        assert!(request.options.is_none());
+    }
+
+    #[test]
+    fn test_start_harness_request_with_options() {
+        let json = r#"{"issue_number": 456, "options": {"auto_commit": true, "dry_run": false}}"#;
+        let request: StartHarnessRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.issue_number, 456);
+        let opts = request.options.unwrap();
+        assert_eq!(opts.auto_commit, Some(true));
+        assert_eq!(opts.dry_run, Some(false));
+    }
+
+    #[test]
+    fn test_start_harness_request_with_reviewers() {
+        let json = r#"{"issue_number": 789, "options": {"create_pr": true, "reviewers": ["alice", "bob"]}}"#;
+        let request: StartHarnessRequest = serde_json::from_str(json).unwrap();
+        let opts = request.options.unwrap();
+        assert_eq!(opts.create_pr, Some(true));
+        assert_eq!(opts.reviewers, Some(vec!["alice".to_string(), "bob".to_string()]));
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_router_creation() {
+        let _router: Router<AppState> = router();
+        // Should be creatable without panicking
+    }
+}

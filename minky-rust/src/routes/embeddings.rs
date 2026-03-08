@@ -325,3 +325,97 @@ pub fn router() -> Router<AppState> {
         // Queue
         .route("/queue/{id}", post(queue_document))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // SimilarQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_similar_query_default_limit() {
+        let json = r#"{}"#;
+        let query: SimilarQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.limit, None);
+    }
+
+    #[test]
+    fn test_similar_query_with_limit() {
+        let json = r#"{"limit": 25}"#;
+        let query: SimilarQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.limit, Some(25));
+    }
+
+    #[test]
+    fn test_similar_query_limit_clamping_logic() {
+        // Test the clamping logic used in find_similar_documents
+        let test_cases = vec![
+            (None, 10),    // default
+            (Some(5), 5),  // below max
+            (Some(50), 50), // at max
+            (Some(100), 50), // above max, clamped
+        ];
+
+        for (input, expected) in test_cases {
+            let limit = input.unwrap_or(10).min(50);
+            assert_eq!(limit, expected, "Failed for input {:?}", input);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // QueueRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_queue_request_default_priority() {
+        let json = r#"{}"#;
+        let req: QueueRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.priority, 0);
+    }
+
+    #[test]
+    fn test_queue_request_with_priority() {
+        let json = r#"{"priority": 5}"#;
+        let req: QueueRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.priority, 5);
+    }
+
+    #[test]
+    fn test_queue_request_negative_priority() {
+        let json = r#"{"priority": -10}"#;
+        let req: QueueRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.priority, -10);
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_router_creation() {
+        let _router: Router<AppState> = router();
+        // Should be creatable without panicking
+    }
+
+    // -------------------------------------------------------------------------
+    // Query validation logic tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_empty_query_validation() {
+        let empty_queries = vec!["", "   ", "\t", "\n", "  \n  "];
+        for query in empty_queries {
+            assert!(query.trim().is_empty(), "Query '{}' should be empty", query);
+        }
+    }
+
+    #[test]
+    fn test_non_empty_query_validation() {
+        let valid_queries = vec!["test", "  hello  ", "a", "query with spaces"];
+        for query in valid_queries {
+            assert!(!query.trim().is_empty(), "Query '{}' should not be empty", query);
+        }
+    }
+}

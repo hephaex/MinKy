@@ -496,3 +496,235 @@ fn build_context_string(chunks: &[crate::models::SemanticSearchResult]) -> Strin
         .collect::<Vec<_>>()
         .join("\n\n---\n\n")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    // -------------------------------------------------------------------------
+    // Response wrapper tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_ask_response_body_serialization() {
+        let body = AskResponseBody {
+            success: true,
+            data: RagAskResponse {
+                answer: "Test answer".to_string(),
+                sources: vec![],
+                tokens_used: 100,
+                model: "claude-haiku-4-5-20251101".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"answer\":\"Test answer\""));
+        assert!(json.contains("\"tokens_used\":100"));
+    }
+
+    #[test]
+    fn test_semantic_response_body_serialization() {
+        let body = SemanticResponseBody {
+            success: true,
+            data: RagSemanticSearchResponse {
+                results: vec![],
+                total: 0,
+                query: "test query".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"total\":0"));
+        assert!(json.contains("\"query\":\"test query\""));
+    }
+
+    #[test]
+    fn test_history_response_body_serialization() {
+        let body = HistoryResponseBody {
+            success: true,
+            data: vec![],
+            total: 0,
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"data\":[]"));
+        assert!(json.contains("\"total\":0"));
+    }
+
+    #[test]
+    fn test_history_response_with_entries() {
+        let body = HistoryResponseBody {
+            success: true,
+            data: vec![SearchHistoryEntry {
+                id: Uuid::new_v4(),
+                query: "test search".to_string(),
+                answer: Some("Test answer".to_string()),
+                source_count: 5,
+                tokens_used: Some(100),
+                user_id: Some(1),
+                created_at: chrono::Utc::now(),
+            }],
+            total: 1,
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(json.contains("\"query\":\"test search\""));
+        assert!(json.contains("\"source_count\":5"));
+        assert!(json.contains("\"total\":1"));
+    }
+
+    // -------------------------------------------------------------------------
+    // StreamEvent tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_stream_event_sources() {
+        let event = StreamEvent::Sources {
+            sources: vec![RagSource {
+                document_id: Uuid::new_v4(),
+                document_title: Some("Test Doc".to_string()),
+                chunk_text: "Some text".to_string(),
+                similarity: 0.95,
+            }],
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"type\":\"sources\""));
+        assert!(json.contains("\"document_title\":\"Test Doc\""));
+        assert!(json.contains("\"similarity\":0.95"));
+    }
+
+    #[test]
+    fn test_stream_event_delta() {
+        let event = StreamEvent::Delta {
+            text: "Hello world".to_string(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"type\":\"delta\""));
+        assert!(json.contains("\"text\":\"Hello world\""));
+    }
+
+    #[test]
+    fn test_stream_event_done() {
+        let event = StreamEvent::Done {
+            tokens_used: 150,
+            model: "claude-haiku".to_string(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"type\":\"done\""));
+        assert!(json.contains("\"tokens_used\":150"));
+        assert!(json.contains("\"model\":\"claude-haiku\""));
+    }
+
+    #[test]
+    fn test_stream_event_error() {
+        let event = StreamEvent::Error {
+            message: "Something went wrong".to_string(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"type\":\"error\""));
+        assert!(json.contains("\"message\":\"Something went wrong\""));
+    }
+
+    // -------------------------------------------------------------------------
+    // build_context_string tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_build_context_string_empty() {
+        let result = build_context_string(&[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_build_context_string_single_chunk() {
+        let chunks = vec![crate::models::SemanticSearchResult {
+            document_id: Uuid::new_v4(),
+            chunk_id: Some(Uuid::new_v4()),
+            document_title: Some("Test Document".to_string()),
+            chunk_text: Some("This is the chunk content.".to_string()),
+            similarity: 0.85,
+        }];
+        let result = build_context_string(&chunks);
+        assert!(result.contains("[Source 1]"));
+        assert!(result.contains("Test Document"));
+        assert!(result.contains("similarity: 0.85"));
+        assert!(result.contains("This is the chunk content."));
+    }
+
+    #[test]
+    fn test_build_context_string_multiple_chunks() {
+        let chunks = vec![
+            crate::models::SemanticSearchResult {
+                document_id: Uuid::new_v4(),
+                chunk_id: Some(Uuid::new_v4()),
+                document_title: Some("Doc A".to_string()),
+                chunk_text: Some("Content A".to_string()),
+                similarity: 0.90,
+            },
+            crate::models::SemanticSearchResult {
+                document_id: Uuid::new_v4(),
+                chunk_id: Some(Uuid::new_v4()),
+                document_title: Some("Doc B".to_string()),
+                chunk_text: Some("Content B".to_string()),
+                similarity: 0.75,
+            },
+        ];
+        let result = build_context_string(&chunks);
+        assert!(result.contains("[Source 1]"));
+        assert!(result.contains("[Source 2]"));
+        assert!(result.contains("Doc A"));
+        assert!(result.contains("Doc B"));
+        assert!(result.contains("---")); // separator
+    }
+
+    #[test]
+    fn test_build_context_string_missing_title() {
+        let chunks = vec![crate::models::SemanticSearchResult {
+            document_id: Uuid::new_v4(),
+            chunk_id: None,
+            document_title: None,
+            chunk_text: Some("Some content".to_string()),
+            similarity: 0.80,
+        }];
+        let result = build_context_string(&chunks);
+        assert!(result.contains("Untitled document"));
+    }
+
+    #[test]
+    fn test_build_context_string_missing_text() {
+        let chunks = vec![crate::models::SemanticSearchResult {
+            document_id: Uuid::new_v4(),
+            chunk_id: None,
+            document_title: Some("Has Title".to_string()),
+            chunk_text: None,
+            similarity: 0.70,
+        }];
+        let result = build_context_string(&chunks);
+        assert!(result.contains("Has Title"));
+        assert!(result.contains("similarity: 0.70"));
+    }
+
+    #[test]
+    fn test_build_context_string_similarity_format() {
+        let chunks = vec![crate::models::SemanticSearchResult {
+            document_id: Uuid::new_v4(),
+            chunk_id: Some(Uuid::new_v4()),
+            document_title: Some("Test".to_string()),
+            chunk_text: Some("Content".to_string()),
+            similarity: 0.9876,
+        }];
+        let result = build_context_string(&chunks);
+        // Should be formatted to 2 decimal places
+        assert!(result.contains("0.99")); // rounded
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_router_creation() {
+        let _router: Router<AppState> = router();
+        // Router should be creatable without panicking
+    }
+}

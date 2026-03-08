@@ -76,9 +76,17 @@ redis = { version = "0.28", features = ["tokio-comp", "connection-manager"] }
 
 # Text Processing
 regex = "1.11"
+pulldown-cmark = "0.9"
+url = "2.5"
 futures-util = "0.3.32"
 tokio-stream = "0.1.18"
 async-stream = "0.3.6"
+
+# Syntax Highlighting
+syntect = "5"
+
+# PDF Generation (via headless Chrome)
+headless_chrome = "1"
 
 [dev-dependencies]
 tokio-test = "0.4"

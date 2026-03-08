@@ -278,3 +278,149 @@ pub fn router() -> Router<AppState> {
         .route("/stats", get(get_stats))
         .route("/history", get(get_history))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // HistoryQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_history_query_deserialization() {
+        let json = r#"{"limit": 25}"#;
+        let query: HistoryQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.limit, Some(25));
+    }
+
+    #[test]
+    fn test_history_query_empty() {
+        let json = r#"{}"#;
+        let query: HistoryQuery = serde_json::from_str(json).unwrap();
+        assert!(query.limit.is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // QuickExecuteRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_quick_execute_request_minimal() {
+        let json = r#"{"input": "Review this code"}"#;
+        let request: QuickExecuteRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.input, "Review this code");
+        assert!(request.context.is_none());
+    }
+
+    #[test]
+    fn test_quick_execute_request_with_context() {
+        let json = r#"{"input": "Debug this error", "context": {"error_message": "undefined is not a function"}}"#;
+        let request: QuickExecuteRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.input, "Debug this error");
+        assert!(request.context.is_some());
+    }
+
+    #[test]
+    fn test_quick_execute_request_with_file_paths() {
+        let json = r#"{"input": "Refactor", "context": {"file_paths": ["src/main.rs", "src/lib.rs"]}}"#;
+        let request: QuickExecuteRequest = serde_json::from_str(json).unwrap();
+        let ctx = request.context.unwrap();
+        assert!(ctx.file_paths.is_some());
+        assert_eq!(ctx.file_paths.unwrap().len(), 2);
+    }
+
+    // -------------------------------------------------------------------------
+    // ExecuteSkillRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_execute_skill_request_by_id() {
+        let json = r#"{"skill_id": "skill_123", "input": "Analyze this code"}"#;
+        let request: ExecuteSkillRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.skill_id, Some("skill_123".to_string()));
+        assert!(request.skill_type.is_none());
+    }
+
+    #[test]
+    fn test_execute_skill_request_by_type() {
+        let json = r#"{"skill_type": "code_reviewer", "input": "Review please"}"#;
+        let request: ExecuteSkillRequest = serde_json::from_str(json).unwrap();
+        assert!(request.skill_id.is_none());
+        assert!(matches!(request.skill_type, Some(SkillType::CodeReviewer)));
+    }
+
+    #[test]
+    fn test_execute_skill_request_with_options() {
+        let json = r#"{"input": "Test", "options": {"stream": true, "max_iterations": 5}}"#;
+        let request: ExecuteSkillRequest = serde_json::from_str(json).unwrap();
+        assert!(request.options.is_some());
+        let opts = request.options.unwrap();
+        assert_eq!(opts.stream, Some(true));
+        assert_eq!(opts.max_iterations, Some(5));
+    }
+
+    // -------------------------------------------------------------------------
+    // CreateSkill tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_create_skill_minimal() {
+        let json = r#"{
+            "name": "Custom Reviewer",
+            "skill_type": "code_reviewer",
+            "description": "A custom code reviewer",
+            "system_prompt": "You are a code reviewer."
+        }"#;
+        let create: CreateSkill = serde_json::from_str(json).unwrap();
+        assert_eq!(create.name, "Custom Reviewer");
+        assert!(create.model.is_none());
+    }
+
+    #[test]
+    fn test_create_skill_full() {
+        let json = r#"{
+            "name": "Full Skill",
+            "skill_type": "debugger",
+            "description": "Debugging skill",
+            "system_prompt": "Debug code",
+            "model": "claude-3-opus",
+            "temperature": 0.3,
+            "max_tokens": 4000,
+            "priority": 10
+        }"#;
+        let create: CreateSkill = serde_json::from_str(json).unwrap();
+        assert_eq!(create.model, Some("claude-3-opus".to_string()));
+        assert_eq!(create.temperature, Some(0.3));
+        assert_eq!(create.priority, Some(10));
+    }
+
+    // -------------------------------------------------------------------------
+    // UpdateSkill tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_update_skill_partial() {
+        let json = r#"{"name": "Updated Name"}"#;
+        let update: UpdateSkill = serde_json::from_str(json).unwrap();
+        assert_eq!(update.name, Some("Updated Name".to_string()));
+        assert!(update.description.is_none());
+    }
+
+    #[test]
+    fn test_update_skill_deactivate() {
+        let json = r#"{"is_active": false}"#;
+        let update: UpdateSkill = serde_json::from_str(json).unwrap();
+        assert_eq!(update.is_active, Some(false));
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_router_creation() {
+        let _router: Router<AppState> = router();
+        // Should be creatable without panicking
+    }
+}

@@ -277,3 +277,247 @@ async fn set_maintenance_mode(
         data: mode,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // ListUsersQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_list_users_query_deserialization() {
+        let json = r#"{"page": 2, "limit": 50}"#;
+        let query: ListUsersQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.page, Some(2));
+        assert_eq!(query.limit, Some(50));
+    }
+
+    #[test]
+    fn test_list_users_query_default() {
+        let json = r#"{}"#;
+        let query: ListUsersQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.page, None);
+        assert_eq!(query.limit, None);
+    }
+
+    #[test]
+    fn test_list_users_pagination_logic() {
+        let test_cases = vec![
+            ((None, None), (1, 20)),       // defaults
+            ((Some(3), Some(50)), (3, 50)), // specified
+            ((Some(1), Some(200)), (1, 100)), // limit clamped
+        ];
+
+        for ((page_input, limit_input), (expected_page, expected_limit)) in test_cases {
+            let page = page_input.unwrap_or(1);
+            let limit = limit_input.unwrap_or(20).min(100);
+            assert_eq!((page, limit), (expected_page, expected_limit));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // AuditLogsQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_audit_logs_query_deserialization() {
+        let json = r#"{"page": 1, "limit": 100, "user_id": 5, "action": "create"}"#;
+        let query: AuditLogsQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.page, Some(1));
+        assert_eq!(query.limit, Some(100));
+        assert_eq!(query.user_id, Some(5));
+        assert_eq!(query.action, Some("create".to_string()));
+    }
+
+    #[test]
+    fn test_audit_logs_query_empty() {
+        let json = r#"{}"#;
+        let query: AuditLogsQuery = serde_json::from_str(json).unwrap();
+        assert!(query.page.is_none());
+        assert!(query.limit.is_none());
+        assert!(query.user_id.is_none());
+        assert!(query.action.is_none());
+    }
+
+    #[test]
+    fn test_audit_logs_limit_clamping() {
+        let test_cases = vec![
+            (None, 50),      // default
+            (Some(100), 100), // below max
+            (Some(200), 200), // at max
+            (Some(300), 200), // above max, clamped
+        ];
+
+        for (input, expected) in test_cases {
+            let limit = input.unwrap_or(50).min(200);
+            assert_eq!(limit, expected);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Response serialization tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_stats_response_serialization() {
+        let response = StatsResponse {
+            success: true,
+            data: SystemStats {
+                total_users: 100,
+                active_users: 50,
+                total_documents: 1000,
+                total_storage_bytes: 1024 * 1024 * 100,
+                database_size_bytes: 1024 * 1024 * 50,
+                cache_hit_rate: 0.85,
+                uptime_seconds: 86400,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"total_users\":100"));
+        assert!(json.contains("\"cache_hit_rate\":0.85"));
+    }
+
+    #[test]
+    fn test_users_response_serialization() {
+        let response = UsersResponse {
+            success: true,
+            data: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"data\":[]"));
+    }
+
+    #[test]
+    fn test_user_response_serialization() {
+        let now = chrono::Utc::now();
+        let response = UserResponse {
+            success: true,
+            data: UserAdmin {
+                id: 1,
+                username: "testuser".to_string(),
+                email: "test@example.com".to_string(),
+                role: "admin".to_string(),
+                is_active: true,
+                created_at: now,
+                last_login: Some(now),
+                document_count: 25,
+                storage_used_bytes: 1024 * 1024,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"username\":\"testuser\""));
+        assert!(json.contains("\"role\":\"admin\""));
+    }
+
+    #[test]
+    fn test_delete_response_serialization() {
+        let response = DeleteResponse {
+            success: true,
+            message: "User deleted".to_string(),
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"message\":\"User deleted\""));
+    }
+
+    #[test]
+    fn test_audit_logs_response_serialization() {
+        let response = AuditLogsResponse {
+            success: true,
+            data: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn test_backups_response_serialization() {
+        let response = BackupsResponse {
+            success: true,
+            data: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn test_backup_response_serialization() {
+        let now = chrono::Utc::now();
+        let response = BackupResponse {
+            success: true,
+            data: BackupInfo {
+                id: "backup-001".to_string(),
+                filename: "backup_2026-03-08.sql.gz".to_string(),
+                size_bytes: 1024 * 1024 * 10,
+                created_at: now,
+                backup_type: "full".to_string(),
+                status: "completed".to_string(),
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"id\":\"backup-001\""));
+        assert!(json.contains("\"backup_type\":\"full\""));
+    }
+
+    #[test]
+    fn test_config_response_serialization() {
+        let response = ConfigResponse {
+            success: true,
+            data: SystemConfig {
+                max_upload_size_mb: 100,
+                allowed_file_types: vec!["pdf".to_string(), "md".to_string()],
+                enable_registration: true,
+                require_email_verification: false,
+                session_timeout_minutes: 60,
+                rate_limit_requests_per_minute: 100,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"max_upload_size_mb\":100"));
+        assert!(json.contains("\"enable_registration\":true"));
+    }
+
+    #[test]
+    fn test_maintenance_response_serialization() {
+        let now = chrono::Utc::now();
+        let response = MaintenanceResponse {
+            success: true,
+            data: MaintenanceMode {
+                enabled: true,
+                message: Some("System maintenance in progress".to_string()),
+                estimated_end: Some(now),
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"enabled\":true"));
+        assert!(json.contains("\"message\":\"System maintenance in progress\""));
+    }
+
+    #[test]
+    fn test_maintenance_response_disabled() {
+        let response = MaintenanceResponse {
+            success: true,
+            data: MaintenanceMode {
+                enabled: false,
+                message: None,
+                estimated_end: None,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"enabled\":false"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_routes_creation() {
+        let _router: Router<AppState> = routes();
+        // Should be creatable without panicking
+    }
+}

@@ -18,6 +18,7 @@ mod korean;
 mod ml;
 mod notifications;
 mod ocr;
+pub mod pipeline;
 pub mod rag;
 mod search;
 mod security;
@@ -68,6 +69,7 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/knowledge", knowledge::router())
         .nest("/embeddings", embeddings::router())
         .nest("/slack", slack::router())
+        .nest("/pipeline", pipeline::router())
         .merge(ws::router())
         .merge(crate::openapi::router())
 }

@@ -172,3 +172,292 @@ async fn apply_template(
         document_id,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{TemplateVariable, VariableType};
+
+    // -------------------------------------------------------------------------
+    // PreviewRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_preview_request_deserialization() {
+        let json = r#"{"variables": {"name": "Test", "count": 5}}"#;
+        let request: PreviewRequest = serde_json::from_str(json).unwrap();
+        assert!(request.variables.is_some());
+    }
+
+    #[test]
+    fn test_preview_request_empty() {
+        let json = r#"{}"#;
+        let request: PreviewRequest = serde_json::from_str(json).unwrap();
+        assert!(request.variables.is_none());
+    }
+
+    #[test]
+    fn test_preview_request_with_null_variables() {
+        let json = r#"{"variables": null}"#;
+        let request: PreviewRequest = serde_json::from_str(json).unwrap();
+        assert!(request.variables.is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // TemplatesResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_templates_response_serialization() {
+        let response = TemplatesResponse {
+            success: true,
+            data: vec![],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"data\":[]"));
+    }
+
+    #[test]
+    fn test_templates_response_with_templates() {
+        let now = chrono::Utc::now();
+        let response = TemplatesResponse {
+            success: true,
+            data: vec![Template {
+                id: 1,
+                name: "Meeting Notes".to_string(),
+                description: Some("Template for meeting notes".to_string()),
+                content: "# {{title}}\n\nDate: {{date}}\n\n## Attendees\n{{attendees}}".to_string(),
+                category_id: Some(5),
+                category_name: Some("Work".to_string()),
+                variables: vec![TemplateVariable {
+                    name: "title".to_string(),
+                    description: Some("Meeting title".to_string()),
+                    default_value: None,
+                    required: true,
+                    var_type: VariableType::Text,
+                }],
+                tags: vec!["meeting".to_string(), "notes".to_string()],
+                is_public: true,
+                usage_count: 42,
+                created_by: 1,
+                created_by_name: Some("admin".to_string()),
+                created_at: now,
+                updated_at: now,
+            }],
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"name\":\"Meeting Notes\""));
+        assert!(json.contains("\"usage_count\":42"));
+    }
+
+    // -------------------------------------------------------------------------
+    // TemplateResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_template_response_serialization() {
+        let now = chrono::Utc::now();
+        let response = TemplateResponse {
+            success: true,
+            data: Template {
+                id: 1,
+                name: "Bug Report".to_string(),
+                description: None,
+                content: "## Bug Report\n\n{{description}}".to_string(),
+                category_id: None,
+                category_name: None,
+                variables: vec![],
+                tags: vec![],
+                is_public: false,
+                usage_count: 0,
+                created_by: 1,
+                created_by_name: None,
+                created_at: now,
+                updated_at: now,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"name\":\"Bug Report\""));
+        assert!(json.contains("\"is_public\":false"));
+    }
+
+    // -------------------------------------------------------------------------
+    // DeleteResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_delete_response_serialization() {
+        let response = DeleteResponse {
+            success: true,
+            message: "Template deleted".to_string(),
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"message\":\"Template deleted\""));
+    }
+
+    // -------------------------------------------------------------------------
+    // PreviewResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_preview_response_serialization() {
+        let response = PreviewResponse {
+            success: true,
+            data: TemplatePreview {
+                content: "# Meeting Notes\n\nDate: 2026-03-08".to_string(),
+                title: Some("Meeting Notes".to_string()),
+                missing_variables: vec![],
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"title\":\"Meeting Notes\""));
+    }
+
+    #[test]
+    fn test_preview_response_with_missing_variables() {
+        let response = PreviewResponse {
+            success: true,
+            data: TemplatePreview {
+                content: "# {{title}}\n\nDate: {{date}}".to_string(),
+                title: None,
+                missing_variables: vec!["title".to_string(), "date".to_string()],
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"missing_variables\":[\"title\",\"date\"]"));
+    }
+
+    // -------------------------------------------------------------------------
+    // ApplyResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_apply_response_serialization() {
+        let doc_id = uuid::Uuid::new_v4();
+        let response = ApplyResponse {
+            success: true,
+            document_id: doc_id,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains(&doc_id.to_string()));
+    }
+
+    // -------------------------------------------------------------------------
+    // TemplateQuery tests (from models but used here)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_template_query_deserialization() {
+        let json = r#"{"page": 2, "limit": 20, "category_id": 5, "is_public": true}"#;
+        let query: TemplateQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.page, Some(2));
+        assert_eq!(query.limit, Some(20));
+        assert_eq!(query.category_id, Some(5));
+        assert_eq!(query.is_public, Some(true));
+    }
+
+    #[test]
+    fn test_template_query_with_search() {
+        let json = r#"{"search": "meeting"}"#;
+        let query: TemplateQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(query.search, Some("meeting".to_string()));
+    }
+
+    #[test]
+    fn test_template_query_empty() {
+        let json = r#"{}"#;
+        let query: TemplateQuery = serde_json::from_str(json).unwrap();
+        assert!(query.page.is_none());
+        assert!(query.limit.is_none());
+        assert!(query.search.is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // CreateTemplate tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_create_template_deserialization() {
+        let json = r#"{"name": "New Template", "content": "Content with {{variable}}"}"#;
+        let create: CreateTemplate = serde_json::from_str(json).unwrap();
+        assert_eq!(create.name, "New Template");
+        assert!(create.content.contains("{{variable}}"));
+    }
+
+    #[test]
+    fn test_create_template_full() {
+        let json = r#"{
+            "name": "Full Template",
+            "description": "A complete template",
+            "content": "Content here",
+            "category_id": 1,
+            "variables": [{"name": "title", "required": true, "var_type": "text"}],
+            "tags": ["tag1", "tag2"],
+            "is_public": true
+        }"#;
+        let create: CreateTemplate = serde_json::from_str(json).unwrap();
+        assert_eq!(create.name, "Full Template");
+        assert_eq!(create.is_public, Some(true));
+        assert!(create.variables.is_some());
+    }
+
+    // -------------------------------------------------------------------------
+    // UpdateTemplate tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_update_template_partial() {
+        let json = r#"{"name": "Updated Name"}"#;
+        let update: UpdateTemplate = serde_json::from_str(json).unwrap();
+        assert_eq!(update.name, Some("Updated Name".to_string()));
+        assert!(update.content.is_none());
+    }
+
+    #[test]
+    fn test_update_template_full() {
+        let json = r#"{
+            "name": "Updated",
+            "description": "New description",
+            "content": "New content",
+            "is_public": false
+        }"#;
+        let update: UpdateTemplate = serde_json::from_str(json).unwrap();
+        assert_eq!(update.name, Some("Updated".to_string()));
+        assert_eq!(update.is_public, Some(false));
+    }
+
+    // -------------------------------------------------------------------------
+    // ApplyTemplateRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_apply_template_request_deserialization() {
+        let json = r#"{"template_id": 1, "title": "My Document"}"#;
+        let request: ApplyTemplateRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.template_id, 1);
+        assert_eq!(request.title, Some("My Document".to_string()));
+    }
+
+    #[test]
+    fn test_apply_template_request_with_variables() {
+        let json = r#"{"template_id": 5, "variables": {"name": "Test", "date": "2026-03-08"}}"#;
+        let request: ApplyTemplateRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.template_id, 5);
+        assert!(request.variables.is_some());
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_routes_creation() {
+        let _router: Router<AppState> = routes();
+        // Should be creatable without panicking
+    }
+}

@@ -223,3 +223,169 @@ async fn delete_attachment(
         message: "Attachment deleted successfully".to_string(),
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // AttachmentListResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_attachment_list_response_empty() {
+        let response = AttachmentListResponse {
+            success: true,
+            data: vec![],
+            total_size: 0,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"data\":[]"));
+        assert!(json.contains("\"total_size\":0"));
+    }
+
+    #[test]
+    fn test_attachment_list_response_with_data() {
+        let now = chrono::Utc::now();
+        let doc_id = Uuid::new_v4();
+        let response = AttachmentListResponse {
+            success: true,
+            data: vec![AttachmentWithUploader {
+                id: Uuid::new_v4(),
+                filename: "abc123_document.pdf".to_string(),
+                original_filename: "document.pdf".to_string(),
+                mime_type: "application/pdf".to_string(),
+                file_size: 1024 * 1024,
+                document_id: doc_id,
+                user_id: 1,
+                uploader_name: "admin".to_string(),
+                created_at: now,
+            }],
+            total_size: 1024 * 1024,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"original_filename\":\"document.pdf\""));
+        assert!(json.contains("\"uploader_name\":\"admin\""));
+    }
+
+    // -------------------------------------------------------------------------
+    // AttachmentResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_attachment_response_serialization() {
+        let now = chrono::Utc::now();
+        let doc_id = Uuid::new_v4();
+        let att_id = Uuid::new_v4();
+        let response = AttachmentResponse {
+            success: true,
+            data: AttachmentData {
+                id: att_id,
+                filename: "stored_file.pdf".to_string(),
+                original_filename: "my_file.pdf".to_string(),
+                mime_type: "application/pdf".to_string(),
+                file_size: 2048,
+                document_id: doc_id,
+                created_at: now,
+            },
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"original_filename\":\"my_file.pdf\""));
+        assert!(json.contains("\"file_size\":2048"));
+    }
+
+    // -------------------------------------------------------------------------
+    // AttachmentData tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_attachment_data_image() {
+        let now = chrono::Utc::now();
+        let data = AttachmentData {
+            id: Uuid::new_v4(),
+            filename: "image_abc.png".to_string(),
+            original_filename: "screenshot.png".to_string(),
+            mime_type: "image/png".to_string(),
+            file_size: 512 * 1024,
+            document_id: Uuid::new_v4(),
+            created_at: now,
+        };
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(json.contains("\"mime_type\":\"image/png\""));
+    }
+
+    #[test]
+    fn test_attachment_data_various_types() {
+        let mime_types = vec![
+            "image/jpeg",
+            "image/gif",
+            "application/pdf",
+            "text/plain",
+            "application/zip",
+        ];
+
+        for mime_type in mime_types {
+            let data = AttachmentData {
+                id: Uuid::new_v4(),
+                filename: "file.ext".to_string(),
+                original_filename: "original.ext".to_string(),
+                mime_type: mime_type.to_string(),
+                file_size: 100,
+                document_id: Uuid::new_v4(),
+                created_at: chrono::Utc::now(),
+            };
+            let json = serde_json::to_string(&data).unwrap();
+            assert!(json.contains(&format!("\"mime_type\":\"{}\"", mime_type)));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // DeleteResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_delete_response_serialization() {
+        let response = DeleteResponse {
+            success: true,
+            message: "Attachment deleted successfully".to_string(),
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"message\":\"Attachment deleted successfully\""));
+    }
+
+    // -------------------------------------------------------------------------
+    // AttachmentWithUploader tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_attachment_with_uploader_serialization() {
+        let now = chrono::Utc::now();
+        let attachment = AttachmentWithUploader {
+            id: Uuid::new_v4(),
+            filename: "stored_123.docx".to_string(),
+            original_filename: "report.docx".to_string(),
+            mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_string(),
+            file_size: 50000,
+            document_id: Uuid::new_v4(),
+            user_id: 5,
+            uploader_name: "john.doe".to_string(),
+            created_at: now,
+        };
+        let json = serde_json::to_string(&attachment).unwrap();
+        assert!(json.contains("\"uploader_name\":\"john.doe\""));
+        assert!(json.contains("\"user_id\":5"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_routes_creation() {
+        let _router: Router<AppState> = routes();
+        // Should be creatable without panicking
+    }
+}

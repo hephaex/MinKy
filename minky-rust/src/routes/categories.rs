@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn test_category_tree_with_children() {
-        let tree = vec![CategoryTree {
+        let tree = [CategoryTree {
             id: 1,
             name: "Parent".to_string(),
             parent_id: None,

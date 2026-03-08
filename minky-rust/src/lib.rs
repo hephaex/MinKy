@@ -3,6 +3,7 @@ pub mod error;
 pub mod middleware;
 pub mod models;
 pub mod openapi;
+pub mod pipeline;
 pub mod routes;
 pub mod services;
 pub mod utils;

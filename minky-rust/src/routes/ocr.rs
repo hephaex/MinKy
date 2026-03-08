@@ -162,3 +162,87 @@ pub fn router() -> Router<AppState> {
         .route("/check-format/{filename}", get(check_format))
         .route("/estimate/{file_size}", get(estimate_time))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -------------------------------------------------------------------------
+    // ProcessImageRequest tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_process_image_request_deserialization() {
+        let json = r#"{"image_path": "/tmp/image.png", "languages": ["eng", "kor"]}"#;
+        let request: ProcessImageRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.image_path, "/tmp/image.png");
+        assert_eq!(request.languages, Some(vec!["eng".to_string(), "kor".to_string()]));
+    }
+
+    #[test]
+    fn test_process_image_request_without_languages() {
+        let json = r#"{"image_path": "/uploads/doc.pdf"}"#;
+        let request: ProcessImageRequest = serde_json::from_str(json).unwrap();
+        assert!(request.languages.is_none());
+    }
+
+    // -------------------------------------------------------------------------
+    // FormatCheckResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_format_check_response_supported() {
+        let response = FormatCheckResponse {
+            filename: "document.pdf".to_string(),
+            supported: true,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"filename\":\"document.pdf\""));
+        assert!(json.contains("\"supported\":true"));
+    }
+
+    #[test]
+    fn test_format_check_response_unsupported() {
+        let response = FormatCheckResponse {
+            filename: "archive.zip".to_string(),
+            supported: false,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"supported\":false"));
+    }
+
+    // -------------------------------------------------------------------------
+    // TimeEstimateResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_time_estimate_response_serialization() {
+        let response = TimeEstimateResponse {
+            file_size_bytes: 1024 * 1024,
+            estimated_ms: 5000,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"file_size_bytes\":1048576"));
+        assert!(json.contains("\"estimated_ms\":5000"));
+    }
+
+    #[test]
+    fn test_time_estimate_response_small_file() {
+        let response = TimeEstimateResponse {
+            file_size_bytes: 1024,
+            estimated_ms: 100,
+        };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"file_size_bytes\":1024"));
+    }
+
+    // -------------------------------------------------------------------------
+    // Router tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_router_creation() {
+        let _router: Router<AppState> = router();
+        // Should be creatable without panicking
+    }
+}
