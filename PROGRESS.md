@@ -5,7 +5,79 @@
 
 ---
 
-## 현재 진행 상황 (2026-03-01) - ESLint 경고 대폭 감소
+## 현재 진행 상황 (2026-03-08) - Route 테스트 100% 완료
+
+### 36차 세션: Route 테스트 커버리지 100% 달성 (2026-03-08)
+
+#### 1. Route 파일 테스트 추가 (완료)
+
+**1차 추가 (11개 파일, 140개 테스트):**
+
+| 파일 | 테스트 수 | 설명 |
+|------|-----------|------|
+| `routes/rag.rs` | 15개 | RAG response body, stream events, build_context_string |
+| `routes/embeddings.rs` | 9개 | SimilarQuery, QueueRequest, validation logic |
+| `routes/knowledge.rs` | 11개 | CSV export, escape_csv function |
+| `routes/pipeline.rs` | 2개 | IngestRequest, IngestResponse |
+| `routes/search.rs` | 13개 | SearchResponse, autocomplete, reindex |
+| `routes/understanding.rs` | 5개 | UnderstandingApiResponse, CachedUnderstandingResponse |
+| `routes/analytics.rs` | 14개 | TimeRangeQuery, LimitQuery, response serialization |
+| `routes/ml.rs` | 23개 | Clustering, topics, trends, anomaly detection |
+| `routes/admin.rs` | 17개 | User admin, audit logs, backups, config, maintenance |
+| `routes/ai.rs` | 12개 | Suggestion request/response, embedding response |
+| `routes/timeline.rs` | 19개 | Timeline events, daily activity, heatmap, stats |
+
+**2차 추가 (11개 파일, 65개 테스트):**
+
+| 파일 | 테스트 수 | 설명 |
+|------|-----------|------|
+| `routes/korean.rs` | 6개 | SpellCheckRequest, ExtractKeywordsRequest, NormalizeRequest |
+| `routes/security.rs` | 16개 | ScanResult, ReviewRequest, EncryptionRequest 직렬화 |
+| `routes/git.rs` | 16개 | LogQuery, DiffQuery, StageRequest, response 직렬화 |
+| `routes/ocr.rs` | 7개 | ProcessImageRequest, FormatCheckResponse, TimeEstimateResponse |
+| `routes/skills.rs` | 13개 | HistoryQuery, QuickExecuteRequest, ExecuteSkillRequest, CreateSkill |
+| `routes/harness.rs` | 7개 | ListQuery, StartHarnessRequest with options/reviewers |
+
+**기존 테스트 보유 파일 (12개):**
+- `sync.rs` (21개), `templates.rs` (21개), `agents.rs` (21개)
+- `attachments.rs` (9개), `export.rs` (14개)
+- 기타: `common.rs`, `slack.rs`, `ws.rs`, `health.rs`, `auth.rs`, `documents.rs`, `tags.rs`, `categories.rs`, `comments.rs`, `notifications.rs`, `workflows.rs`, `versions.rs`
+
+#### 2. 테스트 수 증가
+
+| 카테고리 | 이전 | 현재 | 변화 |
+|----------|------|------|------|
+| Rust 유닛 테스트 | 1,189 | 1,448 | +259 |
+| Integration 테스트 | 15 | 15 | - |
+| Doc 테스트 | 2 | 2 | - |
+| **총계** | 1,206 | 1,465 | +259 |
+
+#### 3. Route 테스트 커버리지 달성
+
+✅ **모든 34개 routes/*.rs 파일에 #[cfg(test)] 모듈 존재**
+
+테스트된 기능:
+- **RAG**: AskResponseBody/SemanticResponseBody 직렬화, StreamEvent variants, build_context_string 함수
+- **Embeddings**: limit clamping logic, priority defaults, query validation
+- **Knowledge**: CSV escape logic, export format, node/edge serialization
+- **Pipeline**: request defaults, response conversion from PipelineOutput
+- **Search**: SearchResponse/SearchHit serialization, autocomplete query/response, reindex response
+- **Understanding**: UnderstandingApiResponse, CachedUnderstandingResponse serialization
+- **Analytics**: TimeRangeQuery, LimitQuery deserialization, response serialization
+- **ML**: ClusteringJob, ClusteringResult, Topic, TrendAnalysis, AnomalyResult 직렬화
+- **Admin**: ListUsersQuery, AuditLogsQuery, SystemStats, SystemConfig, MaintenanceMode
+- **AI**: SuggestionRequestBody, ContentRequest, EmbeddingRequest/Response
+- **Timeline**: LogEventRequest/Response, TimelineResponse, DailyActivity, ActivityHeatmap, TimelineStats
+- **Korean**: 맞춤법 검사, 키워드 추출, 정규화 요청
+- **Security**: 보안 스캔, 리뷰, 암호화 요청/응답
+- **Git**: 로그, diff, stage 쿼리 및 응답 직렬화
+- **OCR**: 이미지 처리 요청, 포맷 확인, 시간 추정
+- **Skills**: 실행 요청, 히스토리 쿼리, 스킬 생성/업데이트
+- **Harness**: 하네스 시작 요청, 옵션, 리뷰어 설정
+
+---
+
+## 이전 진행 상황 (2026-03-01) - ESLint 경고 대폭 감소
 
 ### 35차 세션: ESLint 경고 수정 (2026-03-01)
 
