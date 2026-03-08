@@ -97,7 +97,7 @@
 **코드 품질 개선:**
 - [x] Rust clippy 경고 80개 → 0개 (type alias, Display impl, derive, allow)
 - [x] Frontend 테스트 520개 통과
-- [x] Rust 단위 테스트 1,130개 통과
+- [x] Rust 단위 테스트 1,465개 통과 (routes 100% 커버리지)
 - [x] Auth 라우트 실제 구현 (login, register, refresh, /me)
 - [x] Documents 인증 연동 (AuthUser 추출기로 user_id 교체)
 - [x] AuthUser 연동 (tags, categories, comments, notifications, workflows, versions, attachments)
