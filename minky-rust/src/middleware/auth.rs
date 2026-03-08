@@ -111,11 +111,7 @@ mod tests {
     fn test_bearer_token_extraction_valid() {
         // Test that "Bearer <token>" format is expected
         let header = "Bearer my-jwt-token-here";
-        let token = if header.starts_with("Bearer ") {
-            Some(&header[7..])
-        } else {
-            None
-        };
+        let token = header.strip_prefix("Bearer ");
         assert_eq!(token, Some("my-jwt-token-here"));
     }
 
@@ -123,11 +119,7 @@ mod tests {
     fn test_bearer_token_extraction_missing_bearer_prefix() {
         // Without "Bearer " prefix, token should not be extracted
         let header = "my-jwt-token-here";
-        let token = if header.starts_with("Bearer ") {
-            Some(&header[7..])
-        } else {
-            None
-        };
+        let token = header.strip_prefix("Bearer ");
         assert!(token.is_none());
     }
 
@@ -135,11 +127,7 @@ mod tests {
     fn test_bearer_token_extraction_wrong_scheme() {
         // "Basic" scheme should not extract token
         let header = "Basic credentials";
-        let token = if header.starts_with("Bearer ") {
-            Some(&header[7..])
-        } else {
-            None
-        };
+        let token = header.strip_prefix("Bearer ");
         assert!(token.is_none());
     }
 
@@ -147,11 +135,7 @@ mod tests {
     fn test_bearer_token_extraction_empty_token() {
         // "Bearer " with empty token should extract empty string
         let header = "Bearer ";
-        let token = if header.starts_with("Bearer ") {
-            Some(&header[7..])
-        } else {
-            None
-        };
+        let token = header.strip_prefix("Bearer ");
         assert_eq!(token, Some(""));
     }
 
