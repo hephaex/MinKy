@@ -13,6 +13,7 @@ mod export_theme;
 mod function;
 mod git;
 mod harness;
+pub mod hierarchical_context;
 pub mod knowledge_graph;
 mod korean;
 mod ml;

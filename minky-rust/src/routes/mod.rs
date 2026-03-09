@@ -13,6 +13,7 @@ mod export;
 mod git;
 mod harness;
 pub mod health;
+mod hybrid;
 pub mod knowledge;
 mod korean;
 mod ml;
@@ -70,6 +71,7 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/embeddings", embeddings::router())
         .nest("/slack", slack::router())
         .nest("/pipeline", pipeline::router())
+        .nest("/hybrid", hybrid::router())
         .merge(ws::router())
         .merge(crate::openapi::router())
 }
