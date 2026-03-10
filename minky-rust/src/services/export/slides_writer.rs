@@ -118,7 +118,7 @@ impl SlidesWriter {
             content = notes_regex.replace(&content, "").to_string();
         }
 
-        let html = self.html_renderer.render(&content.trim())?;
+        let html = self.html_renderer.render(content.trim())?;
 
         let mut result = html;
 

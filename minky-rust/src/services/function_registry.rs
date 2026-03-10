@@ -835,6 +835,6 @@ mod tests {
 
     #[test]
     fn test_format_number_float() {
-        assert_eq!(format_number(3.14), "3.14");
+        assert_eq!(format_number(3.15), "3.15");
     }
 }
