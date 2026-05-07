@@ -3,8 +3,6 @@
 //! These tests verify that Axum's DefaultBodyLimit middleware correctly
 //! rejects oversized request bodies before the handler runs.
 
-mod common;
-
 use axum::{
     body::Body,
     extract::DefaultBodyLimit,

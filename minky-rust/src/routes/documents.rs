@@ -346,6 +346,9 @@ fn title_from_filename(filename: &str) -> String {
 }
 
 fn validate_upload_filename(filename: &str) -> Result<(), String> {
+    if filename.contains('/') || filename.contains('\\') || filename.contains('\0') {
+        return Err("Invalid filename".to_string());
+    }
     if filename.to_lowercase().ends_with(".md") {
         Ok(())
     } else {
@@ -397,7 +400,10 @@ async fn upload_document(
         validate_upload_data(&data)
             .map_err(AppError::Validation)?;
 
-        let content = std::str::from_utf8(&data).unwrap().to_string();
+        // Safe: validate_upload_data already verified UTF-8
+        let content = std::str::from_utf8(&data)
+            .expect("BUG: validate_upload_data already verified UTF-8")
+            .to_string();
         let title = title_from_filename(&original_filename);
 
         let pipeline = DocumentPipelineBuilder::new()
@@ -933,6 +939,17 @@ mod tests {
     #[test]
     fn validate_filename_rejects_empty() {
         assert!(validate_upload_filename("").is_err());
+    }
+
+    #[test]
+    fn validate_filename_rejects_path_traversal() {
+        assert!(validate_upload_filename("../../etc/passwd.md").is_err());
+        assert!(validate_upload_filename("..\\windows\\system.md").is_err());
+    }
+
+    #[test]
+    fn validate_filename_rejects_null_byte() {
+        assert!(validate_upload_filename("test\0.md").is_err());
     }
 
     // validate_upload_data tests

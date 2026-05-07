@@ -79,7 +79,7 @@ const DocumentCard = ({ document, searchQuery = '', showPreview = false, formatD
           {document.processing_status === 'pending' && (
             <>
               <span className="meta-separator">•</span>
-              <span className="processing-badge processing-badge--pending">Pending</span>
+              <span className="processing-badge processing-badge--pending" role="status">Pending</span>
             </>
           )}
         </div>
