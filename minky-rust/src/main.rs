@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use anyhow::Result;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -27,7 +29,11 @@ async fn main() -> Result<()> {
 
     tracing::info!("MinKy server running at http://{}:{}", config.host, config.port);
 
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }

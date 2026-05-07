@@ -11,7 +11,7 @@ pub struct FunctionDefinition {
     pub parameters: Vec<FunctionParameter>,
     pub body: FunctionBody,
     pub description: Option<String>,
-    pub created_by: Option<Uuid>,
+    pub created_by: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

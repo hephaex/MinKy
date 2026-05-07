@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS document_functions (
     parameters JSONB NOT NULL DEFAULT '[]',
     body_type VARCHAR(20) NOT NULL CHECK (body_type IN ('builtin', 'template', 'ai_powered')),
     body TEXT NOT NULL,
-    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS export_themes (
     css TEXT NOT NULL,
     fonts JSONB DEFAULT '[]',
     is_builtin BOOLEAN DEFAULT FALSE,
-    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

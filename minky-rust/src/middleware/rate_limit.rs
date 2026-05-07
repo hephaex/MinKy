@@ -1,5 +1,5 @@
 use axum::{
-    extract::Request,
+    extract::{ConnectInfo, Request},
     http::StatusCode,
     middleware::Next,
     response::Response,
@@ -9,6 +9,7 @@ use redis::AsyncCommands;
 use serde_json::json;
 use std::{
     collections::HashMap,
+    net::SocketAddr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -178,22 +179,66 @@ impl RateLimiter {
     }
 }
 
+/// Extract a stable client identifier for rate limiting.
+///
+/// Priority order:
+/// 1. `x-forwarded-for` first entry (trusted reverse-proxy header)
+/// 2. `x-real-ip` header
+/// 3. `ConnectInfo<SocketAddr>` peer IP (direct TCP peer)
+/// 4. `"unknown"` fallback (only when the server was started without connect_info)
+fn extract_client_id(request: &Request) -> String {
+    if let Some(forwarded) = request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|h| h.to_str().ok())
+    {
+        if let Some(first) = forwarded.split(',').next() {
+            let trimmed = first.trim();
+            if !trimmed.is_empty() {
+                return trimmed.to_string();
+            }
+        }
+    }
+
+    if let Some(real_ip) = request
+        .headers()
+        .get("x-real-ip")
+        .and_then(|h| h.to_str().ok())
+    {
+        let trimmed = real_ip.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    if let Some(ConnectInfo(addr)) = request.extensions().get::<ConnectInfo<SocketAddr>>() {
+        return addr.ip().to_string();
+    }
+
+    "unknown".to_string()
+}
+
 /// Rate limiting middleware
 pub async fn rate_limit_middleware(
     request: Request,
     next: Next,
 ) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
-    // Extract client identifier (IP or user ID)
-    let client_id = request
-        .headers()
-        .get("x-forwarded-for")
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
+    let client_id = extract_client_id(&request);
 
-    // Use environment-aware rate limiter (100 requests per minute)
+    // Default: 100 requests per minute. Override with
+    // RATE_LIMIT_MAX_REQUESTS and RATE_LIMIT_WINDOW_SECS env vars.
     static LIMITER: std::sync::OnceLock<RateLimiter> = std::sync::OnceLock::new();
-    let limiter = LIMITER.get_or_init(|| RateLimiter::from_env(100, 60));
+    let limiter = LIMITER.get_or_init(|| {
+        let max_requests = std::env::var("RATE_LIMIT_MAX_REQUESTS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(100);
+        let window_secs = std::env::var("RATE_LIMIT_WINDOW_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(60);
+        RateLimiter::from_env(max_requests, window_secs)
+    });
 
     if limiter.check(&client_id).await {
         Ok(next.run(request).await)
@@ -261,5 +306,52 @@ mod tests {
         std::env::remove_var("REDIS_URL");
         let limiter = RateLimiter::from_env(10, 60);
         assert!(limiter.check("test_client").await);
+    }
+
+    fn build_request() -> Request {
+        Request::builder().uri("/").body(axum::body::Body::empty()).unwrap()
+    }
+
+    #[test]
+    fn extract_client_id_prefers_x_forwarded_for_first_entry() {
+        let mut req = build_request();
+        req.headers_mut()
+            .insert("x-forwarded-for", "203.0.113.7, 198.51.100.1".parse().unwrap());
+        req.headers_mut().insert("x-real-ip", "10.0.0.1".parse().unwrap());
+        req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 55000))));
+
+        assert_eq!(extract_client_id(&req), "203.0.113.7");
+    }
+
+    #[test]
+    fn extract_client_id_falls_back_to_x_real_ip() {
+        let mut req = build_request();
+        req.headers_mut().insert("x-real-ip", "10.0.0.42".parse().unwrap());
+        req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 55000))));
+
+        assert_eq!(extract_client_id(&req), "10.0.0.42");
+    }
+
+    #[test]
+    fn extract_client_id_falls_back_to_connect_info() {
+        let mut req = build_request();
+        req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([192, 168, 1, 5], 55000))));
+
+        assert_eq!(extract_client_id(&req), "192.168.1.5");
+    }
+
+    #[test]
+    fn extract_client_id_returns_unknown_when_nothing_available() {
+        let req = build_request();
+        assert_eq!(extract_client_id(&req), "unknown");
+    }
+
+    #[test]
+    fn extract_client_id_ignores_empty_x_forwarded_for() {
+        let mut req = build_request();
+        req.headers_mut().insert("x-forwarded-for", "  ".parse().unwrap());
+        req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([192, 168, 1, 5], 55000))));
+
+        assert_eq!(extract_client_id(&req), "192.168.1.5");
     }
 }

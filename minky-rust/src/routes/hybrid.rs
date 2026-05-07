@@ -37,10 +37,10 @@ pub fn router() -> Router<AppState> {
         // Collections
         .route("/collections", get(list_collections))
         .route("/collections", post(create_collection))
-        .route("/collections/:id", get(get_collection))
-        .route("/collections/:id/context", post(add_collection_context))
+        .route("/collections/{id}", get(get_collection))
+        .route("/collections/{id}/context", post(add_collection_context))
         // Context
-        .route("/context/:path", get(get_context))
+        .route("/context/{path}", get(get_context))
         .route("/context", post(add_context))
         // Status
         .route("/status", get(search_status))
