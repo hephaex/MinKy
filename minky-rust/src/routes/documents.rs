@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Multipart, Path, Query, State},
+    extract::{DefaultBodyLimit, Multipart, Path, Query, State},
     routing::{get, post},
     Json, Router,
 };
@@ -11,9 +11,13 @@ use crate::{error::{AppError, AppResult}, middleware::AuthUser, AppState};
 use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
 
 pub fn routes() -> Router<AppState> {
+    let upload_route = Router::new()
+        .route("/upload", post(upload_document))
+        .layer(DefaultBodyLimit::max(10 * 1024 * 1024));
+
     Router::new()
         .route("/", get(list_documents).post(create_document))
-        .route("/upload", post(upload_document))
+        .merge(upload_route)
         .route("/{id}", get(get_document).put(update_document).delete(delete_document))
 }
 
@@ -324,6 +328,7 @@ pub struct UploadedDocument {
     pub id: Uuid,
     pub title: String,
     pub chunks_count: usize,
+    pub processing_status: String,
 }
 
 fn title_from_filename(filename: &str) -> String {
@@ -397,6 +402,7 @@ async fn upload_document(
                 id: output.document_id,
                 title: output.title,
                 chunks_count: output.chunks_count,
+                processing_status: if output.analyzed { "completed" } else { "pending" }.to_string(),
             },
         }));
     }
@@ -831,6 +837,7 @@ mod tests {
                 id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
                 title: "test doc".to_string(),
                 chunks_count: 5,
+                processing_status: "completed".to_string(),
             },
         };
         let json = serde_json::to_value(&resp).unwrap();
@@ -849,10 +856,26 @@ mod tests {
                 id,
                 title: "any".to_string(),
                 chunks_count: 0,
+                processing_status: "pending".to_string(),
             },
         };
         let json = serde_json::to_value(&resp).unwrap();
         assert_eq!(json["document"]["id"], id.to_string());
+    }
+
+    #[test]
+    fn upload_response_includes_processing_status_pending() {
+        let resp = UploadResponse {
+            success: true,
+            document: UploadedDocument {
+                id: Uuid::new_v4(),
+                title: "test".to_string(),
+                chunks_count: 1,
+                processing_status: "pending".to_string(),
+            },
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["document"]["processing_status"], "pending");
     }
 
     #[test]

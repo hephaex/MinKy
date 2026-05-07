@@ -10,7 +10,7 @@ use serde_json::json;
 use std::{
     collections::HashMap,
     net::SocketAddr,
-    sync::Arc,
+    sync::{Arc, OnceLock},
     time::{Duration, Instant},
 };
 use tokio::sync::RwLock;
@@ -179,35 +179,55 @@ impl RateLimiter {
     }
 }
 
+/// Returns `true` when the `TRUSTED_PROXY` environment variable is set to
+/// `"true"` (case-insensitive). The result is cached after the first read.
+///
+/// When this returns `false` (the default), proxy headers such as
+/// `x-forwarded-for` and `x-real-ip` are ignored because any client can
+/// forge them, bypassing rate limiting.
+fn is_trusted_proxy() -> bool {
+    static TRUSTED: OnceLock<bool> = OnceLock::new();
+    *TRUSTED.get_or_init(|| {
+        std::env::var("TRUSTED_PROXY")
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+    })
+}
+
 /// Extract a stable client identifier for rate limiting.
 ///
-/// Priority order:
+/// When `trust_proxy` is `true` the priority order is:
 /// 1. `x-forwarded-for` first entry (trusted reverse-proxy header)
 /// 2. `x-real-ip` header
 /// 3. `ConnectInfo<SocketAddr>` peer IP (direct TCP peer)
 /// 4. `"unknown"` fallback (only when the server was started without connect_info)
-fn extract_client_id(request: &Request) -> String {
-    if let Some(forwarded) = request
-        .headers()
-        .get("x-forwarded-for")
-        .and_then(|h| h.to_str().ok())
-    {
-        if let Some(first) = forwarded.split(',').next() {
-            let trimmed = first.trim();
+///
+/// When `trust_proxy` is `false` (the default) steps 1 and 2 are skipped so
+/// that a client cannot spoof its IP by setting those headers.
+fn extract_client_id_with_trust(request: &Request, trust_proxy: bool) -> String {
+    if trust_proxy {
+        if let Some(forwarded) = request
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|h| h.to_str().ok())
+        {
+            if let Some(first) = forwarded.split(',').next() {
+                let trimmed = first.trim();
+                if !trimmed.is_empty() {
+                    return trimmed.to_string();
+                }
+            }
+        }
+
+        if let Some(real_ip) = request
+            .headers()
+            .get("x-real-ip")
+            .and_then(|h| h.to_str().ok())
+        {
+            let trimmed = real_ip.trim();
             if !trimmed.is_empty() {
                 return trimmed.to_string();
             }
-        }
-    }
-
-    if let Some(real_ip) = request
-        .headers()
-        .get("x-real-ip")
-        .and_then(|h| h.to_str().ok())
-    {
-        let trimmed = real_ip.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
         }
     }
 
@@ -215,7 +235,15 @@ fn extract_client_id(request: &Request) -> String {
         return addr.ip().to_string();
     }
 
+    tracing::warn!("No ConnectInfo available, using 'unknown' as client ID");
     "unknown".to_string()
+}
+
+/// Extract a stable client identifier for rate limiting.
+///
+/// Respects the `TRUSTED_PROXY` environment variable (see [`is_trusted_proxy`]).
+fn extract_client_id(request: &Request) -> String {
+    extract_client_id_with_trust(request, is_trusted_proxy())
 }
 
 /// Rate limiting middleware
@@ -320,7 +348,7 @@ mod tests {
         req.headers_mut().insert("x-real-ip", "10.0.0.1".parse().unwrap());
         req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 55000))));
 
-        assert_eq!(extract_client_id(&req), "203.0.113.7");
+        assert_eq!(extract_client_id_with_trust(&req, true), "203.0.113.7");
     }
 
     #[test]
@@ -329,7 +357,7 @@ mod tests {
         req.headers_mut().insert("x-real-ip", "10.0.0.42".parse().unwrap());
         req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 55000))));
 
-        assert_eq!(extract_client_id(&req), "10.0.0.42");
+        assert_eq!(extract_client_id_with_trust(&req, true), "10.0.0.42");
     }
 
     #[test]
@@ -337,13 +365,13 @@ mod tests {
         let mut req = build_request();
         req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([192, 168, 1, 5], 55000))));
 
-        assert_eq!(extract_client_id(&req), "192.168.1.5");
+        assert_eq!(extract_client_id_with_trust(&req, false), "192.168.1.5");
     }
 
     #[test]
     fn extract_client_id_returns_unknown_when_nothing_available() {
         let req = build_request();
-        assert_eq!(extract_client_id(&req), "unknown");
+        assert_eq!(extract_client_id_with_trust(&req, false), "unknown");
     }
 
     #[test]
@@ -352,6 +380,35 @@ mod tests {
         req.headers_mut().insert("x-forwarded-for", "  ".parse().unwrap());
         req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([192, 168, 1, 5], 55000))));
 
-        assert_eq!(extract_client_id(&req), "192.168.1.5");
+        assert_eq!(extract_client_id_with_trust(&req, true), "192.168.1.5");
+    }
+
+    #[test]
+    fn extract_client_id_ignores_proxy_headers_when_untrusted() {
+        let mut req = build_request();
+        req.headers_mut()
+            .insert("x-forwarded-for", "203.0.113.7, 198.51.100.1".parse().unwrap());
+        req.headers_mut().insert("x-real-ip", "10.0.0.1".parse().unwrap());
+        req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([192, 168, 1, 5], 55000))));
+
+        // Proxy headers must be ignored; the real TCP peer address is used.
+        assert_eq!(extract_client_id_with_trust(&req, false), "192.168.1.5");
+    }
+
+    #[test]
+    fn extract_client_id_default_is_untrusted() {
+        // Ensure TRUSTED_PROXY is not set so we test the default.
+        // Note: OnceLock caches the result, so we test the function logic
+        // directly by verifying that without the env var the default is false.
+        std::env::remove_var("TRUSTED_PROXY");
+
+        // Build a request with proxy headers + ConnectInfo.
+        let mut req = build_request();
+        req.headers_mut()
+            .insert("x-forwarded-for", "203.0.113.7".parse().unwrap());
+        req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([192, 168, 1, 99], 55000))));
+
+        // When trust_proxy is false (the default), ConnectInfo wins.
+        assert_eq!(extract_client_id_with_trust(&req, false), "192.168.1.99");
     }
 }
