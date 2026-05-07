@@ -7,8 +7,12 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::Validate;
 
+use secrecy::ExposeSecret;
+
 use crate::{error::{AppError, AppResult}, middleware::AuthUser, AppState};
+use crate::models::EmbeddingModel;
 use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
+use crate::services::{EmbeddingConfig, EmbeddingService};
 
 const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10MB
 
@@ -21,6 +25,8 @@ pub fn routes() -> Router<AppState> {
         .route("/", get(list_documents).post(create_document))
         .merge(upload_route)
         .route("/{id}", get(get_document).put(update_document).delete(delete_document))
+        .route("/{id}/status", get(get_document_status))
+        .route("/{id}/reprocess", post(reprocess_document))
 }
 
 /// Query parameters for document listing
@@ -322,6 +328,7 @@ async fn delete_document(
 pub enum ProcessingStatus {
     Pending,
     Completed,
+    Failed,
 }
 
 #[derive(Debug, Serialize)]
@@ -421,18 +428,148 @@ async fn upload_document(
             AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", e))
         })?;
 
+        let processing_status = if output.analyzed {
+            ProcessingStatus::Completed
+        } else {
+            enqueue_for_embedding(&state, output.document_id).await;
+            ProcessingStatus::Pending
+        };
+
         return Ok(Json(UploadResponse {
             success: true,
             document: UploadedDocument {
                 id: output.document_id,
                 title: output.title,
                 chunks_count: output.chunks_count,
-                processing_status: if output.analyzed { ProcessingStatus::Completed } else { ProcessingStatus::Pending },
+                processing_status,
             },
         }));
     }
 
     Err(AppError::Validation("No file field found in upload".to_string()))
+}
+
+fn embedding_service_from_state(state: &AppState) -> EmbeddingService {
+    let config = EmbeddingConfig {
+        openai_api_key: state.config.openai_api_key.as_ref().map(|s| s.expose_secret().to_string()),
+        voyage_api_key: None,
+        default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
+        chunk_size: 512,
+        chunk_overlap: 50,
+    };
+    EmbeddingService::new(state.db.clone(), config)
+}
+
+async fn enqueue_for_embedding(state: &AppState, document_id: Uuid) {
+    let service = embedding_service_from_state(state);
+    if let Err(e) = service.queue_document(document_id, 0).await {
+        tracing::warn!("Failed to enqueue document {} for embedding: {}", document_id, e);
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentStatus {
+    pub document_id: Uuid,
+    pub processing_status: ProcessingStatus,
+    pub queue_position: Option<i64>,
+    pub error_message: Option<String>,
+}
+
+async fn get_document_status(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<DocumentStatus>, AppError> {
+    let doc_exists: Option<(i32,)> = sqlx::query_as(
+        "SELECT user_id FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true)"
+    )
+    .bind(id)
+    .bind(auth_user.id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    if doc_exists.is_none() {
+        return Err(AppError::NotFound(format!("Document not found: {}", id)));
+    }
+
+    type QueueRow = (String, Option<String>);
+    let queue_entry: Option<QueueRow> = sqlx::query_as(
+        "SELECT status, error_message FROM embedding_queue WHERE document_id = $1 ORDER BY created_at DESC LIMIT 1"
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    let (processing_status, error_message) = match queue_entry {
+        Some((status, err_msg)) => {
+            let ps = match status.as_str() {
+                "completed" => ProcessingStatus::Completed,
+                "failed" => ProcessingStatus::Failed,
+                _ => ProcessingStatus::Pending,
+            };
+            (ps, err_msg)
+        }
+        None => {
+            let has_embedding: Option<(i64,)> = sqlx::query_as(
+                "SELECT COUNT(*) FROM document_embeddings WHERE document_id = $1"
+            )
+            .bind(id)
+            .fetch_one(&state.db)
+            .await
+            .ok();
+            if has_embedding.is_some_and(|(c,)| c > 0) {
+                (ProcessingStatus::Completed, None)
+            } else {
+                (ProcessingStatus::Pending, None)
+            }
+        }
+    };
+
+    Ok(Json(DocumentStatus {
+        document_id: id,
+        processing_status,
+        queue_position: None,
+        error_message,
+    }))
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReprocessResponse {
+    pub success: bool,
+    pub document_id: Uuid,
+    pub message: String,
+}
+
+async fn reprocess_document(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ReprocessResponse>, AppError> {
+    let doc: Option<(i32,)> = sqlx::query_as(
+        "SELECT user_id FROM documents WHERE id = $1"
+    )
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?;
+
+    match doc {
+        None => Err(AppError::NotFound(format!("Document not found: {}", id))),
+        Some((owner_id,)) if owner_id != auth_user.id => {
+            Err(AppError::Forbidden)
+        }
+        Some(_) => {
+            let service = embedding_service_from_state(&state);
+            service.queue_document(id, 1).await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("Failed to enqueue: {}", e))
+            })?;
+
+            Ok(Json(ReprocessResponse {
+                success: true,
+                document_id: id,
+                message: "Document queued for reprocessing".to_string(),
+            }))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1004,5 +1141,61 @@ mod tests {
     fn processing_status_rejects_unknown_value() {
         let result: Result<ProcessingStatus, _> = serde_json::from_str("\"unknown\"");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn processing_status_failed_serializes() {
+        let failed = serde_json::to_value(ProcessingStatus::Failed).unwrap();
+        assert_eq!(failed, "failed");
+    }
+
+    #[test]
+    fn processing_status_failed_deserializes() {
+        let failed: ProcessingStatus = serde_json::from_str("\"failed\"").unwrap();
+        assert_eq!(failed, ProcessingStatus::Failed);
+    }
+
+    #[test]
+    fn document_status_serialization() {
+        let id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        let status = DocumentStatus {
+            document_id: id,
+            processing_status: ProcessingStatus::Pending,
+            queue_position: Some(3),
+            error_message: None,
+        };
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json["document_id"], id.to_string());
+        assert_eq!(json["processing_status"], "pending");
+        assert_eq!(json["queue_position"], 3);
+        assert!(json["error_message"].is_null());
+    }
+
+    #[test]
+    fn document_status_with_error() {
+        let status = DocumentStatus {
+            document_id: Uuid::new_v4(),
+            processing_status: ProcessingStatus::Failed,
+            queue_position: None,
+            error_message: Some("API key invalid".to_string()),
+        };
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json["processing_status"], "failed");
+        assert_eq!(json["error_message"], "API key invalid");
+        assert!(json["queue_position"].is_null());
+    }
+
+    #[test]
+    fn reprocess_response_serialization() {
+        let id = Uuid::new_v4();
+        let resp = ReprocessResponse {
+            success: true,
+            document_id: id,
+            message: "Document queued for reprocessing".to_string(),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["success"], true);
+        assert_eq!(json["document_id"], id.to_string());
+        assert_eq!(json["message"], "Document queued for reprocessing");
     }
 }
