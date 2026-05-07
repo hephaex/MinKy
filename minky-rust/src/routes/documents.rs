@@ -345,6 +345,30 @@ fn title_from_filename(filename: &str) -> String {
     stem.replace(['-', '_'], " ")
 }
 
+fn validate_upload_filename(filename: &str) -> Result<(), String> {
+    if filename.to_lowercase().ends_with(".md") {
+        Ok(())
+    } else {
+        Err("Only .md files are accepted".to_string())
+    }
+}
+
+fn validate_upload_data(data: &[u8]) -> Result<(), String> {
+    if data.is_empty() {
+        return Err("File is empty".to_string());
+    }
+    if data.len() > MAX_UPLOAD_SIZE {
+        return Err(format!(
+            "File too large: {} bytes (max {} bytes)",
+            data.len(),
+            MAX_UPLOAD_SIZE
+        ));
+    }
+    std::str::from_utf8(data)
+        .map_err(|_| "File is not valid UTF-8 text".to_string())?;
+    Ok(())
+}
+
 async fn upload_document(
     State(state): State<AppState>,
     auth_user: AuthUser,
@@ -363,29 +387,17 @@ async fn upload_document(
             .map(|s| s.to_string())
             .unwrap_or_else(|| "untitled.md".to_string());
 
-        if !original_filename.to_lowercase().ends_with(".md") {
-            return Err(AppError::Validation("Only .md files are accepted".to_string()));
-        }
+        validate_upload_filename(&original_filename)
+            .map_err(AppError::Validation)?;
 
         let data = field.bytes().await.map_err(|e| {
             AppError::Validation(format!("Failed to read file data: {}", e))
         })?;
 
-        if data.is_empty() {
-            return Err(AppError::Validation("File is empty".to_string()));
-        }
+        validate_upload_data(&data)
+            .map_err(AppError::Validation)?;
 
-        if data.len() > MAX_UPLOAD_SIZE {
-            return Err(AppError::Validation(format!(
-                "File too large: {} bytes (max {} bytes)",
-                data.len(), MAX_UPLOAD_SIZE
-            )));
-        }
-
-        let content = String::from_utf8(data.to_vec()).map_err(|_| {
-            AppError::Validation("File is not valid UTF-8 text".to_string())
-        })?;
-
+        let content = std::str::from_utf8(&data).unwrap().to_string();
         let title = title_from_filename(&original_filename);
 
         let pipeline = DocumentPipelineBuilder::new()
@@ -897,16 +909,62 @@ mod tests {
         assert_eq!(MAX_UPLOAD_SIZE, 10_485_760);
     }
 
+    // validate_upload_filename tests
     #[test]
-    fn file_exceeding_max_upload_size_is_rejected() {
-        let oversized = vec![0u8; MAX_UPLOAD_SIZE + 1];
-        assert!(oversized.len() > MAX_UPLOAD_SIZE);
+    fn validate_filename_accepts_md() {
+        assert!(validate_upload_filename("test.md").is_ok());
     }
 
     #[test]
-    fn file_at_exact_max_upload_size_is_accepted() {
-        let exact = vec![0u8; MAX_UPLOAD_SIZE];
-        assert!(exact.len() <= MAX_UPLOAD_SIZE);
+    fn validate_filename_accepts_uppercase_md() {
+        assert!(validate_upload_filename("TEST.MD").is_ok());
+    }
+
+    #[test]
+    fn validate_filename_rejects_txt() {
+        assert!(validate_upload_filename("test.txt").is_err());
+    }
+
+    #[test]
+    fn validate_filename_rejects_no_extension() {
+        assert!(validate_upload_filename("readme").is_err());
+    }
+
+    #[test]
+    fn validate_filename_rejects_empty() {
+        assert!(validate_upload_filename("").is_err());
+    }
+
+    // validate_upload_data tests
+    #[test]
+    fn validate_data_accepts_valid_utf8() {
+        assert!(validate_upload_data(b"# Hello\nWorld").is_ok());
+    }
+
+    #[test]
+    fn validate_data_rejects_empty() {
+        let err = validate_upload_data(b"").unwrap_err();
+        assert!(err.contains("empty"));
+    }
+
+    #[test]
+    fn validate_data_rejects_oversized() {
+        let oversized = vec![b'a'; MAX_UPLOAD_SIZE + 1];
+        let err = validate_upload_data(&oversized).unwrap_err();
+        assert!(err.contains("too large"));
+    }
+
+    #[test]
+    fn validate_data_accepts_exactly_max_size() {
+        let exact = vec![b'a'; MAX_UPLOAD_SIZE];
+        assert!(validate_upload_data(&exact).is_ok());
+    }
+
+    #[test]
+    fn validate_data_rejects_invalid_utf8() {
+        let invalid = vec![0xFF, 0xFE, 0x00];
+        let err = validate_upload_data(&invalid).unwrap_err();
+        assert!(err.contains("UTF-8"));
     }
 
     #[test]

@@ -76,6 +76,12 @@ const DocumentCard = ({ document, searchQuery = '', showPreview = false, formatD
               </span>
             </>
           )}
+          {document.processing_status === 'pending' && (
+            <>
+              <span className="meta-separator">•</span>
+              <span className="processing-badge processing-badge--pending">Pending</span>
+            </>
+          )}
         </div>
 
         {/* Tags display with overflow indicator */}
@@ -128,6 +134,7 @@ DocumentCard.propTypes = {
     ),
     updated_at: PropTypes.string,
     markdown_content: PropTypes.string,
+    processing_status: PropTypes.oneOf(['pending', 'completed']),
   }).isRequired,
   searchQuery: PropTypes.string,
   showPreview: PropTypes.bool,

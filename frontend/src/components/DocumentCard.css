@@ -105,6 +105,22 @@
   margin-top: 12px;
 }
 
+/* Processing status badge */
+.processing-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.processing-badge--pending {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffc107;
+}
+
 /* Search highlighting */
 .search-highlight {
   background-color: #fff3cd;
