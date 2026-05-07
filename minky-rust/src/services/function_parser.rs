@@ -276,7 +276,7 @@ impl FunctionParser {
 
         // Sort calls by position (reverse to maintain positions during replacement)
         let mut sorted_calls = calls;
-        sorted_calls.sort_by(|a, b| b.start_pos.cmp(&a.start_pos));
+        sorted_calls.sort_by_key(|b| std::cmp::Reverse(b.start_pos));
 
         let mut result = with_vars;
 

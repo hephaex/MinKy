@@ -67,10 +67,11 @@ impl SlidesWriter {
     fn render_slides(&self, slides: &[String]) -> Result<String> {
         let mut html = String::new();
 
+        // Compile regex once outside the loop
+        let vertical_sep = Regex::new(r"(?m)^--$|<!--\s*vertical\s*-->").unwrap();
+
         for slide in slides {
             // Check for vertical slides (sections within a slide)
-            let vertical_sep = Regex::new(r"(?m)^--$|<!--\s*vertical\s*-->").unwrap();
-
             if vertical_sep.is_match(slide) {
                 // Vertical slide group
                 html.push_str("<section>\n");

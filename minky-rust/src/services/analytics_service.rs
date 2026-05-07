@@ -351,7 +351,7 @@ impl AnalyticsService {
             })
             .collect();
 
-        top_keywords.sort_by(|a, b| b.count.cmp(&a.count));
+        top_keywords.sort_by_key(|b| std::cmp::Reverse(b.count));
         top_keywords.truncate(10);
 
         ContentAnalysis {

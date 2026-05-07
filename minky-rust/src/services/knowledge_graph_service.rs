@@ -319,7 +319,7 @@ impl KnowledgeGraphService {
         for member in member_map.values_mut() {
             member
                 .expertise_areas
-                .sort_by(|a, b| b.document_count.cmp(&a.document_count));
+                .sort_by_key(|b| std::cmp::Reverse(b.document_count));
             member.expertise_areas.truncate(10);
             member.top_technologies.truncate(5);
             member.top_topics.truncate(5);
@@ -851,7 +851,7 @@ pub fn detect_clusters(
     }
 
     // Sort clusters by size descending
-    clusters.sort_by(|a, b| b.size.cmp(&a.size));
+    clusters.sort_by_key(|b| std::cmp::Reverse(b.size));
 
     // Re-assign cluster IDs after sorting
     for (new_id, cluster) in clusters.iter_mut().enumerate() {

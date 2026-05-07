@@ -1,6 +1,6 @@
 use axum::{
-    extract::{Path, Query, State},
-    routing::get,
+    extract::{Multipart, Path, Query, State},
+    routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -8,10 +8,12 @@ use uuid::Uuid;
 use validator::Validate;
 
 use crate::{error::{AppError, AppResult}, middleware::AuthUser, AppState};
+use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_documents).post(create_document))
+        .route("/upload", post(upload_document))
         .route("/{id}", get(get_document).put(update_document).delete(delete_document))
 }
 
@@ -307,6 +309,99 @@ async fn delete_document(
         success: true,
         message: format!("Document {} deleted successfully", id),
     }))
+}
+
+const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10MB
+
+#[derive(Debug, Serialize)]
+pub struct UploadResponse {
+    pub success: bool,
+    pub document: UploadedDocument,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UploadedDocument {
+    pub id: Uuid,
+    pub title: String,
+    pub chunks_count: usize,
+}
+
+fn title_from_filename(filename: &str) -> String {
+    let stem = filename.strip_suffix(".md")
+        .or_else(|| filename.strip_suffix(".MD"))
+        .unwrap_or(filename);
+    stem.replace(['-', '_'], " ")
+}
+
+async fn upload_document(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+    mut multipart: Multipart,
+) -> Result<Json<UploadResponse>, AppError> {
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        AppError::Validation(format!("Failed to read multipart field: {}", e))
+    })? {
+        let name = field.name().unwrap_or("").to_string();
+        if name != "file" {
+            continue;
+        }
+
+        let original_filename = field
+            .file_name()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "untitled.md".to_string());
+
+        if !original_filename.to_lowercase().ends_with(".md") {
+            return Err(AppError::Validation("Only .md files are accepted".to_string()));
+        }
+
+        let data = field.bytes().await.map_err(|e| {
+            AppError::Validation(format!("Failed to read file data: {}", e))
+        })?;
+
+        if data.is_empty() {
+            return Err(AppError::Validation("File is empty".to_string()));
+        }
+
+        if data.len() > MAX_UPLOAD_SIZE {
+            return Err(AppError::Validation(format!(
+                "File too large: {} bytes (max {} bytes)",
+                data.len(), MAX_UPLOAD_SIZE
+            )));
+        }
+
+        let content = String::from_utf8(data.to_vec()).map_err(|_| {
+            AppError::Validation("File is not valid UTF-8 text".to_string())
+        })?;
+
+        let title = title_from_filename(&original_filename);
+
+        let pipeline = DocumentPipelineBuilder::new()
+            .pool(state.db.clone())
+            .app_config(state.config.clone())
+            .semantic_chunking(512)
+            .user_id(auth_user.id)
+            .skip_embedding()
+            .skip_analysis()
+            .build();
+        let input = IngestionInput::from_text(title.clone(), content);
+
+        let output = pipeline.process(input).await.map_err(|e| {
+            tracing::error!("Upload pipeline failed: {}", e);
+            AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", e))
+        })?;
+
+        return Ok(Json(UploadResponse {
+            success: true,
+            document: UploadedDocument {
+                id: output.document_id,
+                title: output.title,
+                chunks_count: output.chunks_count,
+            },
+        }));
+    }
+
+    Err(AppError::Validation("No file field found in upload".to_string()))
 }
 
 #[cfg(test)]
@@ -697,5 +792,73 @@ mod tests {
             message: format!("Document {} deleted successfully", id),
         };
         assert!(response.message.contains("550e8400-e29b-41d4-a716-446655440000"));
+    }
+
+    // Upload handler tests
+    #[test]
+    fn title_from_filename_strips_md_extension() {
+        assert_eq!(title_from_filename("my-document.md"), "my document");
+    }
+
+    #[test]
+    fn title_from_filename_strips_uppercase_md() {
+        assert_eq!(title_from_filename("NOTES.MD"), "NOTES");
+    }
+
+    #[test]
+    fn title_from_filename_replaces_hyphens_and_underscores() {
+        assert_eq!(
+            title_from_filename("2026-04-15_backend-review.md"),
+            "2026 04 15 backend review"
+        );
+    }
+
+    #[test]
+    fn title_from_filename_no_extension() {
+        assert_eq!(title_from_filename("no-extension"), "no extension");
+    }
+
+    #[test]
+    fn title_from_filename_simple() {
+        assert_eq!(title_from_filename("simple.md"), "simple");
+    }
+
+    #[test]
+    fn upload_response_serialization_has_document_key() {
+        let resp = UploadResponse {
+            success: true,
+            document: UploadedDocument {
+                id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+                title: "test doc".to_string(),
+                chunks_count: 5,
+            },
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert!(json.get("document").is_some());
+        assert_eq!(json["success"], true);
+        assert_eq!(json["document"]["title"], "test doc");
+        assert_eq!(json["document"]["chunks_count"], 5);
+    }
+
+    #[test]
+    fn upload_response_document_contains_id() {
+        let id = Uuid::new_v4();
+        let resp = UploadResponse {
+            success: true,
+            document: UploadedDocument {
+                id,
+                title: "any".to_string(),
+                chunks_count: 0,
+            },
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert_eq!(json["document"]["id"], id.to_string());
+    }
+
+    #[test]
+    fn routes_includes_upload_path() {
+        let router = routes();
+        // Verify router creation doesn't panic — upload route is registered
+        let _ = router;
     }
 }

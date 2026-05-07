@@ -11,17 +11,21 @@ use uuid::Uuid;
 
 /// Embedding model types supported by the system
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
-#[sqlx(type_name = "embedding_model", rename_all = "snake_case")]
+#[sqlx(type_name = "embedding_model")]
 #[derive(Default)]
 pub enum EmbeddingModel {
     #[serde(rename = "openai_text_embedding_3_small")]
+    #[sqlx(rename = "openai_text_embedding_3_small")]
     #[default]
     OpenaiTextEmbedding3Small,
     #[serde(rename = "openai_text_embedding_3_large")]
+    #[sqlx(rename = "openai_text_embedding_3_large")]
     OpenaiTextEmbedding3Large,
     #[serde(rename = "voyage_large_2")]
+    #[sqlx(rename = "voyage_large_2")]
     VoyageLarge2,
     #[serde(rename = "voyage_code_2")]
+    #[sqlx(rename = "voyage_code_2")]
     VoyageCode2,
 }
 

@@ -226,7 +226,7 @@ impl KoreanService {
             })
             .collect();
 
-        keywords.sort_by(|a, b| b.frequency.cmp(&a.frequency));
+        keywords.sort_by_key(|b| std::cmp::Reverse(b.frequency));
         keywords.truncate(limit as usize);
 
         Ok(KeywordExtraction {

@@ -209,7 +209,7 @@ async fn create_collection(
 ) -> AppResult<Json<Collection>> {
     let id = Uuid::new_v4();
     let patterns = serde_json::to_value(&req.patterns).unwrap_or_default();
-    let context = serde_json::to_value(&req.context.clone().unwrap_or_default()).unwrap_or_default();
+    let context = serde_json::to_value(req.context.clone().unwrap_or_default()).unwrap_or_default();
 
     sqlx::query(
         r#"

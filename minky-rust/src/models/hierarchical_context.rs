@@ -254,7 +254,7 @@ impl ContextBuilder {
 
         // Add annotations by priority
         let mut sorted: Vec<_> = annotations.iter().collect();
-        sorted.sort_by(|a, b| b.priority.cmp(&a.priority));
+        sorted.sort_by_key(|b| std::cmp::Reverse(b.priority));
 
         for annotation in sorted.iter().take(5) {
             let prefix = match annotation.context_type {
