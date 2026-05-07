@@ -396,19 +396,12 @@ mod tests {
     }
 
     #[test]
-    fn extract_client_id_default_is_untrusted() {
-        // Ensure TRUSTED_PROXY is not set so we test the default.
-        // Note: OnceLock caches the result, so we test the function logic
-        // directly by verifying that without the env var the default is false.
-        std::env::remove_var("TRUSTED_PROXY");
-
-        // Build a request with proxy headers + ConnectInfo.
+    fn untrusted_mode_uses_connect_info_over_proxy_headers() {
         let mut req = build_request();
         req.headers_mut()
             .insert("x-forwarded-for", "203.0.113.7".parse().unwrap());
         req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([192, 168, 1, 99], 55000))));
 
-        // When trust_proxy is false (the default), ConnectInfo wins.
         assert_eq!(extract_client_id_with_trust(&req, false), "192.168.1.99");
     }
 }

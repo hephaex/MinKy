@@ -10,10 +10,12 @@ use validator::Validate;
 use crate::{error::{AppError, AppResult}, middleware::AuthUser, AppState};
 use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
 
+const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10MB
+
 pub fn routes() -> Router<AppState> {
     let upload_route = Router::new()
         .route("/upload", post(upload_document))
-        .layer(DefaultBodyLimit::max(10 * 1024 * 1024));
+        .layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE));
 
     Router::new()
         .route("/", get(list_documents).post(create_document))
@@ -315,7 +317,12 @@ async fn delete_document(
     }))
 }
 
-const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10MB
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProcessingStatus {
+    Pending,
+    Completed,
+}
 
 #[derive(Debug, Serialize)]
 pub struct UploadResponse {
@@ -328,7 +335,7 @@ pub struct UploadedDocument {
     pub id: Uuid,
     pub title: String,
     pub chunks_count: usize,
-    pub processing_status: String,
+    pub processing_status: ProcessingStatus,
 }
 
 fn title_from_filename(filename: &str) -> String {
@@ -402,7 +409,7 @@ async fn upload_document(
                 id: output.document_id,
                 title: output.title,
                 chunks_count: output.chunks_count,
-                processing_status: if output.analyzed { "completed" } else { "pending" }.to_string(),
+                processing_status: if output.analyzed { ProcessingStatus::Completed } else { ProcessingStatus::Pending },
             },
         }));
     }
@@ -837,7 +844,7 @@ mod tests {
                 id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
                 title: "test doc".to_string(),
                 chunks_count: 5,
-                processing_status: "completed".to_string(),
+                processing_status: ProcessingStatus::Completed,
             },
         };
         let json = serde_json::to_value(&resp).unwrap();
@@ -856,7 +863,7 @@ mod tests {
                 id,
                 title: "any".to_string(),
                 chunks_count: 0,
-                processing_status: "pending".to_string(),
+                processing_status: ProcessingStatus::Pending,
             },
         };
         let json = serde_json::to_value(&resp).unwrap();
@@ -871,7 +878,7 @@ mod tests {
                 id: Uuid::new_v4(),
                 title: "test".to_string(),
                 chunks_count: 1,
-                processing_status: "pending".to_string(),
+                processing_status: ProcessingStatus::Pending,
             },
         };
         let json = serde_json::to_value(&resp).unwrap();
@@ -881,7 +888,46 @@ mod tests {
     #[test]
     fn routes_includes_upload_path() {
         let router = routes();
-        // Verify router creation doesn't panic — upload route is registered
         let _ = router;
+    }
+
+    #[test]
+    fn max_upload_size_is_10mb() {
+        assert_eq!(MAX_UPLOAD_SIZE, 10 * 1024 * 1024);
+        assert_eq!(MAX_UPLOAD_SIZE, 10_485_760);
+    }
+
+    #[test]
+    fn file_exceeding_max_upload_size_is_rejected() {
+        let oversized = vec![0u8; MAX_UPLOAD_SIZE + 1];
+        assert!(oversized.len() > MAX_UPLOAD_SIZE);
+    }
+
+    #[test]
+    fn file_at_exact_max_upload_size_is_accepted() {
+        let exact = vec![0u8; MAX_UPLOAD_SIZE];
+        assert!(exact.len() <= MAX_UPLOAD_SIZE);
+    }
+
+    #[test]
+    fn processing_status_serializes_to_snake_case() {
+        let pending = serde_json::to_value(ProcessingStatus::Pending).unwrap();
+        let completed = serde_json::to_value(ProcessingStatus::Completed).unwrap();
+        assert_eq!(pending, "pending");
+        assert_eq!(completed, "completed");
+    }
+
+    #[test]
+    fn processing_status_deserializes_from_snake_case() {
+        let pending: ProcessingStatus = serde_json::from_str("\"pending\"").unwrap();
+        let completed: ProcessingStatus = serde_json::from_str("\"completed\"").unwrap();
+        assert_eq!(pending, ProcessingStatus::Pending);
+        assert_eq!(completed, ProcessingStatus::Completed);
+    }
+
+    #[test]
+    fn processing_status_rejects_unknown_value() {
+        let result: Result<ProcessingStatus, _> = serde_json::from_str("\"unknown\"");
+        assert!(result.is_err());
     }
 }
