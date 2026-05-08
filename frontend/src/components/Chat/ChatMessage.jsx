@@ -7,7 +7,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import './Chat.css';
 
-const CodeBlock = ({ language, children }) => {
+const CodeBlock = ({ language = '', children }) => {
   const [copied, setCopied] = useState(false);
   const code = String(children).replace(/\n$/, '');
 
@@ -43,9 +43,6 @@ CodeBlock.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-CodeBlock.defaultProps = {
-  language: '',
-};
 
 const markdownComponents = {
   code({ inline, className, children, ...props }) {
@@ -240,8 +237,5 @@ ChatMessage.propTypes = {
   onCopy: PropTypes.func,
 };
 
-ChatMessage.defaultProps = {
-  onCopy: null,
-};
 
 export default ChatMessage;

@@ -55,8 +55,7 @@ const useDocumentStatus = (documentId) => {
       mountedRef.current = false;
       stopPolling();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentId]);
+  }, [documentId, stopPolling]);
 
   return { status, queuePosition, errorMessage, isPolling, startPolling, stopPolling };
 };

@@ -10,9 +10,9 @@ function GraphNode({
   degree,
   isSelected,
   isHighlighted,
-  isPathNode,
-  isPathEndpoint,
-  clusterColor,
+  isPathNode = false,
+  isPathEndpoint = false,
+  clusterColor = null,
   onSelect,
   onHover,
 }) {
@@ -132,12 +132,6 @@ GraphNode.propTypes = {
   clusterColor: PropTypes.string,
   onSelect: PropTypes.func.isRequired,
   onHover: PropTypes.func.isRequired,
-};
-
-GraphNode.defaultProps = {
-  isPathNode: false,
-  isPathEndpoint: false,
-  clusterColor: null,
 };
 
 export default GraphNode;

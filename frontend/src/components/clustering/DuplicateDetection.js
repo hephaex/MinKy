@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-const DuplicateDetection = ({ duplicates, onDetect }) => {
+const DuplicateDetection = ({ duplicates = null, onDetect }) => {
   return (
     <div className="duplicate-detection">
       <div className="section-header">
@@ -115,10 +115,6 @@ DuplicateDetection.propTypes = {
     }),
   }),
   onDetect: PropTypes.func.isRequired,
-};
-
-DuplicateDetection.defaultProps = {
-  duplicates: null,
 };
 
 export default DuplicateDetection;

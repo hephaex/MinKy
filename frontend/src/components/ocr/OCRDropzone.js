@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-const OCRDropzone = ({ file, onFileChange, onFileRemove, dragActive, onDrag, onDrop }) => {
+const OCRDropzone = ({ file = null, onFileChange, onFileRemove, dragActive = false, onDrag, onDrop }) => {
   const isValidFileType = (file) => {
     if (!file) return false;
     const allowedTypes = [
@@ -76,11 +76,6 @@ OCRDropzone.propTypes = {
   dragActive: PropTypes.bool,
   onDrag: PropTypes.func.isRequired,
   onDrop: PropTypes.func.isRequired,
-};
-
-OCRDropzone.defaultProps = {
-  file: null,
-  dragActive: false,
 };
 
 export default OCRDropzone;

@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-const StatCard = ({ title, value, subtitle, className = '' }) => (
+const StatCard = ({ title, value = 0, subtitle = null, className = '' }) => (
   <div className={`admin-stat-card ${className}`}>
     <h3>{title}</h3>
     <div className="stat-value">{value?.toLocaleString() || 0}</div>
@@ -8,7 +8,7 @@ const StatCard = ({ title, value, subtitle, className = '' }) => (
   </div>
 );
 
-const AdminOverview = ({ systemStats }) => {
+const AdminOverview = ({ systemStats = null }) => {
   if (!systemStats) {
     return null;
   }
@@ -90,12 +90,6 @@ StatCard.propTypes = {
   className: PropTypes.string,
 };
 
-StatCard.defaultProps = {
-  value: 0,
-  subtitle: null,
-  className: '',
-};
-
 AdminOverview.propTypes = {
   systemStats: PropTypes.shape({
     users: PropTypes.shape({
@@ -117,10 +111,6 @@ AdminOverview.propTypes = {
       avg_document_size: PropTypes.number,
     }),
   }),
-};
-
-AdminOverview.defaultProps = {
-  systemStats: null,
 };
 
 export default AdminOverview;

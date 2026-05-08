@@ -5,7 +5,7 @@ import { edgeMidpoint } from './graphLayout';
  * A single edge (connection) in the knowledge graph.
  * Renders as an SVG line with optional weight-based thickness.
  */
-function GraphEdge({ edge, sourceNode, targetNode, isHighlighted }) {
+function GraphEdge({ edge, sourceNode = null, targetNode = null, isHighlighted }) {
   if (!sourceNode || !targetNode) return null;
 
   const mid = edgeMidpoint(sourceNode, targetNode);
@@ -64,11 +64,6 @@ GraphEdge.propTypes = {
     y: PropTypes.number,
   }),
   isHighlighted: PropTypes.bool.isRequired,
-};
-
-GraphEdge.defaultProps = {
-  sourceNode: null,
-  targetNode: null,
 };
 
 export default GraphEdge;

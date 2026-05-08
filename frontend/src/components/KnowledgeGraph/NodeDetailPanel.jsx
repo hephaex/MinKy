@@ -8,16 +8,16 @@ import { formatRelativeTime, formatDate } from '../../utils/dateUtils';
  * Displays metadata, statistics, cluster info, and quick actions.
  */
 function NodeDetailPanel({
-  node,
+  node = null,
   relatedEdges,
   allNodes,
   onClose,
   onNavigate,
-  clusterMode,
-  clusterData,
-  onSetPathSource,
-  onFilterToNode,
-  onExportConnections,
+  clusterMode = false,
+  clusterData = null,
+  onSetPathSource = null,
+  onFilterToNode = null,
+  onExportConnections = null,
 }) {
   // Calculate node statistics (hook must be called unconditionally)
   const stats = useMemo(() => {
@@ -243,15 +243,6 @@ NodeDetailPanel.propTypes = {
   onSetPathSource: PropTypes.func,
   onFilterToNode: PropTypes.func,
   onExportConnections: PropTypes.func,
-};
-
-NodeDetailPanel.defaultProps = {
-  node: null,
-  clusterMode: false,
-  clusterData: null,
-  onSetPathSource: null,
-  onFilterToNode: null,
-  onExportConnections: null,
 };
 
 export default NodeDetailPanel;

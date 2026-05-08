@@ -188,6 +188,20 @@ describe('useDocumentStatus', () => {
       expect(result.current.errorMessage).toBe('Processing failed');
     });
 
+    it('stops polling when status is processing', async () => {
+      documentService.getDocumentStatus.mockResolvedValueOnce({
+        processing_status: 'processing',
+        queue_position: null,
+        error_message: null,
+      });
+      const { result } = renderHook(() => useDocumentStatus(123));
+      await act(async () => {
+        result.current.startPolling();
+      });
+      expect(result.current.status).toBe('processing');
+      expect(result.current.isPolling).toBe(false);
+    });
+
     it('continues polling while status remains pending', async () => {
       documentService.getDocumentStatus.mockResolvedValue(makePendingResponse());
       const { result } = renderHook(() => useDocumentStatus('doc-1'));
@@ -292,6 +306,14 @@ describe('useDocumentStatus', () => {
         result.current.startPolling();
       });
 
+      expect(documentService.getDocumentStatus).not.toHaveBeenCalled();
+    });
+
+    it('does not call the API when documentId is empty string', async () => {
+      const { result } = renderHook(() => useDocumentStatus(''));
+      await act(async () => {
+        result.current.startPolling();
+      });
       expect(documentService.getDocumentStatus).not.toHaveBeenCalled();
     });
   });

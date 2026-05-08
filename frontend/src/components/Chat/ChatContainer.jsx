@@ -33,7 +33,7 @@ const EmptyState = () => (
   </div>
 );
 
-const ChatContainer = ({ className }) => {
+const ChatContainer = ({ className = '' }) => {
   const {
     sessions,
     activeSessionId,
@@ -105,10 +105,6 @@ const ChatContainer = ({ className }) => {
 
 ChatContainer.propTypes = {
   className: PropTypes.string,
-};
-
-ChatContainer.defaultProps = {
-  className: '',
 };
 
 export default ChatContainer;

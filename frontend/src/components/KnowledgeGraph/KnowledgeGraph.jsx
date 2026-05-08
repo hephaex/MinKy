@@ -25,21 +25,21 @@ const ZOOM_STEP = 0.15;
  * @param {string}   emptyMessage - Message shown when no data
  */
 function KnowledgeGraph({
-  nodes,
-  edges,
-  title,
-  loading,
-  emptyMessage,
-  onNodeClick,
-  pathMode,
-  pathSource,
-  pathTarget,
-  pathResult,
-  clusterMode,
-  clusterData,
-  onSetPathSource,
-  onFilterToNode,
-  onExportConnections,
+  nodes = [],
+  edges = [],
+  title = null,
+  loading = false,
+  emptyMessage = null,
+  onNodeClick = null,
+  pathMode = false,
+  pathSource = null,
+  pathTarget = null,
+  pathResult = null,
+  clusterMode = false,
+  clusterData = null,
+  onSetPathSource = null,
+  onFilterToNode = null,
+  onExportConnections = null,
 }) {
   const containerRef = useRef(null);
   const svgRef = useRef(null);
@@ -474,22 +474,5 @@ KnowledgeGraph.propTypes = {
   onExportConnections: PropTypes.func,
 };
 
-KnowledgeGraph.defaultProps = {
-  nodes: [],
-  edges: [],
-  title: null,
-  loading: false,
-  emptyMessage: null,
-  onNodeClick: null,
-  pathMode: false,
-  pathSource: null,
-  pathTarget: null,
-  pathResult: null,
-  clusterMode: false,
-  clusterData: null,
-  onSetPathSource: null,
-  onFilterToNode: null,
-  onExportConnections: null,
-};
 
 export default KnowledgeGraph;

@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-const SimilarDocuments = ({ documentId, similarDocs, onRefresh }) => {
+const SimilarDocuments = ({ documentId = null, similarDocs = null, onRefresh }) => {
   if (!documentId) {
     return (
       <div className="similar-documents">
@@ -118,11 +118,6 @@ SimilarDocuments.propTypes = {
     }),
   }),
   onRefresh: PropTypes.func.isRequired,
-};
-
-SimilarDocuments.defaultProps = {
-  documentId: null,
-  similarDocs: null,
 };
 
 export default SimilarDocuments;

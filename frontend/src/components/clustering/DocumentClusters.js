@@ -1,7 +1,7 @@
 import PropTypes from 'prop-types';
 
 const DocumentClusters = ({
-  clusteringResults,
+  clusteringResults = null,
   clusteringConfig,
   setClusteringConfig,
   onCluster,
@@ -206,10 +206,6 @@ DocumentClusters.propTypes = {
   }).isRequired,
   setClusteringConfig: PropTypes.func.isRequired,
   onCluster: PropTypes.func.isRequired,
-};
-
-DocumentClusters.defaultProps = {
-  clusteringResults: null,
 };
 
 export default DocumentClusters;

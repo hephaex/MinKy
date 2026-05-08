@@ -1,6 +1,6 @@
 import PropTypes from 'prop-types';
 
-const DocumentInsights = ({ analytics, onLoadSimilar }) => {
+const DocumentInsights = ({ analytics, onLoadSimilar = () => {} }) => {
   return (
     <div className="document-insights">
       {/* Basic Statistics */}
@@ -211,10 +211,6 @@ DocumentInsights.propTypes = {
     ),
   }).isRequired,
   onLoadSimilar: PropTypes.func,
-};
-
-DocumentInsights.defaultProps = {
-  onLoadSimilar: () => {},
 };
 
 export default DocumentInsights;
