@@ -7,11 +7,11 @@ import { logError } from '../utils/logger';
 import './CollaborativeEditor.css';
 
 const CollaborativeEditor = ({
-  documentId,
+  documentId = null,
   initialValue = '',
-  onChange,
-  onTitleSuggestion,
-  onTagSuggestions,
+  onChange = () => {},
+  onTitleSuggestion = () => {},
+  onTagSuggestions = () => {},
   placeholder = 'Start writing your markdown...',
   showAISuggestions = true,
 }) => {
@@ -426,14 +426,5 @@ CollaborativeEditor.propTypes = {
   showAISuggestions: PropTypes.bool,
 };
 
-CollaborativeEditor.defaultProps = {
-  documentId: null,
-  initialValue: '',
-  onChange: () => {},
-  onTitleSuggestion: () => {},
-  onTagSuggestions: () => {},
-  placeholder: 'Start writing your markdown...',
-  showAISuggestions: true,
-};
 
 export default CollaborativeEditor;

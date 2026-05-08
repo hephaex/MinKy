@@ -7,7 +7,7 @@ const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-const NewSimpleDateSidebar = ({ onDocumentSelect, selectedDateKey }) => {
+const NewSimpleDateSidebar = ({ onDocumentSelect = () => {}, selectedDateKey = null }) => {
   const [timeline, setTimeline] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -257,9 +257,5 @@ NewSimpleDateSidebar.propTypes = {
   selectedDateKey: PropTypes.string,
 };
 
-NewSimpleDateSidebar.defaultProps = {
-  onDocumentSelect: () => {},
-  selectedDateKey: null,
-};
 
 export default NewSimpleDateSidebar;

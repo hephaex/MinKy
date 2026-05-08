@@ -48,8 +48,5 @@ SearchBar.propTypes = {
   initialValue: PropTypes.string,
 };
 
-SearchBar.defaultProps = {
-  initialValue: '',
-};
 
 export default SearchBar;

@@ -4,7 +4,7 @@ import { authService } from '../services/api';
 import { DocumentInsights, CorpusInsights } from './ml-analytics';
 import './MLAnalytics.css';
 
-const MLAnalytics = ({ documentId, showCorpusAnalysis = false }) => {
+const MLAnalytics = ({ documentId = null, showCorpusAnalysis = false }) => {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -200,9 +200,5 @@ MLAnalytics.propTypes = {
   showCorpusAnalysis: PropTypes.bool,
 };
 
-MLAnalytics.defaultProps = {
-  documentId: null,
-  showCorpusAnalysis: false,
-};
 
 export default MLAnalytics;

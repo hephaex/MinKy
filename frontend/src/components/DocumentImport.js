@@ -5,7 +5,7 @@ import { logError } from '../utils/logger';
 import './DocumentImport.css';
 
 const DocumentImport = ({
-  onDocumentImported,
+  onDocumentImported = () => {},
   acceptedFileTypes = null,
   fileExtensions = null,
   title = 'Document Import',
@@ -305,12 +305,5 @@ DocumentImport.propTypes = {
   description: PropTypes.string,
 };
 
-DocumentImport.defaultProps = {
-  onDocumentImported: () => {},
-  acceptedFileTypes: null,
-  fileExtensions: null,
-  title: 'Document Import',
-  description: 'Upload documents to convert them to Markdown format',
-};
 
 export default DocumentImport;

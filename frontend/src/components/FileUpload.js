@@ -4,7 +4,7 @@ import { documentService } from '../services/api';
 import { logError } from '../utils/logger';
 import './FileUpload.css';
 
-const FileUpload = ({ onUploadSuccess, onUploadError }) => {
+const FileUpload = ({ onUploadSuccess = null, onUploadError = null }) => {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
@@ -184,9 +184,5 @@ FileUpload.propTypes = {
   onUploadError: PropTypes.func,
 };
 
-FileUpload.defaultProps = {
-  onUploadSuccess: null,
-  onUploadError: null,
-};
 
 export default FileUpload;

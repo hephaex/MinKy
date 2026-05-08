@@ -11,7 +11,7 @@ const MODES = [
   { key: 'by-date', label: '날짜' },
 ];
 
-const TreeSidebar = ({ isVisible, onToggle }) => {
+const TreeSidebar = ({ isVisible = true, onToggle = () => {} }) => {
   const navigate = useNavigate();
   const [mode, setMode] = useState('by-tag');
   const [treeData, setTreeData] = useState([]);
@@ -163,9 +163,5 @@ TreeSidebar.propTypes = {
   onToggle: PropTypes.func,
 };
 
-TreeSidebar.defaultProps = {
-  isVisible: true,
-  onToggle: () => {},
-};
 
 export default TreeSidebar;

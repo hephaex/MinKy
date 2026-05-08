@@ -5,11 +5,11 @@ import AISuggestions from './AISuggestions';
 import './MarkdownEditor.css';
 
 const MarkdownEditor = ({
-  value,
+  value = '',
   onChange,
   placeholder = 'Start writing your markdown...',
-  onTitleSuggestion,
-  onTagSuggestions,
+  onTitleSuggestion = () => {},
+  onTagSuggestions = () => {},
   showAISuggestions = true,
 }) => {
   const [previewMode, setPreviewMode] = useState('edit');
@@ -118,12 +118,5 @@ MarkdownEditor.propTypes = {
   showAISuggestions: PropTypes.bool,
 };
 
-MarkdownEditor.defaultProps = {
-  value: '',
-  placeholder: 'Start writing your markdown...',
-  onTitleSuggestion: () => {},
-  onTagSuggestions: () => {},
-  showAISuggestions: true,
-};
 
 export default MarkdownEditor;

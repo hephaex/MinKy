@@ -5,7 +5,7 @@ import api from '../services/api';
 import { logError } from '../utils/logger';
 import { formatDateTime } from '../utils/dateUtils';
 
-const SimpleDocumentsByDate = ({ dateKey, onDocumentClick }) => {
+const SimpleDocumentsByDate = ({ dateKey = null, onDocumentClick = null }) => {
   const [documents, setDocuments] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [dateRange, setDateRange] = useState(null);
@@ -364,9 +364,5 @@ SimpleDocumentsByDate.propTypes = {
   onDocumentClick: PropTypes.func,
 };
 
-SimpleDocumentsByDate.defaultProps = {
-  dateKey: null,
-  onDocumentClick: null,
-};
 
 export default SimpleDocumentsByDate;

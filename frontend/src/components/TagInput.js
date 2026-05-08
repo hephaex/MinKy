@@ -4,7 +4,7 @@ import { tagService } from '../services/api';
 import { logError } from '../utils/logger';
 import './TagInput.css';
 
-const TagInput = ({ tags = [], onChange, suggestedTags = [], onSuggestionApply }) => {
+const TagInput = ({ tags = [], onChange, suggestedTags = [], onSuggestionApply = null }) => {
   const [inputValue, setInputValue] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -194,10 +194,5 @@ TagInput.propTypes = {
   onSuggestionApply: PropTypes.func,
 };
 
-TagInput.defaultProps = {
-  tags: [],
-  suggestedTags: [],
-  onSuggestionApply: null,
-};
 
 export default TagInput;

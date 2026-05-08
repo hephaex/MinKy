@@ -5,11 +5,11 @@ import { logError } from '../utils/logger';
 import './AISuggestions.css';
 
 const AISuggestions = ({
-  content,
-  cursorPosition,
-  onSuggestionSelect,
-  onTitleSuggestion,
-  onTagSuggestions,
+  content = '',
+  cursorPosition = 0,
+  onSuggestionSelect = null,
+  onTitleSuggestion = null,
+  onTagSuggestions = null,
   isVisible = true,
 }) => {
   const [suggestions, setSuggestions] = useState([]);
@@ -262,13 +262,5 @@ AISuggestions.propTypes = {
   isVisible: PropTypes.bool,
 };
 
-AISuggestions.defaultProps = {
-  content: '',
-  cursorPosition: 0,
-  onSuggestionSelect: null,
-  onTitleSuggestion: null,
-  onTagSuggestions: null,
-  isVisible: true,
-};
 
 export default AISuggestions;

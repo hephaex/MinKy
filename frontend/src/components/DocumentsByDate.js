@@ -11,7 +11,7 @@ const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-const DocumentsByDate = ({ dateKey, onDocumentClick }) => {
+const DocumentsByDate = ({ dateKey = null, onDocumentClick = null }) => {
   const [state, setState] = useState({
     documents: [],
     pagination: null,
@@ -205,9 +205,5 @@ DocumentsByDate.propTypes = {
   onDocumentClick: PropTypes.func,
 };
 
-DocumentsByDate.defaultProps = {
-  dateKey: null,
-  onDocumentClick: null,
-};
 
 export default DocumentsByDate;

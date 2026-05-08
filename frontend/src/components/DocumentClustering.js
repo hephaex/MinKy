@@ -4,7 +4,7 @@ import { authService } from '../services/api';
 import { SimilarDocuments, DocumentClusters, DuplicateDetection } from './clustering';
 import './DocumentClustering.css';
 
-const DocumentClustering = ({ documentId, showFullInterface = false }) => {
+const DocumentClustering = ({ documentId = null, showFullInterface = false }) => {
   const [clusteringResults, setClusteringResults] = useState(null);
   const [similarDocs, setSimilarDocs] = useState(null);
   const [duplicates, setDuplicates] = useState(null);
@@ -230,9 +230,5 @@ DocumentClustering.propTypes = {
   showFullInterface: PropTypes.bool,
 };
 
-DocumentClustering.defaultProps = {
-  documentId: null,
-  showFullInterface: false,
-};
 
 export default DocumentClustering;

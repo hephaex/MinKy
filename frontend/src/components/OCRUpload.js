@@ -11,7 +11,7 @@ import {
 } from './ocr';
 import './OCRUpload.css';
 
-const OCRUpload = ({ onTextExtracted, onDocumentCreated, mode = 'extract' }) => {
+const OCRUpload = ({ onTextExtracted = () => {}, onDocumentCreated = () => {}, mode = 'extract' }) => {
   const [file, setFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -292,10 +292,5 @@ OCRUpload.propTypes = {
   mode: PropTypes.oneOf(['extract', 'create']),
 };
 
-OCRUpload.defaultProps = {
-  onTextExtracted: () => {},
-  onDocumentCreated: () => {},
-  mode: 'extract',
-};
 
 export default OCRUpload;
