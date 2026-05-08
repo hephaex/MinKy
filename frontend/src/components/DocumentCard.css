@@ -127,6 +127,15 @@
   border: 1px solid #f5c6cb;
 }
 
+.processing-badge--clickable {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.processing-badge--clickable:hover {
+  background-color: #f1b0b7;
+}
+
 /* Search highlighting */
 .search-highlight {
   background-color: #fff3cd;

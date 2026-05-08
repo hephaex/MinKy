@@ -10,7 +10,6 @@ use validator::Validate;
 use secrecy::ExposeSecret;
 
 use crate::{error::{AppError, AppResult}, middleware::AuthUser, AppState};
-use crate::models::EmbeddingModel;
 use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
 use crate::services::{EmbeddingConfig, EmbeddingService};
 
@@ -452,10 +451,7 @@ async fn upload_document(
 fn embedding_service_from_state(state: &AppState) -> EmbeddingService {
     let config = EmbeddingConfig {
         openai_api_key: state.config.openai_api_key.as_ref().map(|s| s.expose_secret().to_string()),
-        voyage_api_key: None,
-        default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
-        chunk_size: 512,
-        chunk_overlap: 50,
+        ..EmbeddingConfig::default()
     };
     EmbeddingService::new(state.db.clone(), config)
 }
@@ -500,14 +496,31 @@ async fn get_document_status(
     .fetch_optional(&state.db)
     .await?;
 
-    let (processing_status, error_message) = match queue_entry {
+    let (processing_status, error_message, queue_position) = match queue_entry {
         Some((status, err_msg)) => {
             let ps = match status.as_str() {
                 "completed" => ProcessingStatus::Completed,
                 "failed" => ProcessingStatus::Failed,
                 _ => ProcessingStatus::Pending,
             };
-            (ps, err_msg)
+            let pos = if ps == ProcessingStatus::Pending {
+                sqlx::query_as::<_, (i64,)>(
+                    r#"SELECT COUNT(*) FROM embedding_queue
+                       WHERE status = 'pending'
+                         AND (priority > (SELECT priority FROM embedding_queue WHERE document_id = $1 AND status = 'pending' LIMIT 1)
+                              OR (priority = (SELECT priority FROM embedding_queue WHERE document_id = $1 AND status = 'pending' LIMIT 1)
+                                  AND created_at < (SELECT created_at FROM embedding_queue WHERE document_id = $1 AND status = 'pending' LIMIT 1)))
+                    "#,
+                )
+                .bind(id)
+                .fetch_one(&state.db)
+                .await
+                .ok()
+                .map(|(c,)| c + 1)
+            } else {
+                None
+            };
+            (ps, err_msg, pos)
         }
         None => {
             let has_embedding: Option<(i64,)> = sqlx::query_as(
@@ -518,9 +531,9 @@ async fn get_document_status(
             .await
             .ok();
             if has_embedding.is_some_and(|(c,)| c > 0) {
-                (ProcessingStatus::Completed, None)
+                (ProcessingStatus::Completed, None, None)
             } else {
-                (ProcessingStatus::Pending, None)
+                (ProcessingStatus::Pending, None, None)
             }
         }
     };
@@ -528,7 +541,7 @@ async fn get_document_status(
     Ok(Json(DocumentStatus {
         document_id: id,
         processing_status,
-        queue_position: None,
+        queue_position,
         error_message,
     }))
 }
@@ -1197,5 +1210,46 @@ mod tests {
         assert_eq!(json["success"], true);
         assert_eq!(json["document_id"], id.to_string());
         assert_eq!(json["message"], "Document queued for reprocessing");
+    }
+
+    #[test]
+    fn document_status_pending_with_queue_position() {
+        let status = DocumentStatus {
+            document_id: Uuid::new_v4(),
+            processing_status: ProcessingStatus::Pending,
+            queue_position: Some(1),
+            error_message: None,
+        };
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json["processing_status"], "pending");
+        assert_eq!(json["queue_position"], 1);
+    }
+
+    #[test]
+    fn document_status_completed_no_position() {
+        let status = DocumentStatus {
+            document_id: Uuid::new_v4(),
+            processing_status: ProcessingStatus::Completed,
+            queue_position: None,
+            error_message: None,
+        };
+        let json = serde_json::to_value(&status).unwrap();
+        assert_eq!(json["processing_status"], "completed");
+        assert!(json["queue_position"].is_null());
+        assert!(json["error_message"].is_null());
+    }
+
+    #[test]
+    fn processing_status_all_variants_roundtrip() {
+        for (variant, expected) in [
+            (ProcessingStatus::Pending, "pending"),
+            (ProcessingStatus::Completed, "completed"),
+            (ProcessingStatus::Failed, "failed"),
+        ] {
+            let serialized = serde_json::to_value(variant).unwrap();
+            assert_eq!(serialized, expected);
+            let deserialized: ProcessingStatus = serde_json::from_value(serialized).unwrap();
+            assert_eq!(deserialized, variant);
+        }
     }
 }

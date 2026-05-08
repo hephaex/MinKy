@@ -4,7 +4,7 @@ import { highlightTextReact, truncateWithHighlight } from '../utils/highlightTex
 import { formatDateTime } from '../utils/dateUtils';
 import './DocumentCard.css';
 
-const DocumentCard = ({ document, searchQuery = '', showPreview = false, formatDate }) => {
+const DocumentCard = ({ document, searchQuery = '', showPreview = false, formatDate, onReprocess }) => {
   const dateFormatter = formatDate || formatDateTime;
 
   const formatAuthor = (author) => {
@@ -85,7 +85,22 @@ const DocumentCard = ({ document, searchQuery = '', showPreview = false, formatD
           {document.processing_status === 'failed' && (
             <>
               <span className="meta-separator">•</span>
-              <span className="processing-badge processing-badge--failed" role="status">Failed</span>
+              {onReprocess ? (
+                <button
+                  className="processing-badge processing-badge--failed processing-badge--clickable"
+                  role="status"
+                  title="Click to retry processing"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onReprocess(document.id);
+                  }}
+                >
+                  Failed — Retry
+                </button>
+              ) : (
+                <span className="processing-badge processing-badge--failed" role="status">Failed</span>
+              )}
             </>
           )}
         </div>
@@ -145,12 +160,14 @@ DocumentCard.propTypes = {
   searchQuery: PropTypes.string,
   showPreview: PropTypes.bool,
   formatDate: PropTypes.func,
+  onReprocess: PropTypes.func,
 };
 
 DocumentCard.defaultProps = {
   searchQuery: '',
   showPreview: false,
   formatDate: null,
+  onReprocess: null,
 };
 
 export default DocumentCard;
