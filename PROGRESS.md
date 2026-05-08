@@ -5,7 +5,25 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-08) - Sprint 9: Review Debt Cleanup
+## 현재 진행 상황 (2026-05-08) - Sprint 10: Status Polling + Tests
+
+### Sprint 10: Document Status Polling + formatAuthor Tests (2026-05-08)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| useDocumentStatus hook | hooks/useDocumentStatus.js (신규) | 5s polling, auto-stop, mountedRef guard |
+| Live status badges | pages/DocumentView.js | pending/completed/failed + queue position |
+| formatAuthor tests | utils/documentUtils.test.js (신규) | 16 test cases |
+| formatAuthor edge fix | utils/documentUtils.js | empty array, non-string guard |
+| Completed badge CSS | components/DocumentCard.css | green badge |
+| Review fixes | 4 files | polling race, response, ARIA, type guard |
+
+테스트: 1,643 Rust + 16 frontend pass / 0 fail
+커밋: `29b0a59a`, `83903ae0`
+
+---
+
+## 이전 진행 상황 (2026-05-08) - Sprint 9: Review Debt Cleanup
 
 ### Sprint 9: Review Debt Cleanup (2026-05-08)
 

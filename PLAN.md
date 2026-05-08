@@ -274,12 +274,20 @@
 - Net: -51 lines
 - Commit: `ce857752`
 
-## Sprint 10 로드맵
+## Sprint 10 완료 (2026-05-08)
 
-- P1: useDocumentStatus hook — polling (pending → completed 자동 전환, 5s interval)
-- P2: DocumentCard에 processing status indicator 통합 (useDocumentStatus 활용)
-- P3: Upload 후 자동 status polling 시작
-- P4: documentUtils.js 단위 테스트 (formatAuthor edge cases)
+- [x] useDocumentStatus polling hook (5s interval, auto-stop on completed/failed)
+- [x] DocumentView live status badges with queue position
+- [x] 16 unit tests for formatAuthor (documentUtils.test.js)
+- [x] Review fixes: polling race condition, response unwrap, ARIA, type guard
+- Commits: `29b0a59a`, `83903ae0`
+
+## Sprint 11 로드맵
+
+- P1: DocumentCard에 processing status indicator 통합 (useDocumentStatus 활용)
+- P2: Upload 후 자동 status polling 시작 (DocumentList에서 새 문서 추적)
+- P3: useDocumentStatus unit tests (polling lifecycle, cleanup)
+- P4: DocumentList 리스트 뷰에 reprocess 지원
 
 ## Blocked / Waiting
 
