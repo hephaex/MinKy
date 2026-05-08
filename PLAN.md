@@ -231,6 +231,22 @@
 
 ---
 
+## Sprint 5 완료 (2026-05-08)
+
+- [x] Upload → EmbeddingService 큐 자동 연결 (fire-and-forget)
+- [x] GET /documents/{id}/status — 문서 처리 상태 조회 (큐 + 폴백)
+- [x] POST /documents/{id}/reprocess — 소유자 전용 재처리 요청
+- [x] ProcessingStatus::Failed variant + Frontend red badge
+- [x] 5 unit tests, clippy clean
+- Commit: `1617d8df`
+
+## Sprint 6 로드맵
+
+- P1: `queue_position` 실제 계산 (현재 항상 None)
+- P2: `EmbeddingConfig` 값을 AppState config에서 로드 (하드코딩 제거)
+- P3: 통합 테스트 — status/reprocess 엔드포인트 실제 라우터 테스트
+- P4: Frontend DocumentCard에 Failed badge 클릭 → reprocess 호출
+
 ## Blocked / Waiting
 
 현재 없음

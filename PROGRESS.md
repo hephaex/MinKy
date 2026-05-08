@@ -5,7 +5,25 @@
 
 ---
 
-## 현재 진행 상황 (2026-03-08) - Route 테스트 100% 완료
+## 현재 진행 상황 (2026-05-08) - Sprint 5: Embedding Queue + Status API
+
+### Sprint 5: Embedding Queue Wiring + Status/Reprocess Endpoints (2026-05-08)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| embedding_service_from_state | routes/documents.rs | SecretString → String 변환으로 EmbeddingService 생성 |
+| enqueue_for_embedding | routes/documents.rs | fire-and-forget 패턴, warn 로깅 |
+| GET /{id}/status | routes/documents.rs | embedding_queue + document_embeddings 폴백 |
+| POST /{id}/reprocess | routes/documents.rs | 소유자 전용, priority=1 재enqueue |
+| ProcessingStatus::Failed | routes/documents.rs | 열거형 확장 + serde 테스트 |
+| Failed badge | DocumentCard.js/css | red badge, PropTypes 갱신 |
+
+테스트: 1,635 pass / 0 fail / 1 ignored / 0 clippy warnings
+커밋: `1617d8df`
+
+---
+
+## 이전 진행 상황 (2026-03-08) - Route 테스트 100% 완료
 
 ### 36차 세션: Route 테스트 커버리지 100% 달성 (2026-03-08)
 
