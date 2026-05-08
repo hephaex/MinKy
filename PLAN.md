@@ -296,12 +296,20 @@
 - Net: 438 insertions, 113 deletions
 - Commit: `736c3d97`
 
-## Sprint 13 로드맵
+## Sprint 13 완료 (2026-05-08) — defaultProps 완전 제거 + Lint Fix
 
-- P1: 서브디렉토리 defaultProps 마이그레이션 (15 파일: Chat/, admin/, clustering/ 등)
-- P2: Toast portal rendering (document.body에 Portal로 이동)
-- P3: Upload 후 자동 status polling 시작 (DocumentList에서 새 문서 추적)
-- P4: useDocumentStatus eslint-disable 제거 + empty string/processing status 테스트
+- [x] 서브디렉토리 defaultProps 마이그레이션 (12 파일, 16 사용처) — 코드베이스 전체 0건
+- [x] useDocumentStatus eslint-disable 제거 (stopPolling을 deps에 추가)
+- [x] 엣지 케이스 테스트 2건 (empty string, processing status)
+- Net: -66 lines
+- Commit: `6ea17153`
+
+## Sprint 14 로드맵
+
+- P1: Toast portal rendering (document.body에 Portal로 이동, z-index 이슈 방지)
+- P2: Upload 후 자동 status polling 시작 (DocumentList에서 새 문서 추적)
+- P3: DocumentView reprocess 후 자동 refetch 개선 (optimistic update)
+- P4: 프론트엔드 접근성 감사 (aria-label, keyboard navigation 점검)
 
 ## Blocked / Waiting
 
