@@ -248,12 +248,19 @@
 - [x] Frontend Failed badge → clickable retry button (onReprocess prop)
 - Commit: `66d5b549`
 
-## Sprint 7 로드맵
+## Sprint 7 완료 (2026-05-08)
 
-- P1: DocumentCard onReprocess를 실제 API 호출과 연결 (DocumentList에서 reprocess 핸들러 구현)
-- P2: Reprocess 후 문서 상태 자동 갱신 (polling 또는 re-fetch)
-- P3: get_document_status 통합 테스트 (TestApp + mock DB)
-- P4: Upload 엔드포인트 통합 테스트 강화 (실제 pipeline mock)
+- [x] documentService에 getDocumentStatus, reprocessDocument API 추가
+- [x] DocumentList → handleReprocess → refetch 연결
+- [x] document_routes_test.rs — 5개 라우트 shape 통합 테스트
+- Commit: `05ca1c2a`
+
+## Sprint 8 로드맵
+
+- P1: Reprocess 중 toast/loading 피드백 (UX 개선)
+- P2: DocumentDetail 페이지에 processing status 표시 + reprocess 버튼
+- P3: DateExplorer에 onReprocess 전달
+- P4: getDocumentStatus 활용한 status polling (pending → completed 자동 전환)
 
 ## Blocked / Waiting
 

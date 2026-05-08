@@ -5,7 +5,24 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-08) - Sprint 6: Queue Position + Reprocess Button
+## 현재 진행 상황 (2026-05-08) - Sprint 7: Reprocess Wiring + Route Tests
+
+### Sprint 7: Reprocess API Wiring + Route Integration Tests (2026-05-08)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| getDocumentStatus API | services/api.js | GET /documents/{id}/status |
+| reprocessDocument API | services/api.js | POST /documents/{id}/reprocess |
+| handleReprocess | pages/DocumentList.js | API 호출 + refetch |
+| onReprocess prop 전달 | pages/DocumentList.js | DocumentCard에 연결 |
+| 5 route shape tests | tests/document_routes_test.rs | status/reprocess path + method 검증 |
+
+테스트: 1,643 pass / 0 fail / 1 ignored / 0 clippy warnings
+커밋: `05ca1c2a`
+
+---
+
+## 이전 진행 상황 (2026-05-08) - Sprint 6: Queue Position + Reprocess Button
 
 ### Sprint 6: Queue Position, Config Simplification, Reprocess Button (2026-05-08)
 
