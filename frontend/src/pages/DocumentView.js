@@ -16,6 +16,7 @@ import {
 import api, { documentService } from '../services/api';
 import Toast from '../components/Toast';
 import useToast from '../hooks/useToast';
+import useDocumentStatus from '../hooks/useDocumentStatus';
 import '../components/DocumentCard.css';
 import './DocumentView.css';
 
@@ -31,6 +32,15 @@ const DocumentView = () => {
   const [autoTaggingInProgress, setAutoTaggingInProgress] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState([]);
   const { toast, showToast, dismissToast } = useToast();
+  const {
+    status: liveStatus,
+    queuePosition,
+    errorMessage: statusError,
+    isPolling,
+    startPolling,
+  } = useDocumentStatus(id, document?.processing_status);
+
+  const processingStatus = liveStatus || document?.processing_status;
 
   const generateAndApplyTags = async (documentData) => {
     try {
@@ -122,6 +132,7 @@ const DocumentView = () => {
       showToast('Document queued for reprocessing', 'success');
       const data = await documentService.getDocument(id);
       setDocument(data);
+      startPolling();
     } catch (err) {
       showToast('Failed to reprocess document', 'error');
       logError('DocumentView.handleReprocess', err);
@@ -197,10 +208,13 @@ const DocumentView = () => {
                 <span> • Updated: {formatDateTime(document.updated_at)}</span>
               )}
             </span>
-            {document.processing_status === 'pending' && (
-              <span className="processing-badge processing-badge--pending" aria-label="Processing pending">Pending</span>
+            {processingStatus === 'pending' && (
+              <span className="processing-badge processing-badge--pending" aria-label="Processing pending">
+                {isPolling ? 'Processing' : 'Pending'}
+                {queuePosition && ` (#${queuePosition})`}
+              </span>
             )}
-            {document.processing_status === 'failed' && (
+            {processingStatus === 'failed' && (
               <button
                 className="processing-badge processing-badge--failed processing-badge--clickable"
                 aria-label="Processing failed. Click to retry."
@@ -208,6 +222,11 @@ const DocumentView = () => {
               >
                 Failed — Retry
               </button>
+            )}
+            {processingStatus === 'completed' && liveStatus === 'completed' && document.processing_status === 'pending' && (
+              <span className="processing-badge processing-badge--completed" aria-label="Processing completed">
+                Completed
+              </span>
             )}
           </div>
         </div>

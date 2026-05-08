@@ -136,6 +136,12 @@
   background-color: #f1b0b7;
 }
 
+.processing-badge--completed {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
 /* Search highlighting */
 .search-highlight {
   background-color: #fff3cd;

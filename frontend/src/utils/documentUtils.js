@@ -16,7 +16,8 @@ export const formatAuthor = (rawAuthor) => {
     }
   }
 
-  if (Array.isArray(author) && author.length > 0) {
+  if (Array.isArray(author)) {
+    if (author.length === 0) return '';
     author = author[0];
   }
 
