@@ -5,7 +5,24 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-08) - Sprint 5: Embedding Queue + Status API
+## 현재 진행 상황 (2026-05-08) - Sprint 6: Queue Position + Reprocess Button
+
+### Sprint 6: Queue Position, Config Simplification, Reprocess Button (2026-05-08)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| queue_position 계산 | routes/documents.rs | pending 상태 시 큐 순서 기반 위치 반환 |
+| ..Default::default() | routes/documents.rs | EmbeddingConfig 기본값 활용, import 정리 |
+| onReprocess prop | DocumentCard.js | Failed 상태 시 클릭 가능 retry 버튼 |
+| clickable badge CSS | DocumentCard.css | hover 효과 추가 |
+| 3 unit tests | routes/documents.rs | position, completed, roundtrip |
+
+테스트: 1,638 pass / 0 fail / 1 ignored / 0 clippy warnings
+커밋: `66d5b549`
+
+---
+
+## 이전 진행 상황 (2026-05-08) - Sprint 5: Embedding Queue + Status API
 
 ### Sprint 5: Embedding Queue Wiring + Status/Reprocess Endpoints (2026-05-08)
 

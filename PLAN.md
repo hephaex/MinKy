@@ -240,12 +240,20 @@
 - [x] 5 unit tests, clippy clean
 - Commit: `1617d8df`
 
-## Sprint 6 로드맵
+## Sprint 6 완료 (2026-05-08)
 
-- P1: `queue_position` 실제 계산 (현재 항상 None)
-- P2: `EmbeddingConfig` 값을 AppState config에서 로드 (하드코딩 제거)
-- P3: 통합 테스트 — status/reprocess 엔드포인트 실제 라우터 테스트
-- P4: Frontend DocumentCard에 Failed badge 클릭 → reprocess 호출
+- [x] queue_position 실제 계산 (priority DESC, created_at ASC 기준)
+- [x] EmbeddingConfig ..Default::default() 활용, EmbeddingModel import 제거
+- [x] 3 unit tests (queue position, completed status, variant roundtrip)
+- [x] Frontend Failed badge → clickable retry button (onReprocess prop)
+- Commit: `66d5b549`
+
+## Sprint 7 로드맵
+
+- P1: DocumentCard onReprocess를 실제 API 호출과 연결 (DocumentList에서 reprocess 핸들러 구현)
+- P2: Reprocess 후 문서 상태 자동 갱신 (polling 또는 re-fetch)
+- P3: get_document_status 통합 테스트 (TestApp + mock DB)
+- P4: Upload 엔드포인트 통합 테스트 강화 (실제 pipeline mock)
 
 ## Blocked / Waiting
 
