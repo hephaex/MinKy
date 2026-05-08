@@ -106,6 +106,16 @@ export const documentService = {
     const response = await api.get('/documents/tree', { params: { mode } });
     return response.data;
   },
+
+  getDocumentStatus: async (id) => {
+    const response = await api.get(`/documents/${id}/status`);
+    return response.data;
+  },
+
+  reprocessDocument: async (id) => {
+    const response = await api.post(`/documents/${id}/reprocess`);
+    return response.data;
+  },
 };
 
 export const authService = {

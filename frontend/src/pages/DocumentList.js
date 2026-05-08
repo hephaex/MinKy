@@ -153,6 +153,15 @@ const DocumentList = () => {
     }
   };
 
+  const handleReprocess = async (documentId) => {
+    try {
+      await api.post(`/documents/${documentId}/reprocess`);
+      fetchDocuments(currentPage, searchQuery, selectedCategory, sortBy, selectedTags);
+    } catch (err) {
+      logError('DocumentList.handleReprocess', err);
+    }
+  };
+
   const handleUploadError = (error) => {
     setUploadStatus({
       type: 'error',
@@ -358,6 +367,7 @@ const DocumentList = () => {
                   searchQuery={searchQuery}
                   showPreview={true}
                   formatDate={formatDate}
+                  onReprocess={handleReprocess}
                 />
               )
             )}
