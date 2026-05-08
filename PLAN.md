@@ -282,12 +282,19 @@
 - [x] Review fixes: polling race condition, response unwrap, ARIA, type guard
 - Commits: `29b0a59a`, `83903ae0`
 
-## Sprint 11 로드맵
+## Sprint 11 완료 (2026-05-08) — DocumentCard Badges + List View Reprocess
 
-- P1: DocumentCard에 processing status indicator 통합 (useDocumentStatus 활용)
-- P2: Upload 후 자동 status polling 시작 (DocumentList에서 새 문서 추적)
-- P3: useDocumentStatus unit tests (polling lifecycle, cleanup)
-- P4: DocumentList 리스트 뷰에 reprocess 지원
+- [x] DocumentCard: completed "Embedded" green badge 추가
+- [x] DocumentList list view: pending/completed/failed badge + clickable retry button
+- [x] Event propagation: e.preventDefault + e.stopPropagation (Link 내부 button)
+- Commit: `977d61aa`
+
+## Sprint 12 로드맵
+
+- P1: deprecated defaultProps mass migration (17 components)
+- P2: useDocumentStatus unit tests (polling lifecycle, cleanup, race condition)
+- P3: Toast portal rendering (document.body에 Portal로 이동)
+- P4: Upload 후 자동 status polling 시작 (DocumentList에서 새 문서 추적)
 
 ## Blocked / Waiting
 

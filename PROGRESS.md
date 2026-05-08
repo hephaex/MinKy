@@ -5,7 +5,22 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-08) - Sprint 10: Status Polling + Tests
+## 현재 진행 상황 (2026-05-08) - Sprint 11: DocumentCard Badges + List View
+
+### Sprint 11: DocumentCard Badges + List View Reprocess (2026-05-08)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| Completed badge | components/DocumentCard.js | processing_status === 'completed' → green "Embedded" badge |
+| List view badges | pages/DocumentList.js | pending/completed/failed badge in list view rows |
+| List view retry | pages/DocumentList.js | failed → clickable "Failed — Retry" button with event propagation |
+
+테스트: 1,643 Rust + 16 frontend pass / 0 fail
+커밋: `977d61aa`
+
+---
+
+## 이전 진행 상황 (2026-05-08) - Sprint 10: Status Polling + Tests
 
 ### Sprint 10: Document Status Polling + formatAuthor Tests (2026-05-08)
 
