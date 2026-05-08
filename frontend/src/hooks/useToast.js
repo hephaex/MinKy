@@ -1,8 +1,10 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 const useToast = (duration = 3000) => {
   const [toast, setToast] = useState(null);
   const timerRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   const showToast = useCallback((message, type = 'success') => {
     if (timerRef.current) {

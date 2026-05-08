@@ -7,6 +7,7 @@ import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import DOMPurify from 'dompurify';
 import { logError } from '../utils/logger';
 import { formatDateTime } from '../utils/dateUtils';
+import { formatAuthor } from '../utils/documentUtils';
 import {
   extractFrontmatter,
   processInternalLinks,
@@ -119,49 +120,12 @@ const DocumentView = () => {
     try {
       await api.post(`/documents/${id}/reprocess`);
       showToast('Document queued for reprocessing', 'success');
-      const response = await documentService.getDocument(id);
-      setDocument(response.data);
+      const data = await documentService.getDocument(id);
+      setDocument(data);
     } catch (err) {
       showToast('Failed to reprocess document', 'error');
       logError('DocumentView.handleReprocess', err);
     }
-  };
-
-  const formatAuthor = (author) => {
-    if (!author) return '';
-
-    // Handle case where author might be a JSON string/array
-    if (typeof author === 'string') {
-      try {
-        // Try to parse as JSON in case it's serialized
-        const parsed = JSON.parse(author);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          author = parsed[0];
-        } else if (typeof parsed === 'string') {
-          author = parsed;
-        }
-      } catch (e) {
-        // If parsing fails, use the string as-is
-      }
-    }
-
-    // Handle array case
-    if (Array.isArray(author) && author.length > 0) {
-      author = author[0];
-    }
-
-    // Clean up the author string
-    if (typeof author === 'string') {
-      author = author.trim();
-      // Remove Obsidian-style wiki links: [[name]] -> name
-      if (author.startsWith('[[') && author.endsWith(']]')) {
-        author = author.slice(2, -2);
-      }
-      // Remove quotes
-      author = author.replace(/^["']|["']$/g, '');
-    }
-
-    return author;
   };
 
   if (loading) {
@@ -234,12 +198,12 @@ const DocumentView = () => {
               )}
             </span>
             {document.processing_status === 'pending' && (
-              <span className="processing-badge processing-badge--pending" role="status">Pending</span>
+              <span className="processing-badge processing-badge--pending" aria-label="Processing pending">Pending</span>
             )}
             {document.processing_status === 'failed' && (
               <button
                 className="processing-badge processing-badge--failed processing-badge--clickable"
-                role="status"
+                aria-label="Processing failed. Click to retry."
                 onClick={handleReprocess}
               >
                 Failed — Retry

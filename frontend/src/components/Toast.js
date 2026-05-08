@@ -17,14 +17,9 @@ const Toast = ({ message, type = 'success', onDismiss }) => {
 };
 
 Toast.propTypes = {
-  message: PropTypes.string.isRequired,
+  message: PropTypes.string,
   type: PropTypes.oneOf(['success', 'error', 'info']),
   onDismiss: PropTypes.func,
-};
-
-Toast.defaultProps = {
-  type: 'success',
-  onDismiss: null,
 };
 
 export default Toast;
