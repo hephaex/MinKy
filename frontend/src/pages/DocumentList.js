@@ -5,6 +5,8 @@ import SearchBar from '../components/SearchBar';
 import Pagination from '../components/Pagination';
 import FileUpload from '../components/FileUpload';
 import DocumentCard from '../components/DocumentCard';
+import Toast from '../components/Toast';
+import useToast from '../hooks/useToast';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import { logError } from '../utils/logger';
@@ -42,6 +44,8 @@ const DocumentList = () => {
     return localStorage.getItem('documentViewMode') || VIEW_MODES.GRID;
   });
   const navigate = useNavigate();
+
+  const { toast, showToast, dismissToast } = useToast();
 
   // Use custom hooks for categories and tags
   const { categories } = useCategories();
@@ -156,8 +160,10 @@ const DocumentList = () => {
   const handleReprocess = async (documentId) => {
     try {
       await api.post(`/documents/${documentId}/reprocess`);
+      showToast('Document queued for reprocessing', 'success');
       fetchDocuments(currentPage, searchQuery, selectedCategory, sortBy, selectedTags);
     } catch (err) {
+      showToast('Failed to reprocess document', 'error');
       logError('DocumentList.handleReprocess', err);
     }
   };
@@ -379,6 +385,9 @@ const DocumentList = () => {
             onPageChange={handlePageChange}
           />
         </>
+      )}
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />
       )}
     </div>
   );

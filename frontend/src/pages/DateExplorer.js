@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import DocumentCard from '../components/DocumentCard';
+import Toast from '../components/Toast';
+import useToast from '../hooks/useToast';
 import { logError } from '../utils/logger';
 import { formatRelativeTime } from '../utils/dateUtils';
 import './DateExplorer.css';
@@ -13,6 +15,7 @@ const DateExplorer = () => {
   const [activeAction, setActiveAction] = useState('recent');
   const [syncStatus, setSyncStatus] = useState(null);
   const navigate = useNavigate();
+  const { toast, showToast, dismissToast } = useToast();
 
   useEffect(() => {
     loadRecentDocuments();
@@ -30,6 +33,17 @@ const DateExplorer = () => {
       setError(error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReprocess = async (documentId) => {
+    try {
+      await api.post(`/documents/${documentId}/reprocess`);
+      showToast('Document queued for reprocessing', 'success');
+      loadRecentDocuments();
+    } catch (err) {
+      showToast('Failed to reprocess document', 'error');
+      logError('DateExplorer.handleReprocess', err);
     }
   };
 
@@ -198,6 +212,10 @@ const DateExplorer = () => {
         </div>
       </div>
 
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />
+      )}
+
       {/* Sync Status Messages */}
       {syncStatus && (
         <div className={`sync-status ${syncStatus.type}`}>
@@ -238,12 +256,13 @@ const DateExplorer = () => {
                 key={doc.id}
                 document={{
                   ...doc,
-                  updated_at: doc.created_at, // Use created_at for recent documents
+                  updated_at: doc.created_at,
                   title: doc.title || '제목 없음',
                 }}
                 formatDate={(dateString) =>
                   `${formatRelativeTime(dateString, 'ko-KR')} • ${formatTime(dateString)}`
                 }
+                onReprocess={handleReprocess}
               />
             ))}
           </div>

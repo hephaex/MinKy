@@ -13,6 +13,9 @@ import {
   processHashtags,
 } from '../utils/obsidianRenderer';
 import api, { documentService } from '../services/api';
+import Toast from '../components/Toast';
+import useToast from '../hooks/useToast';
+import '../components/DocumentCard.css';
 import './DocumentView.css';
 
 const DocumentView = () => {
@@ -26,6 +29,7 @@ const DocumentView = () => {
   const [processedContent, setProcessedContent] = useState('');
   const [autoTaggingInProgress, setAutoTaggingInProgress] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState([]);
+  const { toast, showToast, dismissToast } = useToast();
 
   const generateAndApplyTags = async (documentData) => {
     try {
@@ -108,6 +112,18 @@ const DocumentView = () => {
         setError('Failed to delete document');
         logError('DocumentView.handleDelete', err);
       }
+    }
+  };
+
+  const handleReprocess = async () => {
+    try {
+      await api.post(`/documents/${id}/reprocess`);
+      showToast('Document queued for reprocessing', 'success');
+      const response = await documentService.getDocument(id);
+      setDocument(response.data);
+    } catch (err) {
+      showToast('Failed to reprocess document', 'error');
+      logError('DocumentView.handleReprocess', err);
     }
   };
 
@@ -217,6 +233,18 @@ const DocumentView = () => {
                 <span> • Updated: {formatDateTime(document.updated_at)}</span>
               )}
             </span>
+            {document.processing_status === 'pending' && (
+              <span className="processing-badge processing-badge--pending" role="status">Pending</span>
+            )}
+            {document.processing_status === 'failed' && (
+              <button
+                className="processing-badge processing-badge--failed processing-badge--clickable"
+                role="status"
+                onClick={handleReprocess}
+              >
+                Failed — Retry
+              </button>
+            )}
           </div>
         </div>
 
@@ -311,6 +339,9 @@ const DocumentView = () => {
           </div>
         )}
       </div>
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />
+      )}
     </div>
   );
 };
