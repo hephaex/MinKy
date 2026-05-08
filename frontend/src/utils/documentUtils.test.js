@@ -60,8 +60,8 @@ describe('formatAuthor', () => {
     expect(original).toBe('  [[Kim]]  ');
   });
 
-  test('returns non-string non-array as empty', () => {
-    expect(formatAuthor(42)).toBe(42);
+  test('returns empty string for non-string non-array', () => {
+    expect(formatAuthor(42)).toBe('');
   });
 
   test('handles JSON parse failure gracefully', () => {

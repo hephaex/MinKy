@@ -1,5 +1,6 @@
 export const formatAuthor = (rawAuthor) => {
   if (!rawAuthor) return '';
+  if (typeof rawAuthor !== 'string' && !Array.isArray(rawAuthor)) return '';
 
   let author = rawAuthor;
 

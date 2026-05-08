@@ -4,8 +4,8 @@ import { logError } from '../utils/logger';
 
 const POLL_INTERVAL = 5000;
 
-const useDocumentStatus = (documentId, initialStatus) => {
-  const [status, setStatus] = useState(initialStatus || null);
+const useDocumentStatus = (documentId) => {
+  const [status, setStatus] = useState(null);
   const [queuePosition, setQueuePosition] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [isPolling, setIsPolling] = useState(false);
@@ -49,15 +49,14 @@ const useDocumentStatus = (documentId, initialStatus) => {
   }, [fetchStatus]);
 
   useEffect(() => {
+    stopPolling();
     mountedRef.current = true;
-    if (initialStatus === 'pending' && documentId) {
-      startPolling();
-    }
     return () => {
       mountedRef.current = false;
       stopPolling();
     };
-  }, [documentId, initialStatus, startPolling, stopPolling]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId]);
 
   return { status, queuePosition, errorMessage, isPolling, startPolling, stopPolling };
 };

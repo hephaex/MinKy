@@ -38,7 +38,7 @@ const DocumentView = () => {
     errorMessage: statusError,
     isPolling,
     startPolling,
-  } = useDocumentStatus(id, document?.processing_status);
+  } = useDocumentStatus(id);
 
   const processingStatus = liveStatus || document?.processing_status;
 
@@ -101,6 +101,10 @@ const DocumentView = () => {
           await generateAndApplyTags(data);
         }
 
+        if (data.processing_status === 'pending') {
+          startPolling();
+        }
+
         setError(null);
       } catch (err) {
         setError('Failed to fetch document');
@@ -113,6 +117,10 @@ const DocumentView = () => {
     fetchDocument();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    if (statusError) showToast(statusError, 'error');
+  }, [statusError, showToast]);
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this document?')) {
@@ -128,7 +136,7 @@ const DocumentView = () => {
 
   const handleReprocess = async () => {
     try {
-      await api.post(`/documents/${id}/reprocess`);
+      await documentService.reprocessDocument(id);
       showToast('Document queued for reprocessing', 'success');
       const data = await documentService.getDocument(id);
       setDocument(data);
@@ -211,7 +219,7 @@ const DocumentView = () => {
             {processingStatus === 'pending' && (
               <span className="processing-badge processing-badge--pending" aria-label="Processing pending">
                 {isPolling ? 'Processing' : 'Pending'}
-                {queuePosition && ` (#${queuePosition})`}
+                {queuePosition != null && ` (#${queuePosition})`}
               </span>
             )}
             {processingStatus === 'failed' && (
@@ -223,7 +231,7 @@ const DocumentView = () => {
                 Failed — Retry
               </button>
             )}
-            {processingStatus === 'completed' && liveStatus === 'completed' && document.processing_status === 'pending' && (
+            {processingStatus === 'completed' && (
               <span className="processing-badge processing-badge--completed" aria-label="Processing completed">
                 Completed
               </span>
