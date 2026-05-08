@@ -365,6 +365,25 @@ const DocumentList = () => {
                       )}
                     </div>
                   )}
+                  {doc.processing_status === 'pending' && (
+                    <span className="processing-badge processing-badge--pending" aria-label="Processing pending">Pending</span>
+                  )}
+                  {doc.processing_status === 'completed' && (
+                    <span className="processing-badge processing-badge--completed" aria-label="Processing completed">Embedded</span>
+                  )}
+                  {doc.processing_status === 'failed' && (
+                    <button
+                      className="processing-badge processing-badge--failed processing-badge--clickable"
+                      aria-label="Processing failed. Click to retry."
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleReprocess(doc.id);
+                      }}
+                    >
+                      Failed — Retry
+                    </button>
+                  )}
                 </Link>
               ) : (
                 <DocumentCard

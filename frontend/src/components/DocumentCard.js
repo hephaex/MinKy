@@ -66,6 +66,12 @@ const DocumentCard = ({ document, searchQuery = '', showPreview = false, formatD
               )}
             </>
           )}
+          {document.processing_status === 'completed' && (
+            <>
+              <span className="meta-separator">•</span>
+              <span className="processing-badge processing-badge--completed" aria-label="Processing completed">Embedded</span>
+            </>
+          )}
         </div>
 
         {/* Tags display with overflow indicator */}
