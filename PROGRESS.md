@@ -5,7 +5,21 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-08) - Sprint 11: DocumentCard Badges + List View
+## 현재 진행 상황 (2026-05-08) - Sprint 12: defaultProps Migration + Polling Tests
+
+### Sprint 12: defaultProps Migration + useDocumentStatus Tests (2026-05-08)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| defaultProps 제거 | 17 component files | ES default params로 전환, PropTypes 유지 |
+| useDocumentStatus tests | hooks/useDocumentStatus.test.js (신규) | 23 tests: lifecycle, cleanup, race, errors |
+
+테스트: 1,643 Rust + 559 frontend pass / 0 fail
+커밋: `736c3d97`
+
+---
+
+## 이전 진행 상황 (2026-05-08) - Sprint 11: DocumentCard Badges + List View
 
 ### Sprint 11: DocumentCard Badges + List View Reprocess (2026-05-08)
 

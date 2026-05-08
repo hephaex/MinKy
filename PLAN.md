@@ -289,12 +289,19 @@
 - [x] Event propagation: e.preventDefault + e.stopPropagation (Link 내부 button)
 - Commit: `977d61aa`
 
-## Sprint 12 로드맵
+## Sprint 12 완료 (2026-05-08) — defaultProps Migration + Polling Tests
 
-- P1: deprecated defaultProps mass migration (17 components)
-- P2: useDocumentStatus unit tests (polling lifecycle, cleanup, race condition)
-- P3: Toast portal rendering (document.body에 Portal로 이동)
-- P4: Upload 후 자동 status polling 시작 (DocumentList에서 새 문서 추적)
+- [x] defaultProps → ES default params (17 파일, 18 사용처)
+- [x] useDocumentStatus unit tests (23개, 8 describe blocks)
+- Net: 438 insertions, 113 deletions
+- Commit: `736c3d97`
+
+## Sprint 13 로드맵
+
+- P1: 서브디렉토리 defaultProps 마이그레이션 (15 파일: Chat/, admin/, clustering/ 등)
+- P2: Toast portal rendering (document.body에 Portal로 이동)
+- P3: Upload 후 자동 status polling 시작 (DocumentList에서 새 문서 추적)
+- P4: useDocumentStatus eslint-disable 제거 + empty string/processing status 테스트
 
 ## Blocked / Waiting
 
