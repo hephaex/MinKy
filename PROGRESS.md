@@ -5,7 +5,25 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-08) - Sprint 8: Toast Notifications + Processing Status
+## 현재 진행 상황 (2026-05-08) - Sprint 9: Review Debt Cleanup
+
+### Sprint 9: Review Debt Cleanup (2026-05-08)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| unmount cleanup | hooks/useToast.js | useEffect cleanup for timer leak |
+| response fix | pages/DocumentView.js | response.data → data (이중 언래핑 수정) |
+| ARIA fix | DocumentCard.js, DocumentView.js | role="status" → aria-label |
+| defaultProps 제거 | Toast.js, DocumentCard.js | ES default params로 전환 |
+| formatAuthor 추출 | utils/documentUtils.js (신규) | 순수 함수, 2곳 중복 제거 |
+
+테스트: 1,643 pass / 0 fail / 1 ignored / 0 clippy warnings
+커밋: `ce857752`
+Net: -51 lines (코드 감소)
+
+---
+
+## 이전 진행 상황 (2026-05-08) - Sprint 8: Toast Notifications + Processing Status
 
 ### Sprint 8: Toast Notifications + Processing Status Display (2026-05-08)
 

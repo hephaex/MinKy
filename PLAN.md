@@ -263,12 +263,23 @@
 - [x] DateExplorer: onReprocess prop 전달 + toast
 - Commit: `7ed594a4`
 
-## Sprint 9 로드맵
+## Sprint 9 완료 (2026-05-08) — Review Debt Cleanup
 
-- P1: getDocumentStatus polling (pending → completed 자동 전환, 5s interval)
-- P2: DocumentCard에 processing status indicator 통합
+- [x] useToast unmount cleanup (memory leak fix)
+- [x] DocumentView handleReprocess response.data double-unwrap fix
+- [x] ARIA role="status" → aria-label (DocumentCard + DocumentView)
+- [x] Remove deprecated defaultProps (Toast + DocumentCard)
+- [x] Extract formatAuthor to utils/documentUtils.js (immutable, DRY)
+- [x] Toast message prop: remove isRequired, keep null guard
+- Net: -51 lines
+- Commit: `ce857752`
+
+## Sprint 10 로드맵
+
+- P1: useDocumentStatus hook — polling (pending → completed 자동 전환, 5s interval)
+- P2: DocumentCard에 processing status indicator 통합 (useDocumentStatus 활용)
 - P3: Upload 후 자동 status polling 시작
-- P4: Batch reprocess 기능 (DocumentList에서 다중 선택)
+- P4: documentUtils.js 단위 테스트 (formatAuthor edge cases)
 
 ## Blocked / Waiting
 
