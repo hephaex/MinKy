@@ -255,12 +255,20 @@
 - [x] document_routes_test.rs — 5개 라우트 shape 통합 테스트
 - Commit: `05ca1c2a`
 
-## Sprint 8 로드맵
+## Sprint 8 완료 (2026-05-08)
 
-- P1: Reprocess 중 toast/loading 피드백 (UX 개선)
-- P2: DocumentDetail 페이지에 processing status 표시 + reprocess 버튼
-- P3: DateExplorer에 onReprocess 전달
-- P4: getDocumentStatus 활용한 status polling (pending → completed 자동 전환)
+- [x] useToast hook + Toast component (auto-dismiss, success/error/info)
+- [x] DocumentList: toast 피드백 in handleReprocess
+- [x] DocumentView: pending/failed badge + reprocess button + toast
+- [x] DateExplorer: onReprocess prop 전달 + toast
+- Commit: `7ed594a4`
+
+## Sprint 9 로드맵
+
+- P1: getDocumentStatus polling (pending → completed 자동 전환, 5s interval)
+- P2: DocumentCard에 processing status indicator 통합
+- P3: Upload 후 자동 status polling 시작
+- P4: Batch reprocess 기능 (DocumentList에서 다중 선택)
 
 ## Blocked / Waiting
 

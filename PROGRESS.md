@@ -5,7 +5,24 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-08) - Sprint 7: Reprocess Wiring + Route Tests
+## 현재 진행 상황 (2026-05-08) - Sprint 8: Toast Notifications + Processing Status
+
+### Sprint 8: Toast Notifications + Processing Status Display (2026-05-08)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| useToast hook | hooks/useToast.js | auto-dismiss timer, showToast/dismissToast |
+| Toast component | components/Toast.js/css | fixed bottom-right, slide-in, 3 variants |
+| DocumentList toast | pages/DocumentList.js | handleReprocess toast 피드백 |
+| DocumentView status | pages/DocumentView.js | pending/failed badge + reprocess + toast |
+| DateExplorer reprocess | pages/DateExplorer.js | onReprocess prop + toast |
+
+테스트: 1,643 pass / 0 fail / 1 ignored / 0 clippy warnings
+커밋: `7ed594a4`
+
+---
+
+## 이전 진행 상황 (2026-05-08) - Sprint 7: Reprocess Wiring + Route Tests
 
 ### Sprint 7: Reprocess API Wiring + Route Integration Tests (2026-05-08)
 
