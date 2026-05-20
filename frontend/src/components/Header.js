@@ -12,7 +12,7 @@ const Header = () => {
           <h1>{t('common.app_name')}</h1>
           <span>{t('common.app_description')}</span>
         </Link>
-        <nav className="main-nav">
+        <nav className="main-nav" aria-label="Main navigation">
           <Link to="/" className="nav-link">
             {t('navigation.documents')}
           </Link>

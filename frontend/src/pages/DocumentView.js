@@ -135,13 +135,14 @@ const DocumentView = () => {
   };
 
   const handleReprocess = async () => {
+    const previousStatus = document?.processing_status;
+    setDocument((prev) => prev ? { ...prev, processing_status: 'pending' } : prev);
     try {
       await documentService.reprocessDocument(id);
       showToast('Document queued for reprocessing', 'success');
-      const data = await documentService.getDocument(id);
-      setDocument(data);
       startPolling();
     } catch (err) {
+      setDocument((prev) => prev ? { ...prev, processing_status: previousStatus } : prev);
       showToast('Failed to reprocess document', 'error');
       logError('DocumentView.handleReprocess', err);
     }

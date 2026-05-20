@@ -25,7 +25,7 @@ describe('SearchBar', () => {
 
     const input = screen.getByPlaceholderText('Search documents...');
     await user.type(input, '  hello world  ');
-    await user.click(screen.getByRole('button', { name: /🔍/i }));
+    await user.click(screen.getByRole('button', { name: /submit search/i }));
 
     expect(mockOnSearch).toHaveBeenCalledWith('hello world');
   });

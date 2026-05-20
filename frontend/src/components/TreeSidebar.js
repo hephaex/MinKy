@@ -140,6 +140,7 @@ const TreeSidebar = ({ isVisible = true, onToggle = () => {} }) => {
             placeholder="문서 검색..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search documents in tree"
           />
         </div>
 

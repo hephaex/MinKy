@@ -24,6 +24,7 @@ const SearchBar = ({ onSearch, initialValue = '' }) => {
           placeholder="Search documents..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search documents"
         />
         {query && (
           <button
@@ -35,7 +36,7 @@ const SearchBar = ({ onSearch, initialValue = '' }) => {
             ×
           </button>
         )}
-        <button type="submit" className="search-button">
+        <button type="submit" className="search-button" aria-label="Submit search">
           🔍
         </button>
       </div>
