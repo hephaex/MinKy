@@ -16,6 +16,7 @@ use crate::models::{
 use pgvector::Vector;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 /// Configuration for the embedding service
@@ -26,6 +27,10 @@ pub struct EmbeddingConfig {
     pub default_model: EmbeddingModel,
     pub chunk_size: usize,
     pub chunk_overlap: usize,
+    /// When `true`, the service initializes the fastembed-rs local model
+    /// (downloaded on first run, then cached). Required for
+    /// [`EmbeddingModel::NomicEmbedTextV15`].
+    pub local_embedding_enabled: bool,
 }
 
 impl Default for EmbeddingConfig {
@@ -36,6 +41,7 @@ impl Default for EmbeddingConfig {
             default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
             chunk_size: 512,
             chunk_overlap: 50,
+            local_embedding_enabled: false,
         }
     }
 }
@@ -45,24 +51,79 @@ pub struct EmbeddingService {
     pool: PgPool,
     config: EmbeddingConfig,
     http_client: reqwest::Client,
+    /// Lazily-initialized local embedding model. `None` when the local
+    /// path was not requested, populated by [`EmbeddingService::new_with_local`].
+    ///
+    /// `fastembed::TextEmbedding::embed` requires `&mut self` (ONNX Runtime
+    /// session reuse), so we wrap it in a blocking `std::sync::Mutex`. The
+    /// lock is only held inside `tokio::task::spawn_blocking`, never across
+    /// an `.await`, which keeps the async runtime free.
+    local_model: Option<Arc<Mutex<fastembed::TextEmbedding>>>,
 }
 
 impl EmbeddingService {
-    /// Create a new embedding service
+    /// Create a new embedding service (without the local fastembed model).
+    ///
+    /// Use [`EmbeddingService::new_with_local`] to enable the local
+    /// `nomic-embed-text-v1.5` model.
     pub fn new(pool: PgPool, config: EmbeddingConfig) -> Self {
         Self {
             pool,
             config,
             http_client: reqwest::Client::new(),
+            local_model: None,
         }
     }
 
-    /// Generate embedding for text using OpenAI API
+    /// Create a new embedding service, optionally initializing the local
+    /// fastembed-rs model when `config.local_embedding_enabled` is `true`.
+    ///
+    /// The first call triggers a ~270 MB model download from HuggingFace
+    /// (cached for subsequent invocations). Initialization is offloaded to
+    /// `tokio::task::spawn_blocking` since fastembed performs synchronous
+    /// disk and ONNX Runtime setup.
+    pub async fn new_with_local(pool: PgPool, config: EmbeddingConfig) -> Result<Self> {
+        let local_model = if config.local_embedding_enabled {
+            let model = tokio::task::spawn_blocking(|| {
+                fastembed::TextEmbedding::try_new(fastembed::InitOptions::new(
+                    fastembed::EmbeddingModel::NomicEmbedTextV15,
+                ))
+            })
+            .await
+            .map_err(|e| {
+                AppError::Configuration(format!(
+                    "Failed to spawn fastembed initialization task: {}",
+                    e
+                ))
+            })?
+            .map_err(|e| {
+                AppError::Configuration(format!("Failed to initialize fastembed model: {}", e))
+            })?;
+            Some(Arc::new(Mutex::new(model)))
+        } else {
+            None
+        };
+
+        Ok(Self {
+            pool,
+            config,
+            http_client: reqwest::Client::new(),
+            local_model,
+        })
+    }
+
+    /// Generate embedding for text. Dispatches to the local fastembed model
+    /// for [`EmbeddingModel::NomicEmbedTextV15`], otherwise calls the
+    /// configured remote provider (OpenAI today).
     pub async fn generate_embedding(
         &self,
         text: &str,
         model: EmbeddingModel,
     ) -> Result<Vec<f32>> {
+        if model.is_local() {
+            return self.generate_local_embedding(text).await;
+        }
+
         let api_key = self
             .config
             .openai_api_key
@@ -102,6 +163,42 @@ impl EmbeddingService {
             .first()
             .map(|d| d.embedding.clone())
             .ok_or_else(|| AppError::ExternalService("No embedding returned".into()))
+    }
+
+    /// Generate an embedding using the locally-loaded fastembed model.
+    ///
+    /// Returns [`AppError::Configuration`] when the service was built without
+    /// `local_embedding_enabled = true`.
+    async fn generate_local_embedding(&self, text: &str) -> Result<Vec<f32>> {
+        let local_model = self.local_model.as_ref().ok_or_else(|| {
+            AppError::Configuration(
+                "Local embedding model not initialized; build the service with \
+                 EmbeddingService::new_with_local and local_embedding_enabled = true"
+                    .into(),
+            )
+        })?;
+
+        let model = Arc::clone(local_model);
+        let text_owned = text.to_string();
+
+        let mut embeddings = tokio::task::spawn_blocking(move || {
+            let mut guard = model.lock().map_err(|e| {
+                anyhow::anyhow!("fastembed mutex poisoned: {}", e)
+            })?;
+            guard
+                .embed(vec![text_owned], None)
+                .map_err(|e| anyhow::anyhow!("fastembed inference error: {}", e))
+        })
+        .await
+        .map_err(|e| AppError::ExternalService(format!("fastembed spawn_blocking error: {}", e)))?
+        .map_err(|e| AppError::ExternalService(e.to_string()))?;
+
+        if embeddings.is_empty() {
+            return Err(AppError::ExternalService(
+                "fastembed returned no embeddings".into(),
+            ));
+        }
+        Ok(embeddings.remove(0))
     }
 
     /// Generate embeddings for multiple texts (batch)
@@ -543,6 +640,32 @@ struct OpenAIEmbeddingData {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_nomic_embed_text_v1_5_dimension() {
+        assert_eq!(EmbeddingModel::NomicEmbedTextV15.dimension(), 768);
+    }
+
+    #[test]
+    fn test_embedding_config_local_enabled_default_false() {
+        let config = EmbeddingConfig::default();
+        assert!(!config.local_embedding_enabled);
+    }
+
+    #[test]
+    fn test_embedding_model_nomic_api_id() {
+        assert_eq!(
+            EmbeddingModel::NomicEmbedTextV15.api_model_id(),
+            "nomic-embed-text-v1.5"
+        );
+    }
+
+    #[test]
+    fn test_embedding_model_nomic_is_local() {
+        assert!(EmbeddingModel::NomicEmbedTextV15.is_local());
+        assert!(!EmbeddingModel::OpenaiTextEmbedding3Small.is_local());
+        assert!(!EmbeddingModel::VoyageLarge2.is_local());
+    }
 
     #[test]
     fn test_chunk_text_basic() {

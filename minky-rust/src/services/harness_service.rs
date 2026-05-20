@@ -1008,6 +1008,7 @@ mod tests {
             slack_redirect_uri: None,
             slack_signing_secret: None,
             cors_allowed_origins: "http://localhost:3000".to_string(),
+            local_embedding_enabled: false,
         };
         HarnessService::new(pool, config)
     }

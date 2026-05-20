@@ -88,6 +88,10 @@ syntect = "5"
 # PDF Generation (via headless Chrome)
 headless_chrome = "1"
 
+# Local Embedding (fastembed-rs with ONNX Runtime)
+# Uses native TLS for macOS compatibility; downloads model from HuggingFace on first init.
+fastembed = { version = "5", default-features = false, features = ["hf-hub-native-tls", "ort-download-binaries-native-tls"] }
+
 [dev-dependencies]
 tokio-test = "0.4"
 tower = { version = "0.5", features = ["util"] }

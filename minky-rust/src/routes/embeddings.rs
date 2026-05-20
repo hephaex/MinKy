@@ -48,6 +48,7 @@ fn build_service(state: &AppState) -> EmbeddingService {
         default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
         chunk_size: 512,
         chunk_overlap: 50,
+        local_embedding_enabled: state.config.local_embedding_enabled,
     };
 
     EmbeddingService::new(state.db.clone(), config)

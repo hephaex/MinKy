@@ -27,6 +27,11 @@ pub enum EmbeddingModel {
     #[serde(rename = "voyage_code_2")]
     #[sqlx(rename = "voyage_code_2")]
     VoyageCode2,
+    /// Local model served by fastembed-rs (no external API required).
+    /// Backed by `nomic-ai/nomic-embed-text-v1.5`, 768 dimensions.
+    #[serde(rename = "nomic_embed_text_v1_5")]
+    #[sqlx(rename = "nomic_embed_text_v1_5")]
+    NomicEmbedTextV15,
 }
 
 
@@ -38,6 +43,7 @@ impl EmbeddingModel {
             Self::OpenaiTextEmbedding3Large => 3072,
             Self::VoyageLarge2 => 1536,
             Self::VoyageCode2 => 1536,
+            Self::NomicEmbedTextV15 => 768,
         }
     }
 
@@ -48,7 +54,13 @@ impl EmbeddingModel {
             Self::OpenaiTextEmbedding3Large => "text-embedding-3-large",
             Self::VoyageLarge2 => "voyage-large-2",
             Self::VoyageCode2 => "voyage-code-2",
+            Self::NomicEmbedTextV15 => "nomic-embed-text-v1.5",
         }
+    }
+
+    /// True when the embedding is computed locally (no outbound API call).
+    pub fn is_local(&self) -> bool {
+        matches!(self, Self::NomicEmbedTextV15)
     }
 }
 

@@ -191,6 +191,7 @@ mod tests {
             slack_redirect_uri: None,
             slack_signing_secret: None,
             cors_allowed_origins: "http://localhost:3000".to_string(),
+            local_embedding_enabled: false,
         }
     }
 
@@ -308,6 +309,7 @@ mod tests {
             slack_redirect_uri: None,
             slack_signing_secret: None,
             cors_allowed_origins: "http://localhost:3000".to_string(),
+            local_embedding_enabled: false,
         };
         let other_svc = AuthService::new(other_pool, other_config);
 
@@ -356,6 +358,7 @@ mod tests {
             slack_redirect_uri: None,
             slack_signing_secret: None,
             cors_allowed_origins: "http://localhost:3000".to_string(),
+            local_embedding_enabled: false,
         };
         let svc = AuthService::new(pool, config);
 

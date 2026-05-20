@@ -282,6 +282,7 @@ async fn ask_stream(
             default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
             chunk_size: 512,
             chunk_overlap: 50,
+            local_embedding_enabled: state.config.local_embedding_enabled,
         };
 
         let embedding_service = EmbeddingService::new(state.db.clone(), embedding_config);

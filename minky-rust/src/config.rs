@@ -63,6 +63,13 @@ pub struct Config {
     /// CORS allowed origins (comma-separated, e.g., `http://localhost:3000,https://minky.example.com`)
     #[serde(default = "default_cors_origins")]
     pub cors_allowed_origins: String,
+
+    /// Enable the locally-served fastembed-rs embedding model
+    /// (`nomic-embed-text-v1.5`, 768 dim). When `true`, the embedding service
+    /// downloads the model on first use and serves
+    /// [`crate::models::EmbeddingModel::NomicEmbedTextV15`] requests offline.
+    #[serde(default)]
+    pub local_embedding_enabled: bool,
 }
 
 fn default_cors_origins() -> String {
@@ -149,6 +156,7 @@ mod tests {
             slack_redirect_uri: None,
             slack_signing_secret: None,
             cors_allowed_origins: "http://localhost:3000".to_string(),
+            local_embedding_enabled: false,
         }
     }
 
