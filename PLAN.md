@@ -304,29 +304,53 @@
 - Net: -66 lines
 - Commit: `6ea17153`
 
-## Sprint 14 — Critical Recovery (2026-05-21)
+## Sprint 14 완료 (2026-05-21) — Critical Recovery
 
-프로젝트 종합 리뷰 결과 발견된 긴급 이슈 해결.
+- [x] S14-01: Frontend node_modules 복구 (npm install + 테스트 561개 재검증)
+- [x] S14-02: Python 레거시 uncommitted changes stash 보존
+- [x] S14-03: .env.cas 확인 (gitignore/dockerignore로 안전)
+- Commit: `66068482`
 
-- [ ] S14-01: Frontend node_modules 복구 (npm install + 테스트 561개 재검증) [CRITICAL]
-- [ ] S14-02: Python 레거시 uncommitted changes 정리 (stash 또는 커밋) [HIGH]
-- [ ] S14-03: .env.cas 정리 (용도 확인 후 제거 또는 gitignore) [LOW]
+## Sprint 15 완료 (2026-05-21) — Toast Portal + Auto-Polling
 
-## Sprint 15 — Toast Portal + Auto-Polling
+- [x] S15-01: Toast를 createPortal로 document.body에 렌더링
+- [x] S15-02: DocumentList에서 업로드 후 자동 status polling (5초 간격, 완료 시 toast + 새로고침)
+- Commit: `fc6d1f3a`
 
-- [ ] S15-01: Toast portal rendering (createPortal → document.body, z-index 이슈 방지) [P1]
-- [ ] S15-02: Upload 후 자동 status polling 시작 (DocumentList에서 새 문서 추적) [P2]
+## Sprint 16 완료 (2026-05-21) — Optimistic Update + Accessibility
 
-## Sprint 16 — Optimistic Update + Accessibility
+- [x] S16-01: DocumentView reprocess를 optimistic update로 개선
+- [x] S16-02: 접근성 개선 (SearchBar, TreeSidebar, Header에 aria-label 추가)
+- Commit: `2a5c9d1b`
 
-- [ ] S16-01: DocumentView reprocess 후 자동 refetch 개선 (optimistic update) [P1]
-- [ ] S16-02: 프론트엔드 접근성 감사 (aria-label, keyboard navigation 점검) [P2]
+## Sprint 17 완료 (2026-05-21) — Legacy Cleanup
 
-## Sprint 17 — Legacy Cleanup
+- [x] S17-01: Python 레거시를 legacy/python-backend/로 아카이브
+- [x] S17-02: .history/ 2025년 파일 24개를 archive-2025/로 이동
+- [x] S17-03: Rust TODO 31건 분류 (아래 표 참조)
 
-- [ ] S17-01: Python 레거시 (app/) 아카이브 브랜치 분리 [P1]
-- [ ] S17-02: .history/ 2025년 파일 consolidation [P2]
-- [ ] S17-03: Rust TODO 31건 분류 및 이슈 등록 [P3]
+## Sprint 18 로드맵
+
+- P1: Obsidian Vault 감시 + 자동 인제스트 파이프라인
+- P2: 로컬 임베딩 모델 (fastembed-rs) 지원 추가
+- P3: 지식 그래프 자동 갱신 이벤트 파이프라인
+- P4: 팀 온보딩 모드 (중심성 기반 추천 문서)
+
+## Rust TODO 현황 (31건, 2026-05-21 감사)
+
+실제 운영에 영향을 주지 않는 stub/placeholder. 필요 시점에 구현.
+
+| 분류 | 건수 | 파일 | 비고 |
+|------|------|------|------|
+| ML stub (빈 구현체) | 5 | ml_service.rs | 클러스터링/토픽/트렌드 |
+| Admin stub | 6 | admin_service.rs | 백업/설정/업타임 |
+| Export/Import stub | 3 | export_service.rs | 큐 기반 작업 |
+| Slack DB 연동 미완 | 3 | slack.rs | extraction_jobs 테이블 |
+| OCR stub | 2 | ocr_service.rs, ocr.rs | job queue + 결과 저장 |
+| Sync stub | 2 | sync_service.rs | job queue + 스케줄 |
+| Security DB 연동 | 2 | security_service.rs | 규칙 로드/저장 |
+| Parsing 미완 | 2 | parsing.rs | HTML headings/links 추출 |
+| 기타 | 6 | hybrid, ws, websocket, template | 개별 항목 |
 
 ## Blocked / Waiting
 

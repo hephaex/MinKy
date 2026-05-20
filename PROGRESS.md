@@ -5,7 +5,51 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-08) - Sprint 13: defaultProps 완전 제거
+## 현재 진행 상황 (2026-05-21) - Sprint 14-17: 종합 리뷰 + Recovery + Feature + Cleanup
+
+### Sprint 14: Critical Recovery (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| node_modules 복구 | frontend/ | npm install, 561 tests pass |
+| 배포 URL 개선 | services/api.js, collaborationService.js | 상대경로 기본값 |
+| .dockerignore 강화 | .dockerignore | target/, node_modules/, build/ 추가 |
+| Python stash | app/ | legacy uncommitted changes 보존 |
+
+커밋: `66068482`
+
+### Sprint 15: Toast Portal + Auto-Polling (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| Toast Portal | components/Toast.js | createPortal → document.body 렌더링 |
+| Upload auto-polling | pages/DocumentList.js | 업로드 후 5초 간격 상태 체크, 완료 시 toast + 새로고침 |
+
+커밋: `fc6d1f3a`
+
+### Sprint 16: Optimistic Update + Accessibility (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| Optimistic reprocess | pages/DocumentView.js | 즉시 pending 표시, 실패 시 롤백 |
+| aria-label 추가 | SearchBar.js, TreeSidebar.js, Header.js | 스크린 리더 지원 |
+| 테스트 수정 | SearchBar.test.js | aria-label 변경에 맞게 수정 |
+
+커밋: `2a5c9d1b`
+
+### Sprint 17: Legacy Cleanup (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| Python 아카이브 | app/, tests/, migrations/ → legacy/python-backend/ | 레거시 코드 분리 |
+| 히스토리 정리 | .history/2025-* → .history/archive-2025/ | 24개 파일 아카이브 |
+| TODO 감사 | PLAN.md | Rust TODO 31건 분류표 작성 |
+
+테스트: 1,639 Rust + 561 frontend = 2,200 pass / 0 fail / 0 clippy warnings
+
+---
+
+## 이전 진행 상황 (2026-05-08) - Sprint 13: defaultProps 완전 제거
 
 ### Sprint 13: defaultProps Complete Elimination + Lint Fix (2026-05-08)
 
