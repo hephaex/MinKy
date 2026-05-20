@@ -53,3 +53,5 @@ nltk==3.8.1
 textblob==0.17.1
 numpy==1.26.2
 markitdown[all]==0.1.2
+
+redis>=4.0.0  # Required by Flask-Limiter and Flask-Caching

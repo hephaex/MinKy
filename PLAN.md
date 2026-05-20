@@ -304,16 +304,33 @@
 - Net: -66 lines
 - Commit: `6ea17153`
 
-## Sprint 14 로드맵
+## Sprint 14 — Critical Recovery (2026-05-21)
 
-- P1: Toast portal rendering (document.body에 Portal로 이동, z-index 이슈 방지)
-- P2: Upload 후 자동 status polling 시작 (DocumentList에서 새 문서 추적)
-- P3: DocumentView reprocess 후 자동 refetch 개선 (optimistic update)
-- P4: 프론트엔드 접근성 감사 (aria-label, keyboard navigation 점검)
+프로젝트 종합 리뷰 결과 발견된 긴급 이슈 해결.
+
+- [ ] S14-01: Frontend node_modules 복구 (npm install + 테스트 561개 재검증) [CRITICAL]
+- [ ] S14-02: Python 레거시 uncommitted changes 정리 (stash 또는 커밋) [HIGH]
+- [ ] S14-03: .env.cas 정리 (용도 확인 후 제거 또는 gitignore) [LOW]
+
+## Sprint 15 — Toast Portal + Auto-Polling
+
+- [ ] S15-01: Toast portal rendering (createPortal → document.body, z-index 이슈 방지) [P1]
+- [ ] S15-02: Upload 후 자동 status polling 시작 (DocumentList에서 새 문서 추적) [P2]
+
+## Sprint 16 — Optimistic Update + Accessibility
+
+- [ ] S16-01: DocumentView reprocess 후 자동 refetch 개선 (optimistic update) [P1]
+- [ ] S16-02: 프론트엔드 접근성 감사 (aria-label, keyboard navigation 점검) [P2]
+
+## Sprint 17 — Legacy Cleanup
+
+- [ ] S17-01: Python 레거시 (app/) 아카이브 브랜치 분리 [P1]
+- [ ] S17-02: .history/ 2025년 파일 consolidation [P2]
+- [ ] S17-03: Rust TODO 31건 분류 및 이슈 등록 [P3]
 
 ## Blocked / Waiting
 
-현재 없음
+- OpenAI API 크레딧 부족 → 벡터 임베딩/RAG E2E 검증 불가
 
 ---
 

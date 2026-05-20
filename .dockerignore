@@ -11,3 +11,6 @@ logs
 postgresdata
 backup
 .history
+minky-rust/target
+frontend/node_modules
+frontend/build
