@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import api, { documentService } from '../services/api';
 import SearchBar from '../components/SearchBar';
 import Pagination from '../components/Pagination';
 import FileUpload from '../components/FileUpload';
@@ -51,6 +51,55 @@ const DocumentList = () => {
   const { categories } = useCategories();
   const { tags: availableTags } = useTags({ popular: true });
   const [selectedTags, setSelectedTags] = useState([]);
+
+  // Auto-polling for recently uploaded documents
+  const [pendingDocIds, setPendingDocIds] = useState([]);
+  const pollTimerRef = useRef(null);
+  const mountedRef = useRef(true);
+
+  const pollPendingDocs = useCallback(async () => {
+    if (pendingDocIds.length === 0) return;
+    const remaining = [];
+    for (const docId of pendingDocIds) {
+      try {
+        const data = await documentService.getDocumentStatus(docId);
+        if (data.processing_status === 'pending' || data.processing_status === 'processing') {
+          remaining.push(docId);
+        } else {
+          showToast(
+            data.processing_status === 'completed'
+              ? 'Document embedding completed'
+              : 'Document processing failed',
+            data.processing_status === 'completed' ? 'success' : 'error'
+          );
+        }
+      } catch {
+        remaining.push(docId);
+      }
+    }
+    if (!mountedRef.current) return;
+    setPendingDocIds(remaining);
+    if (remaining.length === 0) {
+      fetchDocuments(currentPage, searchQuery, selectedCategory, sortBy, selectedTags);
+    }
+  }, [pendingDocIds, showToast, currentPage, searchQuery, selectedCategory, sortBy, selectedTags]);
+
+  useEffect(() => {
+    if (pendingDocIds.length > 0) {
+      pollTimerRef.current = setInterval(pollPendingDocs, 5000);
+    }
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [pendingDocIds, pollPendingDocs]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const fetchDocuments = async (
     page = 1,
@@ -130,29 +179,25 @@ const DocumentList = () => {
 
   const handleUploadSuccess = (response) => {
     if (response.count && response.count > 1) {
-      // Multiple files uploaded
       setUploadStatus({
         type: 'success',
         message: response.message,
       });
       setShowUpload(false);
-
-      // Refresh document list
       fetchDocuments(currentPage, searchQuery);
     } else {
-      // Single file uploaded
+      const docId = response.document?.id;
       setUploadStatus({
         type: 'success',
         message: `File uploaded successfully! Document "${response.document.title}" has been created.`,
       });
       setShowUpload(false);
-
-      // Refresh document list
       fetchDocuments(currentPage, searchQuery);
-
-      // Navigate to the new document after a brief delay
+      if (docId) {
+        setPendingDocIds((prev) => [...prev, docId]);
+      }
       setTimeout(() => {
-        navigate(`/documents/${response.document.id}`);
+        navigate(`/documents/${docId}`);
       }, 1500);
     }
   };

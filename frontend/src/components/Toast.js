@@ -1,10 +1,11 @@
+import { createPortal } from 'react-dom';
 import PropTypes from 'prop-types';
 import './Toast.css';
 
 const Toast = ({ message, type = 'success', onDismiss }) => {
   if (!message) return null;
 
-  return (
+  return createPortal(
     <div className={`toast toast--${type}`} role="alert">
       <span className="toast-message">{message}</span>
       {onDismiss && (
@@ -12,7 +13,8 @@ const Toast = ({ message, type = 'success', onDismiss }) => {
           &times;
         </button>
       )}
-    </div>
+    </div>,
+    document.body
   );
 };
 
