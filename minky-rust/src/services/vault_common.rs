@@ -347,4 +347,60 @@ mod tests {
         let files = collect_md_files(dir.path(), true, 100);
         assert_eq!(files.len(), 1, ".git/ entries must be skipped");
     }
+
+    // ── S25-01: missing edge case tests ───────────────────────────────────────
+
+    /// An empty directory contains no .md files — result must be empty, not panic.
+    #[test]
+    fn collect_empty_dir_returns_empty() {
+        let dir = make_temp_vault();
+        let files = collect_md_files(dir.path(), true, 100);
+        assert!(files.is_empty(), "empty dir must yield no files");
+    }
+
+    /// When the root path is itself a symlink, `collect_md_files` must return
+    /// empty rather than following the link (symlink-traversal guard).
+    #[cfg(unix)]
+    #[test]
+    fn collect_symlink_root_returns_empty() {
+        let target = make_temp_vault();
+        write_file(target.path(), "note.md", "# Note");
+
+        let link_dir = make_temp_vault();
+        let link_path = link_dir.path().join("vault_link");
+        std::os::unix::fs::symlink(target.path(), &link_path)
+            .expect("create symlink");
+
+        let files = collect_md_files(&link_path, true, 100);
+        assert!(
+            files.is_empty(),
+            "symlink root must be rejected by the symlink guard"
+        );
+    }
+
+    /// A real .md file that exists on disk must pass `is_safe_md_path`.
+    #[test]
+    fn is_safe_md_path_accepts_real_md_file() {
+        let dir = make_temp_vault();
+        let f = write_file(dir.path(), "note.md", "# Hello");
+        assert!(
+            is_safe_md_path(&f),
+            "a real .md file must be accepted by is_safe_md_path"
+        );
+    }
+
+    /// A symlink pointing at a .md file must be rejected by `is_safe_md_path`
+    /// because `symlink_metadata` sees a symlink, not a regular file.
+    #[cfg(unix)]
+    #[test]
+    fn is_safe_md_path_rejects_symlink_to_md() {
+        let dir = make_temp_vault();
+        let target = write_file(dir.path(), "real.md", "# Real");
+        let link = dir.path().join("link.md");
+        std::os::unix::fs::symlink(&target, &link).expect("create symlink");
+        assert!(
+            !is_safe_md_path(&link),
+            "symlink to .md must be rejected — symlink_metadata sees symlink type"
+        );
+    }
 }
