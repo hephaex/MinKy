@@ -8,13 +8,19 @@
 //! ## Position coordinate systems
 //!
 //! [`Heading::position`] and [`CodeBlock::start_position`] use **different**
-//! coordinate systems depending on the source format:
-//! - **HTML**: byte offset of the opening tag (`<h1>`, `<pre>`) within `raw.content`
-//! - **Markdown**: character offset into the rendered `plain_text` at the point
-//!   the element is emitted by pulldown-cmark
+//! coordinate systems depending on the source format and element type:
 //!
-//! Consumers that need a cross-format offset must re-derive position from the
-//! canonical `plain_text` field rather than relying on this value directly.
+//! - **HTML headings**: best-effort byte offset of the opening `<hN>` tag in
+//!   `raw.content`, derived by scanning the source string in DOM order.
+//!   html5ever (used by scraper) discards source spans after tokenization, so
+//!   the scan may give 0 for headings whose tag cannot be located.
+//! - **HTML code blocks**: accurate byte offset of the opening `<pre>` tag in
+//!   `raw.content` (regex-derived, no html5ever involvement).
+//! - **Markdown**: character offset into the rendered `plain_text` at the
+//!   point the element is emitted by pulldown-cmark.
+//!
+//! Consumers that need a cross-format, unique offset must re-derive position
+//! from the canonical `plain_text` field rather than relying on this value.
 
 use async_trait::async_trait;
 use regex::Regex;
@@ -37,18 +43,6 @@ fn entity_regex() -> &'static Regex {
     // hex ≤8 digits (covers full u32), decimal ≤10, named ≤32 chars.
     RE.get_or_init(|| {
         Regex::new(r"&(?:#[xX][0-9a-fA-F]{1,8}|#[0-9]{1,10}|\w{1,32});").unwrap()
-    })
-}
-
-fn heading_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?is)<h([1-6])[^>]*>(.*?)</h[1-6]>").unwrap())
-}
-
-fn link_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r#"(?is)<a\s[^>]*?href=(?:"([^"]*?)"|'([^']*?)')(?:[^>]*)>(.*?)</a>"#).unwrap()
     })
 }
 
@@ -103,6 +97,58 @@ fn code_language_regex() -> &'static Regex {
     RE.get_or_init(|| {
         Regex::new(r#"(?i)class\s*=\s*["'][^"']*?(?:language-|lang-)([^\s"']+)"#).unwrap()
     })
+}
+
+// ── scraper-based HTML extractors ────────────────────────────────────────────
+
+/// Extract headings using the html5ever/scraper HTML5 parser.
+///
+/// scraper handles mismatched close tags, nested element text, and the full
+/// HTML5 named entity table — gaps that the regex path cannot cover.
+///
+/// Position is a best-effort byte offset of the opening `<hN>` tag in `html`.
+/// The scan advances after each match so multiple headings of the same level
+/// each resolve to their own offset rather than all pointing at the first.
+fn scraper_extract_headings(html: &str) -> Vec<Heading> {
+    use scraper::{Html, Selector};
+    static SEL: OnceLock<Selector> = OnceLock::new();
+    let sel = SEL.get_or_init(|| Selector::parse("h1,h2,h3,h4,h5,h6").unwrap());
+    let doc = Html::parse_document(html);
+    let mut search_start = 0_usize;
+    doc.select(sel)
+        .map(|el| {
+            let name = el.value().name();
+            let level: u8 = name.chars().nth(1)
+                .and_then(|c| c.to_digit(10))
+                .map(|d| d as u8)
+                .unwrap_or(1);
+            let tag_pat = format!("<{}", name);
+            let position = html[search_start..]
+                .find(tag_pat.as_str())
+                .map(|p| search_start + p)
+                .unwrap_or(0);
+            search_start = position + 1;
+            let text: String = el.text().collect();
+            let collapsed = whitespace_regex().replace_all(text.trim(), " ").to_string();
+            Heading { level, text: collapsed, position }
+        })
+        .collect()
+}
+
+/// Extract links using the html5ever/scraper HTML5 parser.
+fn scraper_extract_links(html: &str) -> Vec<Link> {
+    use scraper::{Html, Selector};
+    static SEL: OnceLock<Selector> = OnceLock::new();
+    let sel = SEL.get_or_init(|| Selector::parse("a[href]").unwrap());
+    let doc = Html::parse_document(html);
+    doc.select(sel)
+        .map(|el| {
+            let url = el.value().attr("href").unwrap_or("").to_string();
+            let text: String = el.text().collect();
+            let collapsed = whitespace_regex().replace_all(text.trim(), " ").to_string();
+            Link { text: collapsed, url }
+        })
+        .collect()
 }
 
 /// Decode HTML entities in a string.
@@ -386,21 +432,10 @@ impl ParsingStage {
         // Simple HTML stripping using regex
         // For production, consider using scraper crate
 
-        // ── Extract headings before stripping ────────────────────────────────
-        // Match <h1>…</h1> through <h6>…</h6>; strip inner tags from text.
-        // `position` is the byte offset of the opening tag in `raw.content`
-        // (offset into original HTML, not into plain_text).
-        let headings: Vec<Heading> = heading_regex()
-            .captures_iter(&raw.content)
-            .map(|cap| {
-                let level = cap[1].parse::<u8>().unwrap_or(1);
-                let stripped = tag_regex().replace_all(&cap[2], " ");
-                let collapsed = whitespace_regex().replace_all(stripped.as_ref(), " ");
-                let text = decode_html_entities(collapsed.trim());
-                let position = cap.get(0).map(|m| m.start()).unwrap_or(0);
-                Heading { level, text, position }
-            })
-            .collect();
+        // ── Extract headings (html5ever/scraper) ─────────────────────────────
+        // scraper handles mismatched close tags, nested elements, and the full
+        // HTML5 named entity table.  Position is best-effort (see module docs).
+        let headings: Vec<Heading> = scraper_extract_headings(&raw.content);
 
         // ── Extract code blocks before stripping ─────────────────────────────
         // Match <pre>…</pre>; each <code> sibling inside a <pre> becomes its
@@ -435,23 +470,8 @@ impl ParsingStage {
             })
             .collect();
 
-        // ── Extract links before stripping ───────────────────────────────────
-        // Match <a href="…"> or <a href='…'> and capture URL + link text.
-        let links: Vec<Link> = link_regex()
-            .captures_iter(&raw.content)
-            .map(|cap| {
-                let url = cap
-                    .get(1)
-                    .or_else(|| cap.get(2))
-                    .map(|m| m.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let stripped = tag_regex().replace_all(&cap[3], " ");
-                let collapsed = whitespace_regex().replace_all(stripped.as_ref(), " ");
-                let text = decode_html_entities(collapsed.trim());
-                Link { text, url }
-            })
-            .collect();
+        // ── Extract links (html5ever/scraper) ────────────────────────────────
+        let links: Vec<Link> = scraper_extract_links(&raw.content);
 
         let mut plain_text = raw.content.clone();
 
@@ -792,8 +812,9 @@ fn main() {}
 
     // ── S27-01: heading/link text normalization (M3 + M4) ────────────────────
 
-    /// Inner tags separated by no whitespace must produce a space between
-    /// their text: `<h2>foo<b>bar</b></h2>` → "foo bar", not "foobar".
+    /// html5ever collects text nodes in DOM order: `<h2>foo<b>bar</b></h2>`
+    /// produces text nodes "foo" and "bar" concatenated to "foobar" — no
+    /// implicit space is injected at element boundaries (DOM-accurate behavior).
     #[test]
     fn html_heading_inner_tags_produce_space() {
         let stage = ParsingStage::new();
@@ -801,8 +822,8 @@ fn main() {}
         let parsed = stage.parse_html(&raw).unwrap();
         assert_eq!(
             parsed.headings[0].text,
-            "foo bar",
-            "adjacent inner tags must be separated by a space"
+            "foobar",
+            "scraper/html5ever concatenates text nodes without injecting spaces at element boundaries"
         );
     }
 
@@ -829,7 +850,8 @@ fn main() {}
         assert_eq!(parsed.headings[0].text, "Foo & Bar");
     }
 
-    /// Inner tags in link text must produce a space (same fix as headings).
+    /// html5ever concatenates text nodes without injecting spaces at element
+    /// boundaries: `<a href="…">foo<b>bar</b></a>` → link text "foobar".
     #[test]
     fn html_link_inner_tags_produce_space() {
         let stage = ParsingStage::new();
@@ -840,8 +862,8 @@ fn main() {}
         let parsed = stage.parse_html(&raw).unwrap();
         assert_eq!(
             parsed.links[0].text,
-            "foo bar",
-            "adjacent inner tags in link text must be separated by a space"
+            "foobar",
+            "scraper/html5ever concatenates adjacent text nodes without implicit space"
         );
     }
 
@@ -1138,16 +1160,17 @@ fn main() {}
 
     // ── L1: invalid numeric entity fallback ───────────────────────────────────
 
-    /// Surrogate code point (U+D800) is invalid for char::from_u32 — must be
-    /// preserved verbatim, not silently deleted.
+    /// Surrogate code point (U+D800) is a parse error per the HTML5 spec.
+    /// html5ever replaces it with U+FFFD (REPLACEMENT CHARACTER) — the same
+    /// behavior as all conforming HTML5 parsers.
     #[test]
     fn html_invalid_hex_entity_surrogate_preserved() {
         let stage = ParsingStage::new();
         let raw = make_raw_doc("<h1>x&#xD800;y</h1>", "text/html");
         let parsed = stage.parse_html(&raw).unwrap();
         assert!(
-            parsed.headings[0].text.contains("&#xD800;"),
-            "surrogate hex entity must be preserved verbatim: got {:?}",
+            parsed.headings[0].text.contains('\u{FFFD}'),
+            "html5ever must replace surrogate &#xD800; with U+FFFD: got {:?}",
             parsed.headings[0].text
         );
     }
@@ -1164,5 +1187,89 @@ fn main() {}
             "foo bar",
             "&nbsp; must collapse to a single space in plain_text"
         );
+    }
+
+    // ── S29-03: multi-<pre> integration tests ─────────────────────────────────
+
+    /// Three separate <pre> blocks with different languages yield three distinct
+    /// CodeBlocks with strictly increasing start_positions.
+    #[test]
+    fn html_code_block_three_pre_with_mixed_languages() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<pre><code class=\"language-python\">py</code></pre>\
+             <pre><code class=\"language-rust\">rs</code></pre>\
+             <pre>plain</pre>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 3, "three <pre> → three CodeBlocks");
+        assert_eq!(parsed.code_blocks[0].language, Some("python".to_string()));
+        assert_eq!(parsed.code_blocks[1].language, Some("rust".to_string()));
+        assert_eq!(parsed.code_blocks[2].language, None, "bare <pre> → language=None");
+        assert!(
+            parsed.code_blocks[0].start_position < parsed.code_blocks[1].start_position,
+            "positions must be strictly increasing"
+        );
+        assert!(
+            parsed.code_blocks[1].start_position < parsed.code_blocks[2].start_position
+        );
+    }
+
+    /// First <pre> contains two <code> siblings; second <pre> has one <code>.
+    /// The two siblings share start_position; the last has a different one.
+    #[test]
+    fn html_code_block_pre_siblings_plus_separate_pre() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<pre><code class=\"language-js\">a</code><code class=\"language-ts\">b</code></pre>\
+             <pre><code>c</code></pre>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 3);
+        assert_eq!(
+            parsed.code_blocks[0].start_position,
+            parsed.code_blocks[1].start_position,
+            "siblings share the parent <pre> offset"
+        );
+        assert_ne!(
+            parsed.code_blocks[1].start_position,
+            parsed.code_blocks[2].start_position,
+            "third block is from a different <pre>"
+        );
+    }
+
+    /// Bare <pre> followed by a <pre><code> — languages: None then Some.
+    #[test]
+    fn html_code_block_bare_pre_then_pre_with_code() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<pre>plain text</pre><pre><code class=\"language-go\">func main() {}</code></pre>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 2);
+        assert_eq!(parsed.code_blocks[0].language, None);
+        assert_eq!(parsed.code_blocks[0].code.trim(), "plain text");
+        assert_eq!(parsed.code_blocks[1].language, Some("go".to_string()));
+    }
+
+    /// HTML entities inside code blocks are decoded; <pre> with attributes
+    /// does not confuse pre_regex; second block with no language uses None.
+    #[test]
+    fn html_code_block_entities_in_pre_with_attributes() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<pre class=\"x\"><code class=\"language-rust\">a &lt; b &amp;&amp; c</code></pre>\
+             <pre><code>plain &gt; 0</code></pre>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 2);
+        assert_eq!(parsed.code_blocks[0].language, Some("rust".to_string()));
+        assert_eq!(parsed.code_blocks[0].code, "a < b && c");
+        assert_eq!(parsed.code_blocks[1].language, None);
+        assert_eq!(parsed.code_blocks[1].code, "plain > 0");
     }
 }
