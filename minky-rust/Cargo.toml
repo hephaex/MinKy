@@ -92,6 +92,10 @@ headless_chrome = "1"
 # Uses native TLS for macOS compatibility; downloads model from HuggingFace on first init.
 fastembed = { version = "5", default-features = false, features = ["hf-hub-native-tls", "ort-download-binaries-native-tls"] }
 
+# File-system watching (vault watcher)
+notify = "6"
+notify-debouncer-full = "0.3"
+
 [dev-dependencies]
 tokio-test = "0.4"
 tower = { version = "0.5", features = ["util"] }

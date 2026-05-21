@@ -31,7 +31,7 @@ mod templates;
 mod timeline;
 mod understanding;
 mod versions;
-mod vault;
+pub mod vault;
 mod workflows;
 mod ws;
 

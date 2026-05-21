@@ -2,6 +2,22 @@ use anyhow::Result;
 use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
+/// Configuration for the background vault file-system watcher.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct VaultWatchConfig {
+    /// Whether the vault watcher should be started at application startup.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Absolute paths to the vault root directories to watch.
+    #[serde(default)]
+    pub roots: Vec<std::path::PathBuf>,
+
+    /// ID of the MinKy user that owns ingested documents.
+    #[serde(default)]
+    pub user_id: Option<i32>,
+}
+
 /// Application configuration loaded from environment variables
 #[derive(Clone, Deserialize)]
 pub struct Config {
@@ -70,6 +86,10 @@ pub struct Config {
     /// [`crate::models::EmbeddingModel::NomicEmbedTextV15`] requests offline.
     #[serde(default)]
     pub local_embedding_enabled: bool,
+
+    /// Configuration for the background vault file-system watcher.
+    #[serde(default)]
+    pub vault_watch: VaultWatchConfig,
 }
 
 fn default_cors_origins() -> String {
@@ -157,6 +177,7 @@ mod tests {
             slack_signing_secret: None,
             cors_allowed_origins: "http://localhost:3000".to_string(),
             local_embedding_enabled: false,
+            vault_watch: VaultWatchConfig::default(),
         }
     }
 
@@ -258,5 +279,13 @@ mod tests {
     fn test_default_cors_origins() {
         let default = default_cors_origins();
         assert!(default.contains("localhost:3000"));
+    }
+
+    #[test]
+    fn vault_watch_config_defaults() {
+        let cfg: VaultWatchConfig = serde_json::from_str("{}").unwrap();
+        assert!(!cfg.enabled);
+        assert!(cfg.roots.is_empty());
+        assert!(cfg.user_id.is_none());
     }
 }

@@ -36,6 +36,8 @@ mod tag_service;
 mod template_service;
 mod timeline_service;
 mod understanding_service;
+pub mod vault_common;
+pub mod vault_watcher_service;
 mod version_service;
 mod websocket_service;
 mod workflow_service;

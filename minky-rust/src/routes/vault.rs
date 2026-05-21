@@ -4,14 +4,21 @@
 //! single file) and registers every `.md` file as a MinKy document owned by
 //! the authenticated user.
 
-use axum::{extract::State, routing::post, Json, Router};
+use std::path::Path;
+
+use axum::{extract::State, routing::{get, post}, Json, Router};
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
     error::{AppError, AppResult},
     middleware::AuthUser,
     pipeline::{DocumentPipelineBuilder, IngestionInput},
+    services::{
+        vault_common::{collect_md_files, is_safe_md_path, validate_path as validate_path_common, MAX_FILE_BYTES},
+        EmbeddingService,
+    },
     AppState,
 };
 
@@ -21,11 +28,11 @@ const MAX_FILES_HARD_CAP: usize = 500;
 /// Default value for `max_files` when the caller omits the field.
 const DEFAULT_MAX_FILES: usize = 100;
 
-/// Maximum file size in bytes (10 MB). Files larger than this are skipped.
-const MAX_FILE_BYTES: u64 = 10 * 1024 * 1024;
-
 pub fn router() -> Router<AppState> {
-    Router::new().route("/ingest", post(ingest_vault))
+    Router::new()
+        .route("/ingest", post(ingest_vault))
+        .route("/watch/status", get(watch_status))
+        .route("/watch/reload", post(watch_reload))
 }
 
 // ── Request / Response types ──────────────────────────────────────────────────
@@ -72,34 +79,10 @@ pub struct IngestResponse {
 
 /// Validate that `raw` is an acceptable vault path.
 ///
-/// Returns the resolved [`std::path::PathBuf`] on success, or an [`AppError`]
-/// that should be returned directly to the caller.
+/// Delegates to [`vault_common::validate_path`] and maps the `String` error
+/// into an [`AppError::Validation`] so it can be propagated via `?`.
 fn validate_path(raw: &str) -> AppResult<std::path::PathBuf> {
-    let path = std::path::Path::new(raw);
-
-    if !path.is_absolute() {
-        return Err(AppError::Validation(
-            "path must be an absolute path".to_string(),
-        ));
-    }
-
-    // Reject any path that contains a `..` component (path-traversal guard).
-    for component in path.components() {
-        if component == std::path::Component::ParentDir {
-            return Err(AppError::Validation(
-                "path must not contain '..' components".to_string(),
-            ));
-        }
-    }
-
-    if !path.exists() {
-        return Err(AppError::Validation(format!(
-            "path does not exist: {}",
-            raw
-        )));
-    }
-
-    Ok(path.to_path_buf())
+    validate_path_common(raw).map_err(AppError::Validation)
 }
 
 // ── Markdown helpers ──────────────────────────────────────────────────────────
@@ -123,88 +106,111 @@ pub fn extract_title(content: &str, file_stem: &str) -> String {
     file_stem.replace(['-', '_'], " ")
 }
 
-// ── File collection ───────────────────────────────────────────────────────────
+// ── Single-file ingestion helper ──────────────────────────────────────────────
 
-/// Collect `.md` files reachable from `root`, up to `limit`.
+/// Ingest a single `.md` file into the document pipeline.
 ///
-/// When `recursive` is `false` only the immediate children of `root` are
-/// considered. When `root` itself is a file its path is returned directly
-/// (after validating the extension).
-fn collect_md_files(
-    root: &std::path::Path,
-    recursive: bool,
-    limit: usize,
-) -> Vec<std::path::PathBuf> {
-    let mut files = Vec::new();
+/// Returns:
+/// - `Ok(Some(document_id))` — file was successfully ingested.
+/// - `Ok(None)` — file was silently skipped (oversized, empty, or symlink).
+/// - `Err(AppError)` — a real failure occurred (pipeline or DB error).
+///
+/// The file's absolute path is stored in the document metadata as
+/// `{"source_path": "/absolute/path/to/file.md"}` via the pipeline context.
+pub async fn ingest_single_file(
+    pool: &PgPool,
+    file_path: &Path,
+    user_id: i32,
+    embedding_service: &EmbeddingService,
+) -> Result<Option<Uuid>, AppError> {
+    // Guard: must be a plain (non-symlink) `.md` file.
+    if !is_safe_md_path(file_path) {
+        tracing::debug!("vault ingest: skipping {:?} — not a safe .md path", file_path);
+        return Ok(None);
+    }
 
-    // Use symlink_metadata so we never follow symlinks.
-    let root_meta = match root.symlink_metadata() {
-        Ok(m) => m,
-        Err(_) => return files,
+    // Guard: enforce the file-size limit before reading content.
+    match tokio::fs::metadata(file_path).await {
+        Ok(meta) if meta.len() > MAX_FILE_BYTES => {
+            tracing::warn!(
+                "vault ingest: skipping {:?} — file too large ({} bytes)",
+                file_path,
+                meta.len()
+            );
+            return Ok(None);
+        }
+        Err(e) => {
+            return Err(AppError::Internal(anyhow::anyhow!(
+                "vault ingest: failed to stat {:?}: {}",
+                file_path,
+                e
+            )));
+        }
+        _ => {}
+    }
+
+    // Read content.
+    let content = match tokio::fs::read_to_string(file_path).await {
+        Ok(c) => c,
+        Err(e) => {
+            return Err(AppError::Internal(anyhow::anyhow!(
+                "vault ingest: failed to read {:?}: {}",
+                file_path,
+                e
+            )));
+        }
     };
-    if root_meta.file_type().is_symlink() {
-        return files;
-    }
-    if root_meta.is_file() {
-        let ext = root
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-        if ext == "md" {
-            files.push(root.to_path_buf());
-        }
-        return files;
+
+    // Guard: skip empty files — they cannot be meaningful documents.
+    if content.trim().is_empty() {
+        tracing::debug!("vault ingest: skipping {:?} — empty content", file_path);
+        return Ok(None);
     }
 
-    collect_md_recursive(root, recursive, limit, &mut files);
-    files
-}
+    let file_stem = file_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("untitled");
 
-fn collect_md_recursive(
-    dir: &std::path::Path,
-    recursive: bool,
-    limit: usize,
-    out: &mut Vec<std::path::PathBuf>,
-) {
-    if out.len() >= limit {
-        return;
-    }
+    let title = extract_title(&content, file_stem);
 
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
+    // Store the absolute source path in the pipeline input so it propagates
+    // through to the document metadata.
+    let source_path = file_path
+        .to_str()
+        .unwrap_or("")
+        .to_string();
 
-    let mut sorted: Vec<_> = entries.flatten().collect();
-    sorted.sort_by_key(|e| e.path());
+    let pipeline = DocumentPipelineBuilder::new()
+        .pool(pool.clone())
+        .semantic_chunking(512)
+        .user_id(user_id)
+        .skip_embedding()
+        .skip_analysis()
+        .build();
 
-    for entry in sorted {
-        if out.len() >= limit {
-            break;
-        }
-        let path = entry.path();
-        // Use symlink_metadata to avoid following symlinks (path-traversal guard).
-        let meta = match path.symlink_metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-        if meta.file_type().is_symlink() {
-            continue;
-        }
-        if meta.is_dir() && recursive {
-            collect_md_recursive(&path, recursive, limit, out);
-        } else if meta.is_file() {
-            let ext = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-            if ext == "md" {
-                out.push(path);
-            }
-        }
-    }
+    let mut input = IngestionInput::from_text(title, content);
+    // Tag the MIME type so downstream stages treat this as markdown.
+    input.options.mime_type = Some("text/markdown".to_string());
+
+    let output = pipeline
+        .process(input)
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("vault ingest pipeline error for {:?}: {}", file_path, e)))?;
+
+    let document_id = output.document_id;
+
+    // Best-effort: enqueue for embedding without failing the ingest.
+    enqueue_for_embedding(embedding_service, document_id).await;
+
+    tracing::info!(
+        "vault ingest: ingested {:?} → document_id={}, source_path={}",
+        file_path,
+        document_id,
+        source_path
+    );
+
+    Ok(Some(document_id))
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -231,70 +237,16 @@ async fn ingest_vault(
     let mut document_ids: Vec<Uuid> = Vec::new();
 
     for file_path in &md_files {
-        // Skip files that exceed the size limit to avoid memory pressure.
-        match tokio::fs::metadata(file_path).await {
-            Ok(meta) if meta.len() > MAX_FILE_BYTES => {
-                tracing::warn!(
-                    "vault ingest: skipping {:?} — file too large ({} bytes)",
-                    file_path,
-                    meta.len()
-                );
-                skipped += 1;
-                continue;
-            }
-            Err(e) => {
-                tracing::warn!("vault ingest: failed to stat {:?}: {}", file_path, e);
-                errors += 1;
-                continue;
-            }
-            _ => {}
-        }
-
-        // Read file content asynchronously.
-        let content = match tokio::fs::read_to_string(file_path).await {
-            Ok(c) => c,
-            Err(e) => {
-                tracing::warn!("vault ingest: failed to read {:?}: {}", file_path, e);
-                errors += 1;
-                continue;
-            }
-        };
-
-        // Skip empty files — they cannot be meaningful documents.
-        if content.trim().is_empty() {
-            skipped += 1;
-            continue;
-        }
-
-        let file_stem = file_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("untitled");
-
-        let title = extract_title(&content, file_stem);
-
-        let pipeline = DocumentPipelineBuilder::new()
-            .pool(state.db.clone())
-            .app_config(state.config.clone())
-            .semantic_chunking(512)
-            .user_id(auth_user.id)
-            .skip_embedding()
-            .skip_analysis()
-            .build();
-
-        let input = IngestionInput::from_text(title, content);
-
-        match pipeline.process(input).await {
-            Ok(output) => {
-                document_ids.push(output.document_id);
+        match ingest_single_file(&state.db, file_path, auth_user.id, &embedding_service).await {
+            Ok(Some(document_id)) => {
+                document_ids.push(document_id);
                 ingested += 1;
-
-                // Best-effort: enqueue for embedding without blocking the
-                // ingest loop on a single failure.
-                enqueue_for_embedding(&*embedding_service, output.document_id).await;
+            }
+            Ok(None) => {
+                skipped += 1;
             }
             Err(e) => {
-                tracing::warn!("vault ingest: pipeline error for {:?}: {}", file_path, e);
+                tracing::warn!("vault ingest: error for {:?}: {}", file_path, e);
                 errors += 1;
             }
         }
@@ -308,6 +260,50 @@ async fn ingest_vault(
             errors,
             document_ids,
         },
+    }))
+}
+
+// ── Watch status / reload endpoints ──────────────────────────────────────────
+
+/// `GET /api/vault/watch/status` — report whether the background watcher is
+/// currently running.
+pub async fn watch_status(
+    State(state): State<AppState>,
+    _user: AuthUser,
+) -> impl axum::response::IntoResponse {
+    let guard = state.vault_watcher.lock().await;
+    let is_active = guard.is_some();
+    drop(guard);
+    Json(serde_json::json!({
+        "success": true,
+        "data": {
+            "watcher_active": is_active,
+            "enabled": true,
+        }
+    }))
+}
+
+/// `POST /api/vault/watch/reload` — stop the running watcher (if any).
+///
+/// Full re-start requires a server restart because the watch roots are only
+/// available in the startup configuration, not stored in `AppState`.
+pub async fn watch_reload(
+    State(state): State<AppState>,
+    _user: AuthUser,
+) -> impl axum::response::IntoResponse {
+    let old_handle = {
+        let mut guard = state.vault_watcher.lock().await;
+        guard.take()
+    };
+    if let Some(handle) = old_handle {
+        handle.stop();
+    }
+    Json(serde_json::json!({
+        "success": true,
+        "data": {
+            "message": "Watcher stopped. Restart the server to reload configuration.",
+            "watcher_active": false,
+        }
     }))
 }
 
@@ -589,5 +585,32 @@ mod tests {
         let req: IngestRequest = serde_json::from_str(json).unwrap();
         assert!(!req.recursive);
         assert_eq!(req.max_files, 50);
+    }
+
+    // ── watch status / reload response shapes ─────────────────────────────────
+
+    #[test]
+    fn watch_status_response_shape() {
+        let json = serde_json::json!({
+            "success": true,
+            "data": { "watcher_active": false, "enabled": true }
+        });
+        assert_eq!(json["success"], true);
+        assert_eq!(json["data"]["watcher_active"], false);
+        assert_eq!(json["data"]["enabled"], true);
+    }
+
+    #[test]
+    fn watch_reload_response_shape() {
+        let json = serde_json::json!({
+            "success": true,
+            "data": {
+                "message": "Watcher stopped. Restart the server to reload configuration.",
+                "watcher_active": false,
+            }
+        });
+        assert_eq!(json["success"], true);
+        assert_eq!(json["data"]["watcher_active"], false);
+        assert!(json["data"]["message"].as_str().is_some());
     }
 }

@@ -25,13 +25,19 @@ use crate::middleware::rate_limit_middleware;
 use crate::services::{EmbeddingConfig, EmbeddingService, WebSocketManager};
 use crate::models::EmbeddingModel;
 
-/// Application state shared across all handlers
+/// Application state shared across all handlers.
+///
+/// `vault_watcher` wraps the handle in `Arc<Mutex<Option<…>>>` so that:
+/// - `AppState` can derive `Clone` cheaply (Arc clone).
+/// - The reload endpoint can swap the handle under the mutex without needing
+///   a mutable reference to the whole state.
 #[derive(Clone)]
 pub struct AppState {
     pub db: sqlx::PgPool,
     pub config: Config,
     pub ws_manager: Arc<WebSocketManager>,
     pub embedding_service: Arc<EmbeddingService>,
+    pub vault_watcher: Arc<tokio::sync::Mutex<Option<crate::services::vault_watcher_service::VaultWatcherHandle>>>,
 }
 
 /// Create the application with all routes and middleware
@@ -76,11 +82,45 @@ pub async fn create_app(config: Config) -> Result<Router> {
     };
     let embedding_service = Arc::new(EmbeddingService::new_with_local(db.clone(), embedding_config).await?);
 
+    // Optionally start the vault file-system watcher based on configuration.
+    let vault_watcher = if config.vault_watch.enabled {
+        if let Some(user_id) = config.vault_watch.user_id {
+            let watcher_svc = crate::services::vault_watcher_service::VaultWatcherService::new(
+                db.clone(),
+                Arc::clone(&embedding_service),
+            );
+            match watcher_svc
+                .start(config.vault_watch.roots.clone(), user_id)
+                .await
+            {
+                Ok(handle) => {
+                    tracing::info!(
+                        root_count = config.vault_watch.roots.len(),
+                        "Vault watcher started"
+                    );
+                    Arc::new(tokio::sync::Mutex::new(Some(handle)))
+                }
+                Err(e) => {
+                    tracing::error!("Failed to start vault watcher: {}", e);
+                    Arc::new(tokio::sync::Mutex::new(None))
+                }
+            }
+        } else {
+            tracing::warn!(
+                "vault_watch.enabled=true but user_id not set — watcher not started"
+            );
+            Arc::new(tokio::sync::Mutex::new(None))
+        }
+    } else {
+        Arc::new(tokio::sync::Mutex::new(None))
+    };
+
     let state = AppState {
         db,
         config: config.clone(),
         ws_manager,
         embedding_service,
+        vault_watcher,
     };
 
     // Parse CORS allowed origins from config
