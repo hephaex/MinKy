@@ -26,41 +26,30 @@
 //! Consumers that need a cross-format, unique offset must re-derive position
 //! from the canonical `plain_text` field rather than relying on this value.
 //!
-//! ## Entity decoding boundaries
+//! ## Entity decoding
 //!
 //! Entity handling differs by extraction path:
 //!
 //! - **Title / headings / links**: html5ever decodes the full HTML5 named-entity
 //!   table automatically via `el.text()`.  No custom post-processing needed.
 //! - **`plain_text` body**: the raw HTML is stripped with regex then run through
-//!   [`decode_html_entities`], which handles 32 common named entities plus
-//!   decimal/hex numeric entities.  html5ever is intentionally **not** used here
-//!   because tree construction can reorder or drop text nodes in malformed HTML,
-//!   producing different output than the source order expected for search indexing.
+//!   [`decode_html_entities`], which delegates to `html_escape::decode_html_entities`
+//!   and therefore covers the complete HTML5 named-entity table.  html5ever is
+//!   intentionally **not** used here because tree construction can reorder or drop
+//!   text nodes in malformed HTML, producing different output than the source order
+//!   expected for search indexing.
 //! - **Code blocks**: same `decode_html_entities` path as the body.  DOM
 //!   restructuring by html5ever would corrupt verbatim source code (e.g.
 //!   `<pre>` content adjacent to unclosed tags gets moved outside `<body>`).
 //!
-//! This asymmetry is a known limitation: rare entities outside the 32-entry
-//! table (e.g. `&mdash;` in body text, `&minus;` in code) will not be decoded.
-//!
 //! ## Known limitations
 //!
-//! - **SVG `<title>`**: The `"title"` CSS selector matches any `<title>` element,
-//!   including SVG `<title>` children embedded in HTML.  For HTML documents this
-//!   is rarely a problem since SVG `<title>` appears before `<head><title>` only
-//!   in pathological markup; scraper returns the first match.
 //! - **Table foster-parenting**: html5ever moves content placed illegally inside
 //!   `<table>` (e.g. bare text nodes) to just before the table per the HTML5
 //!   parsing spec.  When this happens, `<a>` elements in the source may appear
 //!   at a different position in the DOM than in the raw byte string, so the
 //!   3-byte `<a` window scan may land on a different tag than scraper selected.
 //!   The result is a best-effort offset, not a guaranteed exact match.
-//! - **Markdown link inside heading**: `Link::position` is recorded as
-//!   `plain_text.len()` at emit time, which does not include preceding text
-//!   within the same heading (heading text is flushed to `plain_text` only at
-//!   the heading end event).  The position is therefore the start of the heading
-//!   block, not the exact offset of the link within it.
 
 use async_trait::async_trait;
 use regex::Regex;
@@ -73,18 +62,6 @@ use std::sync::OnceLock;
 fn tag_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"<[^>]+>").unwrap())
-}
-
-fn entity_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    // Matches named entities (&amp;), decimal numeric (&#39;), and hex numeric
-    // (&#x27; or &#X27;).  Order is significant: hex (#[xX]...) must precede
-    // decimal (#[0-9]+) in the alternation — \w cannot match '#' so named
-    // entities never conflict.  Length bounds prevent pathological input:
-    // hex ≤8 digits (covers full u32), decimal ≤10, named ≤32 chars.
-    RE.get_or_init(|| {
-        Regex::new(r"&(?:#[xX][0-9a-fA-F]{1,8}|#[0-9]{1,10}|\w{1,32});").unwrap()
-    })
 }
 
 fn script_regex() -> &'static Regex {
@@ -157,7 +134,7 @@ fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) 
     // safe: all are valid CSS selector literals
     let h_sel = H_SEL.get_or_init(|| Selector::parse("h1,h2,h3,h4,h5,h6").unwrap());
     let a_sel = A_SEL.get_or_init(|| Selector::parse("a[href]").unwrap());
-    let t_sel = T_SEL.get_or_init(|| Selector::parse("title").unwrap());
+    let t_sel = T_SEL.get_or_init(|| Selector::parse("head > title").unwrap());
     let doc = Html::parse_document(html);
 
     let title = doc.select(t_sel).next().and_then(|el| {
@@ -217,77 +194,16 @@ fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) 
 
 /// Decode HTML entities in a string.
 ///
-/// Handles named entities (`&amp;`, `&rsquo;`, etc.), decimal numeric
-/// entities (`&#39;`), and hex numeric entities (`&#x27;`).  Unknown named
-/// entities are preserved verbatim so no content is silently deleted.
+/// Delegates to `html_escape::decode_html_entities`, which covers the full
+/// HTML5 named-entity table (2,231 entries), decimal numeric entities
+/// (`&#39;`), and hex numeric entities (`&#x27;`).  Unknown named entities
+/// and invalid numeric codepoints (e.g. surrogates) are preserved verbatim
+/// so no content is silently deleted.
 ///
-/// Shared by all extraction paths (heading, link, code-block, plain-text body)
-/// to ensure consistent decoding across formats.
+/// Shared by the plain-text body and code-block extraction paths to ensure
+/// consistent decoding without html5ever's tree-restructuring side effects.
 fn decode_html_entities(s: &str) -> String {
-    entity_regex()
-        .replace_all(s, |caps: &regex::Captures| {
-            match &caps[0] {
-                // Basic HTML (RFC 1866 / HTML4)
-                "&nbsp;" => "\u{00A0}".to_string(),
-                "&lt;" => "<".to_string(),
-                "&gt;" => ">".to_string(),
-                "&amp;" => "&".to_string(),
-                "&quot;" => "\"".to_string(),
-                "&apos;" => "'".to_string(),
-                // Quotation marks
-                "&lsquo;" => "\u{2018}".to_string(),
-                "&rsquo;" => "\u{2019}".to_string(),
-                "&ldquo;" => "\u{201C}".to_string(),
-                "&rdquo;" => "\u{201D}".to_string(),
-                "&laquo;" => "\u{00AB}".to_string(),
-                "&raquo;" => "\u{00BB}".to_string(),
-                // Dashes and ellipsis
-                "&mdash;" => "\u{2014}".to_string(),
-                "&ndash;" => "\u{2013}".to_string(),
-                "&minus;" => "\u{2212}".to_string(),
-                "&hellip;" => "\u{2026}".to_string(),
-                // Symbols
-                "&copy;" => "\u{00A9}".to_string(),
-                "&reg;" => "\u{00AE}".to_string(),
-                "&trade;" => "\u{2122}".to_string(),
-                "&euro;" => "\u{20AC}".to_string(),
-                "&pound;" => "\u{00A3}".to_string(),
-                "&yen;" => "\u{00A5}".to_string(),
-                "&cent;" => "\u{00A2}".to_string(),
-                // Punctuation
-                "&bull;" => "\u{2022}".to_string(),
-                "&middot;" => "\u{00B7}".to_string(),
-                // Math / typography
-                "&times;" => "\u{00D7}".to_string(),
-                "&divide;" => "\u{00F7}".to_string(),
-                "&plusmn;" => "\u{00B1}".to_string(),
-                "&deg;" => "\u{00B0}".to_string(),
-                "&frac12;" => "\u{00BD}".to_string(),
-                "&frac14;" => "\u{00BC}".to_string(),
-                "&frac34;" => "\u{00BE}".to_string(),
-                // Hex numeric entities: &#xNN; or &#XNN;
-                other if other.starts_with("&#x") || other.starts_with("&#X") => {
-                    let hex = &other[3..other.len() - 1];
-                    u32::from_str_radix(hex, 16)
-                        .ok()
-                        .and_then(char::from_u32)
-                        .map(|c| c.to_string())
-                        .unwrap_or_else(|| other.to_string())
-                }
-                // Decimal numeric entities: &#NN;
-                other if other.starts_with("&#") => {
-                    let dec = &other[2..other.len() - 1];
-                    dec.parse::<u32>()
-                        .ok()
-                        .and_then(char::from_u32)
-                        .map(|c| c.to_string())
-                        .unwrap_or_else(|| other.to_string())
-                }
-                // Preserve unknown named entities verbatim
-                other => other.to_string(),
-            }
-        })
-        .to_string()
+    html_escape::decode_html_entities(s).into_owned()
 }
 
 use crate::pipeline::{PipelineContext, PipelineResult, PipelineStage};
@@ -404,6 +320,7 @@ impl ParsingStage {
         let mut link_text = String::new();
         let mut link_url = String::new();
         let mut in_link = false;
+        let mut link_position_snapshot: usize = 0;
 
         for event in parser {
             match event {
@@ -452,12 +369,13 @@ impl ParsingStage {
                     in_link = true;
                     link_url = dest.to_string();
                     link_text.clear();
+                    link_position_snapshot = plain_text.len() + current_heading_text.len();
                 }
                 Event::End(Tag::Link(_, _, _)) => {
                     links.push(Link {
                         text: link_text.clone(),
                         url: link_url.clone(),
-                        position: plain_text.len(),
+                        position: link_position_snapshot,
                     });
                     plain_text.push_str(&link_text);
                     in_link = false;
@@ -1459,6 +1377,94 @@ fn main() {}
         assert_eq!(parsed.links.len(), 1);
         assert_eq!(parsed.links[0].text, "click");
         assert_eq!(parsed.links[0].url, "/url");
+    }
+
+    // ── S31-03: Link::position accuracy inside headings ──────────────────────
+
+    /// For a link inside a heading, position must be the offset of the link
+    /// within the concatenated plain_text — not the heading-start offset.
+    /// "# Title [click](/url)" → heading_text before link = "Title " (6 bytes)
+    /// plain_text before heading = 0 bytes → position = 0 + 6 = 6
+    #[test]
+    fn markdown_link_in_heading_position_is_link_offset() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("# Title [click](/url)", "text/markdown");
+        let parsed = stage.parse_markdown(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 1);
+        assert_eq!(parsed.links[0].position, 6, "position must be past 'Title '");
+    }
+
+    /// With preceding paragraph text, heading-link position must account for
+    /// both prior plain_text and heading prefix text.
+    /// "intro\n\n# Header [link](/u)" → plain_text before heading = "intro" = 5 bytes
+    /// (paragraph end events emit no newline; only SoftBreak/HardBreak do)
+    /// heading text before link = "Header " = 7 bytes → position = 5 + 7 = 12
+    #[test]
+    fn markdown_link_in_heading_with_preceding_text() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("intro\n\n# Header [link](/u)", "text/markdown");
+        let parsed = stage.parse_markdown(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 1);
+        assert_eq!(parsed.links[0].position, 12, "position must be past 'intro' + 'Header '");
+    }
+
+    // ── S31-01: html-escape full HTML5 entity table ───────────────────────────
+
+    /// html-escape covers the full HTML5 named-entity table; entities outside the
+    /// old 32-entry hand-rolled table must now decode correctly.
+    #[test]
+    fn html_entity_micro_decoded() {
+        let stage = ParsingStage::new();
+        // &micro; (U+00B5 µ) was NOT in the 32-entry table
+        let raw = make_raw_doc("<p>&micro;g of data</p>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert!(parsed.plain_text.contains('\u{00B5}'), "µ must be decoded");
+    }
+
+    #[test]
+    fn html_entity_sect_decoded() {
+        let stage = ParsingStage::new();
+        // &sect; (§) was NOT in the 32-entry table
+        let raw = make_raw_doc("<p>&sect;3 of the spec</p>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert!(parsed.plain_text.contains('\u{00A7}'), "§ must be decoded");
+    }
+
+    #[test]
+    fn html_entity_unknown_preserved() {
+        // Unknown named entities must still be preserved verbatim.
+        // This is a regression guard against over-eager decode.
+        let result = decode_html_entities("&fakeentity; test");
+        assert!(result.contains("&fakeentity;"), "unknown entity must be preserved verbatim");
+    }
+
+    // ── S31-02: T_SEL "head > title" — SVG <title> must not be selected ─────────
+
+    /// T_SEL uses "head > title" so an SVG <title> inside <body> is not
+    /// matched even if it appears before the document <title> in the source.
+    #[test]
+    fn html_title_ignores_svg_title() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<html><head><title>Page Title</title></head>\
+             <body><svg><title>SVG label</title></svg></body></html>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.title, "Page Title");
+    }
+
+    /// html5ever inserts an implicit <head> even when the source omits it,
+    /// so "head > title" still matches when the markup is <html><title>X</title>.
+    #[test]
+    fn html_title_implicit_head() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<html><title>Implicit</title><body>content</body></html>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.title, "Implicit");
     }
 
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────

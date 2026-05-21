@@ -82,6 +82,7 @@ url = "2.5"
 futures-util = "0.3.32"
 tokio-stream = "0.1.18"
 async-stream = "0.3.6"
+html-escape = "0.2"
 
 # Syntax Highlighting
 syntect = "5"
