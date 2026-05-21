@@ -342,8 +342,8 @@ pub async fn sync_report(
     let root_to_canonical: Vec<(String, String)> = valid_roots
         .iter()
         .map(|r| {
-            let raw = r.to_str().unwrap_or("").to_string();
-            let canonical = try_canonicalize(&raw);
+            let raw = r.to_str().unwrap_or("").trim_end_matches('/').to_string();
+            let canonical = try_canonicalize(&raw).trim_end_matches('/').to_string();
             (raw, canonical)
         })
         .collect();
@@ -360,7 +360,10 @@ pub async fn sync_report(
         let files = collect_md_files(root, true, usize::MAX);
         for f in files {
             if let Some(s) = f.to_str() {
-                let canonical_path = if s.starts_with(raw_root.as_str()) {
+                let canonical_path = if s.starts_with(raw_root.as_str())
+                    && (s.len() == raw_root.len()
+                        || s.as_bytes().get(raw_root.len()) == Some(&b'/'))
+                {
                     format!("{}{}", canonical_root, &s[raw_root.len()..])
                 } else {
                     // Fallback: path unexpectedly doesn't share the root prefix.
@@ -429,7 +432,7 @@ pub async fn sync_report(
         // the DB returns more rows than we asked for.
         remaining = remaining.saturating_sub(count);
 
-        if db_pairs.len() >= SYNC_REPORT_DB_LIMIT {
+        if db_pairs.len() > SYNC_REPORT_DB_LIMIT {
             truncated = true;
             break 'roots;
         }
@@ -454,7 +457,12 @@ pub async fn sync_report(
         .map(|(id, path)| {
             let canonical_path = root_to_canonical
                 .iter()
-                .find(|(raw, _)| path.starts_with(raw.as_str()))
+                .find(|(raw, _)| {
+                    let raw = raw.as_str();
+                    path.starts_with(raw)
+                        && (path.len() == raw.len()
+                            || path.as_bytes().get(raw.len()) == Some(&b'/'))
+                })
                 .map(|(raw, canonical)| format!("{}{}", canonical, &path[raw.len()..]))
                 .unwrap_or_else(|| try_canonicalize(&path));
             (canonical_path, id)
@@ -1245,7 +1253,7 @@ mod tests {
             db_pairs.extend(rows);
             remaining = remaining.saturating_sub(count);
 
-            if db_pairs.len() >= SYNC_REPORT_DB_LIMIT {
+            if db_pairs.len() > SYNC_REPORT_DB_LIMIT {
                 truncated = true;
                 break 'roots;
             }
@@ -1304,7 +1312,7 @@ mod tests {
     fn canonicalize_prefix_swap_replaces_known_root() {
         let raw_root = "/tmp/vault".to_string();
         let canonical_root = "/private/tmp/vault".to_string();
-        let root_to_canonical = vec![(raw_root.clone(), canonical_root.clone())];
+        let root_to_canonical = [(raw_root.clone(), canonical_root.clone())];
 
         let path = "/tmp/vault/note.md";
         let result = root_to_canonical
@@ -1327,7 +1335,7 @@ mod tests {
     /// fallback branch was taken without needing a live filesystem.
     #[test]
     fn canonicalize_prefix_swap_falls_back_for_unknown_path() {
-        let root_to_canonical = vec![(
+        let root_to_canonical = [(
             "/tmp/vault".to_string(),
             "/private/tmp/vault".to_string(),
         )];
@@ -1396,5 +1404,97 @@ mod tests {
                 "canonical file path must start with the canonical root: {canonical_path}"
             );
         }
+    }
+
+    // ── HIGH-3 regression: exactly-at-limit must not be truncated ────────────
+
+    /// When the first root returns exactly `SYNC_REPORT_DB_LIMIT` rows (no
+    /// sentinel "+1") there is no overflow — the result must **not** be marked
+    /// truncated and the second root must still be queried.
+    #[test]
+    fn sync_report_first_root_returns_exactly_limit_not_truncated() {
+        // Root-1 delivers exactly SYNC_REPORT_DB_LIMIT rows.  Because
+        // `remaining` starts at SYNC_REPORT_DB_LIMIT + 1 and root-1 consumes
+        // SYNC_REPORT_DB_LIMIT of that budget, `remaining` drops to 1.
+        // Root-2 gets at most 1 row from the query cap.  The total never
+        // exceeds SYNC_REPORT_DB_LIMIT + 1 so `truncated` must stay false.
+        let (len, truncated) = simulate_per_root_loop(&[SYNC_REPORT_DB_LIMIT, 0]);
+
+        assert!(
+            !truncated,
+            "truncated must be false when first root returns exactly SYNC_REPORT_DB_LIMIT rows"
+        );
+        assert_eq!(
+            len, SYNC_REPORT_DB_LIMIT,
+            "all rows must be retained"
+        );
+    }
+
+    // ── HIGH-1 regression: trailing-slash root must not mangle paths ─────────
+
+    /// When `raw_root` ends with `/`, stripping that trailing slash before the
+    /// prefix swap must prevent the double-slash / missing-slash mangling
+    /// described in HIGH-1.
+    ///
+    /// Simulates:  raw_root = "/tmp/vault/"  →  strip  →  "/tmp/vault"
+    ///             canonical_root = "/private/tmp/vault"  (no trailing slash)
+    ///             path = "/tmp/vault/note.md"
+    ///             expected result = "/private/tmp/vault/note.md"
+    #[test]
+    fn canonicalize_prefix_swap_trailing_slash_root() {
+        // Mimic the HIGH-1 fix: trim trailing slashes from both sides before
+        // storing in root_to_canonical.
+        let raw_root = "/tmp/vault/".trim_end_matches('/').to_string();
+        let canonical_root = "/private/tmp/vault".trim_end_matches('/').to_string();
+        let root_to_canonical = [(raw_root.clone(), canonical_root.clone())];
+
+        let path = "/tmp/vault/note.md";
+
+        // Path-boundary-aware prefix match (HIGH-2 fix also applied here).
+        let result = root_to_canonical
+            .iter()
+            .find(|(raw, _)| {
+                let raw = raw.as_str();
+                path.starts_with(raw)
+                    && (path.len() == raw.len()
+                        || path.as_bytes().get(raw.len()) == Some(&b'/'))
+            })
+            .map(|(raw, canonical)| format!("{}{}", canonical, &path[raw.len()..]))
+            .unwrap_or_else(|| try_canonicalize(path));
+
+        assert_eq!(
+            result, "/private/tmp/vault/note.md",
+            "trailing slash in raw_root must not mangle the swapped path"
+        );
+    }
+
+    // ── HIGH-2 regression: adjacent root must not match shorter root ─────────
+
+    /// `/tmp/vault2/note.md` must match root `/tmp/vault2`, **not** `/tmp/vault`,
+    /// even though `/tmp/vault2/note.md` starts with the byte string `/tmp/vault`.
+    #[test]
+    fn canonicalize_prefix_swap_adjacent_root_no_collision() {
+        let root_to_canonical = [
+            ("/tmp/vault".to_string(), "/canonA".to_string()),
+            ("/tmp/vault2".to_string(), "/canonB".to_string()),
+        ];
+
+        let path = "/tmp/vault2/note.md";
+
+        let result = root_to_canonical
+            .iter()
+            .find(|(raw, _)| {
+                let raw = raw.as_str();
+                path.starts_with(raw)
+                    && (path.len() == raw.len()
+                        || path.as_bytes().get(raw.len()) == Some(&b'/'))
+            })
+            .map(|(raw, canonical)| format!("{}{}", canonical, &path[raw.len()..]))
+            .unwrap_or_else(|| try_canonicalize(path));
+
+        assert_eq!(
+            result, "/canonB/note.md",
+            "adjacent root /tmp/vault must not collide with /tmp/vault2"
+        );
     }
 }
