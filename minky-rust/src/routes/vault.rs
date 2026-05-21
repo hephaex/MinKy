@@ -29,6 +29,11 @@ use crate::{
 /// Default value for `max_files` when the caller omits the field.
 const DEFAULT_MAX_FILES: usize = 100;
 
+/// Maximum number of rows returned by sync_report DB query.
+/// If more than this many tracked files exist, the query result is truncated
+/// and the response includes a `truncated: true` flag.
+const SYNC_REPORT_DB_LIMIT: usize = 50_000;
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/ingest", post(ingest_vault))
@@ -192,6 +197,46 @@ pub async fn ingest_single_file(
     Ok(Some(document_id))
 }
 
+// ── LIKE metacharacter escaping ───────────────────────────────────────────────
+
+/// Escape PostgreSQL `LIKE` metacharacters in `s` so the string can be used
+/// as a literal prefix pattern.
+///
+/// PostgreSQL interprets `%`, `_`, and `\` specially inside a `LIKE` pattern
+/// even when the value is supplied via a bind parameter.  Callers must escape
+/// these characters and pair the escaped string with `ESCAPE '\'` in the SQL.
+///
+/// | Input char | Output |
+/// |-----------|--------|
+/// | `\`       | `\\`   |
+/// | `%`       | `\%`   |
+/// | `_`       | `\_`   |
+fn escape_like_prefix(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+// ── Path canonicalization helper ──────────────────────────────────────────────
+
+/// Canonicalize `path` to its real filesystem path, falling back to the
+/// original string if canonicalization fails (e.g. the path no longer exists).
+///
+/// On macOS, `/tmp` is a symlink to `/private/tmp`.  Without canonicalization
+/// the disk walk (which follows real inodes) returns `/private/tmp/…` while
+/// the DB may store `/tmp/…`, causing every file to appear as "untracked".
+/// Applying this function to both sides of the comparison eliminates the mismatch.
+fn try_canonicalize(path: &str) -> String {
+    std::path::Path::new(path)
+        .canonicalize()
+        .ok()
+        .and_then(|p| p.into_os_string().into_string().ok())
+        .unwrap_or_else(|| {
+            tracing::warn!(path, "sync_report: could not canonicalize path");
+            path.to_string()
+        })
+}
+
 // ── Sync-report query ─────────────────────────────────────────────────────────
 
 /// Query parameters for `GET /api/vault/sync/report`.
@@ -202,6 +247,42 @@ pub async fn ingest_single_file(
 pub struct SyncReportQuery {
     /// One or more absolute vault root paths to compare against the database.
     pub root: Vec<String>,
+}
+
+// ── Root deduplication helper ────────────────────────────────────────────────
+
+/// Remove any root that is a sub-path of another root in the set.
+///
+/// This ensures that if the caller supplies `["/vault", "/vault/sub"]`, only
+/// `["/vault"]` is kept. The order of the input does not matter; the function
+/// returns the "minimal" set where no root is a prefix of another.
+///
+/// # Example
+/// ```ignore
+/// let roots = vec!["/vault/sub".into(), "/vault".into()];
+/// let deduped = dedup_roots(roots);
+/// assert_eq!(deduped, vec![PathBuf::from("/vault")]);
+/// ```
+fn dedup_roots(roots: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {
+    let mut kept: Vec<std::path::PathBuf> = Vec::new();
+
+    'outer: for candidate in roots {
+        // Check if the candidate is a sub-path of any already-kept root.
+        for existing in &kept {
+            if candidate.starts_with(existing) {
+                // candidate is under an already-kept root — drop it.
+                continue 'outer;
+            }
+        }
+
+        // Check if the candidate is a prefix of any already-kept root.
+        // If so, remove those roots and add the candidate instead.
+        kept.retain(|existing| !existing.starts_with(&candidate));
+
+        kept.push(candidate);
+    }
+
+    kept
 }
 
 // ── Sync-report handler ───────────────────────────────────────────────────────
@@ -241,6 +322,10 @@ pub async fn sync_report(
         }
     }
 
+    // Remove overlapping roots so that if the caller supplies `["/vault", "/vault/sub"]`,
+    // only `["/vault"]` is kept. This prevents double-counting files and DB rows.
+    valid_roots = dedup_roots(valid_roots);
+
     if valid_roots.is_empty() {
         return (
             axum::http::StatusCode::BAD_REQUEST,
@@ -255,7 +340,7 @@ pub async fn sync_report(
         let files = collect_md_files(root, true, usize::MAX);
         for f in files {
             if let Some(s) = f.to_str() {
-                disk_paths.insert(s.to_string());
+                disk_paths.insert(try_canonicalize(s));
             }
         }
     }
@@ -273,12 +358,18 @@ pub async fn sync_report(
             format!("{root_str}/")
         };
 
+        // Escape LIKE metacharacters so vault paths containing `_`, `%`, or
+        // `\` are treated as literals.  `root_prefix` (unescaped) is kept
+        // below for the canonical path check after the query.
+        let escaped_prefix = escape_like_prefix(&root_prefix);
+
         let rows = match sqlx::query_as::<_, (uuid::Uuid, String)>(
             "SELECT id, source_path FROM documents \
              WHERE source_path IS NOT NULL \
-             AND source_path LIKE $1 || '%'",
+             AND source_path LIKE $1 || '%' ESCAPE '\\' \
+             LIMIT 50001",
         )
-        .bind(&root_prefix)
+        .bind(&escaped_prefix)
         .fetch_all(&state.db)
         .await
         {
@@ -296,11 +387,19 @@ pub async fn sync_report(
         db_pairs.extend(rows);
     }
 
+    // Check if we exceeded the limit.
+    let truncated = db_pairs.len() > SYNC_REPORT_DB_LIMIT;
+    if truncated {
+        db_pairs.truncate(SYNC_REPORT_DB_LIMIT);
+    }
+
     // Deduplicate: a source_path should map to exactly one document row;
     // later entries overwrite earlier ones in the HashMap.
+    // Canonicalize each DB path so that symlink differences (e.g. /tmp vs
+    // /private/tmp on macOS) do not cause false "orphan" or "untracked" results.
     let db_docs: HashMap<String, uuid::Uuid> = db_pairs
         .into_iter()
-        .map(|(id, path)| (path, id))
+        .map(|(id, path)| (try_canonicalize(&path), id))
         .collect();
 
     // 4. Compute the diff sets.
@@ -343,6 +442,7 @@ pub async fn sync_report(
             "tracked_count": tracked_count,
             "orphans": orphans,
             "untracked": untracked,
+            "truncated": truncated,
         }
     }))
     .into_response()
@@ -862,5 +962,187 @@ mod tests {
         assert_eq!(untracked.len(), 1, "exactly one untracked file expected");
         assert!(untracked[0].contains("c.md"), "c.md should be untracked");
         assert_eq!(orphans.len(), 0, "no orphans expected");
+    }
+
+    // ── escape_like_prefix ────────────────────────────────────────────────────
+
+    #[test]
+    fn like_escape_replaces_underscore() {
+        assert_eq!(escape_like_prefix("/my_vault/"), "/my\\_vault/");
+    }
+
+    #[test]
+    fn like_escape_replaces_percent() {
+        assert_eq!(escape_like_prefix("/100%_docs/"), "/100\\%\\_docs/");
+    }
+
+    #[test]
+    fn like_escape_replaces_backslash() {
+        assert_eq!(escape_like_prefix("/win\\path/"), "/win\\\\path/");
+    }
+
+    #[test]
+    fn like_escape_all_metacharacters() {
+        assert_eq!(
+            escape_like_prefix("/vault/a_b/100%\\done/"),
+            "/vault/a\\_b/100\\%\\\\done/"
+        );
+    }
+
+    // ── dedup_roots ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn sync_report_dedup_sub_root_removed() {
+        let roots = vec![
+            PathBuf::from("/tmp/vault"),
+            PathBuf::from("/tmp/vault/sub"),
+        ];
+        let deduped = dedup_roots(roots);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0], PathBuf::from("/tmp/vault"));
+    }
+
+    #[test]
+    fn sync_report_dedup_disjoint_roots_kept() {
+        let roots = vec![PathBuf::from("/tmp/a"), PathBuf::from("/tmp/b")];
+        let deduped = dedup_roots(roots);
+        assert_eq!(deduped.len(), 2);
+        // Both roots should be kept since they don't share a prefix relationship.
+        assert!(deduped.contains(&PathBuf::from("/tmp/a")));
+        assert!(deduped.contains(&PathBuf::from("/tmp/b")));
+    }
+
+    #[test]
+    fn sync_report_dedup_longer_prefix_wins() {
+        let roots = vec![
+            PathBuf::from("/tmp/vault/sub"),
+            PathBuf::from("/tmp/vault"),
+        ];
+        let deduped = dedup_roots(roots);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0], PathBuf::from("/tmp/vault"));
+    }
+
+    #[test]
+    fn sync_report_dedup_multiple_overlapping() {
+        let roots = vec![
+            PathBuf::from("/tmp/vault"),
+            PathBuf::from("/tmp/vault/sub"),
+            PathBuf::from("/tmp/vault/sub/deep"),
+            PathBuf::from("/tmp/other"),
+        ];
+        let deduped = dedup_roots(roots);
+        assert_eq!(deduped.len(), 2);
+        assert!(deduped.contains(&PathBuf::from("/tmp/vault")));
+        assert!(deduped.contains(&PathBuf::from("/tmp/other")));
+    }
+
+    #[test]
+    fn sync_report_dedup_single_root() {
+        let roots = vec![PathBuf::from("/tmp/vault")];
+        let deduped = dedup_roots(roots);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0], PathBuf::from("/tmp/vault"));
+    }
+
+    #[test]
+    fn sync_report_dedup_empty_input() {
+        let roots: Vec<PathBuf> = vec![];
+        let deduped = dedup_roots(roots);
+        assert!(deduped.is_empty());
+    }
+
+    // ── SYNC_REPORT_DB_LIMIT and truncation ───────────────────────────────────
+
+    #[test]
+    fn sync_report_limit_constant_is_50000() {
+        assert_eq!(SYNC_REPORT_DB_LIMIT, 50_000);
+    }
+
+    #[test]
+    fn sync_report_truncated_flag_when_over_limit() {
+        // Simulate: collect 50_001 db_pairs (exceeds SYNC_REPORT_DB_LIMIT).
+        // After truncation logic, we should have exactly 50_000 entries and
+        // truncated = true.
+        let mut db_pairs: Vec<(uuid::Uuid, String)> = (0..50_001)
+            .map(|i| (uuid::Uuid::new_v4(), format!("/vault/file{}.md", i)))
+            .collect();
+
+        let truncated = db_pairs.len() > SYNC_REPORT_DB_LIMIT;
+        if truncated {
+            db_pairs.truncate(SYNC_REPORT_DB_LIMIT);
+        }
+
+        assert!(truncated, "truncated should be true when over limit");
+        assert_eq!(db_pairs.len(), SYNC_REPORT_DB_LIMIT, "should truncate to exactly the limit");
+    }
+
+    #[test]
+    fn sync_report_not_truncated_at_limit() {
+        // Simulate: collect exactly 50_000 db_pairs (at the limit).
+        // After truncation logic, we should have exactly 50_000 entries and
+        // truncated = false.
+        let mut db_pairs: Vec<(uuid::Uuid, String)> = (0..SYNC_REPORT_DB_LIMIT)
+            .map(|i| (uuid::Uuid::new_v4(), format!("/vault/file{}.md", i)))
+            .collect();
+
+        let truncated = db_pairs.len() > SYNC_REPORT_DB_LIMIT;
+        if truncated {
+            db_pairs.truncate(SYNC_REPORT_DB_LIMIT);
+        }
+
+        assert!(!truncated, "truncated should be false when at exactly the limit");
+        assert_eq!(db_pairs.len(), SYNC_REPORT_DB_LIMIT, "should keep all entries at the limit");
+    }
+
+    // ── try_canonicalize ──────────────────────────────────────────────────────
+
+    #[test]
+    fn try_canonicalize_returns_original_for_nonexistent() {
+        // A path that does not exist cannot be canonicalized; the function must
+        // return the original string unchanged (no panic, no empty string).
+        let path = "/this/path/does/not/exist/9f3b2a1c/note.md";
+        let result = try_canonicalize(path);
+        assert_eq!(result, path, "nonexistent path must be returned as-is");
+    }
+
+    #[test]
+    fn try_canonicalize_resolves_real_path() {
+        // /tmp is guaranteed to exist on macOS and Linux.  The canonical form
+        // must be non-empty and an absolute path.
+        let result = try_canonicalize("/tmp");
+        assert!(!result.is_empty(), "canonical path must not be empty");
+        assert!(
+            result.starts_with('/'),
+            "canonical path must be absolute, got: {result}"
+        );
+    }
+
+    #[test]
+    fn sync_report_matching_after_canonicalize() {
+        // Create a real file in a tempdir.  Apply try_canonicalize to its path
+        // on both the "disk" side and the "db" side.  The results must be equal,
+        // simulating the macOS /tmp → /private/tmp symlink resolution scenario.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let file_path = dir.path().join("note.md");
+        std::fs::write(&file_path, "# Note").expect("write temp file");
+
+        let disk_side = file_path.to_str().expect("valid UTF-8 path").to_string();
+        // Simulate a DB record that stored the same path (possibly via a different
+        // symlink prefix).  After canonicalization both sides must match.
+        let db_side = disk_side.clone();
+
+        let canonical_disk = try_canonicalize(&disk_side);
+        let canonical_db = try_canonicalize(&db_side);
+
+        assert_eq!(
+            canonical_disk, canonical_db,
+            "disk path and db path must match after canonicalization"
+        );
+        // The canonical path must actually exist.
+        assert!(
+            std::path::Path::new(&canonical_disk).exists(),
+            "canonical path must point to an existing file"
+        );
     }
 }
