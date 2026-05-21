@@ -418,22 +418,32 @@
 - 커밋: `e0787245`, `fb6cc8ff`
 - 결과: 1,752 Rust pass / 0 fail / 2 ignored / 0 clippy warnings. 두 심링크 guard 레이어 + happy/edge path 모두 명시적 단위 테스트로 보호.
 
-## Sprint 26 로드맵
+## Sprint 26 완료 (2026-05-21) — HTML 추출 구현 + sync_report 응답 형상 테스트
 
-- P1: RAG E2E SOP 문서 작성 (`Docs/RAG_E2E_SETUP.md`) — operational prerequisite SOP 문서화
+- [x] S26-01: `parsing.rs` HTML headings/links 추출 — regex `(?is)` (dotall+case-insensitive), `position` = byte offset, OnceLock 정적 컴파일
+- [x] S26-02: sync_report response shape contract test — orphan/untracked/truncated 필드 검증 (DB 없이)
+- [x] 리뷰 H1 수정: parse_html 내 9개 regex OnceLock 상수화 (per-document 재컴파일 제거)
+- [x] 리뷰 H3 수정: `position` 하드코딩 0 → `cap.get(0).start()` (raw.content 내 byte offset)
+- [x] 리뷰 M6 수정: flag 검증 테스트 3건 추가 (dotall, case-insensitive, position byte offset)
+- 커밋: `b2fa2233`, `a1ae4271`
+- 결과: 1,737 Rust pass / 0 fail / 0 clippy warnings. parsing.rs HTML 추출 TODO 2건 해소.
+
+## Sprint 27 로드맵
+
+- P1: RAG E2E SOP 문서 작성 (`Docs/RAG_E2E_SETUP.md`) — operational prerequisite
   - PostgreSQL 컨테이너 기동 + migration 009/010 적용 절차
   - LOCAL_EMBEDDING_ENABLED=true 서버 기동 명령
   - POST /api/vault/ingest → POST /api/search/ask 테스트 시퀀스
-  - **Note**: code change 없음 — operational documentation only.
-- P2: `parsing.rs` HTML headings/links 추출 stub 완성 (TODO 2건)
-  - 현재 placeholder. HTML 입력 → heading hierarchy + outgoing link 추출 함수 구현
-- P3: `vault_watcher_service.rs` 단위 테스트
-  - VaultWatchConfig 직렬화/기본값
-  - `initial_scan=false` 경로 검증 (이벤트 루프 시작 전 스캔 스킵)
-- P4: sync_report response shape 통합 테스트
-  - DB 없이 mock response JSON 구조 검증 (orphan/untracked/truncated 필드)
+  - **Note**: code change 없음 — operational documentation only
+- P2: HTML heading/link 텍스트 정규화 개선 (S26 review M3/M4 follow-up)
+  - inner tag를 empty string 대신 space로 치환 (foobar → foo bar)
+  - heading/link text에 HTML entity 디코딩 적용 (`&amp;` → `&`)
+- P3: `parse_html()` 정규식 → scraper crate 마이그레이션 준비 (H2 follow-up: mismatched close tag)
+  - scraper crate 추가 평가 (Cargo.toml dependency, API 검토)
+  - 현재 regex path 대비 correctness/deps 트레이드오프 문서화
+- P4: parsing.rs code_blocks HTML 추출 (현재 `Vec::new()` 반환)
 
-## Rust TODO 현황 (31건, 2026-05-21 감사)
+## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 
 실제 운영에 영향을 주지 않는 stub/placeholder. 필요 시점에 구현.
 
@@ -446,7 +456,7 @@
 | OCR stub | 2 | ocr_service.rs, ocr.rs | job queue + 결과 저장 |
 | Sync stub | 2 | sync_service.rs | job queue + 스케줄 |
 | Security DB 연동 | 2 | security_service.rs | 규칙 로드/저장 |
-| Parsing 미완 | 2 | parsing.rs | HTML headings/links 추출 |
+| ~~Parsing 미완~~ | ~~2~~ → **0** | parsing.rs | ~~HTML headings/links 추출~~ ✅ Sprint 26 완료 |
 | 기타 | 6 | hybrid, ws, websocket, template | 개별 항목 |
 
 ## Blocked / Waiting

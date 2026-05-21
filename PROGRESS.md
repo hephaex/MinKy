@@ -5,7 +5,29 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 25: vault_common 심링크 엣지 케이스 + escape_like contract 정리
+## 현재 진행 상황 (2026-05-21) - Sprint 26: HTML 추출 구현 + sync_report 응답 형상 테스트
+
+### Sprint 26: HTML heading/link Extraction + sync_report Response Shape Test (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| HTML heading 추출 구현 (S26-01) | pipeline/stages/parsing.rs | `heading_regex()` OnceLock static, `(?is)` 플래그, inner-tag strip, `position` = byte offset |
+| HTML link 추출 구현 (S26-01) | pipeline/stages/parsing.rs | `link_regex()` OnceLock static, double/single quote href 지원 |
+| 9개 regression 테스트 (S26-01) | pipeline/stages/parsing.rs | 단일/복수 레벨, inner-tag strip, multiline, uppercase, position, no-headings, no-links |
+| sync_report response shape 테스트 2건 (S26-02) | routes/vault.rs | `sync_report_response_shape`, `sync_report_truncated_field_serializes_both_states` |
+| H1 수정: 9개 regex OnceLock 상수화 | pipeline/stages/parsing.rs | `tag_regex()`, `entity_regex()`, `heading_regex()`, `link_regex()`, `script_regex()`, `style_regex()`, `block_regex()`, `whitespace_regex()`, `title_regex()` — per-document 컴파일 비용 제거 |
+| H3 수정: position byte offset | pipeline/stages/parsing.rs | `Heading.position` = `cap.get(0).start()` (raw.content 내 <h…> 태그 시작 offset) |
+| M6 추가 테스트 3건 | pipeline/stages/parsing.rs | `html_heading_extraction_multiline` (dotall), `html_heading_extraction_uppercase_tag` (case-insensitive), `html_heading_position_is_byte_offset` (H3 guard) |
+
+테스트: 1,737 Rust pass / 0 fail / 2 ignored / 0 clippy warnings
+커밋: `b2fa2233` (Sprint 26 구현), `a1ae4271` (리뷰 H1/H3/M6 수정)
+리뷰: `~/.claude/references/2026-05-21_sprint26_html_extraction_parsing.md`
+
+**현재 상태**: parsing.rs HTML headings/links 추출 TODO 2건 해소. OnceLock 패턴으로 hotpath regex 컴파일 비용 제거. Heading position이 실제 byte offset으로 교정.
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 25: vault_common 심링크 엣지 케이스 + escape_like contract 정리
 
 ### Sprint 25: vault_common Symlink Edge Cases + escape_like Contract Cleanup (2026-05-21)
 
