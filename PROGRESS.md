@@ -5,7 +5,30 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 20: Obsidian Vault 파일 감시
+## 현재 진행 상황 (2026-05-21) - Sprint 21: source_path dedup + 초기 스캔 + sync report
+
+### Sprint 21: source_path Dedup + Vault Initial Scan + Sync Report API (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| migration 010 (신규) | migrations/010_document_source_path.sql | ADD COLUMN source_path TEXT + partial unique index (user_id, source_path) WHERE source_path IS NOT NULL |
+| storage upsert 분기 | pipeline/stages/storage.rs | source_path 있으면 path 기반 upsert, 없으면 기존 title 기반 — 중복 방지 |
+| ingest_single_file 수정 | routes/vault.rs | IngestionInput::from_file(path) → DocumentSource::File로 source_path 자동 채움 |
+| 초기 스캔 (신규) | services/vault_watcher_service.rs | VaultWatchConfig.initial_scan (기본 true) — 이벤트 루프 시작 전 기존 파일 일괄 인제스트 |
+| config.rs 갱신 | src/config.rs | VaultWatchConfig.initial_scan 필드 추가 |
+| lib.rs 갱신 | src/lib.rs | create_app()에서 initial_scan 전달 |
+| sync report API (신규) | routes/vault.rs | GET /api/vault/sync/report — disk vs DB orphan/untracked 비교 (read-only, AdminUser) |
+| H1 HIGH 수정 | routes/vault.rs + Cargo.toml | axum_extra::extract::Query로 교체 → ?root=&root= 다중값 올바르게 파싱 |
+| H2 HIGH 수정 | routes/vault.rs | sync_report DB 에러 → 500 응답 (unwrap_or_default 제거) |
+| H3 HIGH 수정 | services/vault_watcher_service.rs | 초기 스캔 cap usize::MAX로 변경, 500 초과 시 warn 로그 |
+
+테스트: 1,703 Rust pass / 0 fail / 3 ignored / 0 clippy warnings
+커밋: `1c0157e6` (Sprint 21 구현), `b0eb8b41` (리뷰 HIGH 수정)
+리뷰: `~/.claude/references/2026-05-21_sprint21_source_path_dedup_sync.md`
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 20: Obsidian Vault 파일 감시
 
 ### Sprint 20: Obsidian Vault File Watcher — notify-debouncer-full (2026-05-21)
 

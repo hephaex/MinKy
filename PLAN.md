@@ -353,11 +353,21 @@
 - 커밋: `88df037a`, `bc092f14`
 - 결과: VAULT_WATCH_ENABLED=true + roots + user_id 설정 시 Obsidian vault .md 파일 변경 자동 인제스트
 
-## Sprint 21 로드맵
+## Sprint 21 완료 (2026-05-21) — source_path dedup + 초기 스캔 + sync report
 
-- P1: Vault watcher 초기 스캔 (시작 시 기존 파일 일괄 인제스트 + source_path 중복 방지)
-- P2: RAG E2E 검증 (LOCAL_EMBEDDING_ENABLED=true + DB 마이그레이션 009 실행 + 실제 질의 테스트)
-- P3: Vault 동기화 보고서 API (source_path 기반 DB-파일 비교, 고아 문서 식별)
+- [x] S21-01: migration 010 — documents.source_path 컬럼 + partial unique index (user_id, source_path)
+- [x] S21-02: storage.rs upsert source_path 분기 (dedup by path vs title) + ingest_single_file DocumentSource::File
+- [x] S21-03: VaultWatcher 초기 스캔 (VaultWatchConfig.initial_scan: bool, default true)
+- [x] S21-04: GET /api/vault/sync/report — disk vs DB orphan/untracked 비교 (read-only, AdminUser)
+- [x] 리뷰 HIGH 수정: axum_extra::Query (multi-root), sync_report DB 에러 전파, 초기 스캔 usize::MAX cap
+- 커밋: `1c0157e6`, `b0eb8b41`
+- 결과: source_path 중복 방지, 기존 파일 일괄 인제스트, DB-파일 sync 보고서 API
+
+## Sprint 22 로드맵
+
+- P1: RAG E2E 검증 (LOCAL_EMBEDDING_ENABLED=true + DB 마이그레이션 009/010 실행 + 실제 질의 테스트)
+- P2: LIKE wildcard 이스케이프 (sync_report: `_`, `%` 포함 경로 오매칭 수정)
+- P3: sync_report 동시성 안전 (dedup overlapping roots, LIMIT cap, tracked_count canonicalization)
 - P4: OpenAI Batch API 최적화 (비동기 임베딩 생성 비용 절감)
 
 ## Rust TODO 현황 (31건, 2026-05-21 감사)
