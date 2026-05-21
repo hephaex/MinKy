@@ -6,7 +6,8 @@
 
 use std::path::Path;
 
-use axum::{extract::{Query, State}, response::IntoResponse, routing::{get, post}, Json, Router};
+use axum::{extract::State, response::IntoResponse, routing::{get, post}, Json, Router};
+use axum_extra::extract::Query;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -272,7 +273,7 @@ pub async fn sync_report(
             format!("{root_str}/")
         };
 
-        let rows = sqlx::query_as::<_, (uuid::Uuid, String)>(
+        let rows = match sqlx::query_as::<_, (uuid::Uuid, String)>(
             "SELECT id, source_path FROM documents \
              WHERE source_path IS NOT NULL \
              AND source_path LIKE $1 || '%'",
@@ -280,7 +281,17 @@ pub async fn sync_report(
         .bind(&root_prefix)
         .fetch_all(&state.db)
         .await
-        .unwrap_or_default();
+        {
+            Ok(rows) => rows,
+            Err(e) => {
+                tracing::error!("sync_report: DB query failed for root {root_str:?}: {e}");
+                return (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"success": false, "error": "database query failed"})),
+                )
+                    .into_response();
+            }
+        };
 
         db_pairs.extend(rows);
     }

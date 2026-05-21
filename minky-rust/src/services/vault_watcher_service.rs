@@ -209,11 +209,22 @@ impl VaultWatcherService {
                         let mut errors = 0usize;
 
                         for root in &roots {
+                            // Use usize::MAX so the initial scan covers the full vault.
+                            // The HTTP ingest endpoint caps at 500 for request-time safety,
+                            // but background startup scan should not silently truncate.
                             let files = crate::services::vault_common::collect_md_files(
                                 root,
                                 true,
-                                crate::services::vault_common::MAX_FILES_HARD_CAP,
+                                usize::MAX,
                             );
+                            if files.len() > crate::services::vault_common::MAX_FILES_HARD_CAP {
+                                tracing::warn!(
+                                    count = files.len(),
+                                    root = ?root,
+                                    "VaultWatcher initial scan: large vault (> {} files)",
+                                    crate::services::vault_common::MAX_FILES_HARD_CAP,
+                                );
+                            }
                             for file_path in files {
                                 // Verify the file is inside a watched canonical root
                                 // (same guard applied in the event loop below).
