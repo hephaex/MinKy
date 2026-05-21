@@ -471,15 +471,37 @@
 - 커밋: `ddcdd35a` (S29-01~04), `8f8ecc74` (리뷰 수정)
 - 결과: 1,768 Rust pass / 0 fail / 0 clippy warnings
 
-## Sprint 30 로드맵
+## Sprint 30 완료 (2026-05-22) — title via scraper, Link::position, 좌표계 문서화
 
-- P1: entity decode 경로 통일 — code block text + plain_text + title을 html5ever 경로로 통합
-  - 현재 code block/plain_text는 custom `decode_html_entities()` 32종, title은 raw match
-  - `Html::parse_document` 단일 파싱 결과에서 추출하거나 `html5ever` tokenizer만 직접 활용
-- P2: `<title>` 추출을 `Html::parse_document`로 통합 (현재 `title_regex()` 별도 경로)
-- P3: `Link` struct에 `position` 필드 추가 (`Heading`과 비대칭)
-  - 추출 시 `html[search_start..].as_bytes().windows(n).position(...)` 패턴 재사용
-- P4: Markdown position 좌표계 통일 — char offset (Markdown) vs byte offset (HTML) 계약 정의
+- [x] S30-01: `title_regex()` 제거; `scraper_extract_all()` → `(Option<String>, Vec<Heading>, Vec<Link>)`
+  - `T_SEL: OnceLock<Selector>` for `"title"` CSS selector
+  - html5ever로 full HTML5 entity table 처리 (title의 `&mdash;` 등 rare entity 해소)
+  - whitespace_regex() collapse + trim; absent `<title>` → raw.title fallback
+  - 3 테스트: `html_title_decodes_entities`, `html_title_collapses_whitespace`, `html_title_missing_falls_back_to_raw_title`
+- [x] S30-02: `Link::position` 필드 추가 (`Heading::position`과 대칭)
+  - HTML: 3-byte `<a` window scan + alphanumeric guard (skips `<abbr>`, `<aside>`, `<audio>` 등)
+  - Markdown: `plain_text.len()` at `Event::End(Tag::Link)` emit time
+  - 4 테스트 + 리뷰 수정 1건 (`markdown_link_inside_heading_has_text`)
+- [x] S30-03: position docs — "character offset" → "byte offset into `plain_text`" 전역 수정
+  - module-level, `Heading::position`, `CodeBlock::start_position` rustdoc
+- [x] S30-04: module-level "Entity decoding boundaries" + "Known limitations" 섹션 추가
+  - Entity 경로 분기 이유 명시 (DOM restructuring risk, verbatim code)
+  - SVG `<title>`, table foster-parenting, markdown link-in-heading position limitations
+- [x] 리뷰 수정: `Event::Text` 핸들러에서 heading 내부 링크 text 수집 버그 수정
+- 커밋: `6500d710` (S30-01~04), `e343a4d4` (리뷰 수정)
+- 결과: 1,776 Rust pass / 0 fail / 0 clippy warnings
+
+## Sprint 31 로드맵
+
+- P1: entity decode 경로 통일 — `plain_text` body와 code block의 `decode_html_entities()` 를
+  html5ever 경로로 통합하거나, 32-entry 테이블을 HTML5 full table로 교체 (M3 완전 해소)
+  - 고려사항: body stripping regex 제거 시 DOM restructuring 영향 평가 필요
+- P2: `<a>` 연속 태그 2건 이상 위치 정확도 검증 — `a_search_start = position + 1` 가 인접
+  `<a><a>` 패턴에서 올바르게 동작하는지 통합 테스트 추가
+- P3: `<title>` SVG false-positive 처리 — `T_SEL` 후보를 `head > title` 로 교체하거나
+  문서에서 확인된 발생 빈도 기반으로 wontfix 결정
+- P4: Markdown link-in-heading position 정확화 — `link_plain_text_position` 변수를
+  `Event::Start(Tag::Link)` 시점에 기록하여 heading flush 이전 정확한 오프셋 제공
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 

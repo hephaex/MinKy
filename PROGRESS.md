@@ -5,7 +5,32 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-22) - Sprint 29: scraper/html5ever 마이그레이션
+## 현재 진행 상황 (2026-05-22) - Sprint 30: title via scraper, Link::position, 좌표계 문서화
+
+### Sprint 30: Title Extraction + Link Position + Byte-Offset Docs (2026-05-22)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `title_regex()` 제거 (S30-01) | pipeline/stages/parsing.rs | scraper로 title 추출; `T_SEL: OnceLock<Selector>` |
+| `scraper_extract_all()` 반환 타입 확장 (S30-01) | pipeline/stages/parsing.rs | `(Option<String>, Vec<Heading>, Vec<Link>)` — 단일 파싱으로 title+heading+link |
+| html5ever full entity table for title (S30-01) | pipeline/stages/parsing.rs | `&mdash;` 등 rare entity decoded; raw.title fallback when absent |
+| `Link::position` 필드 추가 (S30-02) | pipeline/stages/parsing.rs | HTML: 3-byte `<a` window scan with alphanumeric guard; Markdown: `plain_text.len()` at emit |
+| `parse_markdown` Link 구성 수정 (S30-02) | pipeline/stages/parsing.rs | `position: plain_text.len()` 추가 (컴파일 에러 해소) |
+| position docs "byte offset" 수정 (S30-03) | pipeline/stages/parsing.rs | module-level, `Heading::position`, `CodeBlock::start_position` rustdoc |
+| "Entity decoding boundaries" 섹션 (S30-04) | pipeline/stages/parsing.rs | html5ever vs `decode_html_entities()` 경로 분기 이유 명시 |
+| "Known limitations" 섹션 추가 (리뷰 MEDIUM) | pipeline/stages/parsing.rs | SVG title, table foster-parenting, markdown link-in-heading position |
+| `Event::Text` link-in-heading 버그 수정 (리뷰 HIGH) | pipeline/stages/parsing.rs | heading 우선순위로 `link_text` 미수집 → 두 버퍼 모두 채우도록 수정 |
+| 테스트 8건 신규 + 1건 리뷰 수정 | pipeline/stages/parsing.rs | S30-01: 3건(title entity/whitespace/fallback), S30-02: 4건(html link position × 3 + markdown position), 리뷰: 1건(link in heading text) |
+
+테스트: 1,776 Rust pass / 0 fail / 0 clippy warnings
+커밋: `6500d710` (S30-01~04), `e343a4d4` (리뷰 HIGH/MEDIUM 수정)
+리뷰: `~/.claude/references/2026-05-22_sprint30_title_link_position.md`
+
+**현재 상태**: title/heading/link 추출이 모두 scraper/html5ever 단일 파싱. Link 구조체가 Heading과 대칭적 position 필드 보유. entity 경로 분기와 알려진 한계가 module-level docs에 명시.
+
+---
+
+## 이전 진행 상황 (2026-05-22) - Sprint 29: scraper/html5ever 마이그레이션
 
 ### Sprint 29: scraper/html5ever Heading + Link Extraction (2026-05-22)
 
