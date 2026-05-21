@@ -374,12 +374,23 @@
 - 커밋: `a52c0f81`, `e5785f85`
 - 결과: sync_report가 경로 특수문자, 중첩 root, 대용량 결과, macOS symlink 환경에서 올바르게 동작
 
-## Sprint 23 로드맵
+## Sprint 23 완료 (2026-05-21) — sync_report per-root budget + O(1) 정규화
 
-- P1: sync_report per-root truncation 개선 (현재는 aggregate bias — root별 limit으로 공정하게)
-- P2: try_canonicalize 성능 최적화 (경로마다 stat() → root 단위 정규화 + prefix rewrite)
-- P3: RAG E2E 검증 (LOCAL_EMBEDDING_ENABLED=true + DB 마이그레이션 009/010 실행 + 실제 질의 테스트)
-- P4: OpenAI Batch API 최적화 (비동기 임베딩 생성 비용 절감)
+- [x] S23-01: per-root truncation budget — remaining 차감, early break `> SYNC_REPORT_DB_LIMIT`
+- [x] S23-02: canonicalize-once-per-root — root_to_canonical Vec + prefix-swap (O(N roots))
+- [x] 리뷰 HIGH-1: trailing-slash root → trim_end_matches('/') 정규화
+- [x] 리뷰 HIGH-2: 인접 root prefix 오매칭 → path-component boundary 체크 (bytes[len] == b'/')
+- [x] 리뷰 HIGH-3: false-positive truncated at LIMIT → `>` 로 변경 (+1 sentinel 일치)
+- [x] 리뷰 MEDIUM-1: clippy::useless_vec → 배열 리터럴 교체
+- 커밋: `9cb0663d`, `cc607fc1`
+- 결과: sync_report DB 쿼리 stat() O(N파일)→O(N루트), root-biased truncation 제거, 경로 버그 수정
+
+## Sprint 24 로드맵
+
+- P1: RAG E2E 검증 (LOCAL_EMBEDDING_ENABLED=true + DB 마이그레이션 009/010 실행 + 실제 질의 테스트)
+- P2: sync_report O(R²) prefix find 최적화 (정렬된 루트 배열 + 조기 종료)
+- P3: OpenAI Batch API 최적화 (비동기 임베딩 생성 비용 절감)
+- P4: vault ingest + watcher 통합 테스트 (실제 파일시스템 기반 E2E)
 
 ## Rust TODO 현황 (31건, 2026-05-21 감사)
 

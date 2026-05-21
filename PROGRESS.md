@@ -5,7 +5,28 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 22: sync_report robustness
+## 현재 진행 상황 (2026-05-21) - Sprint 23: sync_report 성능 + 정확성
+
+### Sprint 23: sync_report Per-Root Budget + O(1) Canonicalization (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| per-root truncation budget | routes/vault.rs | remaining 용량 차감, early break `> LIMIT` (S23-01) |
+| root_to_canonical 사전 계산 | routes/vault.rs | N roots → N stat(), 파일별 stat() 제거 (S23-02) |
+| prefix-swap (disk) | routes/vault.rs | collect_md_files 결과에 string prefix replace (S23-02) |
+| prefix-swap (DB) | routes/vault.rs | db_pairs에 string prefix replace + component boundary 체크 (S23-02) |
+| HIGH-1 수정 | routes/vault.rs | trailing-slash root → trim_end_matches('/') 정규화 |
+| HIGH-2 수정 | routes/vault.rs | 인접 root prefix 충돌 → `bytes[len] == b'/'` 경계 체크 |
+| HIGH-3 수정 | routes/vault.rs | `>= LIMIT` → `> LIMIT` (false-positive truncated 제거) |
+| MEDIUM-1 수정 | routes/vault.rs | clippy::useless_vec → 배열 리터럴 교체 |
+
+테스트: 1,737 Rust pass / 0 fail / 4 ignored / 0 clippy warnings (--all-targets 포함)
+커밋: `9cb0663d` (Sprint 23 구현), `cc607fc1` (리뷰 HIGH 수정)
+리뷰: `~/.claude/references/2026-05-21_sprint23_sync_report_perf_correctness.md`
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 22: sync_report robustness
 
 ### Sprint 22: sync_report Robustness Hardening (2026-05-21)
 
