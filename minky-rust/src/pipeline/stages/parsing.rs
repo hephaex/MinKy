@@ -7,20 +7,42 @@
 //!
 //! ## Position coordinate systems
 //!
-//! [`Heading::position`] and [`CodeBlock::start_position`] use **different**
-//! coordinate systems depending on the source format and element type:
+//! [`Heading::position`], [`Link::position`], and [`CodeBlock::start_position`]
+//! use **byte offsets** (not character/codepoint offsets), but the reference
+//! string differs by format and element type:
 //!
-//! - **HTML headings**: best-effort byte offset of the opening `<hN>` tag in
-//!   `raw.content`, derived by scanning the source string in DOM order.
-//!   html5ever (used by scraper) discards source spans after tokenization, so
-//!   the scan may give 0 for headings whose tag cannot be located.
+//! - **HTML headings / links**: best-effort byte offset of the opening tag in
+//!   `raw.content`, derived by scanning the UTF-8 source string in DOM order
+//!   with case-insensitive comparison (html5ever normalises tag names to
+//!   lowercase but the source may contain `<H1>` or `<A HREF=…>`).
+//!   html5ever discards source spans after tokenisation, so the scan may
+//!   return 0 when the tag cannot be located.
 //! - **HTML code blocks**: accurate byte offset of the opening `<pre>` tag in
 //!   `raw.content` (regex-derived, no html5ever involvement).
-//! - **Markdown**: character offset into the rendered `plain_text` at the
-//!   point the element is emitted by pulldown-cmark.
+//! - **Markdown headings / links / code blocks**: byte offset into the
+//!   rendered `plain_text` string at the point the element is emitted by
+//!   pulldown-cmark (i.e. `plain_text.len()` at event time).
 //!
 //! Consumers that need a cross-format, unique offset must re-derive position
 //! from the canonical `plain_text` field rather than relying on this value.
+//!
+//! ## Entity decoding boundaries
+//!
+//! Entity handling differs by extraction path:
+//!
+//! - **Title / headings / links**: html5ever decodes the full HTML5 named-entity
+//!   table automatically via `el.text()`.  No custom post-processing needed.
+//! - **`plain_text` body**: the raw HTML is stripped with regex then run through
+//!   [`decode_html_entities`], which handles 32 common named entities plus
+//!   decimal/hex numeric entities.  html5ever is intentionally **not** used here
+//!   because tree construction can reorder or drop text nodes in malformed HTML,
+//!   producing different output than the source order expected for search indexing.
+//! - **Code blocks**: same `decode_html_entities` path as the body.  DOM
+//!   restructuring by html5ever would corrupt verbatim source code (e.g.
+//!   `<pre>` content adjacent to unclosed tags gets moved outside `<body>`).
+//!
+//! This asymmetry is a known limitation: rare entities outside the 32-entry
+//! table (e.g. `&mdash;` in body text, `&minus;` in code) will not be decoded.
 
 use async_trait::async_trait;
 use regex::Regex;
@@ -70,11 +92,6 @@ fn whitespace_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"\p{White_Space}+").unwrap())
 }
 
-fn title_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?i)<title>([^<]+)</title>").unwrap())
-}
-
 fn pre_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| Regex::new(r"(?is)<pre[^>]*>(.*?)</pre>").unwrap())
@@ -102,29 +119,36 @@ fn code_language_regex() -> &'static Regex {
 
 // ── scraper-based HTML extractors ────────────────────────────────────────────
 
-/// Extract headings using the html5ever/scraper HTML5 parser.
+/// Extract title, headings, and links in a single html5ever parse.
 ///
-/// scraper handles mismatched close tags, nested element text, and the full
-/// HTML5 named entity table — gaps that the regex path cannot cover.
+/// Returns `(Option<title>, Vec<Heading>, Vec<Link>)`.
 ///
-/// Parses the document once and extracts both headings and links from a single
-/// DOM tree to avoid double-parsing overhead.
-///
-/// **Heading position**: best-effort byte offset of the opening `<hN>` tag in
-/// `html`, derived by scanning the source bytes with case-insensitive comparison
-/// (html5ever normalises tag names to lowercase while source may have `<H1>`).
-/// The scan advances in DOM order so multiple headings of the same level each
-/// resolve to their own offset.
-fn scraper_extract_all(html: &str) -> (Vec<Heading>, Vec<Link>) {
+/// - **Title**: html5ever decodes the full HTML5 named entity table, so
+///   `<title>AT&amp;T</title>` → `"AT&T"`.  Whitespace is collapsed.
+///   Returns `None` if no `<title>` element exists.
+/// - **Headings/links**: see field-level docs on `Heading` and `Link`.
+/// - **Position (heading)**: best-effort byte offset of the opening `<hN>` tag,
+///   derived via case-insensitive byte window search to handle `<H1>` source.
+///   The scan advances in DOM order so multiple headings of the same level each
+///   resolve to their own offset.
+fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) {
     use scraper::{Html, Selector};
     static H_SEL: OnceLock<Selector> = OnceLock::new();
     static A_SEL: OnceLock<Selector> = OnceLock::new();
-    // safe: both are valid CSS selector literals
+    static T_SEL: OnceLock<Selector> = OnceLock::new();
+    // safe: all are valid CSS selector literals
     let h_sel = H_SEL.get_or_init(|| Selector::parse("h1,h2,h3,h4,h5,h6").unwrap());
     let a_sel = A_SEL.get_or_init(|| Selector::parse("a[href]").unwrap());
+    let t_sel = T_SEL.get_or_init(|| Selector::parse("title").unwrap());
     let doc = Html::parse_document(html);
 
-    let mut search_start = 0_usize;
+    let title = doc.select(t_sel).next().and_then(|el| {
+        let text: String = el.text().collect();
+        let collapsed = whitespace_regex().replace_all(text.trim(), " ").to_string();
+        if collapsed.is_empty() { None } else { Some(collapsed) }
+    });
+
+    let mut h_search_start = 0_usize;
     let headings: Vec<Heading> = doc.select(h_sel)
         .map(|el| {
             let name = el.value().name(); // always lowercase from html5ever
@@ -134,29 +158,43 @@ fn scraper_extract_all(html: &str) -> (Vec<Heading>, Vec<Link>) {
             let tag_pat = format!("<{}", name);
             // Case-insensitive window search so "<H1>" in source is found even
             // though html5ever normalises the name to "h1".
-            let position = html[search_start..]
+            let position = html[h_search_start..]
                 .as_bytes()
                 .windows(tag_pat.len())
                 .position(|w| w.eq_ignore_ascii_case(tag_pat.as_bytes()))
-                .map(|p| search_start + p)
+                .map(|p| h_search_start + p)
                 .unwrap_or(0);
-            search_start = position + 1;
+            h_search_start = position + 1;
             let text: String = el.text().collect();
             let collapsed = whitespace_regex().replace_all(text.trim(), " ").to_string();
             Heading { level, text: collapsed, position }
         })
         .collect();
 
+    let mut a_search_start = 0_usize;
     let links: Vec<Link> = doc.select(a_sel)
         .map(|el| {
+            // Case-insensitive match for `<a` followed by a non-alphanumeric
+            // byte so `<abbr`, `<address>`, etc. are not mistakenly hit.
+            let position = html[a_search_start..]
+                .as_bytes()
+                .windows(3)
+                .position(|w| {
+                    w[0] == b'<'
+                        && (w[1] == b'a' || w[1] == b'A')
+                        && !w[2].is_ascii_alphanumeric()
+                })
+                .map(|p| a_search_start + p)
+                .unwrap_or(0);
+            a_search_start = position + 1;
             let url = el.value().attr("href").unwrap_or("").to_string();
             let text: String = el.text().collect();
             let collapsed = whitespace_regex().replace_all(text.trim(), " ").to_string();
-            Link { text: collapsed, url }
+            Link { text: collapsed, url, position }
         })
         .collect();
 
-    (headings, links)
+    (title, headings, links)
 }
 
 /// Decode HTML entities in a string.
@@ -276,8 +314,8 @@ pub struct Heading {
     /// Heading text
     pub text: String,
 
-    /// Byte offset of the opening `<h…>` tag in `raw.content` (HTML), or
-    /// character offset into `plain_text` at event-emission time (Markdown).
+    /// Byte offset of the opening `<hN>` tag in `raw.content` (HTML), or
+    /// byte offset into `plain_text` at event-emission time (Markdown).
     /// See module-level docs for coordinate-system details.
     pub position: usize,
 }
@@ -290,6 +328,11 @@ pub struct Link {
 
     /// Link URL
     pub url: String,
+
+    /// Byte offset of the opening `<a` tag in `raw.content` (HTML), or
+    /// byte offset into `plain_text` at link-emission time (Markdown).
+    /// See module-level docs for coordinate-system details.
+    pub position: usize,
 }
 
 /// A code block extracted from the document
@@ -303,8 +346,8 @@ pub struct CodeBlock {
 
     /// Byte offset of this code block in the source.
     ///
-    /// For Markdown: offset into `plain_text` at the time the block is
-    /// emitted (character count of preceding rendered text).
+    /// For Markdown: byte offset into `plain_text` at the time the block is
+    /// emitted (i.e. `plain_text.len()` before the block's text is appended).
     /// For HTML: byte offset of the opening `<pre>` tag in `raw.content`.
     ///
     /// Note: these are different coordinate systems. Consumers that need
@@ -396,6 +439,7 @@ impl ParsingStage {
                     links.push(Link {
                         text: link_text.clone(),
                         url: link_url.clone(),
+                        position: plain_text.len(),
                     });
                     plain_text.push_str(&link_text);
                     in_link = false;
@@ -437,10 +481,10 @@ impl ParsingStage {
 
     /// Parse HTML content
     fn parse_html(&self, raw: &RawDocument) -> PipelineResult<ParsedDocument> {
-        // ── Extract headings + links (html5ever/scraper, single parse) ──────
-        // scraper handles mismatched tags, nested elements, and the full HTML5
-        // entity table.  One parse produces both Heading and Link vecs.
-        let (headings, links) = scraper_extract_all(&raw.content);
+        // ── Extract title, headings, links (html5ever/scraper, single parse) ─
+        // scraper handles mismatched tags, nested elements, the full HTML5
+        // entity table (including title entity decode), and link positions.
+        let (html_title, headings, links) = scraper_extract_all(&raw.content);
 
         // ── Extract code blocks before stripping ─────────────────────────────
         // Match <pre>…</pre>; each <code> sibling inside a <pre> becomes its
@@ -493,12 +537,7 @@ impl ParsingStage {
         // Normalize whitespace
         plain_text = whitespace_regex().replace_all(&plain_text, " ").to_string();
 
-        // Extract title from <title> tag if present
-        let title = title_regex()
-            .captures(&raw.content)
-            .and_then(|c| c.get(1))
-            .map(|m| m.as_str().to_string())
-            .unwrap_or_else(|| raw.title.clone());
+        let title = html_title.unwrap_or_else(|| raw.title.clone());
 
         Ok(ParsedDocument {
             title,
@@ -1289,6 +1328,102 @@ fn main() {}
         assert_eq!(parsed.code_blocks[0].code, "a < b && c");
         assert_eq!(parsed.code_blocks[1].language, None);
         assert_eq!(parsed.code_blocks[1].code, "plain > 0");
+    }
+
+    // ── S30-01: title extraction via scraper/html5ever ───────────────────────
+
+    /// html5ever fully decodes HTML5 named entities in <title>; the custom
+    /// decode_html_entities() only covers 32 entities and would miss &mdash;.
+    #[test]
+    fn html_title_decodes_entities() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<html><head><title>AT&amp;T &mdash; News</title></head><body></body></html>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.title, "AT&T \u{2014} News");
+    }
+
+    /// Whitespace in <title> is collapsed to a single space; leading/trailing
+    /// whitespace is trimmed.
+    #[test]
+    fn html_title_collapses_whitespace() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<html><head><title>  Hello\n  World  </title></head><body></body></html>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.title, "Hello World");
+    }
+
+    /// When no <title> element is present, parse_html falls back to raw.title.
+    #[test]
+    fn html_title_missing_falls_back_to_raw_title() {
+        let stage = ParsingStage::new();
+        let raw = RawDocument {
+            title: "Fallback Title".to_string(),
+            content: "<html><head></head><body><h1>Body</h1></body></html>".to_string(),
+            mime_type: "text/html".to_string(),
+            source_type: "test".to_string(),
+            source_path: None,
+        };
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.title, "Fallback Title");
+    }
+
+    // ── S30-02: Link::position byte offsets ───────────────────────────────────
+
+    /// For HTML, Link::position is the byte offset of the opening `<a` tag in
+    /// raw.content.  `<p>x</p>` is 8 bytes, so the link starts at byte 8.
+    #[test]
+    fn html_link_position_is_byte_offset() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(r#"<p>x</p><a href="/y">y</a>"#, "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 1);
+        assert_eq!(parsed.links[0].position, 8);
+    }
+
+    /// `<abbr>` starts with `<a` but is immediately followed by `b`, an
+    /// alphanumeric byte, so the 3-byte window detector must skip it and
+    /// find the real `<a ` tag.
+    #[test]
+    fn html_link_position_ignores_abbr() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<abbr title="HyperText">HT</abbr><a href="/y">y</a>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 1);
+        // <abbr title="HyperText">HT</abbr> is 33 bytes; <a> starts at index 33.
+        assert_eq!(parsed.links[0].position, 33);
+    }
+
+    /// html5ever normalises tag names to lowercase but the source may use
+    /// uppercase `<A HREF=…>`.  The case-insensitive window scan must still
+    /// return the correct byte offset.
+    #[test]
+    fn html_link_position_uppercase_tag() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(r#"<A HREF="/y">y</A>"#, "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 1);
+        assert_eq!(parsed.links[0].position, 0);
+    }
+
+    /// For Markdown, Link::position is the byte offset into plain_text at the
+    /// moment the link event is emitted — i.e., `plain_text.len()` before the
+    /// link text is appended.  Here "prefix " is 7 bytes.
+    #[test]
+    fn markdown_link_position_is_plain_text_offset() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("prefix [click](/url)", "text/markdown");
+        let parsed = stage.parse_markdown(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 1);
+        assert_eq!(parsed.links[0].position, 7);
     }
 
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
