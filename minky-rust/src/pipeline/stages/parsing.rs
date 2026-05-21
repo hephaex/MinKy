@@ -27,7 +27,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
-// ── Static regex helpers (compiled once) ─────────────────────────────────────
+// ── Static regex helpers — body stripping + code blocks (compiled once) ──────
+// Note: heading and link extraction use scraper/html5ever (see scraper_extract_all).
 
 fn tag_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -106,25 +107,37 @@ fn code_language_regex() -> &'static Regex {
 /// scraper handles mismatched close tags, nested element text, and the full
 /// HTML5 named entity table — gaps that the regex path cannot cover.
 ///
-/// Position is a best-effort byte offset of the opening `<hN>` tag in `html`.
-/// The scan advances after each match so multiple headings of the same level
-/// each resolve to their own offset rather than all pointing at the first.
-fn scraper_extract_headings(html: &str) -> Vec<Heading> {
+/// Parses the document once and extracts both headings and links from a single
+/// DOM tree to avoid double-parsing overhead.
+///
+/// **Heading position**: best-effort byte offset of the opening `<hN>` tag in
+/// `html`, derived by scanning the source bytes with case-insensitive comparison
+/// (html5ever normalises tag names to lowercase while source may have `<H1>`).
+/// The scan advances in DOM order so multiple headings of the same level each
+/// resolve to their own offset.
+fn scraper_extract_all(html: &str) -> (Vec<Heading>, Vec<Link>) {
     use scraper::{Html, Selector};
-    static SEL: OnceLock<Selector> = OnceLock::new();
-    let sel = SEL.get_or_init(|| Selector::parse("h1,h2,h3,h4,h5,h6").unwrap());
+    static H_SEL: OnceLock<Selector> = OnceLock::new();
+    static A_SEL: OnceLock<Selector> = OnceLock::new();
+    // safe: both are valid CSS selector literals
+    let h_sel = H_SEL.get_or_init(|| Selector::parse("h1,h2,h3,h4,h5,h6").unwrap());
+    let a_sel = A_SEL.get_or_init(|| Selector::parse("a[href]").unwrap());
     let doc = Html::parse_document(html);
+
     let mut search_start = 0_usize;
-    doc.select(sel)
+    let headings: Vec<Heading> = doc.select(h_sel)
         .map(|el| {
-            let name = el.value().name();
-            let level: u8 = name.chars().nth(1)
-                .and_then(|c| c.to_digit(10))
-                .map(|d| d as u8)
+            let name = el.value().name(); // always lowercase from html5ever
+            let level: u8 = name.as_bytes().get(1)
+                .map(|b| b - b'0')
                 .unwrap_or(1);
             let tag_pat = format!("<{}", name);
+            // Case-insensitive window search so "<H1>" in source is found even
+            // though html5ever normalises the name to "h1".
             let position = html[search_start..]
-                .find(tag_pat.as_str())
+                .as_bytes()
+                .windows(tag_pat.len())
+                .position(|w| w.eq_ignore_ascii_case(tag_pat.as_bytes()))
                 .map(|p| search_start + p)
                 .unwrap_or(0);
             search_start = position + 1;
@@ -132,23 +145,18 @@ fn scraper_extract_headings(html: &str) -> Vec<Heading> {
             let collapsed = whitespace_regex().replace_all(text.trim(), " ").to_string();
             Heading { level, text: collapsed, position }
         })
-        .collect()
-}
+        .collect();
 
-/// Extract links using the html5ever/scraper HTML5 parser.
-fn scraper_extract_links(html: &str) -> Vec<Link> {
-    use scraper::{Html, Selector};
-    static SEL: OnceLock<Selector> = OnceLock::new();
-    let sel = SEL.get_or_init(|| Selector::parse("a[href]").unwrap());
-    let doc = Html::parse_document(html);
-    doc.select(sel)
+    let links: Vec<Link> = doc.select(a_sel)
         .map(|el| {
             let url = el.value().attr("href").unwrap_or("").to_string();
             let text: String = el.text().collect();
             let collapsed = whitespace_regex().replace_all(text.trim(), " ").to_string();
             Link { text: collapsed, url }
         })
-        .collect()
+        .collect();
+
+    (headings, links)
 }
 
 /// Decode HTML entities in a string.
@@ -429,13 +437,10 @@ impl ParsingStage {
 
     /// Parse HTML content
     fn parse_html(&self, raw: &RawDocument) -> PipelineResult<ParsedDocument> {
-        // Simple HTML stripping using regex
-        // For production, consider using scraper crate
-
-        // ── Extract headings (html5ever/scraper) ─────────────────────────────
-        // scraper handles mismatched close tags, nested elements, and the full
-        // HTML5 named entity table.  Position is best-effort (see module docs).
-        let headings: Vec<Heading> = scraper_extract_headings(&raw.content);
+        // ── Extract headings + links (html5ever/scraper, single parse) ──────
+        // scraper handles mismatched tags, nested elements, and the full HTML5
+        // entity table.  One parse produces both Heading and Link vecs.
+        let (headings, links) = scraper_extract_all(&raw.content);
 
         // ── Extract code blocks before stripping ─────────────────────────────
         // Match <pre>…</pre>; each <code> sibling inside a <pre> becomes its
@@ -469,9 +474,6 @@ impl ParsingStage {
                 }
             })
             .collect();
-
-        // ── Extract links (html5ever/scraper) ────────────────────────────────
-        let links: Vec<Link> = scraper_extract_links(&raw.content);
 
         let mut plain_text = raw.content.clone();
 
@@ -792,6 +794,22 @@ fn main() {}
             "case-insensitive flag must match uppercase heading tags"
         );
         assert_eq!(parsed.headings[0].text, "Upper");
+    }
+
+    /// Position scan is case-insensitive: `<H1>` in source must resolve to its
+    /// correct byte offset, not silently fall back to 0.
+    #[test]
+    fn html_heading_uppercase_tag_position() {
+        let stage = ParsingStage::new();
+        // "<p>aa</p>" is 9 bytes; <H1> starts at offset 9.
+        let raw = make_raw_doc("<p>aa</p><H1>upper</H1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.headings.len(), 1);
+        assert_eq!(
+            parsed.headings[0].position,
+            9,
+            "uppercase <H1> must resolve to byte offset 9, not 0"
+        );
     }
 
     /// Heading `position` must be the byte offset of the opening `<h…>` tag
@@ -1271,5 +1289,17 @@ fn main() {}
         assert_eq!(parsed.code_blocks[0].code, "a < b && c");
         assert_eq!(parsed.code_blocks[1].language, None);
         assert_eq!(parsed.code_blocks[1].code, "plain > 0");
+    }
+
+    // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
+
+    /// `OnceLock<Selector>` in `scraper_extract_all` is shared across Axum
+    /// worker threads.  This test asserts that `Selector` implements both
+    /// `Sync` and `Send` so a future scraper bump that breaks the assumption
+    /// is caught at compile time, not at runtime.
+    #[test]
+    fn selector_is_sync_send() {
+        fn _assert<T: Sync + Send>() {}
+        _assert::<scraper::Selector>();
     }
 }
