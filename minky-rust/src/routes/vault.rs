@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::{
     error::{AppError, AppResult},
-    middleware::AuthUser,
+    middleware::{AdminUser, AuthUser},
     pipeline::{DocumentPipelineBuilder, IngestionInput},
     services::{
         vault_common::{collect_md_files, is_safe_md_path, validate_path as validate_path_common, MAX_FILE_BYTES},
@@ -115,8 +115,9 @@ pub fn extract_title(content: &str, file_stem: &str) -> String {
 /// - `Ok(None)` — file was silently skipped (oversized, empty, or symlink).
 /// - `Err(AppError)` — a real failure occurred (pipeline or DB error).
 ///
-/// The file's absolute path is stored in the document metadata as
-/// `{"source_path": "/absolute/path/to/file.md"}` via the pipeline context.
+/// The pipeline reads the file itself via [`DocumentSource::File`], which sets
+/// `source_path` correctly in the document record.  The manual read-before-pass
+/// pattern (which caused a TOCTOU race) is eliminated.
 pub async fn ingest_single_file(
     pool: &PgPool,
     file_path: &Path,
@@ -129,7 +130,9 @@ pub async fn ingest_single_file(
         return Ok(None);
     }
 
-    // Guard: enforce the file-size limit before reading content.
+    // Guard: enforce the file-size limit before passing to the pipeline.
+    // Using metadata here (rather than a full read) is cheap and avoids
+    // allocating a large buffer for files that will be rejected anyway.
     match tokio::fs::metadata(file_path).await {
         Ok(meta) if meta.len() > MAX_FILE_BYTES => {
             tracing::warn!(
@@ -149,37 +152,9 @@ pub async fn ingest_single_file(
         _ => {}
     }
 
-    // Read content.
-    let content = match tokio::fs::read_to_string(file_path).await {
-        Ok(c) => c,
-        Err(e) => {
-            return Err(AppError::Internal(anyhow::anyhow!(
-                "vault ingest: failed to read {:?}: {}",
-                file_path,
-                e
-            )));
-        }
-    };
-
-    // Guard: skip empty files — they cannot be meaningful documents.
-    if content.trim().is_empty() {
-        tracing::debug!("vault ingest: skipping {:?} — empty content", file_path);
-        return Ok(None);
-    }
-
-    let file_stem = file_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("untitled");
-
-    let title = extract_title(&content, file_stem);
-
-    // Store the absolute source path in the pipeline input so it propagates
-    // through to the document metadata.
-    let source_path = file_path
-        .to_str()
-        .unwrap_or("")
-        .to_string();
+    // Build the path string once; the pipeline uses it as the `File` source so
+    // that `source_path` is stored correctly in the document record.
+    let path_str = file_path.to_str().unwrap_or("").to_string();
 
     let pipeline = DocumentPipelineBuilder::new()
         .pool(pool.clone())
@@ -189,8 +164,10 @@ pub async fn ingest_single_file(
         .skip_analysis()
         .build();
 
-    let mut input = IngestionInput::from_text(title, content);
-    // Tag the MIME type so downstream stages treat this as markdown.
+    // Use DocumentSource::File so the pipeline reads the file and populates
+    // source_path on the resulting document (fixes C1).  MIME type is forced
+    // to text/markdown regardless of what mime-guess returns.
+    let mut input = IngestionInput::from_file(path_str.clone());
     input.options.mime_type = Some("text/markdown".to_string());
 
     let output = pipeline
@@ -207,7 +184,7 @@ pub async fn ingest_single_file(
         "vault ingest: ingested {:?} → document_id={}, source_path={}",
         file_path,
         document_id,
-        source_path
+        path_str,
     );
 
     Ok(Some(document_id))
@@ -267,9 +244,11 @@ async fn ingest_vault(
 
 /// `GET /api/vault/watch/status` — report whether the background watcher is
 /// currently running.
+///
+/// Admin-only: operational metadata should not be visible to regular users.
 pub async fn watch_status(
     State(state): State<AppState>,
-    _user: AuthUser,
+    _admin: AdminUser,
 ) -> impl axum::response::IntoResponse {
     let guard = state.vault_watcher.lock().await;
     let is_active = guard.is_some();
@@ -285,11 +264,12 @@ pub async fn watch_status(
 
 /// `POST /api/vault/watch/reload` — stop the running watcher (if any).
 ///
+/// Admin-only: stopping the vault watcher is a privileged operation.
 /// Full re-start requires a server restart because the watch roots are only
 /// available in the startup configuration, not stored in `AppState`.
 pub async fn watch_reload(
     State(state): State<AppState>,
-    _user: AuthUser,
+    _admin: AdminUser,
 ) -> impl axum::response::IntoResponse {
     let old_handle = {
         let mut guard = state.vault_watcher.lock().await;

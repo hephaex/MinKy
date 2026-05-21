@@ -157,6 +157,15 @@ fn collect_md_recursive(
             break;
         }
         let path = entry.path();
+
+        // H5: skip hidden entries (files or directories whose names start
+        // with '.', e.g. `.obsidian/`, `.git/`, `.DS_Store`).
+        let entry_name = entry.file_name();
+        let name_str = entry_name.to_str().unwrap_or("");
+        if name_str.starts_with('.') {
+            continue;
+        }
+
         // Use symlink_metadata to avoid following symlinks (path-traversal guard).
         let meta = match path.symlink_metadata() {
             Ok(m) => m,
@@ -295,5 +304,41 @@ mod tests {
         let f = write_file(dir.path(), "data.json", "{}");
         let files = collect_md_files(&f, false, 10);
         assert!(files.is_empty());
+    }
+
+    // ── H5: dotfile / hidden-directory skipping ────────────────────────────────
+
+    #[test]
+    fn collect_skips_hidden_files() {
+        let dir = make_temp_vault();
+        write_file(dir.path(), "visible.md", "# Visible");
+        write_file(dir.path(), ".hidden.md", "# Hidden");
+        let files = collect_md_files(dir.path(), false, 100);
+        assert_eq!(files.len(), 1);
+        assert!(files[0].file_name().unwrap().to_str().unwrap() == "visible.md");
+    }
+
+    #[test]
+    fn collect_skips_hidden_directories_recursively() {
+        let dir = make_temp_vault();
+        write_file(dir.path(), "root.md", "# Root");
+        // .obsidian/ is a hidden directory Obsidian uses — must be skipped.
+        let obsidian_dir = dir.path().join(".obsidian");
+        std::fs::create_dir(&obsidian_dir).unwrap();
+        write_file(&obsidian_dir, "config.md", "# Config");
+        let files = collect_md_files(dir.path(), true, 100);
+        assert_eq!(files.len(), 1, "files inside .obsidian/ must be skipped");
+        assert!(files[0].file_name().unwrap().to_str().unwrap() == "root.md");
+    }
+
+    #[test]
+    fn collect_skips_git_directory() {
+        let dir = make_temp_vault();
+        write_file(dir.path(), "note.md", "# Note");
+        let git_dir = dir.path().join(".git");
+        std::fs::create_dir(&git_dir).unwrap();
+        write_file(&git_dir, "HEAD.md", "ref: refs/heads/main");
+        let files = collect_md_files(dir.path(), true, 100);
+        assert_eq!(files.len(), 1, ".git/ entries must be skipped");
     }
 }

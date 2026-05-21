@@ -192,6 +192,7 @@ mod tests {
             slack_signing_secret: None,
             cors_allowed_origins: "http://localhost:3000".to_string(),
             local_embedding_enabled: false,
+            vault_watch: crate::config::VaultWatchConfig::default(),
         }
     }
 
@@ -310,6 +311,7 @@ mod tests {
             slack_signing_secret: None,
             cors_allowed_origins: "http://localhost:3000".to_string(),
             local_embedding_enabled: false,
+            vault_watch: crate::config::VaultWatchConfig::default(),
         };
         let other_svc = AuthService::new(other_pool, other_config);
 
@@ -359,6 +361,7 @@ mod tests {
             slack_signing_secret: None,
             cors_allowed_origins: "http://localhost:3000".to_string(),
             local_embedding_enabled: false,
+            vault_watch: crate::config::VaultWatchConfig::default(),
         };
         let svc = AuthService::new(pool, config);
 

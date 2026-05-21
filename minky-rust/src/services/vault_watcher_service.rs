@@ -16,12 +16,13 @@ use crate::services::embedding_service::EmbeddingService;
 
 /// A lightweight handle returned by [`VaultWatcherService::start`].
 ///
-/// Dropping this handle does **not** stop the watcher; call [`stop`] explicitly
-/// so that the shutdown is intentional and observable in logs.
+/// Dropping this handle **stops** the watcher automatically via the [`Drop`]
+/// implementation.  You can also call [`stop`] explicitly if you want the
+/// shutdown to be observable in logs before the handle goes out of scope.
 ///
 /// [`stop`]: VaultWatcherHandle::stop
 pub struct VaultWatcherHandle {
-    shutdown_tx: oneshot::Sender<()>,
+    shutdown_tx: Option<oneshot::Sender<()>>,
 }
 
 impl VaultWatcherHandle {
@@ -31,11 +32,21 @@ impl VaultWatcherHandle {
     /// immediately.  The background task acknowledges the signal and exits
     /// asynchronously.  Calling `stop` on an already-stopped watcher is safe
     /// and has no effect.
-    pub fn stop(self) {
-        // oneshot::Sender::send returns Err only when the receiver is already
-        // dropped, which is not an error condition from the caller's point of
-        // view (the task has already exited).
-        let _ = self.shutdown_tx.send(());
+    pub fn stop(mut self) {
+        if let Some(tx) = self.shutdown_tx.take() {
+            // send returns Err only when the receiver is already dropped,
+            // which simply means the task exited on its own — not an error.
+            let _ = tx.send(());
+        }
+    }
+}
+
+impl Drop for VaultWatcherHandle {
+    /// Automatically stop the background watcher when the handle is dropped.
+    fn drop(&mut self) {
+        if let Some(tx) = self.shutdown_tx.take() {
+            let _ = tx.send(());
+        }
     }
 }
 
@@ -101,6 +112,16 @@ impl VaultWatcherService {
                 .map_err(|e| anyhow::anyhow!("Invalid watch root {:?}: {}", root, e))?;
         }
 
+        // Pre-compute canonical roots so the event loop can verify that every
+        // incoming path is actually under a watched root (H4).  Roots that
+        // cannot be canonicalized are silently omitted — validate_path above
+        // already confirmed they exist, so canonicalize failures are rare edge
+        // cases (e.g. the directory was removed between validation and here).
+        let roots_canonical: Vec<PathBuf> = roots
+            .iter()
+            .filter_map(|r| std::fs::canonicalize(r).ok())
+            .collect();
+
         let pool = self.pool;
         let embedding_service = Arc::clone(&self.embedding_service);
 
@@ -139,7 +160,14 @@ impl VaultWatcherService {
                                     .flatten()
                                     .collect();
                                 if !paths.is_empty() {
-                                    let _ = event_tx.try_send(paths);
+                                    // H3: log a warning when the channel is full
+                                    // rather than silently dropping events.
+                                    if let Err(e) = event_tx.try_send(paths) {
+                                        tracing::warn!(
+                                            "VaultWatcher: event channel full, dropping {} paths",
+                                            e.into_inner().len(),
+                                        );
+                                    }
                                 }
                             }
                         },
@@ -169,10 +197,45 @@ impl VaultWatcherService {
                                 for path in paths {
                                     use crate::services::vault_common::is_safe_md_path;
 
+                                    // H5: skip hidden files and directories
+                                    // (e.g. .obsidian/, .git/).
+                                    if path.components().any(|c| {
+                                        c.as_os_str()
+                                            .to_str()
+                                            .map(|s| s.starts_with('.'))
+                                            .unwrap_or(false)
+                                    }) {
+                                        tracing::debug!(
+                                            "VaultWatcher: skipping hidden path {:?}",
+                                            path
+                                        );
+                                        continue;
+                                    }
+
                                     if !is_safe_md_path(&path) {
                                         tracing::debug!(
                                             "VaultWatcher: skipping non-md or unsafe path {:?}",
                                             path
+                                        );
+                                        continue;
+                                    }
+
+                                    // H4: verify the canonical path is under one
+                                    // of the configured watch roots.
+                                    let canonical = match std::fs::canonicalize(&path) {
+                                        Ok(p) => p,
+                                        Err(_) => {
+                                            tracing::debug!(
+                                                "VaultWatcher: cannot canonicalize {:?}, skipping",
+                                                path
+                                            );
+                                            continue;
+                                        }
+                                    };
+                                    if !roots_canonical.iter().any(|r| canonical.starts_with(r)) {
+                                        tracing::debug!(
+                                            "VaultWatcher: skipping out-of-root path {:?}",
+                                            canonical
                                         );
                                         continue;
                                     }
@@ -214,7 +277,7 @@ impl VaultWatcherService {
             }
         });
 
-        Ok(VaultWatcherHandle { shutdown_tx })
+        Ok(VaultWatcherHandle { shutdown_tx: Some(shutdown_tx) })
     }
 }
 
@@ -227,10 +290,23 @@ mod tests {
     #[test]
     fn handle_stop_does_not_panic() {
         let (tx, _rx) = oneshot::channel::<()>();
-        let handle = VaultWatcherHandle { shutdown_tx: tx };
+        let handle = VaultWatcherHandle { shutdown_tx: Some(tx) };
         // Dropping _rx before calling stop means the receiver is gone, yet
         // stop() must not panic.
         handle.stop();
+    }
+
+    #[test]
+    fn handle_drop_sends_shutdown() {
+        let (tx, mut rx) = oneshot::channel::<()>();
+        let handle = VaultWatcherHandle { shutdown_tx: Some(tx) };
+        // Dropping the handle should automatically send the shutdown signal.
+        drop(handle);
+        // rx.try_recv() returns Ok(()) if the signal was received.
+        assert!(
+            rx.try_recv().is_ok(),
+            "dropping VaultWatcherHandle must send the shutdown signal"
+        );
     }
 
     #[test]
