@@ -1045,6 +1045,12 @@ mod tests {
     }
 
     // ── escape_like_prefix ────────────────────────────────────────────────────
+    //
+    // sync_report uses: `LIKE $1 || '%' ESCAPE '\\'`
+    // PostgreSQL with ESCAPE '\' treats `\_` as literal underscore and
+    // `\%` as literal percent.  The assert_eq! tests below are the contract:
+    // they verify the exact escape sequences our function must produce so that
+    // the PostgreSQL ESCAPE '\\' clause interprets them correctly.
 
     #[test]
     fn like_escape_replaces_underscore() {
@@ -1066,44 +1072,6 @@ mod tests {
         assert_eq!(
             escape_like_prefix("/vault/a_b/100%\\done/"),
             "/vault/a\\_b/100\\%\\\\done/"
-        );
-    }
-
-    /// Contract test for the LIKE + ESCAPE clause used in sync_report.
-    ///
-    /// sync_report builds:  `LIKE $1 || '%' ESCAPE '\\'`
-    ///
-    /// With ESCAPE '\', PostgreSQL treats `\_` as a literal underscore and
-    /// `\%` as a literal percent — not wildcards.  This test verifies that
-    /// our escape function produces output consistent with that contract.
-    #[test]
-    fn escape_like_clause_underscore_becomes_literal() {
-        let raw = "/my_vault";
-        let escaped = escape_like_prefix(raw);
-        // `_` must be escaped to `\_` so that PostgreSQL (with ESCAPE '\\')
-        // treats it as a literal underscore, not a single-char wildcard.
-        assert!(
-            escaped.contains("\\_"),
-            "underscore must be escaped to `\\_` for ESCAPE '\\\\' clause"
-        );
-        // No raw `%` should appear (would act as wildcard)
-        assert!(
-            !escaped.contains('%'),
-            "escaped output must not contain a raw `%` when input had none"
-        );
-    }
-
-    #[test]
-    fn escape_like_clause_percent_becomes_literal() {
-        let raw = "/100%_docs";
-        let escaped = escape_like_prefix(raw);
-        assert!(
-            escaped.contains("\\%"),
-            "percent must be escaped to `\\%` for ESCAPE '\\\\' clause"
-        );
-        assert!(
-            escaped.contains("\\_"),
-            "underscore must also be escaped when percent is present"
         );
     }
 

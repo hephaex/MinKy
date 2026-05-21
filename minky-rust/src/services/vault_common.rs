@@ -364,6 +364,8 @@ mod tests {
     #[test]
     fn collect_symlink_root_returns_empty() {
         let target = make_temp_vault();
+        // Write a real .md file behind the symlink to prove the guard fires
+        // even when valid content exists — it's the symlink itself being rejected.
         write_file(target.path(), "note.md", "# Note");
 
         let link_dir = make_temp_vault();
@@ -389,8 +391,10 @@ mod tests {
         );
     }
 
-    /// A symlink pointing at a .md file must be rejected by `is_safe_md_path`
-    /// because `symlink_metadata` sees a symlink, not a regular file.
+    /// A symlink pointing at a .md file must be rejected by `is_safe_md_path`.
+    /// `symlink_metadata()` returns metadata about the link itself (not the
+    /// target), so `file_type().is_symlink()` is true and the guard fires
+    /// before the extension is even checked.
     #[cfg(unix)]
     #[test]
     fn is_safe_md_path_rejects_symlink_to_md() {
@@ -400,7 +404,55 @@ mod tests {
         std::os::unix::fs::symlink(&target, &link).expect("create symlink");
         assert!(
             !is_safe_md_path(&link),
-            "symlink to .md must be rejected — symlink_metadata sees symlink type"
+            "symlink to .md must be rejected — symlink_metadata sees the link, not the target"
+        );
+    }
+
+    /// A dangling symlink (target does not exist) must be rejected by
+    /// `is_safe_md_path`.  `symlink_metadata()` still succeeds for dangling
+    /// symlinks and reports the link type, so the guard fires correctly.
+    #[cfg(unix)]
+    #[test]
+    fn is_safe_md_path_rejects_dangling_symlink() {
+        let dir = make_temp_vault();
+        let link = dir.path().join("dangling.md");
+        std::os::unix::fs::symlink("/nonexistent/target.md", &link)
+            .expect("create dangling symlink");
+        assert!(
+            !is_safe_md_path(&link),
+            "dangling symlink must be rejected by the symlink guard"
+        );
+    }
+
+    /// Symlinks *inside* a scanned directory must be skipped by the per-entry
+    /// guard (line ~180 in collect_md_recursive), not just the root guard.
+    #[cfg(unix)]
+    #[test]
+    fn collect_skips_symlinks_inside_dir() {
+        let dir = make_temp_vault();
+        write_file(dir.path(), "real.md", "# Real");
+
+        // Place the symlink target outside the scanned dir so there is no
+        // ambiguity: the only way to find it would be to follow the link.
+        let outside = make_temp_vault();
+        let outside_target = write_file(outside.path(), "outside.md", "# Outside");
+        let link = dir.path().join("link.md");
+        std::os::unix::fs::symlink(&outside_target, &link).expect("create symlink");
+
+        let files = collect_md_files(dir.path(), true, 100);
+        assert_eq!(files.len(), 1, "symlink inside dir must be skipped");
+        assert!(files[0].ends_with("real.md"), "only the real file must be returned");
+    }
+
+    /// `is_safe_md_path` uses `eq_ignore_ascii_case("md")`, so uppercase
+    /// `.MD` must be accepted alongside lowercase `.md`.
+    #[test]
+    fn is_safe_md_path_accepts_uppercase_extension() {
+        let dir = make_temp_vault();
+        let f = write_file(dir.path(), "NOTE.MD", "# Hello");
+        assert!(
+            is_safe_md_path(&f),
+            "uppercase .MD extension must be accepted (case-insensitive check)"
         );
     }
 }
