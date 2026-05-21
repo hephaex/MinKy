@@ -197,13 +197,21 @@ fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) 
 /// Delegates to `html_escape::decode_html_entities`, which covers the full
 /// HTML5 named-entity table (2,231 entries), decimal numeric entities
 /// (`&#39;`), and hex numeric entities (`&#x27;`).  Unknown named entities
-/// and invalid numeric codepoints (e.g. surrogates) are preserved verbatim
-/// so no content is silently deleted.
+/// are preserved verbatim so no content is silently deleted.
+///
+/// NUL bytes (`&#0;` / `&#x0;`) are replaced with U+FFFD (replacement
+/// character) because NUL is invalid in PostgreSQL TEXT columns and
+/// corrupts JSON/log output.
 ///
 /// Shared by the plain-text body and code-block extraction paths to ensure
 /// consistent decoding without html5ever's tree-restructuring side effects.
 fn decode_html_entities(s: &str) -> String {
-    html_escape::decode_html_entities(s).into_owned()
+    let decoded = html_escape::decode_html_entities(s);
+    if decoded.contains('\0') {
+        decoded.replace('\0', "\u{FFFD}")
+    } else {
+        decoded.into_owned()
+    }
 }
 
 use crate::pipeline::{PipelineContext, PipelineResult, PipelineStage};
@@ -377,7 +385,12 @@ impl ParsingStage {
                         url: link_url.clone(),
                         position: link_position_snapshot,
                     });
-                    plain_text.push_str(&link_text);
+                    // Inside a heading the link text is already in
+                    // current_heading_text and will reach plain_text via
+                    // End(Heading); pushing again would duplicate it.
+                    if current_heading_level.is_none() {
+                        plain_text.push_str(&link_text);
+                    }
                     in_link = false;
                 }
                 Event::Text(text) => {
@@ -1381,31 +1394,43 @@ fn main() {}
 
     // ── S31-03: Link::position accuracy inside headings ──────────────────────
 
-    /// For a link inside a heading, position must be the offset of the link
-    /// within the concatenated plain_text — not the heading-start offset.
-    /// "# Title [click](/url)" → heading_text before link = "Title " (6 bytes)
-    /// plain_text before heading = 0 bytes → position = 0 + 6 = 6
+    /// For a link inside a heading, position must index into the final plain_text
+    /// at the start of the link text — not at the heading start.
+    /// "# Title [click](/url)" → plain_text = "Title click\n", link at byte 6.
     #[test]
     fn markdown_link_in_heading_position_is_link_offset() {
         let stage = ParsingStage::new();
         let raw = make_raw_doc("# Title [click](/url)", "text/markdown");
         let parsed = stage.parse_markdown(&raw).unwrap();
         assert_eq!(parsed.links.len(), 1);
-        assert_eq!(parsed.links[0].position, 6, "position must be past 'Title '");
+        let pos = parsed.links[0].position;
+        assert_eq!(pos, 6, "position must be past 'Title '");
+        // Self-consistency: plain_text[position..] must start with the link text.
+        assert!(
+            parsed.plain_text[pos..].starts_with(&parsed.links[0].text),
+            "plain_text[{}..] = {:?} must start with link text {:?}",
+            pos, &parsed.plain_text[pos..], parsed.links[0].text,
+        );
     }
 
     /// With preceding paragraph text, heading-link position must account for
     /// both prior plain_text and heading prefix text.
-    /// "intro\n\n# Header [link](/u)" → plain_text before heading = "intro" = 5 bytes
-    /// (paragraph end events emit no newline; only SoftBreak/HardBreak do)
-    /// heading text before link = "Header " = 7 bytes → position = 5 + 7 = 12
+    /// "intro\n\n# Header [link](/u)" → plain_text = "introHeader link\n",
+    /// "intro" = 5, "Header " = 7 → link at byte 12.
     #[test]
     fn markdown_link_in_heading_with_preceding_text() {
         let stage = ParsingStage::new();
         let raw = make_raw_doc("intro\n\n# Header [link](/u)", "text/markdown");
         let parsed = stage.parse_markdown(&raw).unwrap();
         assert_eq!(parsed.links.len(), 1);
-        assert_eq!(parsed.links[0].position, 12, "position must be past 'intro' + 'Header '");
+        let pos = parsed.links[0].position;
+        assert_eq!(pos, 12, "position must be past 'intro' + 'Header '");
+        // Self-consistency: plain_text[position..] must start with the link text.
+        assert!(
+            parsed.plain_text[pos..].starts_with(&parsed.links[0].text),
+            "plain_text[{}..] = {:?} must start with link text {:?}",
+            pos, &parsed.plain_text[pos..], parsed.links[0].text,
+        );
     }
 
     // ── S31-01: html-escape full HTML5 entity table ───────────────────────────
@@ -1428,6 +1453,21 @@ fn main() {}
         let raw = make_raw_doc("<p>&sect;3 of the spec</p>", "text/html");
         let parsed = stage.parse_html(&raw).unwrap();
         assert!(parsed.plain_text.contains('\u{00A7}'), "§ must be decoded");
+    }
+
+    /// &#0; decodes to NUL via html-escape; decode_html_entities must replace it
+    /// with U+FFFD so the output is safe for PostgreSQL TEXT columns.
+    #[test]
+    fn html_entity_nul_replaced_with_replacement_char() {
+        let result = decode_html_entities("before&#0;after");
+        assert!(
+            !result.contains('\0'),
+            "NUL byte must not appear in decoded output"
+        );
+        assert!(
+            result.contains('\u{FFFD}'),
+            "NUL must be replaced with U+FFFD"
+        );
     }
 
     #[test]
