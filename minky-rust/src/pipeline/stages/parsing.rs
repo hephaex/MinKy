@@ -66,30 +66,47 @@ fn pre_regex() -> &'static Regex {
 
 fn code_tag_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?is)^\s*<code([^>]*)>(.*)</code>\s*$").unwrap())
+    // No trailing `$` — the non-greedy (.*?) stops at the FIRST </code>.
+    // With a `$` anchor the lazy quantifier is forced to extend to the last
+    // </code> anyway, which merges siblings.  Without `$`, only the first
+    // <code>…</code> block is captured; any siblings are covered by the
+    // bare-pre fallback (tag-stripped, language=None).
+    RE.get_or_init(|| Regex::new(r"(?is)^\s*<code([^>]*)>(.*?)</code>").unwrap())
 }
 
 fn code_language_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r#"(?i)(?:language-|lang-)([^\s"']+)"#).unwrap())
+    // Anchored to a class attribute so data-href or id values that happen to
+    // contain "language-" or "lang-" are not misidentified as language tokens.
+    // Accepts both `language-xxx` (HTML5/GitHub) and `lang-xxx` (Prettify/legacy).
+    RE.get_or_init(|| {
+        Regex::new(r#"(?i)class\s*=\s*["'][^"']*?(?:language-|lang-)([^\s"']+)"#).unwrap()
+    })
 }
 
 /// Decode common HTML entities in a string.
 ///
 /// Shared by the main body stripping logic and the heading/link text
 /// extraction so entity decoding is consistent across all extraction paths.
+/// Decode common HTML entities in a string.
+///
+/// Shared by the main body stripping logic, heading/link text extraction,
+/// and code-block extraction so entity decoding is consistent across all
+/// extraction paths.
+///
+/// Unknown entities are left verbatim so no content is silently deleted.
 fn decode_html_entities(s: &str) -> String {
     entity_regex()
         .replace_all(s, |caps: &regex::Captures| {
             match &caps[0] {
-                "&nbsp;" => " ",
-                "&lt;" => "<",
-                "&gt;" => ">",
-                "&amp;" => "&",
-                "&quot;" => "\"",
-                _ => "",
+                "&nbsp;" => " ".to_string(),
+                "&lt;" => "<".to_string(),
+                "&gt;" => ">".to_string(),
+                "&amp;" => "&".to_string(),
+                "&quot;" => "\"".to_string(),
+                "&apos;" => "'".to_string(),
+                other => other.to_string(),
             }
-            .to_string()
         })
         .to_string()
 }
@@ -159,7 +176,15 @@ pub struct CodeBlock {
     /// Code content
     pub code: String,
 
-    /// Start position in original content
+    /// Byte offset of this code block in the source.
+    ///
+    /// For Markdown: offset into `plain_text` at the time the block is
+    /// emitted (character count of preceding rendered text).
+    /// For HTML: byte offset of the opening `<pre>` tag in `raw.content`.
+    ///
+    /// Note: these are different coordinate systems. Consumers that need
+    /// cross-format consistency should re-derive position from the canonical
+    /// plain-text offset rather than relying on this field directly.
     pub start_position: usize,
 }
 
@@ -322,7 +347,10 @@ impl ParsingStage {
                     let code = decode_html_entities(&cc[2]);
                     CodeBlock { language, code, start_position }
                 } else {
-                    let code = decode_html_entities(inner);
+                    // Strip any residual tags (e.g. bare <code> without matching
+                    // </code> at `$`) so the code field never contains raw HTML.
+                    let stripped = tag_regex().replace_all(inner, "");
+                    let code = decode_html_entities(&stripped);
                     CodeBlock { language: None, code, start_position }
                 }
             })
@@ -836,5 +864,66 @@ fn main() {}
         let parsed = stage.parse_html(&raw).unwrap();
         assert_eq!(parsed.code_blocks.len(), 1);
         assert_eq!(parsed.code_blocks[0].code, "a < b && c > 0");
+    }
+
+    // ── Review fixes (C1, C2, C3, H5) ────────────────────────────────────────
+
+    /// C1 regression: unknown entities must be preserved verbatim, not dropped.
+    #[test]
+    fn html_heading_unknown_entity_preserved() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1>What&rsquo;s new</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        // &rsquo; is not in the decode table — must be preserved, not deleted.
+        assert!(
+            parsed.headings[0].text.contains("&rsquo;"),
+            "unknown entity must be kept verbatim: got {:?}",
+            parsed.headings[0].text
+        );
+    }
+
+    /// C1: &apos; is now decoded to '.
+    #[test]
+    fn html_heading_apos_entity_decoded() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1>It&apos;s fine</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.headings[0].text, "It's fine");
+    }
+
+    /// C2 regression: two <code> siblings inside one <pre> must not merge.
+    #[test]
+    fn html_code_block_two_code_siblings_in_one_pre() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<pre><code class=\"language-rust\">fn a() {}</code>\n<code class=\"language-rust\">fn b() {}</code></pre>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        // The captured code must not contain the literal "</code>" string
+        // (which would indicate the greedy match merged the two siblings).
+        for block in &parsed.code_blocks {
+            assert!(
+                !block.code.contains("</code>"),
+                "code block must not contain a literal </code>: {:?}",
+                block.code
+            );
+        }
+    }
+
+    /// M2: <pre> with attributes must still be matched and language extracted.
+    #[test]
+    fn html_code_block_pre_with_attributes() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<pre class="highlight" data-lang="ignored"><code class="language-go">package main</code></pre>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 1);
+        assert_eq!(
+            parsed.code_blocks[0].language,
+            Some("go".to_string())
+        );
     }
 }
