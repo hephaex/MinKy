@@ -8,6 +8,56 @@
 use async_trait::async_trait;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
+
+// ── Static regex helpers (compiled once) ─────────────────────────────────────
+
+fn tag_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"<[^>]+>").unwrap())
+}
+
+fn entity_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"&\w+;").unwrap())
+}
+
+fn heading_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?is)<h([1-6])[^>]*>(.*?)</h[1-6]>").unwrap())
+}
+
+fn link_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r#"(?is)<a\s[^>]*?href=(?:"([^"]*?)"|'([^']*?)')(?:[^>]*)>(.*?)</a>"#).unwrap()
+    })
+}
+
+fn script_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?is)<script[^>]*>.*?</script>").unwrap())
+}
+
+fn style_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?is)<style[^>]*>.*?</style>").unwrap())
+}
+
+fn block_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"</(p|div|h[1-6]|br|li|tr)>").unwrap())
+}
+
+fn whitespace_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"\s+").unwrap())
+}
+
+fn title_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?i)<title>([^<]+)</title>").unwrap())
+}
 
 use crate::pipeline::{PipelineContext, PipelineResult, PipelineStage};
 
@@ -205,30 +255,23 @@ impl ParsingStage {
         // Simple HTML stripping using regex
         // For production, consider using scraper crate
 
-        let tag_re = Regex::new(r"<[^>]+>").unwrap();
-        let entity_re = Regex::new(r"&\w+;").unwrap();
-
         // ── Extract headings before stripping ────────────────────────────────
         // Match <h1>…</h1> through <h6>…</h6>; strip inner tags from text.
-        let heading_re = Regex::new(r"(?is)<h([1-6])[^>]*>(.*?)</h[1-6]>").unwrap();
-        let headings: Vec<Heading> = heading_re
+        // `position` is the byte offset of the opening tag in `raw.content`
+        // (offset into original HTML, not into plain_text).
+        let headings: Vec<Heading> = heading_regex()
             .captures_iter(&raw.content)
             .map(|cap| {
                 let level = cap[1].parse::<u8>().unwrap_or(1);
-                let text = tag_re
-                    .replace_all(&cap[2], "")
-                    .trim()
-                    .to_string();
-                Heading { level, text, position: 0 }
+                let text = tag_regex().replace_all(&cap[2], "").trim().to_string();
+                let position = cap.get(0).map(|m| m.start()).unwrap_or(0);
+                Heading { level, text, position }
             })
             .collect();
 
         // ── Extract links before stripping ───────────────────────────────────
         // Match <a href="…"> or <a href='…'> and capture URL + link text.
-        let link_re =
-            Regex::new(r#"(?is)<a\s[^>]*?href=(?:"([^"]*?)"|'([^']*?)')(?:[^>]*)>(.*?)</a>"#)
-                .unwrap();
-        let links: Vec<Link> = link_re
+        let links: Vec<Link> = link_regex()
             .captures_iter(&raw.content)
             .map(|cap| {
                 let url = cap
@@ -237,10 +280,7 @@ impl ParsingStage {
                     .map(|m| m.as_str())
                     .unwrap_or("")
                     .to_string();
-                let text = tag_re
-                    .replace_all(&cap[3], "")
-                    .trim()
-                    .to_string();
+                let text = tag_regex().replace_all(&cap[3], "").trim().to_string();
                 Link { text, url }
             })
             .collect();
@@ -248,20 +288,17 @@ impl ParsingStage {
         let mut plain_text = raw.content.clone();
 
         // Remove script and style tags with content
-        let script_re = Regex::new(r"(?is)<script[^>]*>.*?</script>").unwrap();
-        let style_re = Regex::new(r"(?is)<style[^>]*>.*?</style>").unwrap();
-        plain_text = script_re.replace_all(&plain_text, "").to_string();
-        plain_text = style_re.replace_all(&plain_text, "").to_string();
+        plain_text = script_regex().replace_all(&plain_text, "").to_string();
+        plain_text = style_regex().replace_all(&plain_text, "").to_string();
 
         // Replace block elements with newlines
-        let block_re = Regex::new(r"</(p|div|h[1-6]|br|li|tr)>").unwrap();
-        plain_text = block_re.replace_all(&plain_text, "\n").to_string();
+        plain_text = block_regex().replace_all(&plain_text, "\n").to_string();
 
         // Remove remaining tags
-        plain_text = tag_re.replace_all(&plain_text, "").to_string();
+        plain_text = tag_regex().replace_all(&plain_text, "").to_string();
 
         // Decode common entities
-        plain_text = entity_re
+        plain_text = entity_regex()
             .replace_all(&plain_text, |caps: &regex::Captures| {
                 match &caps[0] {
                     "&nbsp;" => " ",
@@ -276,12 +313,10 @@ impl ParsingStage {
             .to_string();
 
         // Normalize whitespace
-        let whitespace_re = Regex::new(r"\s+").unwrap();
-        plain_text = whitespace_re.replace_all(&plain_text, " ").to_string();
+        plain_text = whitespace_regex().replace_all(&plain_text, " ").to_string();
 
         // Extract title from <title> tag if present
-        let title_re = Regex::new(r"(?i)<title>([^<]+)</title>").unwrap();
-        let title = title_re
+        let title = title_regex()
             .captures(&raw.content)
             .and_then(|c| c.get(1))
             .map(|m| m.as_str().to_string())
@@ -549,5 +584,53 @@ fn main() {}
         let raw = make_raw_doc("<p>No links here.</p>", "text/html");
         let parsed = stage.parse_html(&raw).unwrap();
         assert!(parsed.links.is_empty());
+    }
+
+    // ── M6: flag-exercising tests ─────────────────────────────────────────────
+
+    /// Headings that span multiple lines must be found — exercises the `s`
+    /// (dotall) flag, which makes `.` match newlines.
+    #[test]
+    fn html_heading_extraction_multiline() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1>\n  Multi\n  Line\n</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.headings.len(),
+            1,
+            "dotall flag must match headings spanning newlines"
+        );
+        assert_eq!(parsed.headings[0].level, 1);
+    }
+
+    /// Uppercase `<H1>` tags must be matched — exercises the `i`
+    /// (case-insensitive) flag.
+    #[test]
+    fn html_heading_extraction_uppercase_tag() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<H1>Upper</H1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.headings.len(),
+            1,
+            "case-insensitive flag must match uppercase heading tags"
+        );
+        assert_eq!(parsed.headings[0].text, "Upper");
+    }
+
+    /// Heading `position` must be the byte offset of the opening `<h…>` tag
+    /// within `raw.content`, not zero.
+    #[test]
+    fn html_heading_position_is_byte_offset() {
+        let stage = ParsingStage::new();
+        // "<p>intro</p>" is 12 bytes before the heading.
+        let raw = make_raw_doc("<p>intro</p><h1>Title</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.headings.len(), 1);
+        assert_eq!(
+            parsed.headings[0].position,
+            12,
+            "position must be byte offset of <h1> in raw.content"
+        );
     }
 }
