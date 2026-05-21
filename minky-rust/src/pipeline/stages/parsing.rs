@@ -59,6 +59,41 @@ fn title_regex() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"(?i)<title>([^<]+)</title>").unwrap())
 }
 
+fn pre_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?is)<pre[^>]*>(.*?)</pre>").unwrap())
+}
+
+fn code_tag_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r"(?is)^\s*<code([^>]*)>(.*)</code>\s*$").unwrap())
+}
+
+fn code_language_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| Regex::new(r#"(?i)(?:language-|lang-)([^\s"']+)"#).unwrap())
+}
+
+/// Decode common HTML entities in a string.
+///
+/// Shared by the main body stripping logic and the heading/link text
+/// extraction so entity decoding is consistent across all extraction paths.
+fn decode_html_entities(s: &str) -> String {
+    entity_regex()
+        .replace_all(s, |caps: &regex::Captures| {
+            match &caps[0] {
+                "&nbsp;" => " ",
+                "&lt;" => "<",
+                "&gt;" => ">",
+                "&amp;" => "&",
+                "&quot;" => "\"",
+                _ => "",
+            }
+            .to_string()
+        })
+        .to_string()
+}
+
 use crate::pipeline::{PipelineContext, PipelineResult, PipelineStage};
 
 use super::ingestion::RawDocument;
@@ -263,9 +298,33 @@ impl ParsingStage {
             .captures_iter(&raw.content)
             .map(|cap| {
                 let level = cap[1].parse::<u8>().unwrap_or(1);
-                let text = tag_regex().replace_all(&cap[2], "").trim().to_string();
+                let stripped = tag_regex().replace_all(&cap[2], " ");
+                let collapsed = whitespace_regex().replace_all(stripped.as_ref(), " ");
+                let text = decode_html_entities(collapsed.trim());
                 let position = cap.get(0).map(|m| m.start()).unwrap_or(0);
                 Heading { level, text, position }
+            })
+            .collect();
+
+        // ── Extract code blocks before stripping ─────────────────────────────
+        // Match <pre>…</pre>; if the content starts with <code class="…">,
+        // the language is extracted from a `language-xxx` or `lang-xxx` class.
+        let code_blocks: Vec<CodeBlock> = pre_regex()
+            .captures_iter(&raw.content)
+            .map(|cap| {
+                let start_position = cap.get(0).map(|m| m.start()).unwrap_or(0);
+                let inner = cap[1].trim();
+                if let Some(cc) = code_tag_regex().captures(inner) {
+                    let language = code_language_regex()
+                        .captures(&cc[1])
+                        .and_then(|m| m.get(1))
+                        .map(|m| m.as_str().to_string());
+                    let code = decode_html_entities(&cc[2]);
+                    CodeBlock { language, code, start_position }
+                } else {
+                    let code = decode_html_entities(inner);
+                    CodeBlock { language: None, code, start_position }
+                }
             })
             .collect();
 
@@ -280,7 +339,9 @@ impl ParsingStage {
                     .map(|m| m.as_str())
                     .unwrap_or("")
                     .to_string();
-                let text = tag_regex().replace_all(&cap[3], "").trim().to_string();
+                let stripped = tag_regex().replace_all(&cap[3], " ");
+                let collapsed = whitespace_regex().replace_all(stripped.as_ref(), " ");
+                let text = decode_html_entities(collapsed.trim());
                 Link { text, url }
             })
             .collect();
@@ -298,19 +359,7 @@ impl ParsingStage {
         plain_text = tag_regex().replace_all(&plain_text, "").to_string();
 
         // Decode common entities
-        plain_text = entity_regex()
-            .replace_all(&plain_text, |caps: &regex::Captures| {
-                match &caps[0] {
-                    "&nbsp;" => " ",
-                    "&lt;" => "<",
-                    "&gt;" => ">",
-                    "&amp;" => "&",
-                    "&quot;" => "\"",
-                    _ => "",
-                }
-                .to_string()
-            })
-            .to_string();
+        plain_text = decode_html_entities(&plain_text);
 
         // Normalize whitespace
         plain_text = whitespace_regex().replace_all(&plain_text, " ").to_string();
@@ -329,7 +378,7 @@ impl ParsingStage {
             mime_type: raw.mime_type.clone(),
             headings,
             links,
-            code_blocks: Vec::new(),
+            code_blocks,
             source_type: raw.source_type.clone(),
             source_path: raw.source_path.clone(),
         })
@@ -632,5 +681,160 @@ fn main() {}
             12,
             "position must be byte offset of <h1> in raw.content"
         );
+    }
+
+    // ── S27-01: heading/link text normalization (M3 + M4) ────────────────────
+
+    /// Inner tags separated by no whitespace must produce a space between
+    /// their text: `<h2>foo<b>bar</b></h2>` → "foo bar", not "foobar".
+    #[test]
+    fn html_heading_inner_tags_produce_space() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h2>foo<b>bar</b></h2>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.headings[0].text,
+            "foo bar",
+            "adjacent inner tags must be separated by a space"
+        );
+    }
+
+    /// HTML entities inside heading text must be decoded:
+    /// `<h1>AT&amp;T</h1>` → "AT&T".
+    #[test]
+    fn html_heading_entity_decoded() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1>AT&amp;T &lt;Corp&gt;</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.headings[0].text,
+            "AT&T <Corp>",
+            "HTML entities in heading text must be decoded"
+        );
+    }
+
+    /// Combined: inner tag with entity in heading text.
+    #[test]
+    fn html_heading_inner_tag_and_entity_combined() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1><em>Foo</em> &amp; Bar</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.headings[0].text, "Foo & Bar");
+    }
+
+    /// Inner tags in link text must produce a space (same fix as headings).
+    #[test]
+    fn html_link_inner_tags_produce_space() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<a href="https://example.com">foo<b>bar</b></a>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.links[0].text,
+            "foo bar",
+            "adjacent inner tags in link text must be separated by a space"
+        );
+    }
+
+    /// HTML entities inside link text must be decoded.
+    #[test]
+    fn html_link_entity_decoded() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<a href="https://example.com">Q&amp;A Guide</a>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.links[0].text,
+            "Q&A Guide",
+            "HTML entities in link text must be decoded"
+        );
+    }
+
+    // ── S27-02: HTML code_blocks extraction ───────────────────────────────────
+
+    #[test]
+    fn html_code_block_with_language() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<pre><code class="language-rust">fn main() {}</code></pre>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 1);
+        assert_eq!(
+            parsed.code_blocks[0].language,
+            Some("rust".to_string())
+        );
+        assert!(parsed.code_blocks[0].code.contains("fn main()"));
+    }
+
+    #[test]
+    fn html_code_block_without_language() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<pre><code>plain code here</code></pre>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 1);
+        assert_eq!(parsed.code_blocks[0].language, None);
+        assert!(parsed.code_blocks[0].code.contains("plain code here"));
+    }
+
+    #[test]
+    fn html_code_block_bare_pre() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<pre>bare preformatted text</pre>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 1);
+        assert_eq!(parsed.code_blocks[0].language, None);
+        assert!(parsed.code_blocks[0].code.contains("bare preformatted text"));
+    }
+
+    #[test]
+    fn html_code_block_multiple_blocks() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<pre><code class="language-python">x = 1</code></pre>
+               <pre><code class="language-rust">let x = 1;</code></pre>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 2);
+        assert_eq!(
+            parsed.code_blocks[0].language,
+            Some("python".to_string())
+        );
+        assert_eq!(
+            parsed.code_blocks[1].language,
+            Some("rust".to_string())
+        );
+    }
+
+    #[test]
+    fn html_no_code_blocks_returns_empty() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<p>No code here.</p>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert!(parsed.code_blocks.is_empty());
+    }
+
+    #[test]
+    fn html_code_block_entity_decoded() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<pre><code>a &lt; b &amp;&amp; c &gt; 0</code></pre>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 1);
+        assert_eq!(parsed.code_blocks[0].code, "a < b && c > 0");
     }
 }
