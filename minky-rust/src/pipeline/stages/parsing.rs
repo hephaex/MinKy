@@ -43,6 +43,24 @@
 //!
 //! This asymmetry is a known limitation: rare entities outside the 32-entry
 //! table (e.g. `&mdash;` in body text, `&minus;` in code) will not be decoded.
+//!
+//! ## Known limitations
+//!
+//! - **SVG `<title>`**: The `"title"` CSS selector matches any `<title>` element,
+//!   including SVG `<title>` children embedded in HTML.  For HTML documents this
+//!   is rarely a problem since SVG `<title>` appears before `<head><title>` only
+//!   in pathological markup; scraper returns the first match.
+//! - **Table foster-parenting**: html5ever moves content placed illegally inside
+//!   `<table>` (e.g. bare text nodes) to just before the table per the HTML5
+//!   parsing spec.  When this happens, `<a>` elements in the source may appear
+//!   at a different position in the DOM than in the raw byte string, so the
+//!   3-byte `<a` window scan may land on a different tag than scraper selected.
+//!   The result is a best-effort offset, not a guaranteed exact match.
+//! - **Markdown link inside heading**: `Link::position` is recorded as
+//!   `plain_text.len()` at emit time, which does not include preceding text
+//!   within the same heading (heading text is flushed to `plain_text` only at
+//!   the heading end event).  The position is therefore the start of the heading
+//!   block, not the exact offset of the link within it.
 
 use async_trait::async_trait;
 use regex::Regex;
@@ -450,6 +468,11 @@ impl ParsingStage {
                         current_code.push_str(&text_str);
                     } else if current_heading_level.is_some() {
                         current_heading_text.push_str(&text_str);
+                        // A link nested inside a heading still needs its text
+                        // collected so Link::text is not empty.
+                        if in_link {
+                            link_text.push_str(&text_str);
+                        }
                     } else if in_link {
                         link_text.push_str(&text_str);
                     } else {
@@ -1424,6 +1447,18 @@ fn main() {}
         let parsed = stage.parse_markdown(&raw).unwrap();
         assert_eq!(parsed.links.len(), 1);
         assert_eq!(parsed.links[0].position, 7);
+    }
+
+    /// A link nested inside a heading must have non-empty text even though the
+    /// heading event handler gets priority for routing to plain_text.
+    #[test]
+    fn markdown_link_inside_heading_has_text() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("# Title [click](/url)", "text/markdown");
+        let parsed = stage.parse_markdown(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 1);
+        assert_eq!(parsed.links[0].text, "click");
+        assert_eq!(parsed.links[0].url, "/url");
     }
 
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
