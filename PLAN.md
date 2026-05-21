@@ -363,11 +363,22 @@
 - 커밋: `1c0157e6`, `b0eb8b41`
 - 결과: source_path 중복 방지, 기존 파일 일괄 인제스트, DB-파일 sync 보고서 API
 
-## Sprint 22 로드맵
+## Sprint 22 완료 (2026-05-21) — sync_report robustness hardening
 
-- P1: RAG E2E 검증 (LOCAL_EMBEDDING_ENABLED=true + DB 마이그레이션 009/010 실행 + 실제 질의 테스트)
-- P2: LIKE wildcard 이스케이프 (sync_report: `_`, `%` 포함 경로 오매칭 수정)
-- P3: sync_report 동시성 안전 (dedup overlapping roots, LIMIT cap, tracked_count canonicalization)
+- [x] S22-01: escape_like_prefix() — LIKE `\`, `%`, `_` 이스케이프 + `ESCAPE '\\'`
+- [x] S22-02: dedup_roots() — 중첩 root 자동 제거 (component-wise prefix 비교)
+- [x] S22-03: SYNC_REPORT_DB_LIMIT=50_000 + `LIMIT N+1` + `truncated: bool` 응답 필드
+- [x] S22-04: try_canonicalize() — disk/DB 양쪽 경로 정규화 (symlink 해소)
+- [x] 리뷰 HIGH 수정: reverse-order dedup 테스트 추가 (order-independence 증명)
+- [x] 리뷰 MEDIUM-5 수정: SQL LIMIT을 상수에서 derive (format!("{}", SYNC_REPORT_DB_LIMIT + 1))
+- 커밋: `a52c0f81`, `e5785f85`
+- 결과: sync_report가 경로 특수문자, 중첩 root, 대용량 결과, macOS symlink 환경에서 올바르게 동작
+
+## Sprint 23 로드맵
+
+- P1: sync_report per-root truncation 개선 (현재는 aggregate bias — root별 limit으로 공정하게)
+- P2: try_canonicalize 성능 최적화 (경로마다 stat() → root 단위 정규화 + prefix rewrite)
+- P3: RAG E2E 검증 (LOCAL_EMBEDDING_ENABLED=true + DB 마이그레이션 009/010 실행 + 실제 질의 테스트)
 - P4: OpenAI Batch API 최적화 (비동기 임베딩 생성 비용 절감)
 
 ## Rust TODO 현황 (31건, 2026-05-21 감사)

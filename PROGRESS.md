@@ -5,7 +5,26 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 21: source_path dedup + 초기 스캔 + sync report
+## 현재 진행 상황 (2026-05-21) - Sprint 22: sync_report robustness
+
+### Sprint 22: sync_report Robustness Hardening (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| escape_like_prefix() (신규) | routes/vault.rs | LIKE `\`→`\\`, `%`→`\%`, `_`→`\_` 이스케이프 + `ESCAPE '\\'` 절 추가 |
+| dedup_roots() (신규) | routes/vault.rs | 중첩 root 제거 — component-wise prefix 비교, order-independent |
+| SYNC_REPORT_DB_LIMIT (신규) | routes/vault.rs | 50_000행 cap + `LIMIT N+1` SQL + `truncated: bool` 응답 |
+| try_canonicalize() (신규) | routes/vault.rs | disk/DB 경로 양쪽 `fs::canonicalize` (macOS `/tmp`→`/private/tmp` 해소) |
+| HIGH 수정 | routes/vault.rs | reverse-order dedup 테스트로 order-independence 증명 |
+| MEDIUM-5 수정 | routes/vault.rs | SQL LIMIT 매직 넘버 → `format!("{}", SYNC_REPORT_DB_LIMIT + 1)` |
+
+테스트: 1,729 Rust pass / 0 fail / 4 ignored / 0 clippy warnings
+커밋: `a52c0f81` (Sprint 22 구현), `e5785f85` (리뷰 HIGH/MEDIUM 수정)
+리뷰: `~/.claude/references/2026-05-21_sprint22_sync_report_hardening.md`
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 21: source_path dedup + 초기 스캔 + sync report
 
 ### Sprint 21: source_path Dedup + Vault Initial Scan + Sync Report API (2026-05-21)
 
