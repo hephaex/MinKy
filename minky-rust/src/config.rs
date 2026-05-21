@@ -3,7 +3,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 /// Configuration for the background vault file-system watcher.
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct VaultWatchConfig {
     /// Whether the vault watcher should be started at application startup.
     #[serde(default)]
@@ -16,6 +16,28 @@ pub struct VaultWatchConfig {
     /// ID of the MinKy user that owns ingested documents.
     #[serde(default)]
     pub user_id: Option<i32>,
+
+    /// When `true` (the default), the watcher performs a full scan of all
+    /// existing `.md` files in the watched roots before the event loop starts.
+    /// Set to `false` for fast startup in tests or CI environments where
+    /// pre-existing files do not need to be ingested.
+    #[serde(default = "default_true")]
+    pub initial_scan: bool,
+}
+
+impl Default for VaultWatchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            roots: Vec::new(),
+            user_id: None,
+            initial_scan: true,
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Application configuration loaded from environment variables
@@ -287,5 +309,19 @@ mod tests {
         assert!(!cfg.enabled);
         assert!(cfg.roots.is_empty());
         assert!(cfg.user_id.is_none());
+        assert!(cfg.initial_scan, "initial_scan must default to true");
+    }
+
+    #[test]
+    fn vault_watch_config_default_trait_has_initial_scan_true() {
+        let cfg = VaultWatchConfig::default();
+        assert!(cfg.initial_scan, "Default::default() must set initial_scan to true");
+    }
+
+    #[test]
+    fn vault_watch_config_initial_scan_can_be_disabled() {
+        let cfg: VaultWatchConfig =
+            serde_json::from_str(r#"{"initial_scan": false}"#).unwrap();
+        assert!(!cfg.initial_scan);
     }
 }

@@ -90,7 +90,7 @@ pub async fn create_app(config: Config) -> Result<Router> {
                 Arc::clone(&embedding_service),
             );
             match watcher_svc
-                .start(config.vault_watch.roots.clone(), user_id)
+                .start(config.vault_watch.roots.clone(), user_id, config.vault_watch.initial_scan)
                 .await
             {
                 Ok(handle) => {

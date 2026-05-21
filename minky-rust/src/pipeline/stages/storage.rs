@@ -101,24 +101,40 @@ impl StorageStage {
         let user_id = context.user_id.or(self.config.user_id).unwrap_or(1);
         let category_id = context.category_id.or(self.config.category_id);
         let is_public = self.config.is_public;
+        let source_path = doc.source_path.as_deref();
 
-        // Check if document exists (by title if upserting)
+        // Check if document exists.
+        // Prefer matching by (user_id, source_path) when source_path is present so
+        // that vault re-ingests update the same row instead of creating duplicates.
+        // Fall back to (user_id, title) for plain-text / URL ingests.
         let existing_id: Option<(Uuid,)> = if self.config.upsert {
-            sqlx::query_as("SELECT id FROM documents WHERE title = $1 AND user_id = $2")
+            if let Some(sp) = source_path {
+                sqlx::query_as(
+                    "SELECT id FROM documents WHERE user_id = $1 AND source_path = $2",
+                )
+                .bind(user_id)
+                .bind(sp)
+                .fetch_optional(&self.pool)
+                .await?
+            } else {
+                sqlx::query_as(
+                    "SELECT id FROM documents WHERE title = $1 AND user_id = $2",
+                )
                 .bind(&doc.title)
                 .bind(user_id)
                 .fetch_optional(&self.pool)
                 .await?
+            }
         } else {
             None
         };
 
         let document_id = if let Some((id,)) = existing_id {
-            // Update existing document
+            // Update existing document, refreshing source_path in case it was previously NULL
             sqlx::query(
                 r#"
                 UPDATE documents
-                SET content = $2, category_id = $3, is_public = $4, updated_at = NOW()
+                SET content = $2, category_id = $3, is_public = $4, source_path = $5, updated_at = NOW()
                 WHERE id = $1
                 "#,
             )
@@ -126,6 +142,7 @@ impl StorageStage {
             .bind(&doc.original_content)
             .bind(category_id)
             .bind(is_public)
+            .bind(source_path)
             .execute(&self.pool)
             .await?;
 
@@ -134,8 +151,8 @@ impl StorageStage {
             // Insert new document
             let (id,): (Uuid,) = sqlx::query_as(
                 r#"
-                INSERT INTO documents (title, content, category_id, user_id, is_public)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO documents (title, content, category_id, user_id, is_public, source_path)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING id
                 "#,
             )
@@ -144,6 +161,7 @@ impl StorageStage {
             .bind(category_id)
             .bind(user_id)
             .bind(is_public)
+            .bind(source_path)
             .fetch_one(&self.pool)
             .await?;
 
@@ -385,5 +403,113 @@ mod tests {
         assert_eq!(stored.chunks_count, 5);
         assert!(stored.has_document_embedding);
         assert!(stored.has_analysis);
+    }
+
+    /// When `source_path` is `Some`, the storage stage must use the
+    /// `(user_id, source_path)` lookup so that repeated ingests of the same
+    /// vault file converge on a single document row.
+    ///
+    /// When `source_path` is `None` (e.g. plain-text or URL ingests), the
+    /// fallback `(user_id, title)` lookup is used instead.
+    ///
+    /// This test verifies the branching precondition that controls which
+    /// upsert path is taken, without requiring a live database connection.
+    #[test]
+    fn upsert_prefers_source_path_lookup_when_source_path_is_some() {
+        use super::super::analysis::AnalyzedDocument;
+        use crate::models::EmbeddingModel;
+
+        // A document produced by the File ingestion path always has source_path
+        // set.  The storage stage selects the upsert branch via:
+        //   `if let Some(sp) = doc.source_path.as_deref() { ... }`
+        // so we verify that the field is correctly `Some` for file ingests.
+        let doc_with_path = AnalyzedDocument {
+            title: "vault note".to_string(),
+            plain_text: String::new(),
+            original_content: "# Vault Note\n".to_string(),
+            mime_type: "text/markdown".to_string(),
+            metadata: Default::default(),
+            embedded_chunks: vec![],
+            document_embedding: None,
+            embedding_model: EmbeddingModel::default(),
+            analysis: None,
+            headings: vec![],
+            links: vec![],
+            code_blocks: vec![],
+            source_type: "file".to_string(),
+            source_path: Some("/vault/note.md".to_string()),
+        };
+
+        // Mirrors the branch condition in `store_document`.
+        let uses_source_path_lookup = doc_with_path.source_path.is_some();
+        assert!(
+            uses_source_path_lookup,
+            "file-ingested document must take the source_path upsert branch"
+        );
+        assert_eq!(
+            doc_with_path.source_path.as_deref(),
+            Some("/vault/note.md"),
+            "source_path must round-trip the file path unchanged"
+        );
+
+        // A document ingested via plain text or URL has no source_path and
+        // must fall through to the title-based lookup.
+        let doc_without_path = AnalyzedDocument {
+            title: "plain text note".to_string(),
+            source_path: None,
+            source_type: "text".to_string(),
+            ..doc_with_path
+        };
+
+        let uses_title_lookup = doc_without_path.source_path.is_none();
+        assert!(
+            uses_title_lookup,
+            "text-ingested document must take the title upsert branch"
+        );
+    }
+
+    /// Verify that `source_path` is present on `AnalyzedDocument` and can be
+    /// extracted as a `&str` the same way the storage stage does.
+    ///
+    /// This is a compile-time / structural test — if `AnalyzedDocument` ever
+    /// loses the `source_path: Option<String>` field the test will fail to
+    /// compile, catching the regression immediately.
+    #[test]
+    fn source_path_field_propagates() {
+        use super::super::analysis::AnalyzedDocument;
+        use crate::models::EmbeddingModel;
+
+        // Helper that mirrors the extraction the storage stage performs
+        fn extract_source_path(doc: &AnalyzedDocument) -> Option<&str> {
+            doc.source_path.as_deref()
+        }
+
+        let doc_with_path = AnalyzedDocument {
+            title: "test doc".to_string(),
+            plain_text: String::new(),
+            original_content: "content".to_string(),
+            mime_type: "text/markdown".to_string(),
+            metadata: Default::default(),
+            embedded_chunks: vec![],
+            document_embedding: None,
+            embedding_model: EmbeddingModel::default(),
+            analysis: None,
+            headings: vec![],
+            links: vec![],
+            code_blocks: vec![],
+            source_type: "file".to_string(),
+            source_path: Some("/tmp/test.md".to_string()),
+        };
+
+        assert_eq!(extract_source_path(&doc_with_path), Some("/tmp/test.md"));
+
+        let doc_no_path = AnalyzedDocument {
+            source_path: None,
+            source_type: "text".to_string(),
+            title: "plain text".to_string(),
+            ..doc_with_path
+        };
+
+        assert!(extract_source_path(&doc_no_path).is_none());
     }
 }

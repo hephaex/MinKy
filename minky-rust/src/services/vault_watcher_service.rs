@@ -59,7 +59,7 @@ impl Drop for VaultWatcherHandle {
 ///
 /// ```text
 /// VaultWatcherService::new(pool, embedding_service)
-///     └─ .start(roots, user_id) -> VaultWatcherHandle
+///     └─ .start(roots, user_id, initial_scan) -> VaultWatcherHandle
 ///             └─ .stop()
 /// ```
 pub struct VaultWatcherService {
@@ -87,6 +87,12 @@ impl VaultWatcherService {
     /// before the background task is spawned; the first invalid root causes an
     /// immediate error.
     ///
+    /// When `initial_scan` is `true`, the spawned task performs a full recursive
+    /// scan of all `.md` files under every root **before** the event loop starts.
+    /// Each file is ingested via [`crate::routes::vault::ingest_single_file`].
+    /// The S21-01 upsert-by-`source_path` deduplication in the storage stage
+    /// ensures that repeated runs do not create duplicate document records.
+    ///
     /// # Errors
     ///
     /// Returns an error if any element of `roots` fails [`validate_path`]
@@ -97,6 +103,7 @@ impl VaultWatcherService {
         self,
         roots: Vec<PathBuf>,
         user_id: i32,
+        initial_scan: bool,
     ) -> anyhow::Result<VaultWatcherHandle> {
         use crate::services::vault_common::validate_path;
         use notify_debouncer_full::{
@@ -190,6 +197,67 @@ impl VaultWatcherService {
                         user_id,
                         "VaultWatcher started",
                     );
+
+                    // ── Initial scan ──────────────────────────────────────────
+                    // Ingest all pre-existing .md files before the event loop
+                    // starts so that files created before the watcher was launched
+                    // are not silently missed.  The upsert-by-source_path in the
+                    // storage stage (S21-01) guarantees idempotency across runs.
+                    if initial_scan {
+                        let mut ingested = 0usize;
+                        let mut skipped = 0usize;
+                        let mut errors = 0usize;
+
+                        for root in &roots {
+                            let files = crate::services::vault_common::collect_md_files(
+                                root,
+                                true,
+                                crate::services::vault_common::MAX_FILES_HARD_CAP,
+                            );
+                            for file_path in files {
+                                // Verify the file is inside a watched canonical root
+                                // (same guard applied in the event loop below).
+                                let canonical = match std::fs::canonicalize(&file_path) {
+                                    Ok(p) => p,
+                                    Err(_) => {
+                                        skipped += 1;
+                                        continue;
+                                    }
+                                };
+                                if !roots_canonical.iter().any(|r| canonical.starts_with(r)) {
+                                    skipped += 1;
+                                    continue;
+                                }
+
+                                match crate::routes::vault::ingest_single_file(
+                                    &pool,
+                                    &file_path,
+                                    user_id,
+                                    &embedding_service,
+                                )
+                                .await
+                                {
+                                    Ok(Some(_)) => ingested += 1,
+                                    Ok(None) => skipped += 1,
+                                    Err(e) => {
+                                        tracing::warn!(
+                                            "VaultWatcher initial scan error for {:?}: {}",
+                                            file_path,
+                                            e
+                                        );
+                                        errors += 1;
+                                    }
+                                }
+                            }
+                        }
+
+                        tracing::info!(
+                            ingested,
+                            skipped,
+                            errors,
+                            "VaultWatcher initial scan complete",
+                        );
+                    }
 
                     loop {
                         tokio::select! {
@@ -307,6 +375,21 @@ mod tests {
             rx.try_recv().is_ok(),
             "dropping VaultWatcherHandle must send the shutdown signal"
         );
+    }
+
+    #[test]
+    fn initial_scan_flag_default_is_true() {
+        use crate::config::VaultWatchConfig;
+        let cfg: VaultWatchConfig = serde_json::from_str("{}").unwrap();
+        assert!(cfg.initial_scan, "initial_scan must default to true via serde");
+    }
+
+    #[test]
+    fn initial_scan_flag_can_be_disabled() {
+        use crate::config::VaultWatchConfig;
+        let cfg: VaultWatchConfig =
+            serde_json::from_str(r#"{"initial_scan": false}"#).unwrap();
+        assert!(!cfg.initial_scan, "initial_scan must be false when explicitly set");
     }
 
     #[test]

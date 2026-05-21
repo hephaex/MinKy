@@ -13,6 +13,12 @@ use std::path::{Path, PathBuf};
 /// ingestion to prevent excessive memory pressure.
 pub const MAX_FILE_BYTES: u64 = 10 * 1024 * 1024;
 
+/// Hard cap on the number of `.md` files collected in a single scan.
+///
+/// Shared by the manual-ingest route and the vault watcher initial scan so
+/// both code paths apply the same safety limit.
+pub const MAX_FILES_HARD_CAP: usize = 500;
+
 // ── Path validation ───────────────────────────────────────────────────────────
 
 /// Validate that `path_str` is an acceptable vault path.
