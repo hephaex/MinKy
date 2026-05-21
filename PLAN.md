@@ -401,20 +401,37 @@
 - 커밋: `cceaf5a7`, `3e4d72f7`
 - 결과: 1,745 Rust pass / 0 fail / 2 ignored / 0 clippy warnings. 현재는 correctness-neutral (dedup_roots가 overlap을 보장하지 않음)이지만 dedup_roots regression 시 안전망 역할.
 
-## Sprint 25 로드맵
+## Sprint 25 완료 (2026-05-21) — vault_common 심링크 엣지 케이스 + escape_like contract 정리
 
-- P1: RAG E2E 검증 (operational prerequisite: PostgreSQL with migrations 009/010 applied + LOCAL_EMBEDDING_ENABLED=true)
-  - 단계: (a) DB 컨테이너 기동 + migration 009 (nomic enum) + migration 010 (source_path) 실행
-  - (b) LOCAL_EMBEDDING_ENABLED=true로 서버 기동, fastembed 모델 다운로드 확인
-  - (c) POST /api/vault/ingest로 샘플 .md 1-2개 적재, processing_status=completed 대기
-  - (d) POST /api/search/ask 자연어 질문 → 응답 + sources 검증
-  - **Note**: code change 없음 — operational prerequisite. SOP 문서화 우선.
-- P2: vault_common.rs — `is_safe_md_path` + `collect_md_files` 단위 테스트 추가
-  - 엣지: empty dir, non-md files (txt/json 필터), symlink root (rejected), dotfile exclusion (.obsidian/.git)
-- P3: OpenAI Batch API 최적화 (설계 단계 — 비동기 임베딩 생성 비용 절감)
-  - greenfield multi-sprint work, 설계 문서 작성부터
-- P4: `escape_like_prefix` SQL ESCAPE clause 통합 테스트
-  - 실제 SQL 쿼리 문자열에 `ESCAPE '\\'` 절이 포함되는지 검증 (단위 테스트는 escape 결과만 검증)
+- [x] S25-01: vault_common.rs 심링크 + 안전성 단위 테스트 4건 추가
+  - `collect_empty_dir_returns_empty` — empty dir yields empty result without panic
+  - `collect_symlink_root_returns_empty` (#[cfg(unix)]) — root-level symlink guard (lines 124-131)
+  - `is_safe_md_path_accepts_real_md_file` — happy path acceptance criteria
+  - `is_safe_md_path_rejects_symlink_to_md` (#[cfg(unix)]) — symlink_metadata sees symlink type, extension never checked
+- [x] 코드 리뷰 MEDIUM-1, MEDIUM-2 수정: vault.rs ESCAPE contract 중복 테스트 2건 제거
+  - 기존 `assert_eq!` 테스트와 contains() 단정문이 중복 → 더 약한 contains() 제거
+  - ESCAPE clause 계약은 escape 테스트 섹션 블록 코멘트로 문서화
+- [x] 코드 리뷰 LOW-2, LOW-3, LOW-5 수정: 추가 안전성 테스트 3건
+  - `is_safe_md_path_rejects_dangling_symlink` — dangling symlink still rejected (symlink_metadata succeeds)
+  - `collect_skips_symlinks_inside_dir` — per-entry symlink guard in collect_md_recursive
+  - `is_safe_md_path_accepts_uppercase_extension` — eq_ignore_ascii_case coverage
+- 커밋: `e0787245`, `fb6cc8ff`
+- 결과: 1,752 Rust pass / 0 fail / 2 ignored / 0 clippy warnings. 두 심링크 guard 레이어 + happy/edge path 모두 명시적 단위 테스트로 보호.
+
+## Sprint 26 로드맵
+
+- P1: RAG E2E SOP 문서 작성 (`Docs/RAG_E2E_SETUP.md`) — operational prerequisite SOP 문서화
+  - PostgreSQL 컨테이너 기동 + migration 009/010 적용 절차
+  - LOCAL_EMBEDDING_ENABLED=true 서버 기동 명령
+  - POST /api/vault/ingest → POST /api/search/ask 테스트 시퀀스
+  - **Note**: code change 없음 — operational documentation only.
+- P2: `parsing.rs` HTML headings/links 추출 stub 완성 (TODO 2건)
+  - 현재 placeholder. HTML 입력 → heading hierarchy + outgoing link 추출 함수 구현
+- P3: `vault_watcher_service.rs` 단위 테스트
+  - VaultWatchConfig 직렬화/기본값
+  - `initial_scan=false` 경로 검증 (이벤트 루프 시작 전 스캔 스킵)
+- P4: sync_report response shape 통합 테스트
+  - DB 없이 mock response JSON 구조 검증 (orphan/untracked/truncated 필드)
 
 ## Rust TODO 현황 (31건, 2026-05-21 감사)
 
@@ -546,4 +563,4 @@
   - benches/core_functions.rs: 19개 벤치마크 함수 (document/tag/comment/audit service)
   - cargo bench로 실행 가능
 
-*Last updated: 2026-02-19 (16차 세션 - Rust 778개, Frontend 337개, Criterion 벤치마크 추가)*
+*Last updated: 2026-05-21 (Sprint 25 완료 — vault_common 심링크 엣지 케이스 + escape_like contract 정리, Rust 1,752 pass)*

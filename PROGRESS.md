@@ -5,7 +5,27 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 24: sort_roots_longest_first + escape_like 테스트 coverage
+## 현재 진행 상황 (2026-05-21) - Sprint 25: vault_common 심링크 엣지 케이스 + escape_like contract 정리
+
+### Sprint 25: vault_common Symlink Edge Cases + escape_like Contract Cleanup (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| 심링크 엣지 케이스 테스트 4건 (신규) | services/vault_common.rs | `collect_empty_dir_returns_empty`, `collect_symlink_root_returns_empty` (Unix), `is_safe_md_path_accepts_real_md_file`, `is_safe_md_path_rejects_symlink_to_md` (Unix) |
+| MEDIUM-1, MEDIUM-2 수정: 중복 contract 테스트 제거 | routes/vault.rs | ESCAPE contract 중복 contains() 단정문 2건 제거 → 기존 `assert_eq!` 테스트가 동일 사항을 더 엄격하게 보장, contract는 escape 섹션 블록 코멘트로 문서화 |
+| LOW-2 수정: dangling symlink 테스트 (신규) | services/vault_common.rs | `is_safe_md_path_rejects_dangling_symlink` — symlink_metadata는 dangling link도 type 식별 가능 |
+| LOW-3 수정: 디렉토리 내부 심링크 가드 테스트 (신규) | services/vault_common.rs | `collect_skips_symlinks_inside_dir` — collect_md_recursive 내부 per-entry 심링크 차단 |
+| LOW-5 수정: 대문자 확장자 happy path (신규) | services/vault_common.rs | `is_safe_md_path_accepts_uppercase_extension` — eq_ignore_ascii_case 동작 검증 |
+
+테스트: 1,752 Rust pass / 0 fail / 2 ignored / 0 clippy warnings
+커밋: `e0787245` (Sprint 25 구현), `fb6cc8ff` (리뷰 MEDIUM/LOW 수정)
+리뷰: `~/.claude/references/2026-05-21_sprint25_vault_common_symlink_tests.md`
+
+**현재 상태**: vault_common의 두 심링크 guard 레이어 (root-level lines 124-131 + collect 내부 per-entry) 양쪽이 명시적 단위 테스트로 보호. happy/edge path 명시화로 acceptance criteria 문서화.
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 24: sort_roots_longest_first + escape_like 테스트 coverage
 
 ### Sprint 24: sort_roots_longest_first Helper + escape_like Unit Tests (2026-05-21)
 
@@ -19,9 +39,6 @@
 테스트: 1,745 Rust pass / 0 fail / 2 ignored / 0 clippy warnings
 커밋: `cceaf5a7` (Sprint 24 구현), `3e4d72f7` (리뷰 MEDIUM 수정)
 리뷰: `~/.claude/references/2026-05-21_sprint24_sort_roots_escape_tests.md`
-
-**현재 상태**: defense-in-depth. dedup_roots가 overlapping root 미허용을 보장하므로 correctness-neutral.
-미래 dedup_roots regression 시 longer (more specific) root가 prefix-swap에서 승리.
 
 ---
 
