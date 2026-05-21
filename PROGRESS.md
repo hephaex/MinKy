@@ -5,7 +5,29 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 27: HTML 텍스트 정규화 + code_blocks 추출
+## 현재 진행 상황 (2026-05-22) - Sprint 28: Named Entity 디코딩 + Multi-Code Sibling
+
+### Sprint 28: Named Entity Decoding + Multi-Code Sibling Extraction (2026-05-22)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| named entity 32종 + numeric entity (S28-01) | pipeline/stages/parsing.rs | `&rsquo;`/`&mdash;`/`&hellip;` 등 32종 + `&#39;` decimal + `&#x27;`/`&#X27;` hex decode |
+| `entity_regex` 길이 bounds (S28-01 + 리뷰) | pipeline/stages/parsing.rs | `{1,8}/{1,10}/{1,32}` bounds + `#[xX]` case-insensitive hex prefix |
+| multi-`<code>` sibling 지원 (S28-02) | pipeline/stages/parsing.rs | `flat_map + captures_iter`; `^` anchor 제거 → captures_iter가 모든 sibling 탐색 |
+| `whitespace_regex` → `\p{White_Space}+` (리뷰 M3) | pipeline/stages/parsing.rs | Rust `\s`는 U+00A0 NBSP 미매칭 → Unicode property로 교체 |
+| scraper crate 평가 문서 (S28-03) | Docs/SCRAPER_MIGRATION_EVAL.md | regex vs scraper 트레이드오프; 결정: Sprint 29 heading/link 마이그레이션 |
+| position 좌표계 docs (S28-04) | pipeline/stages/parsing.rs | module-level `//!` doc + `Heading::position` field doc |
+| 테스트 18건 신규 (S28-01/02 + 리뷰 L1/L2) | pipeline/stages/parsing.rs | named entity decode, numeric hex/decimal, surrogate preserve, multi-sibling, NBSP collapse, position offset |
+
+테스트: 1,762 Rust pass / 0 fail / 0 clippy warnings
+커밋: `24307ee6` (S28-01~04 구현), `c312df38` (리뷰 M1+M2+M3+L1+L2 수정)
+리뷰: `~/.claude/references/2026-05-22_sprint28_entity_decoding_multicode.md`
+
+**현재 상태**: `decode_html_entities`가 32종 named + 전체 numeric entity 처리. `<pre>` 내 multi-`<code>` sibling이 별도 CodeBlock으로 추출됨. `^` anchor + `captures_iter` 비호환 함정 발견·수정. `\p{White_Space}` 로 NBSP 정규화 완성.
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 27: HTML 텍스트 정규화 + code_blocks 추출
 
 ### Sprint 27: HTML Text Normalization + Code Block Extraction (2026-05-21)
 

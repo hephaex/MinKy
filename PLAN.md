@@ -441,20 +441,32 @@
 - 커밋: `f107729f`, `dd637ee4`, `e7e71c9e`
 - 결과: 1,752 Rust pass / 0 fail / 0 clippy warnings
 
-## Sprint 28 로드맵
+## Sprint 28 완료 (2026-05-22) — Named Entity 디코딩 + Multi-Code Sibling
 
-- P1: named HTML entity 전체 디코딩 (`&rsquo;` → `'`, `&mdash;` → `—`, `&hellip;` → `…` 등)
-  - html-escape crate 도입 또는 named entity 완전 표(Named Character References) 구현
-  - heading/link/code text 전체 경로 커버
-- P2: `<pre>` 내 multi-`<code>` sibling 지원 (현재 첫 번째만 추출, 나머지 무시)
-  - pre_regex 내부에서 code_tag_regex를 복수 회 적용하여 모든 sibling CodeBlock 반환
-- P3: scraper crate 마이그레이션 평가 (Sprint 26 H2 follow-up: mismatched close tag)
-  - scraper crate Cargo.toml 추가 + API 검토
-  - regex path 대비 correctness/deps 트레이드오프 문서화
-  - 마이그레이션 여부 결정 + Sprint 29 실행 또는 known-limitation으로 종결
-- P4: Markdown/HTML position coordinate 통일 검토
-  - Markdown: offset into `plain_text`; HTML: byte offset of opening tag in `raw.content`
-  - downstream 소비자가 두 경로를 구분 없이 쓸 수 있는 계약 정의
+- [x] S28-01: named HTML entity 32종 + `&#decimal;` + `&#xhex;` 디코딩
+  - `&rsquo;` → `'`, `&mdash;` → `—`, `&hellip;` → `…` 등 32종 named entity
+  - `&#39;` decimal + `&#x27;`/`&#X27;` hex (case-insensitive, bounds-limited)
+  - `char::from_u32` 으로 surrogate/overflow 안전 처리
+- [x] S28-02: `<pre>` 내 multi-`<code>` sibling 지원 — `flat_map + captures_iter`
+  - `^` anchor 제거 → `captures_iter` 가 모든 sibling `<code>` 탐색 가능
+  - bare-pre fallback 유지 (code_tag_regex 매칭 없을 때)
+- [x] S28-03: `Docs/SCRAPER_MIGRATION_EVAL.md` — scraper vs regex 트레이드오프 문서
+  - 결정: Sprint 29에서 heading/link를 scraper로 마이그레이션; regex는 body strip + code blocks 유지
+- [x] S28-04: position 좌표계 module-level docs + `Heading::position` field doc
+- [x] 리뷰 수정: entity_regex 길이 bounds, `\p{White_Space}+` NBSP 정규화, 3 새 테스트
+- 커밋: `24307ee6` (S28-01~04), `c312df38` (리뷰 수정)
+- 결과: 1,762 Rust pass / 0 fail / 0 clippy warnings
+
+## Sprint 29 로드맵
+
+- P1: scraper crate로 HTML heading/link 추출 마이그레이션 (`Docs/SCRAPER_MIGRATION_EVAL.md` 결정에 따름)
+  - mismatched close tag (`<h1>...</h3>`) 정확도 향상
+  - 현재 regex heading/link 추출 → `scraper::Html::parse_fragment` 기반 교체
+  - 기존 OnceLock regex helper (tag_regex, script_regex 등) body 처리 경로는 유지
+- P2: html-escape crate 또는 named entity 전체 표 완성 (현재 32종 → HTML5 표준 2200+종)
+  - `html-escape` or `htmlescape` crate 도입 평가
+- P3: multi-`<pre>` 내 code_blocks 통합 테스트 강화 (현재 단일 pre 기반 테스트만 있음)
+- P4: position 좌표계 통일 — Markdown char offset vs HTML byte offset downstream 소비자 계약 정의
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 
