@@ -5,7 +5,33 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-22) - Sprint 28: Named Entity 디코딩 + Multi-Code Sibling
+## 현재 진행 상황 (2026-05-22) - Sprint 29: scraper/html5ever 마이그레이션
+
+### Sprint 29: scraper/html5ever Heading + Link Extraction (2026-05-22)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `scraper = "0.20"` 추가 (S29-01) | Cargo.toml | html5ever 기반 HTML5 파서 도입 |
+| `scraper_extract_all()` 단일 파싱 (S29-01) | pipeline/stages/parsing.rs | heading + link를 하나의 `Html::parse_document`로 추출 |
+| `OnceLock<Selector>` 패턴 (S29-01) | pipeline/stages/parsing.rs | H_SEL / A_SEL static 초기화 |
+| `heading_regex` / `link_regex` 제거 (S29-02) | pipeline/stages/parsing.rs | OnceLock regex 2개 삭제 |
+| parse_html 콜사이트 교체 (S29-02) | pipeline/stages/parsing.rs | `scraper_extract_all(&raw.content)` 단일 호출 |
+| 테스트 3건 업데이트 (S29-02) | pipeline/stages/parsing.rs | element boundary 공백 없음, surrogate→U+FFFD (html5ever 스펙) |
+| multi-`<pre>` 통합 테스트 4건 (S29-03) | pipeline/stages/parsing.rs | 3-pre, siblings+separate, bare-pre+code, entities+attributes |
+| module-level position docs (S29-04) | pipeline/stages/parsing.rs | HTML heading = best-effort, HTML code = accurate, Markdown = char offset |
+| H1 리뷰: uppercase position 수정 | pipeline/stages/parsing.rs | `eq_ignore_ascii_case` 윈도우 탐색, `html_heading_uppercase_tag_position` 테스트 추가 |
+| M1 리뷰: double-parse 제거 | pipeline/stages/parsing.rs | `scraper_extract_headings + scraper_extract_links` → `scraper_extract_all` 통합 |
+| L3 리뷰: `selector_is_sync_send` | pipeline/stages/parsing.rs | `Selector: Sync+Send` 컴파일 타임 assertion |
+
+테스트: 1,768 Rust pass / 0 fail / 0 clippy warnings
+커밋: `ddcdd35a` (S29-01~04), `8f8ecc74` (리뷰 H1/M1/M2/L3 수정)
+리뷰: `~/.claude/references/2026-05-22_sprint29_scraper_html5ever_migration.md`
+
+**현재 상태**: HTML heading/link 추출이 scraper/html5ever로 완전 마이그레이션. mismatched tag 처리, HTML5 entity 전체 표, uppercase tag position 정확도 모두 해결. body stripping + code blocks는 기존 regex 유지(하이브리드).
+
+---
+
+## 이전 진행 상황 (2026-05-22) - Sprint 28: Named Entity 디코딩 + Multi-Code Sibling
 
 ### Sprint 28: Named Entity Decoding + Multi-Code Sibling Extraction (2026-05-22)
 

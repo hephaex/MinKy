@@ -457,16 +457,29 @@
 - 커밋: `24307ee6` (S28-01~04), `c312df38` (리뷰 수정)
 - 결과: 1,762 Rust pass / 0 fail / 0 clippy warnings
 
-## Sprint 29 로드맵
+## Sprint 29 완료 (2026-05-22) — scraper/html5ever 마이그레이션
 
-- P1: scraper crate로 HTML heading/link 추출 마이그레이션 (`Docs/SCRAPER_MIGRATION_EVAL.md` 결정에 따름)
-  - mismatched close tag (`<h1>...</h3>`) 정확도 향상
-  - 현재 regex heading/link 추출 → `scraper::Html::parse_fragment` 기반 교체
-  - 기존 OnceLock regex helper (tag_regex, script_regex 등) body 처리 경로는 유지
-- P2: html-escape crate 또는 named entity 전체 표 완성 (현재 32종 → HTML5 표준 2200+종)
-  - `html-escape` or `htmlescape` crate 도입 평가
-- P3: multi-`<pre>` 내 code_blocks 통합 테스트 강화 (현재 단일 pre 기반 테스트만 있음)
-- P4: position 좌표계 통일 — Markdown char offset vs HTML byte offset downstream 소비자 계약 정의
+- [x] S29-01: `scraper = "0.20"` 추가; `scraper_extract_all()` 단일 파싱 함수
+  - heading + link를 하나의 `Html::parse_document`로 추출 (double-parse 제거)
+  - `OnceLock<Selector>` 패턴, `Selector: Sync+Send` compile-time assertion
+- [x] S29-02: `heading_regex` / `link_regex` 제거; parse_html 콜사이트 교체
+  - html5ever: mismatched tag 자동 처리, HTML5 entity 전체 표, text node 직접 수집
+  - 테스트 3건 업데이트 (html5ever 스펙 기반)
+- [x] S29-03: multi-`<pre>` 통합 테스트 4건 추가
+- [x] S29-04: module-level position docs 업데이트 (best-effort HTML heading offset 명시)
+- [x] 리뷰 수정: uppercase tag position (`eq_ignore_ascii_case` 윈도우), 단일 파싱, 주석 갱신
+- 커밋: `ddcdd35a` (S29-01~04), `8f8ecc74` (리뷰 수정)
+- 결과: 1,768 Rust pass / 0 fail / 0 clippy warnings
+
+## Sprint 30 로드맵
+
+- P1: entity decode 경로 통일 — code block text + plain_text + title을 html5ever 경로로 통합
+  - 현재 code block/plain_text는 custom `decode_html_entities()` 32종, title은 raw match
+  - `Html::parse_document` 단일 파싱 결과에서 추출하거나 `html5ever` tokenizer만 직접 활용
+- P2: `<title>` 추출을 `Html::parse_document`로 통합 (현재 `title_regex()` 별도 경로)
+- P3: `Link` struct에 `position` 필드 추가 (`Heading`과 비대칭)
+  - 추출 시 `html[search_start..].as_bytes().windows(n).position(...)` 패턴 재사용
+- P4: Markdown position 좌표계 통일 — char offset (Markdown) vs byte offset (HTML) 계약 정의
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 
