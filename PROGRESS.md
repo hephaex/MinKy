@@ -5,7 +5,29 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-22) - Sprint 30: title via scraper, Link::position, 좌표계 문서화
+## 현재 진행 상황 (2026-05-22) - Sprint 31: html-escape entity decode, head>title, link position
+
+### Sprint 31: Full HTML5 Entity Decode + SVG Title Fix + Link-in-Heading Position (2026-05-22)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `html-escape = "0.2"` 추가 (S31-01) | Cargo.toml | html5ever 경유 없이 full HTML5 entity 2,231종 지원 |
+| `entity_regex()` + 32-arm match 제거 (S31-01) | pipeline/stages/parsing.rs | decode_html_entities 1-liner로 대체 |
+| NUL byte 후처리 (리뷰 H2) | pipeline/stages/parsing.rs | `&#0;` → U+FFFD (PostgreSQL TEXT 안전) |
+| T_SEL `"head > title"` (S31-02) | pipeline/stages/parsing.rs | SVG `<title>` false-positive 방지 |
+| `link_position_snapshot` (S31-03) | pipeline/stages/parsing.rs | `Start(Link)` 시 `plain_text.len() + heading_text.len()` 스냅샷 |
+| End(Link) 이중 flush 수정 (리뷰 H1) | pipeline/stages/parsing.rs | heading 내부 link_text를 plain_text에 중복 추가 방지 |
+| 자기일관성 단언 추가 (리뷰) | pipeline/stages/parsing.rs | `plain_text[position..].starts_with(link.text)` |
+
+테스트: 1,784 Rust pass / 0 fail / 0 clippy warnings
+커밋: `dc829253` (S31-01~03), `b285e90f` (리뷰 수정)
+리뷰: `~/.claude/references/2026-05-22_sprint31_entity_selector_position.md`
+
+**현재 상태**: decode_html_entities가 html-escape로 full HTML5 table 커버. SVG title false-positive 해소. Markdown heading 내부 link position이 실제 plain_text slice와 일치.
+
+---
+
+## 이전 진행 상황 (2026-05-22) - Sprint 30: title via scraper, Link::position, 좌표계 문서화
 
 ### Sprint 30: Title Extraction + Link Position + Byte-Offset Docs (2026-05-22)
 

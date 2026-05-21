@@ -491,17 +491,33 @@
 - 커밋: `6500d710` (S30-01~04), `e343a4d4` (리뷰 수정)
 - 결과: 1,776 Rust pass / 0 fail / 0 clippy warnings
 
-## Sprint 31 로드맵
+## Sprint 31 완료 (2026-05-22) — html-escape entity decode, head>title, link position
 
-- P1: entity decode 경로 통일 — `plain_text` body와 code block의 `decode_html_entities()` 를
-  html5ever 경로로 통합하거나, 32-entry 테이블을 HTML5 full table로 교체 (M3 완전 해소)
-  - 고려사항: body stripping regex 제거 시 DOM restructuring 영향 평가 필요
-- P2: `<a>` 연속 태그 2건 이상 위치 정확도 검증 — `a_search_start = position + 1` 가 인접
-  `<a><a>` 패턴에서 올바르게 동작하는지 통합 테스트 추가
-- P3: `<title>` SVG false-positive 처리 — `T_SEL` 후보를 `head > title` 로 교체하거나
-  문서에서 확인된 발생 빈도 기반으로 wontfix 결정
-- P4: Markdown link-in-heading position 정확화 — `link_plain_text_position` 변수를
-  `Event::Start(Tag::Link)` 시점에 기록하여 heading flush 이전 정확한 오프셋 제공
+- [x] S31-01: `decode_html_entities()` → `html_escape::decode_html_entities()` 위임
+  - `html-escape = "0.2"` Cargo.toml 추가; `entity_regex()` + 32-arm match 제거
+  - 2,231 HTML5 named entity 전체 지원 (기존: 32종)
+  - NUL byte (`&#0;`) → U+FFFD 후처리 (PostgreSQL TEXT 안전)
+  - 5 테스트: micro, sect, unknown_preserved, nul_replaced, 기존 4건 유지
+- [x] S31-02: T_SEL `"title"` → `"head > title"` (SVG `<title>` false-positive 방지)
+  - html5ever implicit `<head>` 자동 삽입으로 암묵적 `<head>` 없는 문서에서도 동작
+  - SVG Known Limitations 섹션 제거; 2 테스트 추가
+- [x] S31-03: Markdown link-in-heading position 정확화
+  - `link_position_snapshot = plain_text.len() + current_heading_text.len()` at `Start(Link)`
+  - `End(Link)` 에서 heading 내부 link_text 이중 flush 방지 가드 추가
+  - 자기일관성 단언 `plain_text[position..].starts_with(link.text)` 추가
+  - 2 테스트: heading position, preceding_text + heading position
+- [x] 리뷰 수정: NUL byte 후처리, End(Link) 이중 flush 수정, 자기일관성 단언
+- 커밋: `dc829253` (S31-01~03), `b285e90f` (리뷰 H1/H2 수정)
+- 결과: 1,784 Rust pass / 0 fail / 0 clippy warnings
+
+## Sprint 32 로드맵
+
+- P1: `html_invalid_hex_entity_surrogate_preserved` 테스트 이름 수정 ("preserved" → "replaced_with_fffd")
+- P2: surrogate numeric entity(`&#xD800;`) 처리 경로 일관성 —
+  body/code path(html-escape)도 U+FFFD 반환하도록 맞추기 (현재 heading/link는 html5ever → U+FFFD)
+- P3: `End(Paragraph)` 에 separator 추가 검토 — 현재 plain_text에 단락-heading 경계 구분자 없음
+  (`"introHeader link"` — "intro" 다음 바로 heading 텍스트가 붙음)
+- P4: 연속 `<a>` 태그 position 검증 테스트 (`a_search_start = position + 1` 패턴 검증)
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 
