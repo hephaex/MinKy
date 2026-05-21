@@ -428,20 +428,33 @@
 - 커밋: `b2fa2233`, `a1ae4271`
 - 결과: 1,737 Rust pass / 0 fail / 0 clippy warnings. parsing.rs HTML 추출 TODO 2건 해소.
 
-## Sprint 27 로드맵
+## Sprint 27 완료 (2026-05-21) — HTML 텍스트 정규화 + code_blocks 추출
 
-- P1: RAG E2E SOP 문서 작성 (`Docs/RAG_E2E_SETUP.md`) — operational prerequisite
-  - PostgreSQL 컨테이너 기동 + migration 009/010 적용 절차
-  - LOCAL_EMBEDDING_ENABLED=true 서버 기동 명령
-  - POST /api/vault/ingest → POST /api/search/ask 테스트 시퀀스
-  - **Note**: code change 없음 — operational documentation only
-- P2: HTML heading/link 텍스트 정규화 개선 (S26 review M3/M4 follow-up)
-  - inner tag를 empty string 대신 space로 치환 (foobar → foo bar)
-  - heading/link text에 HTML entity 디코딩 적용 (`&amp;` → `&`)
-- P3: `parse_html()` 정규식 → scraper crate 마이그레이션 준비 (H2 follow-up: mismatched close tag)
-  - scraper crate 추가 평가 (Cargo.toml dependency, API 검토)
-  - 현재 regex path 대비 correctness/deps 트레이드오프 문서화
-- P4: parsing.rs code_blocks HTML 추출 (현재 `Vec::new()` 반환)
+- [x] S27-01: `decode_html_entities` DRY helper 추출 + heading/link 텍스트 정규화
+  - inner tag → space 치환 (`foo<br>bar` → `foo bar`)
+  - HTML entity decode (`&amp;` → `&`, `&apos;` → `'` 등)
+- [x] S27-02: `parse_html()` HTML code_blocks 추출 (`Vec::new()` 해소)
+  - `<pre><code class="language-rust">` → `CodeBlock { language: Some("rust"), code, start_position }`
+  - `pre_regex`, `code_tag_regex` (no `$` anchor, truly non-greedy), `code_language_regex` (class= anchored)
+- [x] S27-03: `Docs/RAG_E2E_SETUP.md` RAG E2E SOP 문서 작성 (507줄)
+- [x] 리뷰 수정: unknown entity 보존, `$` anchor 제거, `class=` 앵커링, bare-pre tag strip
+- 커밋: `f107729f`, `dd637ee4`, `e7e71c9e`
+- 결과: 1,752 Rust pass / 0 fail / 0 clippy warnings
+
+## Sprint 28 로드맵
+
+- P1: named HTML entity 전체 디코딩 (`&rsquo;` → `'`, `&mdash;` → `—`, `&hellip;` → `…` 등)
+  - html-escape crate 도입 또는 named entity 완전 표(Named Character References) 구현
+  - heading/link/code text 전체 경로 커버
+- P2: `<pre>` 내 multi-`<code>` sibling 지원 (현재 첫 번째만 추출, 나머지 무시)
+  - pre_regex 내부에서 code_tag_regex를 복수 회 적용하여 모든 sibling CodeBlock 반환
+- P3: scraper crate 마이그레이션 평가 (Sprint 26 H2 follow-up: mismatched close tag)
+  - scraper crate Cargo.toml 추가 + API 검토
+  - regex path 대비 correctness/deps 트레이드오프 문서화
+  - 마이그레이션 여부 결정 + Sprint 29 실행 또는 known-limitation으로 종결
+- P4: Markdown/HTML position coordinate 통일 검토
+  - Markdown: offset into `plain_text`; HTML: byte offset of opening tag in `raw.content`
+  - downstream 소비자가 두 경로를 구분 없이 쓸 수 있는 계약 정의
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 
@@ -573,4 +586,4 @@
   - benches/core_functions.rs: 19개 벤치마크 함수 (document/tag/comment/audit service)
   - cargo bench로 실행 가능
 
-*Last updated: 2026-05-21 (Sprint 25 완료 — vault_common 심링크 엣지 케이스 + escape_like contract 정리, Rust 1,752 pass)*
+*Last updated: 2026-05-21 (Sprint 27 완료 — HTML 텍스트 정규화 + code_blocks 추출, Rust 1,752 pass)*

@@ -5,7 +5,35 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 26: HTML 추출 구현 + sync_report 응답 형상 테스트
+## 현재 진행 상황 (2026-05-21) - Sprint 27: HTML 텍스트 정규화 + code_blocks 추출
+
+### Sprint 27: HTML Text Normalization + Code Block Extraction (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `decode_html_entities` DRY helper (S27-01) | pipeline/stages/parsing.rs | shared helper: known entity decode + unknown entity 보존 (`other => other.to_string()`) |
+| heading 텍스트 정규화 (S27-01) | pipeline/stages/parsing.rs | inner tag → space, whitespace collapse, entity decode |
+| link 텍스트 정규화 (S27-01) | pipeline/stages/parsing.rs | 동일 정규화 파이프라인 적용 |
+| `pre_regex` OnceLock (S27-02) | pipeline/stages/parsing.rs | `(?is)<pre[^>]*>(.*?)</pre>` — `<pre>` 블록 추출 |
+| `code_tag_regex` OnceLock (S27-02) | pipeline/stages/parsing.rs | `(?is)^\s*<code([^>]*)>(.*?)</code>` — `$` anchor 없음, 진짜 non-greedy |
+| `code_language_regex` OnceLock (S27-02) | pipeline/stages/parsing.rs | `class=` 앵커 — `data-href` 등 거짓 양성 방지 |
+| HTML code_blocks 추출 (S27-02) | pipeline/stages/parsing.rs | `<pre><code class="language-*">` → `CodeBlock { language, code, start_position }` |
+| bare-pre fallback 태그 strip (리뷰 H5) | pipeline/stages/parsing.rs | `tag_regex().replace_all(inner, "")` → entity decode (HTML 리터럴 노출 방지) |
+| RAG E2E SOP 문서 (S27-03) | Docs/RAG_E2E_SETUP.md | 507줄 — PostgreSQL+pgvector 기동, migration 001-010, LOCAL_EMBEDDING_ENABLED 서버, curl 예시 |
+| 테스트 15건 신규 (S27-01/02) | pipeline/stages/parsing.rs | entity decode/preserve, code block language, position, dotall/case-insensitive, multi-sibling |
+| 리뷰 C1 수정 | pipeline/stages/parsing.rs | `_ => ""` → `other => other.to_string()` (unknown entity 보존) |
+| 리뷰 C2 수정 | pipeline/stages/parsing.rs | `code_tag_regex` `$` anchor 제거 → lazy 비-탐욕성 복원 |
+| 리뷰 C3 수정 | pipeline/stages/parsing.rs | `code_language_regex` `class=` 앵커 추가 |
+
+테스트: 1,752 Rust pass / 0 fail / 0 clippy warnings
+커밋: `f107729f` (S27-01/02 구현), `dd637ee4` (S27-03 문서), `e7e71c9e` (리뷰 C1/C2/C3/H5 수정)
+리뷰: `~/.claude/references/2026-05-21_sprint27_html_normalization_codeblocks.md`
+
+**현재 상태**: parsing.rs code_blocks HTML 추출 TODO 해소. `decode_html_entities` DRY helper로 heading/link/code 세 경로 공유. `$` anchor + lazy quantifier 함정 수정.
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 26: HTML 추출 구현 + sync_report 응답 형상 테스트
 
 ### Sprint 26: HTML heading/link Extraction + sync_report Response Shape Test (2026-05-21)
 
