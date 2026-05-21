@@ -4,6 +4,17 @@
 //! - Markdown
 //! - HTML
 //! - Plain text
+//!
+//! ## Position coordinate systems
+//!
+//! [`Heading::position`] and [`CodeBlock::start_position`] use **different**
+//! coordinate systems depending on the source format:
+//! - **HTML**: byte offset of the opening tag (`<h1>`, `<pre>`) within `raw.content`
+//! - **Markdown**: character offset into the rendered `plain_text` at the point
+//!   the element is emitted by pulldown-cmark
+//!
+//! Consumers that need a cross-format offset must re-derive position from the
+//! canonical `plain_text` field rather than relying on this value directly.
 
 use async_trait::async_trait;
 use regex::Regex;
@@ -19,7 +30,8 @@ fn tag_regex() -> &'static Regex {
 
 fn entity_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"&\w+;").unwrap())
+    // Matches named entities (&amp;), decimal numeric (&#39;), and hex numeric (&#x27;).
+    RE.get_or_init(|| Regex::new(r"&(?:#x[0-9a-fA-F]+|#[0-9]+|\w+);").unwrap())
 }
 
 fn heading_regex() -> &'static Regex {
@@ -66,12 +78,12 @@ fn pre_regex() -> &'static Regex {
 
 fn code_tag_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    // No trailing `$` — the non-greedy (.*?) stops at the FIRST </code>.
-    // With a `$` anchor the lazy quantifier is forced to extend to the last
-    // </code> anyway, which merges siblings.  Without `$`, only the first
-    // <code>…</code> block is captured; any siblings are covered by the
-    // bare-pre fallback (tag-stripped, language=None).
-    RE.get_or_init(|| Regex::new(r"(?is)^\s*<code([^>]*)>(.*?)</code>").unwrap())
+    // No leading `^` or trailing `$` anchors.
+    //   - No `$`: the lazy `(.*?)` stops at the FIRST `</code>` — adding `$`
+    //     forces it to extend to the last `</code>` (merges siblings).
+    //   - No `^`: allows `captures_iter` to find every `<code>` sibling inside
+    //     a `<pre>` block, not just the one anchored at the start.
+    RE.get_or_init(|| Regex::new(r"(?is)<code([^>]*)>(.*?)</code>").unwrap())
 }
 
 fn code_language_regex() -> &'static Regex {
@@ -84,27 +96,75 @@ fn code_language_regex() -> &'static Regex {
     })
 }
 
-/// Decode common HTML entities in a string.
+/// Decode HTML entities in a string.
 ///
-/// Shared by the main body stripping logic and the heading/link text
-/// extraction so entity decoding is consistent across all extraction paths.
-/// Decode common HTML entities in a string.
+/// Handles named entities (`&amp;`, `&rsquo;`, etc.), decimal numeric
+/// entities (`&#39;`), and hex numeric entities (`&#x27;`).  Unknown named
+/// entities are preserved verbatim so no content is silently deleted.
 ///
-/// Shared by the main body stripping logic, heading/link text extraction,
-/// and code-block extraction so entity decoding is consistent across all
-/// extraction paths.
-///
-/// Unknown entities are left verbatim so no content is silently deleted.
+/// Shared by all extraction paths (heading, link, code-block, plain-text body)
+/// to ensure consistent decoding across formats.
 fn decode_html_entities(s: &str) -> String {
     entity_regex()
         .replace_all(s, |caps: &regex::Captures| {
             match &caps[0] {
-                "&nbsp;" => " ".to_string(),
+                // Basic HTML (RFC 1866 / HTML4)
+                "&nbsp;" => "\u{00A0}".to_string(),
                 "&lt;" => "<".to_string(),
                 "&gt;" => ">".to_string(),
                 "&amp;" => "&".to_string(),
                 "&quot;" => "\"".to_string(),
                 "&apos;" => "'".to_string(),
+                // Quotation marks
+                "&lsquo;" => "\u{2018}".to_string(),
+                "&rsquo;" => "\u{2019}".to_string(),
+                "&ldquo;" => "\u{201C}".to_string(),
+                "&rdquo;" => "\u{201D}".to_string(),
+                "&laquo;" => "\u{00AB}".to_string(),
+                "&raquo;" => "\u{00BB}".to_string(),
+                // Dashes and ellipsis
+                "&mdash;" => "\u{2014}".to_string(),
+                "&ndash;" => "\u{2013}".to_string(),
+                "&minus;" => "\u{2212}".to_string(),
+                "&hellip;" => "\u{2026}".to_string(),
+                // Symbols
+                "&copy;" => "\u{00A9}".to_string(),
+                "&reg;" => "\u{00AE}".to_string(),
+                "&trade;" => "\u{2122}".to_string(),
+                "&euro;" => "\u{20AC}".to_string(),
+                "&pound;" => "\u{00A3}".to_string(),
+                "&yen;" => "\u{00A5}".to_string(),
+                "&cent;" => "\u{00A2}".to_string(),
+                // Punctuation
+                "&bull;" => "\u{2022}".to_string(),
+                "&middot;" => "\u{00B7}".to_string(),
+                // Math / typography
+                "&times;" => "\u{00D7}".to_string(),
+                "&divide;" => "\u{00F7}".to_string(),
+                "&plusmn;" => "\u{00B1}".to_string(),
+                "&deg;" => "\u{00B0}".to_string(),
+                "&frac12;" => "\u{00BD}".to_string(),
+                "&frac14;" => "\u{00BC}".to_string(),
+                "&frac34;" => "\u{00BE}".to_string(),
+                // Hex numeric entities: &#xNN; or &#XNN;
+                other if other.starts_with("&#x") || other.starts_with("&#X") => {
+                    let hex = &other[3..other.len() - 1];
+                    u32::from_str_radix(hex, 16)
+                        .ok()
+                        .and_then(char::from_u32)
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| other.to_string())
+                }
+                // Decimal numeric entities: &#NN;
+                other if other.starts_with("&#") => {
+                    let dec = &other[2..other.len() - 1];
+                    dec.parse::<u32>()
+                        .ok()
+                        .and_then(char::from_u32)
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| other.to_string())
+                }
+                // Preserve unknown named entities verbatim
                 other => other.to_string(),
             }
         })
@@ -153,7 +213,9 @@ pub struct Heading {
     /// Heading text
     pub text: String,
 
-    /// Position in plain text (character offset)
+    /// Byte offset of the opening `<h…>` tag in `raw.content` (HTML), or
+    /// character offset into `plain_text` at event-emission time (Markdown).
+    /// See module-level docs for coordinate-system details.
     pub position: usize,
 }
 
@@ -332,26 +394,34 @@ impl ParsingStage {
             .collect();
 
         // ── Extract code blocks before stripping ─────────────────────────────
-        // Match <pre>…</pre>; if the content starts with <code class="…">,
-        // the language is extracted from a `language-xxx` or `lang-xxx` class.
+        // Match <pre>…</pre>; each <code> sibling inside a <pre> becomes its
+        // own CodeBlock.  Multiple siblings (e.g. output vs input panes) are
+        // all extracted rather than only the first.  Bare <pre> blocks with no
+        // <code> tag fall back to tag-stripped, language=None.
         let code_blocks: Vec<CodeBlock> = pre_regex()
             .captures_iter(&raw.content)
-            .map(|cap| {
+            .flat_map(|cap| {
                 let start_position = cap.get(0).map(|m| m.start()).unwrap_or(0);
                 let inner = cap[1].trim();
-                if let Some(cc) = code_tag_regex().captures(inner) {
-                    let language = code_language_regex()
-                        .captures(&cc[1])
-                        .and_then(|m| m.get(1))
-                        .map(|m| m.as_str().to_string());
-                    let code = decode_html_entities(&cc[2]);
-                    CodeBlock { language, code, start_position }
-                } else {
-                    // Strip any residual tags (e.g. bare <code> without matching
-                    // </code> at `$`) so the code field never contains raw HTML.
+                // Collect all <code> siblings inside this <pre>.
+                let siblings: Vec<CodeBlock> = code_tag_regex()
+                    .captures_iter(inner)
+                    .map(|cc| {
+                        let language = code_language_regex()
+                            .captures(&cc[1])
+                            .and_then(|m| m.get(1))
+                            .map(|m| m.as_str().to_string());
+                        let code = decode_html_entities(&cc[2]);
+                        CodeBlock { language, code, start_position }
+                    })
+                    .collect();
+                if siblings.is_empty() {
+                    // Bare <pre> without any <code> tag — strip residual HTML.
                     let stripped = tag_regex().replace_all(inner, "");
                     let code = decode_html_entities(&stripped);
-                    CodeBlock { language: None, code, start_position }
+                    vec![CodeBlock { language: None, code, start_position }]
+                } else {
+                    siblings
                 }
             })
             .collect();
@@ -868,15 +938,15 @@ fn main() {}
 
     // ── Review fixes (C1, C2, C3, H5) ────────────────────────────────────────
 
-    /// C1 regression: unknown entities must be preserved verbatim, not dropped.
+    /// C1 regression: truly unknown entities must be preserved verbatim, not dropped.
     #[test]
     fn html_heading_unknown_entity_preserved() {
         let stage = ParsingStage::new();
-        let raw = make_raw_doc("<h1>What&rsquo;s new</h1>", "text/html");
+        // &fakeentity; is not in any decode table and must survive verbatim.
+        let raw = make_raw_doc("<h1>Hello &fakeentity; World</h1>", "text/html");
         let parsed = stage.parse_html(&raw).unwrap();
-        // &rsquo; is not in the decode table — must be preserved, not deleted.
         assert!(
-            parsed.headings[0].text.contains("&rsquo;"),
+            parsed.headings[0].text.contains("&fakeentity;"),
             "unknown entity must be kept verbatim: got {:?}",
             parsed.headings[0].text
         );
@@ -891,7 +961,8 @@ fn main() {}
         assert_eq!(parsed.headings[0].text, "It's fine");
     }
 
-    /// C2 regression: two <code> siblings inside one <pre> must not merge.
+    /// C2 / S28-02: two <code> siblings inside one <pre> must each become a
+    /// separate CodeBlock (not merged, not dropped).
     #[test]
     fn html_code_block_two_code_siblings_in_one_pre() {
         let stage = ParsingStage::new();
@@ -900,8 +971,13 @@ fn main() {}
             "text/html",
         );
         let parsed = stage.parse_html(&raw).unwrap();
-        // The captured code must not contain the literal "</code>" string
-        // (which would indicate the greedy match merged the two siblings).
+        assert_eq!(
+            parsed.code_blocks.len(),
+            2,
+            "each <code> sibling must become a separate CodeBlock"
+        );
+        assert!(parsed.code_blocks[0].code.contains("fn a()"));
+        assert!(parsed.code_blocks[1].code.contains("fn b()"));
         for block in &parsed.code_blocks {
             assert!(
                 !block.code.contains("</code>"),
@@ -925,5 +1001,110 @@ fn main() {}
             parsed.code_blocks[0].language,
             Some("go".to_string())
         );
+    }
+
+    // ── S28-01: expanded entity decoding ─────────────────────────────────────
+
+    /// &rsquo; (right single quotation mark) is now in the decode table.
+    #[test]
+    fn html_heading_rsquo_decoded() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1>What&rsquo;s new</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.headings[0].text,
+            "What\u{2019}s new",
+            "&rsquo; must decode to U+2019 right single quotation mark"
+        );
+    }
+
+    /// &mdash; (em dash) is now in the decode table.
+    #[test]
+    fn html_heading_mdash_decoded() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1>foo&mdash;bar</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.headings[0].text,
+            "foo\u{2014}bar",
+            "&mdash; must decode to U+2014 em dash"
+        );
+    }
+
+    /// &#39; (decimal numeric apostrophe) must be decoded.
+    #[test]
+    fn html_heading_numeric_decimal_decoded() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1>&#39;hello&#39;</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.headings[0].text,
+            "'hello'",
+            "decimal numeric entity &#39; must decode to apostrophe"
+        );
+    }
+
+    /// &#x27; (hex numeric apostrophe) must be decoded.
+    #[test]
+    fn html_heading_numeric_hex_decoded() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1>&#x27;world&#x27;</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.headings[0].text,
+            "'world'",
+            "hex numeric entity &#x27; must decode to apostrophe"
+        );
+    }
+
+    /// &hellip; (ellipsis) and &copy; (copyright) are now decoded.
+    #[test]
+    fn html_heading_hellip_copy_decoded() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1>Read more&hellip; &copy;2024</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.headings[0].text,
+            "Read more\u{2026} \u{00A9}2024",
+            "&hellip; and &copy; must decode correctly"
+        );
+    }
+
+    // ── S28-02: multi-sibling <code> extraction ───────────────────────────────
+
+    /// Three <code> siblings in one <pre> must each become a separate CodeBlock.
+    #[test]
+    fn html_code_block_three_code_siblings() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<pre><code class="language-python">x = 1</code><code class="language-rust">let x = 1;</code><code>plain</code></pre>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 3);
+        assert_eq!(parsed.code_blocks[0].language, Some("python".to_string()));
+        assert_eq!(parsed.code_blocks[1].language, Some("rust".to_string()));
+        assert_eq!(parsed.code_blocks[2].language, None);
+        assert!(parsed.code_blocks[0].code.contains("x = 1"));
+        assert!(parsed.code_blocks[1].code.contains("let x = 1;"));
+        assert!(parsed.code_blocks[2].code.contains("plain"));
+    }
+
+    /// All siblings share the same start_position (byte offset of their parent <pre>).
+    #[test]
+    fn html_code_block_siblings_share_start_position() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<pre><code>a</code><code>b</code></pre>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 2);
+        assert_eq!(
+            parsed.code_blocks[0].start_position,
+            parsed.code_blocks[1].start_position,
+            "siblings in the same <pre> must share start_position"
+        );
+        assert_eq!(parsed.code_blocks[0].start_position, 0);
     }
 }
