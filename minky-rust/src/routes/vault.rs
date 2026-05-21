@@ -299,6 +299,15 @@ fn dedup_roots(roots: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {
 ///    - `orphans`: DB records whose `source_path` no longer exists on disk.
 ///    - `untracked`: disk files that have no corresponding DB record.
 ///
+/// Sorts `root_to_canonical` pairs so that longer raw roots come first.
+///
+/// If `dedup_roots` ever lets two overlapping roots through, the more specific
+/// (longer) root must win the prefix-swap.  `dedup_roots` currently guarantees
+/// no overlap, so this sort is correctness-neutral today — it is defense-in-depth.
+fn sort_roots_longest_first(v: &mut [(String, String)]) {
+    v.sort_unstable_by_key(|b| std::cmp::Reverse(b.0.len()));
+}
+
 /// Admin-only.  Performs **no writes or deletions**.
 pub async fn sync_report(
     State(state): State<AppState>,
@@ -348,10 +357,7 @@ pub async fn sync_report(
                 (raw, canonical)
             })
             .collect();
-        // Longest raw root first: find() exits on the first match and
-        // dedup_roots guarantees at most one root matches any path, so the
-        // sort is correctness-neutral but minimises iterations on average.
-        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.0.len()));
+        sort_roots_longest_first(&mut v);
         v
     };
 
@@ -1507,9 +1513,9 @@ mod tests {
 
     // ── S24-01: root_to_canonical sorted longest-first ────────────────────────
 
-    /// After the sort, longer raw roots must appear before shorter ones.
-    /// dedup_roots guarantees no overlap, so this is correctness-neutral but
-    /// minimises find() iterations when many roots of varying depth exist.
+    /// `sort_roots_longest_first` places longer raw roots before shorter ones.
+    /// This is the production helper called from sync_report — testing it here
+    /// directly ensures the function itself is covered.
     #[test]
     fn root_to_canonical_sorted_longest_first() {
         let mut entries: Vec<(String, String)> = vec![
@@ -1517,24 +1523,22 @@ mod tests {
             ("/a/b/c".to_string(), "/a/b/c".to_string()),
             ("/a/b".to_string(), "/a/b".to_string()),
         ];
-        entries.sort_unstable_by_key(|b| std::cmp::Reverse(b.0.len()));
+        sort_roots_longest_first(&mut entries);
         assert_eq!(entries[0].0, "/a/b/c", "longest root must be first");
         assert_eq!(entries[1].0, "/a/b");
         assert_eq!(entries[2].0, "/a", "shortest root must be last");
     }
 
-    /// Sorting by descending length must still produce the correct prefix-swap
-    /// result: find() must hit the matching root on the first attempt when the
-    /// path belongs to the longest root.
+    /// After sort_roots_longest_first, find() must select the most specific
+    /// (longest) matching root — the one that gives the correct canonical path.
     #[test]
     fn root_to_canonical_sorted_find_hits_first() {
-        // After sort: [("/a/b/c", "canonical-abc"), ("/a/b", …), ("/a", …)]
         let mut root_to_canonical: Vec<(String, String)> = vec![
             ("/a".to_string(), "canonical-a".to_string()),
             ("/a/b/c".to_string(), "canonical-abc".to_string()),
             ("/a/b".to_string(), "canonical-ab".to_string()),
         ];
-        root_to_canonical.sort_unstable_by_key(|b| std::cmp::Reverse(b.0.len()));
+        sort_roots_longest_first(&mut root_to_canonical);
 
         let path = "/a/b/c/note.md";
         let result = root_to_canonical
@@ -1569,8 +1573,8 @@ mod tests {
 
     #[test]
     fn escape_like_backslash_doubled_first() {
-        // Backslash must be doubled before % and _ are escaped to avoid
-        // double-escaping: '\%' -> '\\%' rather than '\%' -> '\\\%'.
+        // Backslash must be escaped *first*; otherwise the `\` introduced by the
+        // `%` → `\%` step would itself be doubled, corrupting the escape sequence.
         assert_eq!(escape_like_prefix("\\"), "\\\\");
         assert_eq!(escape_like_prefix("\\%"), "\\\\\\%");
     }
