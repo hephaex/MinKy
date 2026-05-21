@@ -30,8 +30,14 @@ fn tag_regex() -> &'static Regex {
 
 fn entity_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    // Matches named entities (&amp;), decimal numeric (&#39;), and hex numeric (&#x27;).
-    RE.get_or_init(|| Regex::new(r"&(?:#x[0-9a-fA-F]+|#[0-9]+|\w+);").unwrap())
+    // Matches named entities (&amp;), decimal numeric (&#39;), and hex numeric
+    // (&#x27; or &#X27;).  Order is significant: hex (#[xX]...) must precede
+    // decimal (#[0-9]+) in the alternation — \w cannot match '#' so named
+    // entities never conflict.  Length bounds prevent pathological input:
+    // hex ≤8 digits (covers full u32), decimal ≤10, named ≤32 chars.
+    RE.get_or_init(|| {
+        Regex::new(r"&(?:#[xX][0-9a-fA-F]{1,8}|#[0-9]{1,10}|\w{1,32});").unwrap()
+    })
 }
 
 fn heading_regex() -> &'static Regex {
@@ -63,7 +69,10 @@ fn block_regex() -> &'static Regex {
 
 fn whitespace_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"\s+").unwrap())
+    // \p{White_Space} covers all Unicode whitespace, including U+00A0 (NBSP)
+    // decoded from &nbsp;, ensuring body normalization is consistent whether
+    // content used ASCII spaces or non-breaking spaces in the source HTML.
+    RE.get_or_init(|| Regex::new(r"\p{White_Space}+").unwrap())
 }
 
 fn title_regex() -> &'static Regex {
@@ -1106,5 +1115,54 @@ fn main() {}
             "siblings in the same <pre> must share start_position"
         );
         assert_eq!(parsed.code_blocks[0].start_position, 0);
+    }
+
+    /// L2: siblings' start_position is the byte offset of the parent <pre>, not 0.
+    #[test]
+    fn html_code_block_siblings_position_is_pre_offset() {
+        let stage = ParsingStage::new();
+        // "<p>x</p>" is 8 bytes; <pre> begins at offset 8.
+        let raw = make_raw_doc(
+            "<p>x</p><pre><code>a</code><code>b</code></pre>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.code_blocks.len(), 2);
+        assert_eq!(
+            parsed.code_blocks[0].start_position,
+            8,
+            "start_position must be the byte offset of the opening <pre> tag"
+        );
+        assert_eq!(parsed.code_blocks[1].start_position, 8);
+    }
+
+    // ── L1: invalid numeric entity fallback ───────────────────────────────────
+
+    /// Surrogate code point (U+D800) is invalid for char::from_u32 — must be
+    /// preserved verbatim, not silently deleted.
+    #[test]
+    fn html_invalid_hex_entity_surrogate_preserved() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h1>x&#xD800;y</h1>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert!(
+            parsed.headings[0].text.contains("&#xD800;"),
+            "surrogate hex entity must be preserved verbatim: got {:?}",
+            parsed.headings[0].text
+        );
+    }
+
+    /// &nbsp; decoded to U+00A0 must be collapsed to a plain space by
+    /// whitespace_regex in the plain_text body path.
+    #[test]
+    fn html_nbsp_collapses_in_plain_text() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<p>foo&nbsp;bar</p>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(
+            parsed.plain_text,
+            "foo bar",
+            "&nbsp; must collapse to a single space in plain_text"
+        );
     }
 }
