@@ -339,14 +339,21 @@ pub async fn sync_report(
     // `collect_md_files` returns paths that are always children of their root,
     // so we only need one `canonicalize` syscall per root rather than one per
     // file.  For a 50k-file vault this reduces ~100k `stat(2)` calls to O(roots).
-    let root_to_canonical: Vec<(String, String)> = valid_roots
-        .iter()
-        .map(|r| {
-            let raw = r.to_str().unwrap_or("").trim_end_matches('/').to_string();
-            let canonical = try_canonicalize(&raw).trim_end_matches('/').to_string();
-            (raw, canonical)
-        })
-        .collect();
+    let root_to_canonical: Vec<(String, String)> = {
+        let mut v: Vec<(String, String)> = valid_roots
+            .iter()
+            .map(|r| {
+                let raw = r.to_str().unwrap_or("").trim_end_matches('/').to_string();
+                let canonical = try_canonicalize(&raw).trim_end_matches('/').to_string();
+                (raw, canonical)
+            })
+            .collect();
+        // Longest raw root first: find() exits on the first match and
+        // dedup_roots guarantees at most one root matches any path, so the
+        // sort is correctness-neutral but minimises iterations on average.
+        v.sort_unstable_by_key(|b| std::cmp::Reverse(b.0.len()));
+        v
+    };
 
     // 3. Collect all .md paths on disk for every root.
     //
@@ -1496,5 +1503,94 @@ mod tests {
             result, "/canonB/note.md",
             "adjacent root /tmp/vault must not collide with /tmp/vault2"
         );
+    }
+
+    // ── S24-01: root_to_canonical sorted longest-first ────────────────────────
+
+    /// After the sort, longer raw roots must appear before shorter ones.
+    /// dedup_roots guarantees no overlap, so this is correctness-neutral but
+    /// minimises find() iterations when many roots of varying depth exist.
+    #[test]
+    fn root_to_canonical_sorted_longest_first() {
+        let mut entries: Vec<(String, String)> = vec![
+            ("/a".to_string(), "/a".to_string()),
+            ("/a/b/c".to_string(), "/a/b/c".to_string()),
+            ("/a/b".to_string(), "/a/b".to_string()),
+        ];
+        entries.sort_unstable_by_key(|b| std::cmp::Reverse(b.0.len()));
+        assert_eq!(entries[0].0, "/a/b/c", "longest root must be first");
+        assert_eq!(entries[1].0, "/a/b");
+        assert_eq!(entries[2].0, "/a", "shortest root must be last");
+    }
+
+    /// Sorting by descending length must still produce the correct prefix-swap
+    /// result: find() must hit the matching root on the first attempt when the
+    /// path belongs to the longest root.
+    #[test]
+    fn root_to_canonical_sorted_find_hits_first() {
+        // After sort: [("/a/b/c", "canonical-abc"), ("/a/b", …), ("/a", …)]
+        let mut root_to_canonical: Vec<(String, String)> = vec![
+            ("/a".to_string(), "canonical-a".to_string()),
+            ("/a/b/c".to_string(), "canonical-abc".to_string()),
+            ("/a/b".to_string(), "canonical-ab".to_string()),
+        ];
+        root_to_canonical.sort_unstable_by_key(|b| std::cmp::Reverse(b.0.len()));
+
+        let path = "/a/b/c/note.md";
+        let result = root_to_canonical
+            .iter()
+            .find(|(raw, _)| {
+                let raw = raw.as_str();
+                path.starts_with(raw)
+                    && (path.len() == raw.len()
+                        || path.as_bytes().get(raw.len()) == Some(&b'/'))
+            })
+            .map(|(raw, canonical)| format!("{}{}", canonical, &path[raw.len()..]))
+            .unwrap();
+
+        assert_eq!(result, "canonical-abc/note.md");
+    }
+
+    // ── S24-02: escape_like_prefix edge cases ─────────────────────────────────
+
+    #[test]
+    fn escape_like_empty_string_unchanged() {
+        assert_eq!(escape_like_prefix(""), "");
+    }
+
+    #[test]
+    fn escape_like_plain_path_unchanged() {
+        assert_eq!(
+            escape_like_prefix("/vault/notes"),
+            "/vault/notes",
+            "paths with no special chars must pass through unchanged"
+        );
+    }
+
+    #[test]
+    fn escape_like_backslash_doubled_first() {
+        // Backslash must be doubled before % and _ are escaped to avoid
+        // double-escaping: '\%' -> '\\%' rather than '\%' -> '\\\%'.
+        assert_eq!(escape_like_prefix("\\"), "\\\\");
+        assert_eq!(escape_like_prefix("\\%"), "\\\\\\%");
+    }
+
+    #[test]
+    fn escape_like_percent_escaped() {
+        assert_eq!(escape_like_prefix("%"), "\\%");
+        assert_eq!(escape_like_prefix("a%b"), "a\\%b");
+    }
+
+    #[test]
+    fn escape_like_underscore_escaped() {
+        assert_eq!(escape_like_prefix("_"), "\\_");
+        assert_eq!(escape_like_prefix("a_b"), "a\\_b");
+    }
+
+    #[test]
+    fn escape_like_all_special_chars_combined() {
+        // Input: \%_  → each char escaped in order: \\ + \% + \_
+        // raw input \%_ → step1: \\%_ → step2: \\\%_ → step3: \\\%\_
+        assert_eq!(escape_like_prefix("\\%_"), "\\\\\\%\\_");
     }
 }
