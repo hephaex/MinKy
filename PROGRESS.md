@@ -5,7 +5,27 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 23: sync_report 성능 + 정확성
+## 현재 진행 상황 (2026-05-21) - Sprint 24: sort_roots_longest_first + escape_like 테스트 coverage
+
+### Sprint 24: sort_roots_longest_first Helper + escape_like Unit Tests (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| sort_roots_longest_first 헬퍼 (신규) | routes/vault.rs | `fn sort_roots_longest_first(&mut [(String, String)])` — raw root 길이 내림차순 정렬 |
+| sync_report 통합 | routes/vault.rs | root_to_canonical Vec 빌드 후 `sort_roots_longest_first(&mut root_to_canonical)` 호출 (S24-01) |
+| 단위 테스트 8개 (신규) | routes/vault.rs | root_to_canonical 정렬 검증 2개 + escape_like 케이스 6개 (S24-02) |
+| 리뷰 MEDIUM 수정 | routes/vault.rs | 테스트가 inline sort 대신 production helper `sort_roots_longest_first` 직접 호출 |
+
+테스트: 1,745 Rust pass / 0 fail / 2 ignored / 0 clippy warnings
+커밋: `cceaf5a7` (Sprint 24 구현), `3e4d72f7` (리뷰 MEDIUM 수정)
+리뷰: `~/.claude/references/2026-05-21_sprint24_sort_roots_escape_tests.md`
+
+**현재 상태**: defense-in-depth. dedup_roots가 overlapping root 미허용을 보장하므로 correctness-neutral.
+미래 dedup_roots regression 시 longer (more specific) root가 prefix-swap에서 승리.
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 23: sync_report 성능 + 정확성
 
 ### Sprint 23: sync_report Per-Root Budget + O(1) Canonicalization (2026-05-21)
 

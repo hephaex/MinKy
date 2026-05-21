@@ -385,12 +385,36 @@
 - 커밋: `9cb0663d`, `cc607fc1`
 - 결과: sync_report DB 쿼리 stat() O(N파일)→O(N루트), root-biased truncation 제거, 경로 버그 수정
 
-## Sprint 24 로드맵
+## Sprint 24 완료 (2026-05-21) — sort_roots_longest_first + escape_like 테스트 coverage
 
-- P1: RAG E2E 검증 (LOCAL_EMBEDDING_ENABLED=true + DB 마이그레이션 009/010 실행 + 실제 질의 테스트)
-- P2: sync_report O(R²) prefix find 최적화 (정렬된 루트 배열 + 조기 종료)
-- P3: OpenAI Batch API 최적화 (비동기 임베딩 생성 비용 절감)
-- P4: vault ingest + watcher 통합 테스트 (실제 파일시스템 기반 E2E)
+- [x] S24-01: `sort_roots_longest_first(&mut [(String, String)])` 헬퍼 추출 — root_to_canonical pairs를 raw root 길이 내림차순 정렬 (defense-in-depth: dedup_roots가 overlapping root를 허용해도 longer root가 prefix-swap 승리)
+- [x] S24-02: 단위 테스트 8개 추가
+  - `root_to_canonical_sorted_longest_first` — 헬퍼가 longest-first 정렬 검증
+  - `root_to_canonical_sorted_find_hits_first` — 정렬 후 find()가 올바른 canonical 선택 검증
+  - `escape_like_empty_string_unchanged`
+  - `escape_like_plain_path_unchanged`
+  - `escape_like_backslash_doubled_first` — ordering invariant (`\` → `\\` must happen before `%` escaping)
+  - `escape_like_percent_escaped`
+  - `escape_like_underscore_escaped`
+  - `escape_like_all_special_chars_combined`
+- [x] 리뷰 MEDIUM 수정: 테스트가 `sort_roots_longest_first` 헬퍼를 직접 호출하도록 변경 (inline sort 제거 → production helper에 binding)
+- 커밋: `cceaf5a7`, `3e4d72f7`
+- 결과: 1,745 Rust pass / 0 fail / 2 ignored / 0 clippy warnings. 현재는 correctness-neutral (dedup_roots가 overlap을 보장하지 않음)이지만 dedup_roots regression 시 안전망 역할.
+
+## Sprint 25 로드맵
+
+- P1: RAG E2E 검증 (operational prerequisite: PostgreSQL with migrations 009/010 applied + LOCAL_EMBEDDING_ENABLED=true)
+  - 단계: (a) DB 컨테이너 기동 + migration 009 (nomic enum) + migration 010 (source_path) 실행
+  - (b) LOCAL_EMBEDDING_ENABLED=true로 서버 기동, fastembed 모델 다운로드 확인
+  - (c) POST /api/vault/ingest로 샘플 .md 1-2개 적재, processing_status=completed 대기
+  - (d) POST /api/search/ask 자연어 질문 → 응답 + sources 검증
+  - **Note**: code change 없음 — operational prerequisite. SOP 문서화 우선.
+- P2: vault_common.rs — `is_safe_md_path` + `collect_md_files` 단위 테스트 추가
+  - 엣지: empty dir, non-md files (txt/json 필터), symlink root (rejected), dotfile exclusion (.obsidian/.git)
+- P3: OpenAI Batch API 최적화 (설계 단계 — 비동기 임베딩 생성 비용 절감)
+  - greenfield multi-sprint work, 설계 문서 작성부터
+- P4: `escape_like_prefix` SQL ESCAPE clause 통합 테스트
+  - 실제 SQL 쿼리 문자열에 `ESCAPE '\\'` 절이 포함되는지 검증 (단위 테스트는 escape 결과만 검증)
 
 ## Rust TODO 현황 (31건, 2026-05-21 감사)
 
