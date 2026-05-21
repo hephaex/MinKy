@@ -208,6 +208,43 @@ impl ParsingStage {
         let tag_re = Regex::new(r"<[^>]+>").unwrap();
         let entity_re = Regex::new(r"&\w+;").unwrap();
 
+        // ── Extract headings before stripping ────────────────────────────────
+        // Match <h1>…</h1> through <h6>…</h6>; strip inner tags from text.
+        let heading_re = Regex::new(r"(?is)<h([1-6])[^>]*>(.*?)</h[1-6]>").unwrap();
+        let headings: Vec<Heading> = heading_re
+            .captures_iter(&raw.content)
+            .map(|cap| {
+                let level = cap[1].parse::<u8>().unwrap_or(1);
+                let text = tag_re
+                    .replace_all(&cap[2], "")
+                    .trim()
+                    .to_string();
+                Heading { level, text, position: 0 }
+            })
+            .collect();
+
+        // ── Extract links before stripping ───────────────────────────────────
+        // Match <a href="…"> or <a href='…'> and capture URL + link text.
+        let link_re =
+            Regex::new(r#"(?is)<a\s[^>]*?href=(?:"([^"]*?)"|'([^']*?)')(?:[^>]*)>(.*?)</a>"#)
+                .unwrap();
+        let links: Vec<Link> = link_re
+            .captures_iter(&raw.content)
+            .map(|cap| {
+                let url = cap
+                    .get(1)
+                    .or_else(|| cap.get(2))
+                    .map(|m| m.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let text = tag_re
+                    .replace_all(&cap[3], "")
+                    .trim()
+                    .to_string();
+                Link { text, url }
+            })
+            .collect();
+
         let mut plain_text = raw.content.clone();
 
         // Remove script and style tags with content
@@ -255,8 +292,8 @@ impl ParsingStage {
             plain_text: plain_text.trim().to_string(),
             original_content: raw.content.clone(),
             mime_type: raw.mime_type.clone(),
-            headings: Vec::new(), // TODO: Extract headings from HTML
-            links: Vec::new(),    // TODO: Extract links from HTML
+            headings,
+            links,
             code_blocks: Vec::new(),
             source_type: raw.source_type.clone(),
             source_path: raw.source_path.clone(),
@@ -404,5 +441,113 @@ fn main() {}
         assert_eq!(parsed.links.len(), 1);
         assert_eq!(parsed.links[0].text, "Example");
         assert_eq!(parsed.links[0].url, "https://example.com");
+    }
+
+    // ── S26-01: HTML heading + link extraction ────────────────────────────────
+
+    #[test]
+    fn html_heading_extraction_single() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<html><body><h1>Main Title</h1><p>Content</p></body></html>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.headings.len(), 1);
+        assert_eq!(parsed.headings[0].level, 1);
+        assert_eq!(parsed.headings[0].text, "Main Title");
+    }
+
+    #[test]
+    fn html_heading_extraction_multiple_levels() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            "<h1>Top</h1><h2>Sub</h2><h3>SubSub</h3>",
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.headings.len(), 3);
+        assert_eq!(parsed.headings[0].level, 1);
+        assert_eq!(parsed.headings[0].text, "Top");
+        assert_eq!(parsed.headings[1].level, 2);
+        assert_eq!(parsed.headings[1].text, "Sub");
+        assert_eq!(parsed.headings[2].level, 3);
+        assert_eq!(parsed.headings[2].text, "SubSub");
+    }
+
+    #[test]
+    fn html_heading_strips_inner_tags() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<h2><em>Styled</em> Heading</h2>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.headings.len(), 1);
+        assert_eq!(parsed.headings[0].text, "Styled Heading");
+    }
+
+    #[test]
+    fn html_no_headings_returns_empty() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<p>Just a paragraph.</p>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert!(parsed.headings.is_empty());
+    }
+
+    #[test]
+    fn html_link_extraction_double_quotes() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<a href="https://example.com">Example</a>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 1);
+        assert_eq!(parsed.links[0].url, "https://example.com");
+        assert_eq!(parsed.links[0].text, "Example");
+    }
+
+    #[test]
+    fn html_link_extraction_single_quotes() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<a href='https://example.org'>Visit</a>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 1);
+        assert_eq!(parsed.links[0].url, "https://example.org");
+        assert_eq!(parsed.links[0].text, "Visit");
+    }
+
+    #[test]
+    fn html_link_extraction_multiple_links() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<a href="https://a.com">A</a> and <a href="https://b.com">B</a>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 2);
+        assert_eq!(parsed.links[0].url, "https://a.com");
+        assert_eq!(parsed.links[1].url, "https://b.com");
+    }
+
+    #[test]
+    fn html_link_strips_inner_tags_from_text() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc(
+            r#"<a href="https://example.com"><strong>Bold</strong> link</a>"#,
+            "text/html",
+        );
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 1);
+        assert_eq!(parsed.links[0].text, "Bold link");
+    }
+
+    #[test]
+    fn html_no_links_returns_empty() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("<p>No links here.</p>", "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert!(parsed.links.is_empty());
     }
 }

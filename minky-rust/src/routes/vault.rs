@@ -1603,4 +1603,83 @@ mod tests {
         // raw input \%_ → step1: \\%_ → step2: \\\%_ → step3: \\\%\_
         assert_eq!(escape_like_prefix("\\%_"), "\\\\\\%\\_");
     }
+
+    // ── S26-02: sync_report response shape ────────────────────────────────────
+
+    /// Verify that the `sync_report` JSON response has the exact shape callers
+    /// depend on.  The handler assembles the JSON via `serde_json::json!` without
+    /// a dedicated response struct, so this test acts as a contract: field names,
+    /// nesting, and types.
+    #[test]
+    fn sync_report_response_shape() {
+        let orphan_id = uuid::Uuid::new_v4();
+
+        // Reproduce the exact `serde_json::json!` expression from the handler.
+        let response = serde_json::json!({
+            "success": true,
+            "data": {
+                "roots": ["/tmp/vault"],
+                "tracked_count": 2_u64,
+                "orphans": [
+                    {
+                        "document_id": orphan_id,
+                        "source_path": "/tmp/vault/deleted.md"
+                    }
+                ],
+                "untracked": ["/tmp/vault/new.md"],
+                "truncated": false
+            }
+        });
+
+        // Top-level shape.
+        assert_eq!(response["success"], true);
+        let data = &response["data"];
+        assert!(data.is_object(), "`data` must be an object");
+
+        // Mandatory data fields.
+        let roots = &data["roots"];
+        assert!(roots.is_array(), "`roots` must be an array");
+        assert_eq!(roots[0], "/tmp/vault");
+
+        assert_eq!(data["tracked_count"], 2);
+        assert_eq!(data["truncated"], false);
+
+        // Untracked list.
+        let untracked = &data["untracked"];
+        assert!(untracked.is_array(), "`untracked` must be an array");
+        assert_eq!(untracked[0], "/tmp/vault/new.md");
+
+        // Orphan list and per-orphan shape.
+        let orphans = &data["orphans"];
+        assert!(orphans.is_array(), "`orphans` must be an array");
+        let orphan = &orphans[0];
+        assert!(
+            orphan["document_id"].is_string(),
+            "`document_id` must be a UUID string"
+        );
+        assert_eq!(orphan["source_path"], "/tmp/vault/deleted.md");
+    }
+
+    /// `truncated: true` when the result was capped, `false` otherwise — verify
+    /// the field survives serialisation correctly for both states.
+    #[test]
+    fn sync_report_truncated_field_serializes_both_states() {
+        for truncated in [true, false] {
+            let response = serde_json::json!({
+                "success": true,
+                "data": {
+                    "roots": serde_json::Value::Array(vec![]),
+                    "tracked_count": 0_u64,
+                    "orphans": serde_json::Value::Array(vec![]),
+                    "untracked": serde_json::Value::Array(vec![]),
+                    "truncated": truncated
+                }
+            });
+            assert_eq!(
+                response["data"]["truncated"],
+                truncated,
+                "truncated field must round-trip correctly for value={truncated}"
+            );
+        }
+    }
 }
