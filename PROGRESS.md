@@ -5,7 +5,27 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 18: fastembed-rs 로컬 임베딩 통합
+## 현재 진행 상황 (2026-05-21) - Sprint 19: fastembed 배치 최적화 + Vault 인제스트 API
+
+### Sprint 19: fastembed Batch Optimization + Obsidian Vault Ingest API (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| fastembed 배치 최적화 | services/embedding_service.rs | generate_local_embeddings_batch(): N번 Mutex lock → 1번 단일 embed() 호출 |
+| generate_embeddings_batch | services/embedding_service.rs | local 경로 분기 → batch 메서드로 위임 |
+| Vault 인제스트 API (신규) | routes/vault.rs | POST /api/vault/ingest — 절대경로 검증, .md 수집, 문서 등록 |
+| 모듈 등록 | routes/mod.rs | mod vault + /vault 라우트 네스팅 |
+| symlink 차단 | routes/vault.rs | symlink_metadata() + is_symlink() 체크 (HIGH 보안 수정) |
+| 파일 크기 상한 | routes/vault.rs | MAX_FILE_BYTES=10MB, metadata() 선행 체크 (MEDIUM 수정) |
+| 공유 EmbeddingService | routes/vault.rs | Arc::clone 루프 밖 + &*embedding_service 전달 (MEDIUM 수정) |
+| 테스트 추가 | services/embedding_service.rs, routes/vault.rs | 2 + 25 = 27개 신규 테스트 |
+
+테스트: 1,674 Rust + 561 frontend = 2,235 pass / 0 fail / 3 ignored / 0 clippy warnings
+커밋: `52637974`, `df89f5bd`
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 18: fastembed-rs 로컬 임베딩 통합
 
 ### Sprint 18: fastembed-rs Local Embedding (2026-05-21)
 

@@ -338,12 +338,19 @@
 - 커밋: `5fa10308`, `8e596136`
 - 결과: OpenAI 크레딧 없이 LOCAL_EMBEDDING_ENABLED=true로 로컬 임베딩 활성화 가능
 
-## Sprint 19 로드맵
+## Sprint 19 완료 (2026-05-21) — fastembed 배치 최적화 + Obsidian Vault 인제스트 API
 
-- P1: Obsidian Vault 감시 + 자동 인제스트 파이프라인
-- P2: fastembed 배치 최적화 (generate_embeddings_batch 로컬 경로 단일 embed() 호출)
-- P3: 지식 그래프 자동 갱신 이벤트 파이프라인
-- P4: 팀 온보딩 모드 (중심성 기반 추천 문서)
+- [x] S19-01: fastembed generate_embeddings_batch 단일 embed() 호출 + vault ingest API
+- [x] S19-02: vault 보안 강화 — symlink traversal 차단, 10MB 파일 크기 상한, 공유 EmbeddingService
+- 커밋: `52637974`, `df89f5bd`
+- 결과: POST /api/vault/ingest 구현, O(N) Mutex lock → O(1) 배치 최적화, 보안 취약점 해결
+
+## Sprint 20 로드맵
+
+- P1: Obsidian Vault 자동 감시 (notify crate — inotify/kqueue 기반 파일 변경 감지 + 자동 인제스트)
+- P2: OpenAI 배치 API 최적화 (Batch API 활용, 비동기 임베딩 생성 비용 절감)
+- P3: 지식 그래프 자동 갱신 이벤트 파이프라인 (문서 저장 시 엣지 자동 재계산)
+- P4: 팀 온보딩 모드 (중심성 기반 추천 문서 — PageRank 기반 "새 팀원에게 읽힐 문서" API)
 
 ## Rust TODO 현황 (31건, 2026-05-21 감사)
 
