@@ -345,12 +345,20 @@
 - 커밋: `52637974`, `df89f5bd`
 - 결과: POST /api/vault/ingest 구현, O(N) Mutex lock → O(1) 배치 최적화, 보안 취약점 해결
 
-## Sprint 20 로드맵
+## Sprint 20 완료 (2026-05-21) — Obsidian Vault 파일 감시 (notify-debouncer-full)
 
-- P1: Obsidian Vault 자동 감시 (notify crate — inotify/kqueue 기반 파일 변경 감지 + 자동 인제스트)
-- P2: OpenAI 배치 API 최적화 (Batch API 활용, 비동기 임베딩 생성 비용 절감)
-- P3: 지식 그래프 자동 갱신 이벤트 파이프라인 (문서 저장 시 엣지 자동 재계산)
-- P4: 팀 온보딩 모드 (중심성 기반 추천 문서 — PageRank 기반 "새 팀원에게 읽힐 문서" API)
+- [x] S20-01: notify v6 + notify-debouncer-full v0.3 추가 + VaultWatcherService 스켈레톤 + vault_common 모듈
+- [x] S20-02: 파일 이벤트 → 인제스트 파이프라인 연결 (DocumentSource::File, dotfile 필터, 루트 검증)
+- [x] S20-03: VaultWatchConfig, AppState 라이프사이클, /vault/watch/status+reload (admin-gated)
+- 커밋: `88df037a`, `bc092f14`
+- 결과: VAULT_WATCH_ENABLED=true + roots + user_id 설정 시 Obsidian vault .md 파일 변경 자동 인제스트
+
+## Sprint 21 로드맵
+
+- P1: Vault watcher 초기 스캔 (시작 시 기존 파일 일괄 인제스트 + source_path 중복 방지)
+- P2: RAG E2E 검증 (LOCAL_EMBEDDING_ENABLED=true + DB 마이그레이션 009 실행 + 실제 질의 테스트)
+- P3: Vault 동기화 보고서 API (source_path 기반 DB-파일 비교, 고아 문서 식별)
+- P4: OpenAI Batch API 최적화 (비동기 임베딩 생성 비용 절감)
 
 ## Rust TODO 현황 (31건, 2026-05-21 감사)
 

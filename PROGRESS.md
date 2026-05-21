@@ -5,7 +5,35 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 19: fastembed 배치 최적화 + Vault 인제스트 API
+## 현재 진행 상황 (2026-05-21) - Sprint 20: Obsidian Vault 파일 감시
+
+### Sprint 20: Obsidian Vault File Watcher — notify-debouncer-full (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| notify crate 추가 | Cargo.toml | notify v6 + notify-debouncer-full v0.3 (2초 debounce 윈도우) |
+| vault 공유 헬퍼 (신규) | services/vault_common.rs | MAX_FILE_BYTES, validate_path, is_safe_md_path, collect_md_files + traversal에서 dotfile skip |
+| Vault Watcher 서비스 (신규) | services/vault_watcher_service.rs | VaultWatcherService(notify 이벤트 루프), VaultWatcherHandle(Drop impl), canonical 루트 prefix 체크, try_send warn 로깅 |
+| 모듈 등록 | services/mod.rs | vault_common, vault_watcher_service 등록 |
+| ingest_single_file 추출 | routes/vault.rs | pub ingest_single_file → DocumentSource::File 사용 (파이프라인이 파일 읽기 + source_path 채움 → TOCTOU 해결) |
+| Watch 관리 엔드포인트 | routes/vault.rs | GET /api/vault/watch/status, POST /api/vault/watch/reload (AdminUser 게이트) |
+| vault 모듈 공개 | routes/mod.rs | pub mod vault |
+| Watch 설정 | config.rs | VaultWatchConfig { enabled, roots, user_id } (기본 false) |
+| AppState 라이프사이클 | lib.rs | Arc<Mutex<Option<VaultWatcherHandle>>> + create_app()에서 자동 시작 |
+| C1 CRITICAL 수정 | routes/vault.rs | source_path 미저장 → DocumentSource::File로 파이프라인 위임 |
+| H1 HIGH 수정 | routes/vault.rs | watch_reload/status admin 전용 (AdminUser extractor) |
+| H3 HIGH 수정 | services/vault_watcher_service.rs | mpsc try_send full 시 tracing::warn! 로깅 |
+| H4 HIGH 수정 | services/vault_watcher_service.rs | std::fs::canonicalize 루트/이벤트 경로 비교 (symlink 우회 차단) |
+| H5 HIGH 수정 | services/vault_common.rs, vault_watcher_service.rs | traversal + 이벤트 모두 dotfile(.obsidian/.git) skip |
+| M4 MEDIUM 수정 | services/vault_watcher_service.rs | VaultWatcherHandle Drop impl + Option<oneshot::Sender> shutdown 신호 |
+| 테스트 헬퍼 갱신 | 다수 services 테스트 파일 | Config test helper에 vault_watch 필드 추가 |
+
+테스트: 1,673 Rust + 561 frontend = 2,234 pass / 0 fail / 2 ignored / 0 clippy warnings
+커밋: `88df037a`, `bc092f14`
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 19: fastembed 배치 최적화 + Vault 인제스트 API
 
 ### Sprint 19: fastembed Batch Optimization + Obsidian Vault Ingest API (2026-05-21)
 
