@@ -31,6 +31,7 @@ mod templates;
 mod timeline;
 mod understanding;
 mod versions;
+mod vault;
 mod workflows;
 mod ws;
 
@@ -72,6 +73,7 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/slack", slack::router())
         .nest("/pipeline", pipeline::router())
         .nest("/hybrid", hybrid::router())
+        .nest("/vault", vault::router())
         .merge(ws::router())
         .merge(crate::openapi::router())
 }
