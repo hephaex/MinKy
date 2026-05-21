@@ -19,19 +19,20 @@ use futures_util::stream::Stream;
 use secrecy::ExposeSecret;
 use serde::Serialize;
 use std::convert::Infallible;
+use std::sync::Arc;
 use tokio_stream::StreamExt;
 
 use crate::{
     error::AppResult,
     middleware::AuthUser,
     models::{
-        EmbeddingModel, RagAskRequest, RagAskResponse, RagSemanticSearchRequest,
+        RagAskRequest, RagAskResponse, RagSemanticSearchRequest,
         RagSemanticSearchResponse, RagSource, SearchHistoryEntry, SearchHistoryQuery,
         SemanticSearchRequest,
     },
     services::{
         anthropic_types::{AnthropicMessage, AnthropicStreamEvent, AnthropicStreamRequest},
-        EmbeddingConfig, EmbeddingService, RagService,
+        RagService,
     },
     AppState,
 };
@@ -272,20 +273,7 @@ async fn ask_stream(
         }
 
         // 1. Vector search for relevant chunks
-        let openai_key = state.config.openai_api_key
-            .as_ref()
-            .map(|s| s.expose_secret().to_string());
-
-        let embedding_config = EmbeddingConfig {
-            openai_api_key: openai_key,
-            voyage_api_key: None,
-            default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
-            chunk_size: 512,
-            chunk_overlap: 50,
-            local_embedding_enabled: state.config.local_embedding_enabled,
-        };
-
-        let embedding_service = EmbeddingService::new(state.db.clone(), embedding_config);
+        let embedding_service = Arc::clone(&state.embedding_service);
 
         let search_req = SemanticSearchRequest {
             query: payload.question.clone(),

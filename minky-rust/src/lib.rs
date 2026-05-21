@@ -22,7 +22,8 @@ use std::sync::Arc;
 
 use crate::config::Config;
 use crate::middleware::rate_limit_middleware;
-use crate::services::WebSocketManager;
+use crate::services::{EmbeddingConfig, EmbeddingService, WebSocketManager};
+use crate::models::EmbeddingModel;
 
 /// Application state shared across all handlers
 #[derive(Clone)]
@@ -30,6 +31,7 @@ pub struct AppState {
     pub db: sqlx::PgPool,
     pub config: Config,
     pub ws_manager: Arc<WebSocketManager>,
+    pub embedding_service: Arc<EmbeddingService>,
 }
 
 /// Create the application with all routes and middleware
@@ -61,10 +63,24 @@ pub async fn create_app(config: Config) -> Result<Router> {
 
     let ws_manager = Arc::new(WebSocketManager::new());
 
+    // Initialize embedding service once at startup. When local_embedding_enabled
+    // is true this downloads ~270 MB (nomic-embed-text-v1.5) on first run.
+    use secrecy::ExposeSecret;
+    let embedding_config = EmbeddingConfig {
+        openai_api_key: config.openai_api_key.as_ref().map(|k| k.expose_secret().to_owned()),
+        voyage_api_key: None,
+        default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
+        chunk_size: 512,
+        chunk_overlap: 50,
+        local_embedding_enabled: config.local_embedding_enabled,
+    };
+    let embedding_service = Arc::new(EmbeddingService::new_with_local(db.clone(), embedding_config).await?);
+
     let state = AppState {
         db,
         config: config.clone(),
         ws_manager,
+        embedding_service,
     };
 
     // Parse CORS allowed origins from config

@@ -13,8 +13,8 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use secrecy::ExposeSecret;
 use serde::Deserialize;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::{
@@ -22,37 +22,13 @@ use crate::{
     middleware::AuthUser,
     models::{
         ChunkEmbedding, CreateChunkEmbeddingsRequest, CreateDocumentEmbeddingRequest,
-        DocumentEmbedding, EmbeddingModel, EmbeddingQueueEntry, EmbeddingStats,
+        DocumentEmbedding, EmbeddingQueueEntry, EmbeddingStats,
         SemanticSearchRequest, SemanticSearchResult,
     },
-    services::{EmbeddingConfig, EmbeddingService},
     AppState,
 };
 
 use super::common::{into_error_response, ApiResponse};
-
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-
-fn build_service(state: &AppState) -> EmbeddingService {
-    let openai_api_key = state
-        .config
-        .openai_api_key
-        .as_ref()
-        .map(|k| k.expose_secret().to_owned());
-
-    let config = EmbeddingConfig {
-        openai_api_key,
-        voyage_api_key: None,
-        default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
-        chunk_size: 512,
-        chunk_overlap: 50,
-        local_embedding_enabled: state.config.local_embedding_enabled,
-    };
-
-    EmbeddingService::new(state.db.clone(), config)
-}
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -101,7 +77,7 @@ async fn create_document_embedding(
         return Err(into_error_response(AppError::Forbidden));
     }
 
-    let service = build_service(&state);
+    let service = Arc::clone(&state.embedding_service);
 
     let req = CreateDocumentEmbeddingRequest {
         document_id,
@@ -142,7 +118,7 @@ async fn create_chunk_embeddings(
     // Ensure the path parameter overrides any document_id in the body.
     payload.document_id = document_id;
 
-    let service = build_service(&state);
+    let service = Arc::clone(&state.embedding_service);
 
     service
         .create_chunk_embeddings(payload)
@@ -211,7 +187,7 @@ async fn semantic_search(
     // Set user_id to filter results to accessible documents
     payload.user_id = Some(auth_user.id);
 
-    let service = build_service(&state);
+    let service = Arc::clone(&state.embedding_service);
 
     service
         .semantic_search(payload)
@@ -245,7 +221,7 @@ async fn find_similar_documents(
     }
 
     let limit = query.limit.unwrap_or(10).min(50);
-    let service = build_service(&state);
+    let service = Arc::clone(&state.embedding_service);
 
     service
         .find_similar_documents(document_id, limit)
@@ -262,7 +238,7 @@ async fn get_stats(
     State(state): State<AppState>,
     _auth_user: AuthUser,
 ) -> Result<Json<ApiResponse<EmbeddingStats>>, (StatusCode, Json<serde_json::Value>)> {
-    let service = build_service(&state);
+    let service = Arc::clone(&state.embedding_service);
 
     service
         .get_stats()
@@ -295,7 +271,7 @@ async fn queue_document(
         return Err(into_error_response(AppError::Forbidden));
     }
 
-    let service = build_service(&state);
+    let service = Arc::clone(&state.embedding_service);
 
     service
         .queue_document(document_id, payload.priority)
