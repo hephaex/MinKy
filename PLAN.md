@@ -329,10 +329,19 @@
 - [x] S17-02: .history/ 2025년 파일 24개를 archive-2025/로 이동
 - [x] S17-03: Rust TODO 31건 분류 (아래 표 참조)
 
-## Sprint 18 로드맵
+## Sprint 18 완료 (2026-05-21) — fastembed-rs 로컬 임베딩
+
+- [x] S18-01: fastembed v5 Cargo.toml 추가 + migration 009 (nomic_embed_text_v1_5 enum)
+- [x] S18-02: NomicEmbedTextV15 variant (768 dim) + EmbeddingService::new_with_local()
+- [x] S18-03: AppState에 Arc<EmbeddingService> 통합 (HIGH 이슈 수정)
+- [x] S18-04: 4개 단위 테스트 추가
+- 커밋: `5fa10308`, `8e596136`
+- 결과: OpenAI 크레딧 없이 LOCAL_EMBEDDING_ENABLED=true로 로컬 임베딩 활성화 가능
+
+## Sprint 19 로드맵
 
 - P1: Obsidian Vault 감시 + 자동 인제스트 파이프라인
-- P2: 로컬 임베딩 모델 (fastembed-rs) 지원 추가
+- P2: fastembed 배치 최적화 (generate_embeddings_batch 로컬 경로 단일 embed() 호출)
 - P3: 지식 그래프 자동 갱신 이벤트 파이프라인
 - P4: 팀 온보딩 모드 (중심성 기반 추천 문서)
 
@@ -354,7 +363,8 @@
 
 ## Blocked / Waiting
 
-- OpenAI API 크레딧 부족 → 벡터 임베딩/RAG E2E 검증 불가
+- ~~OpenAI API 크레딧 부족~~ → fastembed-rs 로컬 임베딩으로 해결 (Sprint 18)
+- RAG E2E 검증: LOCAL_EMBEDDING_ENABLED=true + DB 마이그레이션 실행 필요
 
 ---
 

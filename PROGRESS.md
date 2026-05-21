@@ -5,7 +5,26 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-21) - Sprint 14-17: 종합 리뷰 + Recovery + Feature + Cleanup
+## 현재 진행 상황 (2026-05-21) - Sprint 18: fastembed-rs 로컬 임베딩 통합
+
+### Sprint 18: fastembed-rs Local Embedding (2026-05-21)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| fastembed v5 추가 | Cargo.toml | hf-hub-native-tls + ort-download-binaries-native-tls (macOS 호환) |
+| DB migration | migrations/009_local_embedding_model.sql | nomic_embed_text_v1_5 enum 값 추가 |
+| EmbeddingModel 확장 | models/embedding.rs | NomicEmbedTextV15 (768 dim) + is_local() |
+| 로컬 임베딩 서비스 | services/embedding_service.rs | Arc<Mutex<TextEmbedding>>, new_with_local(), generate_local_embedding() |
+| Config 추가 | config.rs | local_embedding_enabled: bool (기본 false) |
+| AppState 통합 | lib.rs | Arc<EmbeddingService> 추가, create_app()에서 한 번 초기화 |
+| 라우트 정리 | routes/embeddings.rs, routes/rag.rs | build_service() 제거, Arc::clone 공유 |
+
+테스트: 1,647 Rust + 561 frontend = 2,208 pass / 0 fail / 0 clippy warnings
+커밋: `5fa10308`, `8e596136`
+
+---
+
+## 이전 진행 상황 (2026-05-21) - Sprint 14-17: 종합 리뷰 + Recovery + Feature + Cleanup
 
 ### Sprint 14: Critical Recovery (2026-05-21)
 
