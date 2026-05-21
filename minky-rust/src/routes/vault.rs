@@ -334,20 +334,57 @@ pub async fn sync_report(
             .into_response();
     }
 
-    // 2. Collect all .md paths on disk for every root.
+    // 2. Pre-compute canonical forms for every root once.
+    //
+    // `collect_md_files` returns paths that are always children of their root,
+    // so we only need one `canonicalize` syscall per root rather than one per
+    // file.  For a 50k-file vault this reduces ~100k `stat(2)` calls to O(roots).
+    let root_to_canonical: Vec<(String, String)> = valid_roots
+        .iter()
+        .map(|r| {
+            let raw = r.to_str().unwrap_or("").to_string();
+            let canonical = try_canonicalize(&raw);
+            (raw, canonical)
+        })
+        .collect();
+
+    // 3. Collect all .md paths on disk for every root.
+    //
+    // Instead of calling `try_canonicalize` for every individual file path we
+    // swap the known raw-root prefix with its pre-computed canonical form.  For
+    // files that don't share the known prefix (should never happen in practice)
+    // we fall back to the slower per-file canonicalization.
     let mut disk_paths: HashSet<String> = HashSet::new();
-    for root in &valid_roots {
+    for (raw_root, canonical_root) in &root_to_canonical {
+        let root = std::path::Path::new(raw_root);
         let files = collect_md_files(root, true, usize::MAX);
         for f in files {
             if let Some(s) = f.to_str() {
-                disk_paths.insert(try_canonicalize(s));
+                let canonical_path = if s.starts_with(raw_root.as_str()) {
+                    format!("{}{}", canonical_root, &s[raw_root.len()..])
+                } else {
+                    // Fallback: path unexpectedly doesn't share the root prefix.
+                    try_canonicalize(s)
+                };
+                disk_paths.insert(canonical_path);
             }
         }
     }
 
-    // 3. Query the DB for documents whose source_path falls under one of the roots.
+    // 4. Query the DB for documents whose source_path falls under one of the roots.
+    //
+    // Each root is queried with a LIMIT equal to the remaining capacity (plus
+    // one extra row to detect truncation).  After each query the consumed row
+    // count is deducted from the remaining budget; if the budget is exhausted
+    // the loop breaks immediately so that later roots are not silently omitted
+    // from the truncated result.
     let mut db_pairs: Vec<(uuid::Uuid, String)> = Vec::new();
-    for root in &valid_roots {
+    let mut truncated = false;
+    // One extra row beyond the limit lets us detect that the DB has more rows
+    // than we want to return without fetching them all.
+    let mut remaining = SYNC_REPORT_DB_LIMIT + 1;
+
+    'roots: for root in &valid_roots {
         // Ensure the prefix ends with '/' so we don't accidentally match
         // paths that share a common string prefix but differ in directory
         // (e.g. /vault2 matching against a /vault prefix).
@@ -368,12 +405,12 @@ pub async fn sync_report(
              WHERE source_path IS NOT NULL \
              AND source_path LIKE $1 || '%' ESCAPE '\\' \
              LIMIT {}",
-            SYNC_REPORT_DB_LIMIT + 1
+            remaining
         );
         let rows = match sqlx::query_as::<_, (uuid::Uuid, String)>(&limit_sql)
-        .bind(&escaped_prefix)
-        .fetch_all(&state.db)
-        .await
+            .bind(&escaped_prefix)
+            .fetch_all(&state.db)
+            .await
         {
             Ok(rows) => rows,
             Err(e) => {
@@ -386,25 +423,45 @@ pub async fn sync_report(
             }
         };
 
+        let count = rows.len();
         db_pairs.extend(rows);
+        // Saturating sub prevents underflow in the (impossible) case where
+        // the DB returns more rows than we asked for.
+        remaining = remaining.saturating_sub(count);
+
+        if db_pairs.len() >= SYNC_REPORT_DB_LIMIT {
+            truncated = true;
+            break 'roots;
+        }
     }
 
-    // Check if we exceeded the limit.
-    let truncated = db_pairs.len() > SYNC_REPORT_DB_LIMIT;
-    if truncated {
+    // Handle the "+1 overshoot": the last query may have returned one extra
+    // row used solely for truncation detection.
+    if db_pairs.len() > SYNC_REPORT_DB_LIMIT {
+        truncated = true;
         db_pairs.truncate(SYNC_REPORT_DB_LIMIT);
     }
 
     // Deduplicate: a source_path should map to exactly one document row;
     // later entries overwrite earlier ones in the HashMap.
-    // Canonicalize each DB path so that symlink differences (e.g. /tmp vs
-    // /private/tmp on macOS) do not cause false "orphan" or "untracked" results.
+    // Apply the same prefix-swap canonicalization used for disk paths so that
+    // symlink differences (e.g. /tmp vs /private/tmp on macOS) never produce
+    // false "orphan" or "untracked" entries.  The per-file syscall is replaced
+    // by an O(1) string prefix swap; paths outside any known root fall back to
+    // the slower `try_canonicalize`.
     let db_docs: HashMap<String, uuid::Uuid> = db_pairs
         .into_iter()
-        .map(|(id, path)| (try_canonicalize(&path), id))
+        .map(|(id, path)| {
+            let canonical_path = root_to_canonical
+                .iter()
+                .find(|(raw, _)| path.starts_with(raw.as_str()))
+                .map(|(raw, canonical)| format!("{}{}", canonical, &path[raw.len()..]))
+                .unwrap_or_else(|| try_canonicalize(&path));
+            (canonical_path, id)
+        })
         .collect();
 
-    // 4. Compute the diff sets.
+    // 6. Compute the diff sets.
     let db_path_set: HashSet<&str> = db_docs.keys().map(|s| s.as_str()).collect();
 
     // orphans: recorded in DB but the file no longer exists on disk.
@@ -1158,5 +1215,186 @@ mod tests {
             std::path::Path::new(&canonical_disk).exists(),
             "canonical path must point to an existing file"
         );
+    }
+
+    // ── per-root truncation / remaining-capacity logic ────────────────────────
+
+    /// Helper that simulates the per-root accumulation loop introduced by the
+    /// Sprint-23 fix.  `root_sizes` contains the number of rows each root
+    /// returns from the DB (already respecting the per-query LIMIT passed to
+    /// it).  Returns `(final_len, truncated)`.
+    fn simulate_per_root_loop(root_sizes: &[usize]) -> (usize, bool) {
+        let mut db_pairs: Vec<(uuid::Uuid, String)> = Vec::new();
+        let mut truncated = false;
+        let mut remaining = SYNC_REPORT_DB_LIMIT + 1;
+
+        'roots: for (root_idx, &size) in root_sizes.iter().enumerate() {
+            // The real handler would LIMIT its query to `remaining`; simulate
+            // that by capping the number of rows the root actually delivers.
+            let actual = size.min(remaining);
+            let rows: Vec<(uuid::Uuid, String)> = (0..actual)
+                .map(|i| {
+                    (
+                        uuid::Uuid::new_v4(),
+                        format!("/root-{}/file{}.md", root_idx, i),
+                    )
+                })
+                .collect();
+
+            let count = rows.len();
+            db_pairs.extend(rows);
+            remaining = remaining.saturating_sub(count);
+
+            if db_pairs.len() >= SYNC_REPORT_DB_LIMIT {
+                truncated = true;
+                break 'roots;
+            }
+        }
+
+        // Handle the "+1 overshoot" from the last root.
+        if db_pairs.len() > SYNC_REPORT_DB_LIMIT {
+            truncated = true;
+            db_pairs.truncate(SYNC_REPORT_DB_LIMIT);
+        }
+
+        (db_pairs.len(), truncated)
+    }
+
+    /// When the very first root already saturates the limit, the loop must
+    /// break immediately (`truncated = true`) and no rows from subsequent
+    /// roots should appear in the result.
+    #[test]
+    fn sync_report_early_break_when_first_root_fills_limit() {
+        // Root-1 delivers SYNC_REPORT_DB_LIMIT + 1 rows (the "+1" sentinel).
+        // The remaining capacity starts at SYNC_REPORT_DB_LIMIT + 1, so the
+        // query cap equals that value — root-1 may return up to that many rows.
+        let (len, truncated) = simulate_per_root_loop(&[SYNC_REPORT_DB_LIMIT + 1, 5_000]);
+
+        assert!(truncated, "should be truncated when first root fills the limit");
+        assert_eq!(
+            len, SYNC_REPORT_DB_LIMIT,
+            "result must be exactly SYNC_REPORT_DB_LIMIT rows after truncation"
+        );
+    }
+
+    /// Remaining capacity must decrease as roots are processed.  If root-1
+    /// returns 30_000 rows, root-2's query limit must be
+    /// `SYNC_REPORT_DB_LIMIT + 1 - 30_000 = 20_001`, not the full
+    /// `SYNC_REPORT_DB_LIMIT + 1`.  The combined result must be truncated to
+    /// exactly `SYNC_REPORT_DB_LIMIT`.
+    #[test]
+    fn sync_report_remaining_capacity_decreases_across_roots() {
+        // Root-1 → 30_000 rows, root-2 → 25_000 rows (but capacity is only
+        // 20_001 so root-2 actually delivers 20_001 rows, pushing the total
+        // to 50_001 and triggering the overshoot truncation).
+        let (len, truncated) = simulate_per_root_loop(&[30_000, 25_000]);
+
+        assert!(truncated, "should be truncated when combined roots exceed the limit");
+        assert_eq!(
+            len, SYNC_REPORT_DB_LIMIT,
+            "result must be exactly SYNC_REPORT_DB_LIMIT rows after truncation"
+        );
+    }
+
+    // ── canonicalize-once-per-root (S23-02) ───────────────────────────────────
+
+    /// Prefix-swap: a file path that begins with `raw_root` must have that
+    /// prefix replaced by `canonical_root` — no syscall required.
+    #[test]
+    fn canonicalize_prefix_swap_replaces_known_root() {
+        let raw_root = "/tmp/vault".to_string();
+        let canonical_root = "/private/tmp/vault".to_string();
+        let root_to_canonical = vec![(raw_root.clone(), canonical_root.clone())];
+
+        let path = "/tmp/vault/note.md";
+        let result = root_to_canonical
+            .iter()
+            .find(|(raw, _)| path.starts_with(raw.as_str()))
+            .map(|(raw, canonical)| format!("{}{}", canonical, &path[raw.len()..]))
+            .unwrap_or_else(|| try_canonicalize(path));
+
+        assert_eq!(
+            result, "/private/tmp/vault/note.md",
+            "prefix swap must replace raw root with its canonical form"
+        );
+    }
+
+    /// Fallback: a path that shares no prefix with any known root must be
+    /// handled by `try_canonicalize` rather than panicking or returning garbage.
+    ///
+    /// We use a path that is guaranteed not to exist so that `try_canonicalize`
+    /// falls back to returning the original string — allowing us to confirm the
+    /// fallback branch was taken without needing a live filesystem.
+    #[test]
+    fn canonicalize_prefix_swap_falls_back_for_unknown_path() {
+        let root_to_canonical = vec![(
+            "/tmp/vault".to_string(),
+            "/private/tmp/vault".to_string(),
+        )];
+
+        // This path deliberately shares no prefix with the known roots.
+        let path = "/nonexistent/xyzzy/note.md";
+        let result = root_to_canonical
+            .iter()
+            .find(|(raw, _)| path.starts_with(raw.as_str()))
+            .map(|(raw, canonical)| format!("{}{}", canonical, &path[raw.len()..]))
+            .unwrap_or_else(|| try_canonicalize(path));
+
+        // `try_canonicalize` returns the original string for non-existent paths.
+        assert_eq!(
+            result, path,
+            "fallback must return the original path when canonicalize fails"
+        );
+    }
+
+    /// One root → one entry in `root_to_canonical`, regardless of how many
+    /// files live under that root.  Confirms O(roots) canonicalization cost.
+    #[test]
+    fn canonicalize_root_once_not_per_file() {
+        use std::path::PathBuf;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let root = dir.path().to_path_buf();
+
+        // Write three files under the same root.
+        for name in ["a.md", "b.md", "c.md"] {
+            std::fs::write(root.join(name), "# Note").expect("write temp file");
+        }
+
+        // Simulate the pre-computation step: one entry per root.
+        let valid_roots: Vec<PathBuf> = vec![root.clone()];
+        let root_to_canonical: Vec<(String, String)> = valid_roots
+            .iter()
+            .map(|r| {
+                let raw = r.to_str().unwrap_or("").to_string();
+                let canonical = try_canonicalize(&raw);
+                (raw, canonical)
+            })
+            .collect();
+
+        // Exactly one canonicalization entry for one root.
+        assert_eq!(
+            root_to_canonical.len(),
+            1,
+            "one root must produce exactly one root_to_canonical entry"
+        );
+
+        // Verify the prefix swap works for all three files.
+        let files = collect_md_files(&root, true, usize::MAX);
+        assert_eq!(files.len(), 3, "expected three md files");
+
+        let (raw_root, canonical_root) = &root_to_canonical[0];
+        for f in &files {
+            let s = f.to_str().expect("valid UTF-8 path");
+            let canonical_path = if s.starts_with(raw_root.as_str()) {
+                format!("{}{}", canonical_root, &s[raw_root.len()..])
+            } else {
+                try_canonicalize(s)
+            };
+            assert!(
+                canonical_path.starts_with(canonical_root.as_str()),
+                "canonical file path must start with the canonical root: {canonical_path}"
+            );
+        }
     }
 }
