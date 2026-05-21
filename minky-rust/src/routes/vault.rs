@@ -21,6 +21,9 @@ const MAX_FILES_HARD_CAP: usize = 500;
 /// Default value for `max_files` when the caller omits the field.
 const DEFAULT_MAX_FILES: usize = 100;
 
+/// Maximum file size in bytes (10 MB). Files larger than this are skipped.
+const MAX_FILE_BYTES: u64 = 10 * 1024 * 1024;
+
 pub fn router() -> Router<AppState> {
     Router::new().route("/ingest", post(ingest_vault))
 }
@@ -134,7 +137,15 @@ fn collect_md_files(
 ) -> Vec<std::path::PathBuf> {
     let mut files = Vec::new();
 
-    if root.is_file() {
+    // Use symlink_metadata so we never follow symlinks.
+    let root_meta = match root.symlink_metadata() {
+        Ok(m) => m,
+        Err(_) => return files,
+    };
+    if root_meta.file_type().is_symlink() {
+        return files;
+    }
+    if root_meta.is_file() {
         let ext = root
             .extension()
             .and_then(|e| e.to_str())
@@ -173,9 +184,17 @@ fn collect_md_recursive(
             break;
         }
         let path = entry.path();
-        if path.is_dir() && recursive {
+        // Use symlink_metadata to avoid following symlinks (path-traversal guard).
+        let meta = match path.symlink_metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
+        if meta.is_dir() && recursive {
             collect_md_recursive(&path, recursive, limit, out);
-        } else if path.is_file() {
+        } else if meta.is_file() {
             let ext = path
                 .extension()
                 .and_then(|e| e.to_str())
@@ -203,12 +222,34 @@ async fn ingest_vault(
     let vault_path = validate_path(&payload.path)?;
     let md_files = collect_md_files(&vault_path, payload.recursive, payload.max_files);
 
+    // Reuse the shared embedding service rather than creating one per file.
+    let embedding_service = std::sync::Arc::clone(&state.embedding_service);
+
     let mut ingested = 0usize;
     let mut skipped = 0usize;
     let mut errors = 0usize;
     let mut document_ids: Vec<Uuid> = Vec::new();
 
     for file_path in &md_files {
+        // Skip files that exceed the size limit to avoid memory pressure.
+        match tokio::fs::metadata(file_path).await {
+            Ok(meta) if meta.len() > MAX_FILE_BYTES => {
+                tracing::warn!(
+                    "vault ingest: skipping {:?} — file too large ({} bytes)",
+                    file_path,
+                    meta.len()
+                );
+                skipped += 1;
+                continue;
+            }
+            Err(e) => {
+                tracing::warn!("vault ingest: failed to stat {:?}: {}", file_path, e);
+                errors += 1;
+                continue;
+            }
+            _ => {}
+        }
+
         // Read file content asynchronously.
         let content = match tokio::fs::read_to_string(file_path).await {
             Ok(c) => c,
@@ -250,7 +291,7 @@ async fn ingest_vault(
 
                 // Best-effort: enqueue for embedding without blocking the
                 // ingest loop on a single failure.
-                enqueue_for_embedding(&state, output.document_id).await;
+                enqueue_for_embedding(&*embedding_service, output.document_id).await;
             }
             Err(e) => {
                 tracing::warn!("vault ingest: pipeline error for {:?}: {}", file_path, e);
@@ -272,19 +313,10 @@ async fn ingest_vault(
 
 // ── Embedding queue helper ────────────────────────────────────────────────────
 
-async fn enqueue_for_embedding(state: &AppState, document_id: Uuid) {
-    use crate::services::{EmbeddingConfig, EmbeddingService};
-    use secrecy::ExposeSecret;
-
-    let config = EmbeddingConfig {
-        openai_api_key: state
-            .config
-            .openai_api_key
-            .as_ref()
-            .map(|s| s.expose_secret().to_string()),
-        ..EmbeddingConfig::default()
-    };
-    let service = EmbeddingService::new(state.db.clone(), config);
+async fn enqueue_for_embedding(
+    service: &crate::services::EmbeddingService,
+    document_id: Uuid,
+) {
     if let Err(e) = service.queue_document(document_id, 0).await {
         tracing::warn!(
             "vault ingest: failed to enqueue document {} for embedding: {}",
