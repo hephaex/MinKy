@@ -363,12 +363,14 @@ pub async fn sync_report(
         // below for the canonical path check after the query.
         let escaped_prefix = escape_like_prefix(&root_prefix);
 
-        let rows = match sqlx::query_as::<_, (uuid::Uuid, String)>(
+        let limit_sql = format!(
             "SELECT id, source_path FROM documents \
              WHERE source_path IS NOT NULL \
              AND source_path LIKE $1 || '%' ESCAPE '\\' \
-             LIMIT 50001",
-        )
+             LIMIT {}",
+            SYNC_REPORT_DB_LIMIT + 1
+        );
+        let rows = match sqlx::query_as::<_, (uuid::Uuid, String)>(&limit_sql)
         .bind(&escaped_prefix)
         .fetch_all(&state.db)
         .await
@@ -1050,6 +1052,18 @@ mod tests {
         let roots: Vec<PathBuf> = vec![];
         let deduped = dedup_roots(roots);
         assert!(deduped.is_empty());
+    }
+
+    #[test]
+    fn sync_report_dedup_reverse_order_collapses() {
+        // Shortest root appears last — dedup_roots must still produce [/tmp/vault].
+        let roots = vec![
+            PathBuf::from("/tmp/vault/sub/deep"),
+            PathBuf::from("/tmp/vault/sub"),
+            PathBuf::from("/tmp/vault"),
+        ];
+        let deduped = dedup_roots(roots);
+        assert_eq!(deduped, vec![PathBuf::from("/tmp/vault")]);
     }
 
     // ── SYNC_REPORT_DB_LIMIT and truncation ───────────────────────────────────
