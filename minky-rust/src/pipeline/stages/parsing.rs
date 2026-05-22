@@ -153,8 +153,7 @@ fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) 
             let tag_pat = format!("<{}", name);
             // Case-insensitive window search so "<H1>" in source is found even
             // though html5ever normalises the name to "h1".
-            let position = html[h_search_start..]
-                .as_bytes()
+            let position = html.as_bytes()[h_search_start..]
                 .windows(tag_pat.len())
                 .position(|w| w.eq_ignore_ascii_case(tag_pat.as_bytes()))
                 .map(|p| h_search_start + p)
@@ -171,8 +170,7 @@ fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) 
         .map(|el| {
             // Case-insensitive match for `<a` followed by a non-alphanumeric
             // byte so `<abbr`, `<address>`, etc. are not mistakenly hit.
-            let position = html[a_search_start..]
-                .as_bytes()
+            let position = html.as_bytes()[a_search_start..]
                 .windows(3)
                 .position(|w| {
                     w[0] == b'<'
@@ -199,19 +197,49 @@ fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) 
 /// (`&#39;`), and hex numeric entities (`&#x27;`).  Unknown named entities
 /// are preserved verbatim so no content is silently deleted.
 ///
-/// NUL bytes (`&#0;` / `&#x0;`) are replaced with U+FFFD (replacement
-/// character) because NUL is invalid in PostgreSQL TEXT columns and
-/// corrupts JSON/log output.
+/// Two categories of invalid codepoints are replaced with U+FFFD:
+/// - NUL bytes (`&#0;` / `&#x0;`): invalid in PostgreSQL TEXT columns.
+/// - Surrogate codepoints U+D800–U+DFFF (`&#xD800;` / `&#55296;` etc.):
+///   `char::from_u32` returns `None` for surrogates, so html_escape
+///   preserves their entity form verbatim.  Replacing them matches
+///   html5ever's behavior in the heading/link extraction path.
 ///
 /// Shared by the plain-text body and code-block extraction paths to ensure
 /// consistent decoding without html5ever's tree-restructuring side effects.
 fn decode_html_entities(s: &str) -> String {
     let decoded = html_escape::decode_html_entities(s);
-    if decoded.contains('\0') {
+
+    // NUL bytes — invalid in PostgreSQL TEXT columns
+    let mut result = if decoded.contains('\0') {
         decoded.replace('\0', "\u{FFFD}")
     } else {
         decoded.into_owned()
+    };
+
+    // html_escape preserves surrogate codepoints (U+D800–U+DFFF) as
+    // literal entity text because `char::from_u32` returns `None` for them.
+    // Replace with U+FFFD to match html5ever's heading/link path behavior.
+    if result.contains("&#") {
+        static HEX_RE: OnceLock<Regex> = OnceLock::new();
+        let hex_re = HEX_RE.get_or_init(|| Regex::new(r"(?i)&#x([0-9a-f]+);").unwrap());
+        static DEC_RE: OnceLock<Regex> = OnceLock::new();
+        let dec_re = DEC_RE.get_or_init(|| Regex::new(r"&#([0-9]+);").unwrap());
+
+        let after_hex = hex_re.replace_all(&result, |caps: &regex::Captures| {
+            match u32::from_str_radix(&caps[1], 16) {
+                Ok(cp) if (0xD800..=0xDFFF).contains(&cp) => "\u{FFFD}".to_owned(),
+                _ => caps[0].to_owned(),
+            }
+        }).into_owned();
+        result = dec_re.replace_all(&after_hex, |caps: &regex::Captures| {
+            match caps[1].parse::<u32>() {
+                Ok(cp) if (0xD800..=0xDFFF).contains(&cp) => "\u{FFFD}".to_owned(),
+                _ => caps[0].to_owned(),
+            }
+        }).into_owned();
     }
+
+    result
 }
 
 use crate::pipeline::{PipelineContext, PipelineResult, PipelineStage};
@@ -414,6 +442,9 @@ impl ParsingStage {
                     plain_text.push_str(&code);
                 }
                 Event::SoftBreak | Event::HardBreak => {
+                    plain_text.push('\n');
+                }
+                Event::End(Tag::Paragraph) if !plain_text.ends_with('\n') => {
                     plain_text.push('\n');
                 }
                 _ => {}
@@ -1175,7 +1206,7 @@ fn main() {}
     /// html5ever replaces it with U+FFFD (REPLACEMENT CHARACTER) — the same
     /// behavior as all conforming HTML5 parsers.
     #[test]
-    fn html_invalid_hex_entity_surrogate_preserved() {
+    fn html_invalid_hex_entity_surrogate_replaced_with_fffd() {
         let stage = ParsingStage::new();
         let raw = make_raw_doc("<h1>x&#xD800;y</h1>", "text/html");
         let parsed = stage.parse_html(&raw).unwrap();
@@ -1415,8 +1446,8 @@ fn main() {}
 
     /// With preceding paragraph text, heading-link position must account for
     /// both prior plain_text and heading prefix text.
-    /// "intro\n\n# Header [link](/u)" → plain_text = "introHeader link\n",
-    /// "intro" = 5, "Header " = 7 → link at byte 12.
+    /// "intro\n\n# Header [link](/u)" → plain_text = "intro\nHeader link",
+    /// "intro\n" = 6, "Header " = 7 → link at byte 13.
     #[test]
     fn markdown_link_in_heading_with_preceding_text() {
         let stage = ParsingStage::new();
@@ -1424,7 +1455,7 @@ fn main() {}
         let parsed = stage.parse_markdown(&raw).unwrap();
         assert_eq!(parsed.links.len(), 1);
         let pos = parsed.links[0].position;
-        assert_eq!(pos, 12, "position must be past 'intro' + 'Header '");
+        assert_eq!(pos, 13, "position must be past 'intro\\n' + 'Header '");
         // Self-consistency: plain_text[position..] must start with the link text.
         assert!(
             parsed.plain_text[pos..].starts_with(&parsed.links[0].text),
@@ -1505,6 +1536,106 @@ fn main() {}
         );
         let parsed = stage.parse_html(&raw).unwrap();
         assert_eq!(parsed.title, "Implicit");
+    }
+
+    // ── S32-01/02: Surrogate codepoint handling ───────────────────────────────
+
+    /// Surrogate codepoints (U+D800–U+DFFF) cannot be represented as Rust
+    /// `char`, so html_escape preserves them verbatim as `&#x…;` text.
+    /// decode_html_entities must replace them with U+FFFD to match html5ever's
+    /// heading/link path behavior (test: html_invalid_hex_entity_surrogate_replaced_with_fffd).
+    #[test]
+    fn decode_html_entities_surrogate_hex_replaced_with_fffd() {
+        let result = decode_html_entities("before&#xD800;after");
+        assert!(
+            result.contains('\u{FFFD}'),
+            "hex surrogate &#xD800; must produce U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            !result.contains("&#xD800;"),
+            "hex surrogate entity must not appear verbatim: got {:?}",
+            result
+        );
+    }
+
+    /// Decimal surrogate U+D800 = 55296; same replacement-with-FFFD rule
+    /// as the hex form.
+    #[test]
+    fn decode_html_entities_surrogate_decimal_replaced_with_fffd() {
+        let result = decode_html_entities("before&#55296;after");
+        assert!(
+            result.contains('\u{FFFD}'),
+            "decimal surrogate &#55296; must produce U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            !result.contains("&#55296;"),
+            "decimal surrogate entity must not appear verbatim: got {:?}",
+            result
+        );
+    }
+
+    // ── S32-03: End(Paragraph) newline separator ──────────────────────────────
+
+    /// Two consecutive Markdown paragraphs must be separated by a newline
+    /// in plain_text.  End(Paragraph) inserts '\n' when the buffer does not
+    /// already end with one.
+    #[test]
+    fn markdown_two_paragraphs_are_newline_separated() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("first\n\nsecond", "text/markdown");
+        let parsed = stage.parse_markdown(&raw).unwrap();
+        assert!(
+            parsed.plain_text.contains("first\nsecond"),
+            "consecutive paragraphs must be newline-separated: got {:?}",
+            parsed.plain_text
+        );
+    }
+
+    /// A paragraph immediately before a heading must be separated from the
+    /// heading text by a newline in plain_text.
+    #[test]
+    fn markdown_paragraph_before_heading_separated_by_newline() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("intro\n\n# Title", "text/markdown");
+        let parsed = stage.parse_markdown(&raw).unwrap();
+        assert!(
+            parsed.plain_text.contains("intro\nTitle"),
+            "paragraph before heading must be newline-separated: got {:?}",
+            parsed.plain_text
+        );
+    }
+
+    // ── S32-04: Consecutive <a> link position verification ────────────────────
+
+    /// Two consecutive `<a>` elements must get distinct, ordered positions.
+    /// The position scanner advances `a_search_start` by `position + 1` after
+    /// each match so the second scan does not re-find the first tag.
+    #[test]
+    fn html_consecutive_links_positions_distinct() {
+        let stage = ParsingStage::new();
+        let html = r#"<a href="https://a.com">A</a><a href="https://b.com">B</a>"#;
+        let raw = make_raw_doc(html, "text/html");
+        let parsed = stage.parse_html(&raw).unwrap();
+        assert_eq!(parsed.links.len(), 2);
+        assert!(
+            parsed.links[0].position < parsed.links[1].position,
+            "second link position ({}) must exceed first ({})",
+            parsed.links[1].position,
+            parsed.links[0].position,
+        );
+        // Self-consistency: each position must point at `<a` in the raw HTML.
+        assert_eq!(
+            &html[parsed.links[0].position..parsed.links[0].position + 2],
+            "<a",
+            "link[0] position must point to `<a`"
+        );
+        assert_eq!(
+            &html[parsed.links[1].position..parsed.links[1].position + 2],
+            "<a",
+            "link[1] position must point to `<a`"
+        );
     }
 
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
