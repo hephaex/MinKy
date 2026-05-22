@@ -535,12 +535,23 @@
 - 결과: **1,793 pass / 0 fail / 0 clippy warnings**
 - 커밋: `c2199bbc`
 
-## Sprint 34 로드맵
+## Sprint 34 완료 (2026-05-23) — Decimal Boundary Tests, Tight List Pin, Inclusive Endpoints
 
-- P1: decimal surrogate boundary tests — `&#55295;` (U+D7FF) / `&#57344;` (U+E000) decimal 형식으로 `surrogate_dec_regex()` 경로 대칭 검증
-- P2: tight list companion test — `"- a\n- b"` (tight, End(Paragraph) 없음) 동반 테스트로 loose vs tight 분기 문서화
-- P3: S33-04 assertion 강화 — `!result.is_empty()` → `contains("&#xD800") || contains('\u{FFFD}')` verbatim leak pin
-- P4: U+D800 / U+DFFF inclusive endpoint 교체 테스트 — 범위 안쪽 양 끝 확인 (`decode_html_entities` 직접 경로)
+- [x] S34-01: `&#55295;` / `&#57344;` decimal boundary — html_escape 선처리 후 char 보존 검증 (end-to-end 계약)
+- [x] S34-02: `markdown_tight_list_items_are_not_newline_separated` — tight list items 직접 연결 pin (`"item oneitem two"`)
+- [x] S34-03: `decode_html_entities_unsemicoloned_ncr_not_panics` assertion 강화 — verbatim leak or U+FFFD pin
+- [x] S34-04: `&#xD800;` / `&#xDFFF;` inclusive endpoint → U+FFFD 교체 검증
+- [x] 리뷰 MEDIUM M1: boundary docstring 정확화 (html_escape 선처리 → regex short-circuit 명시)
+- [x] 리뷰 MEDIUM M2: tight list assertion `!contains(\n)` → `contains("item oneitem two")` 강화
+- 결과: **1,798 pass / 0 fail / 0 clippy warnings**
+- 커밋: `6e0c3dc9` (S34-01~04), `a3c9e49e` (review fix)
+
+## Sprint 35 로드맵
+
+- P1: `&#57343;` (U+DFFF decimal, 57343) — hex S34-04 upper endpoint의 decimal 대칭 검증
+- P2: unsemicoloned NCR 주변 문자 생존 pin — `decode_html_entities("x&#xD800y")` 결과에 'x', 'y' 존재 확인
+- P3: mixed-NCR sequence test — `&#xD800;&#xDFFF;&#55295;&#xE000;` 섞인 입력에서 각 NCR 독립 처리 검증
+- P4: astral-plane NCR test — `&#128512;` (U+1F600, emoji) → 4바이트 UTF-8 path 검증 (html_escape가 처리)
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 

@@ -5,7 +5,28 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-22) - Sprint 33: Surrogate Boundary Tests, List Separator, Regex Helpers
+## 현재 진행 상황 (2026-05-23) - Sprint 34: Decimal Boundary Tests, Tight List Pin, Inclusive Endpoints
+
+### Sprint 34: Decimal Boundary + Tight List + Assertion Strengthening (2026-05-23)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `&#55295;` / `&#57344;` decimal boundary 테스트 (S34-01) | parsing.rs | html_escape 선처리 → char 보존 검증 (end-to-end 계약) |
+| tight list no-separator pin (S34-02) | parsing.rs | `"- a\n- b"` → `"item oneitem two"` 직접 연결 확인 |
+| unsemicoloned NCR assertion 강화 (S34-03) | parsing.rs | `!is_empty()` → verbatim leak or U+FFFD pin |
+| U+D800 / U+DFFF inclusive endpoint 교체 테스트 (S34-04) | parsing.rs | hex lower/upper boundary → U+FFFD 검증 |
+| boundary docstring 정확화 (리뷰 M1) | parsing.rs | "exercises dec_regex()" → "html_escape short-circuits, end-to-end contract" |
+| tight list assertion 강화 (리뷰 M2) | parsing.rs | `!contains("item one\nitem two")` → `contains("item oneitem two")` |
+
+테스트: **1,798 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `6e0c3dc9` (S34-01~04), `a3c9e49e` (review M1/M2)
+리뷰: `~/.claude/references/2026-05-23_sprint34_decimal_boundary_tight_list_endpoint.md`
+
+**현재 상태**: 서로게이트 범위 경계를 4-point (D7FF/D800/DFFF/E000)로 완전 커버. tight vs loose list 동작이 모두 명시적 테스트로 고정됨.
+
+---
+
+## 이전 진행 상황 (2026-05-22) - Sprint 33: Surrogate Boundary Tests, List Separator, Regex Helpers
 
 ### Sprint 33: Boundary Tests + Loose List Test + OnceLock Helper Extraction (2026-05-22)
 
