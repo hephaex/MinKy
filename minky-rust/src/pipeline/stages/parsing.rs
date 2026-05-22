@@ -1656,8 +1656,11 @@ fn main() {}
 
     // ── S33-01: Surrogate range boundary tests ────────────────────────────────
 
-    /// U+D7FF is just below the surrogate range (0xD800–0xDFFF) and is a
-    /// valid Unicode character.  The surrogate post-processing must NOT replace it.
+    /// U+D7FF (`&#xD7FF;`) is just below the surrogate range.  `html_escape`
+    /// decodes it to the valid character U+D7FF directly, so `result.contains("&#")`
+    /// is false and the surrogate post-processing is short-circuited.  End-to-end
+    /// contract: a valid codepoint adjacent to the surrogate range must not be
+    /// replaced with U+FFFD regardless of which internal branch runs.
     #[test]
     fn decode_html_entities_boundary_d7ff_not_replaced() {
         let result = decode_html_entities("&#xD7FF;");
@@ -1673,8 +1676,10 @@ fn main() {}
         );
     }
 
-    /// U+E000 is just above the surrogate range and is a valid Unicode character
-    /// (Private Use Area).  The surrogate post-processing must NOT replace it.
+    /// U+E000 (`&#xE000;`) is just above the surrogate range (Private Use Area).
+    /// `html_escape` decodes it directly, so the surrogate post-processing is
+    /// short-circuited.  End-to-end contract: a valid PUA codepoint must not be
+    /// replaced with U+FFFD.
     #[test]
     fn decode_html_entities_boundary_e000_not_replaced() {
         let result = decode_html_entities("&#xE000;");
@@ -1692,9 +1697,10 @@ fn main() {}
 
     // ── S34-01: Decimal-form surrogate boundary tests ─────────────────────────
 
-    /// U+D7FF in decimal NCR form — exercises `surrogate_dec_regex()` path.
-    /// html_escape decodes &#55295; to U+D7FF before our regex runs,
-    /// so the "&#" early-exit guard is never reached.  The char is preserved as-is.
+    /// U+D7FF in decimal NCR form (`&#55295;`).  `html_escape` decodes this to
+    /// U+D7FF directly, so `result.contains("&#")` is false and the surrogate
+    /// post-processing is short-circuited.  End-to-end contract: symmetric with
+    /// the hex form — valid codepoint just below the surrogate range is preserved.
     #[test]
     fn decode_html_entities_boundary_d7ff_decimal_not_replaced() {
         let result = decode_html_entities("&#55295;");
@@ -1710,7 +1716,10 @@ fn main() {}
         );
     }
 
-    /// U+E000 in decimal NCR form (Private Use Area) — exercises `surrogate_dec_regex()` path.
+    /// U+E000 in decimal NCR form (`&#57344;`, Private Use Area).  `html_escape`
+    /// decodes this directly; surrogate post-processing is short-circuited.
+    /// End-to-end contract: symmetric with the hex form — valid PUA codepoint
+    /// just above the surrogate range is preserved.
     #[test]
     fn decode_html_entities_boundary_e000_decimal_not_replaced() {
         let result = decode_html_entities("&#57344;");
@@ -1753,15 +1762,10 @@ fn main() {}
         let stage = ParsingStage::new();
         let raw = make_raw_doc("- item one\n- item two", "text/markdown");
         let parsed = stage.parse_markdown(&raw).unwrap();
+        // Tight list: no Paragraph events → items concatenated with no separator.
         assert!(
-            !parsed.plain_text.contains("item one\nitem two"),
-            "tight list items must NOT be newline-separated (no End(Paragraph) event): got {:?}",
-            parsed.plain_text
-        );
-        // Both items must still be present in the output.
-        assert!(
-            parsed.plain_text.contains("item one") && parsed.plain_text.contains("item two"),
-            "tight list items must both appear in plain_text: got {:?}",
+            parsed.plain_text.contains("item oneitem two"),
+            "tight list items must be concatenated with no separator: got {:?}",
             parsed.plain_text
         );
     }
