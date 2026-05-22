@@ -1690,6 +1690,42 @@ fn main() {}
         );
     }
 
+    // ── S34-01: Decimal-form surrogate boundary tests ─────────────────────────
+
+    /// U+D7FF in decimal NCR form — exercises `surrogate_dec_regex()` path.
+    /// html_escape decodes &#55295; to U+D7FF before our regex runs,
+    /// so the "&#" early-exit guard is never reached.  The char is preserved as-is.
+    #[test]
+    fn decode_html_entities_boundary_d7ff_decimal_not_replaced() {
+        let result = decode_html_entities("&#55295;");
+        assert!(
+            !result.contains('\u{FFFD}'),
+            "U+D7FF decimal form is not a surrogate — must not produce U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            result.contains('\u{D7FF}'),
+            "&#55295; must decode to U+D7FF: got {:?}",
+            result
+        );
+    }
+
+    /// U+E000 in decimal NCR form (Private Use Area) — exercises `surrogate_dec_regex()` path.
+    #[test]
+    fn decode_html_entities_boundary_e000_decimal_not_replaced() {
+        let result = decode_html_entities("&#57344;");
+        assert!(
+            !result.contains('\u{FFFD}'),
+            "U+E000 decimal form is not a surrogate — must not produce U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            result.contains('\u{E000}'),
+            "&#57344; must decode to U+E000: got {:?}",
+            result
+        );
+    }
+
     // ── S33-02: End(Paragraph) affects list items ─────────────────────────────
 
     /// pulldown-cmark emits Start/End(Paragraph) inside list items.
@@ -1707,6 +1743,29 @@ fn main() {}
         );
     }
 
+    /// Tight lists (`- a\n- b`, no blank line between items) do NOT emit
+    /// Start/End(Paragraph) events in pulldown-cmark — so the S32-03
+    /// End(Paragraph) '\n' insertion does not fire.  Items are therefore
+    /// concatenated directly in plain_text without a newline separator.
+    /// This is the complement to `markdown_list_items_are_newline_separated`.
+    #[test]
+    fn markdown_tight_list_items_are_not_newline_separated() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("- item one\n- item two", "text/markdown");
+        let parsed = stage.parse_markdown(&raw).unwrap();
+        assert!(
+            !parsed.plain_text.contains("item one\nitem two"),
+            "tight list items must NOT be newline-separated (no End(Paragraph) event): got {:?}",
+            parsed.plain_text
+        );
+        // Both items must still be present in the output.
+        assert!(
+            parsed.plain_text.contains("item one") && parsed.plain_text.contains("item two"),
+            "tight list items must both appear in plain_text: got {:?}",
+            parsed.plain_text
+        );
+    }
+
     // ── S33-04: Unsemicoloned NCR — known limitation documentation ────────────
 
     /// Numeric char refs without a trailing semicolon (`&#xD800` vs `&#xD800;`)
@@ -1718,14 +1777,56 @@ fn main() {}
     #[test]
     fn decode_html_entities_unsemicoloned_ncr_not_panics() {
         let result = decode_html_entities("x&#xD800y");
-        // Must complete without panic; content is implementation-defined.
-        assert!(!result.is_empty());
-        // The semicoloned form, by contrast, is guaranteed to produce U+FFFD.
+        // The surrogate regex requires ';', so "&#xD800y" (no semicolon) is not
+        // matched and the literal text leaks through.  If html_escape ever gains
+        // more aggressive NCR handling, U+FFFD is also an acceptable outcome.
+        assert!(
+            result.contains("&#xD800") || result.contains('\u{FFFD}'),
+            "unsemicoloned NCR: expected verbatim leak or U+FFFD; got {:?}",
+            result
+        );
+        // The semicoloned form is guaranteed to produce U+FFFD.
         let semicoloned = decode_html_entities("x&#xD800;y");
         assert!(
             semicoloned.contains('\u{FFFD}'),
             "semicoloned &#xD800; must produce U+FFFD: got {:?}",
             semicoloned
+        );
+    }
+
+    // ── S34-04: Inclusive endpoint replacement (U+D800 and U+DFFF) ───────────
+
+    /// U+D800 is the lower inclusive endpoint of the surrogate range.
+    /// `decode_html_entities` must replace it with U+FFFD.
+    #[test]
+    fn decode_html_entities_d800_replaced_with_fffd() {
+        let result = decode_html_entities("&#xD800;");
+        assert!(
+            result.contains('\u{FFFD}'),
+            "U+D800 (lower surrogate boundary) must be replaced with U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            !result.contains("&#xD800;"),
+            "&#xD800; must not appear verbatim after replacement: got {:?}",
+            result
+        );
+    }
+
+    /// U+DFFF is the upper inclusive endpoint of the surrogate range.
+    /// `decode_html_entities` must replace it with U+FFFD.
+    #[test]
+    fn decode_html_entities_dfff_replaced_with_fffd() {
+        let result = decode_html_entities("&#xDFFF;");
+        assert!(
+            result.contains('\u{FFFD}'),
+            "U+DFFF (upper surrogate boundary) must be replaced with U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            !result.contains("&#xDFFF;"),
+            "&#xDFFF; must not appear verbatim after replacement: got {:?}",
+            result
         );
     }
 
