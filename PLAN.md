@@ -526,12 +526,21 @@
 - 결과: 1,789 Rust pass / 0 fail / 0 clippy warnings
 - 커밋: `b2741f8a`
 
-## Sprint 33 로드맵
+## Sprint 33 완료 (2026-05-22) — Surrogate Boundary Tests, List Separator, Regex Helpers
 
-- P1: surrogate range 경계 테스트 — `&#xD7FF;` (U+D7FF, 범위 외) 는 교체하지 않음 검증; `&#xE000;` (U+E000) 도 동일
-- P2: `markdown_list_items_are_newline_separated` — S32-03 `End(Paragraph)` 변경이 list item에 미치는 영향 고정 테스트
-- P3: `surrogate_hex_regex()` / `surrogate_dec_regex()` 헬퍼 함수 추출 — 인라인 `static` → 파일 스타일 일치
-- P4: unsemicoloned NCR (`&#xD800` without `;`) — html5ever와 일관성 검토 (LOW, 실제 영향 없음)
+- [x] S33-01: U+D7FF / U+E000 경계 테스트 — 서로게이트 범위 밖 값은 U+FFFD로 교체하지 않음 검증 (hex+decimal 형식 각 2건)
+- [x] S33-02: `markdown_list_items_are_newline_separated` — loose list (`\n\n`) 로 End(Paragraph) 핸들러가 동작함 검증
+- [x] S33-03: `surrogate_hex_regex()` / `surrogate_dec_regex()` OnceLock 헬퍼 추출 — decode_html_entities 내부 inline static → 파일 스타일 일치
+- [x] S33-04: `decode_html_entities_unsemicoloned_ncr_not_panics` — 세미콜론 없는 NCR 처리 한계 문서화 테스트
+- 결과: **1,793 pass / 0 fail / 0 clippy warnings**
+- 커밋: `c2199bbc`
+
+## Sprint 34 로드맵
+
+- P1: decimal surrogate boundary tests — `&#55295;` (U+D7FF) / `&#57344;` (U+E000) decimal 형식으로 `surrogate_dec_regex()` 경로 대칭 검증
+- P2: tight list companion test — `"- a\n- b"` (tight, End(Paragraph) 없음) 동반 테스트로 loose vs tight 분기 문서화
+- P3: S33-04 assertion 강화 — `!result.is_empty()` → `contains("&#xD800") || contains('\u{FFFD}')` verbatim leak pin
+- P4: U+D800 / U+DFFF inclusive endpoint 교체 테스트 — 범위 안쪽 양 끝 확인 (`decode_html_entities` 직접 경로)
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 

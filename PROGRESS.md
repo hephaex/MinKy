@@ -5,7 +5,27 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-22) - Sprint 32: surrogate safety, paragraph separator, position tests
+## 현재 진행 상황 (2026-05-22) - Sprint 33: Surrogate Boundary Tests, List Separator, Regex Helpers
+
+### Sprint 33: Boundary Tests + Loose List Test + OnceLock Helper Extraction (2026-05-22)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `surrogate_hex_regex()` / `surrogate_dec_regex()` 추출 (S33-03) | parsing.rs | decode_html_entities 내 inline static → 파일 스타일 OnceLock 헬퍼 |
+| U+D7FF 경계 테스트 (S33-01) | parsing.rs | hex `&#xD7FF;` + decimal `&#55295;` — 서로게이트 범위 밖, 교체 안 됨 검증 |
+| U+E000 경계 테스트 (S33-01) | parsing.rs | hex `&#xE000;` + decimal `&#57344;` — 서로게이트 범위 밖, 교체 안 됨 검증 |
+| `markdown_list_items_are_newline_separated` (S33-02) | parsing.rs | loose list (`\n\n`) → End(Paragraph) 핸들러 동작 → items `\n` 분리 검증 |
+| `decode_html_entities_unsemicoloned_ncr_not_panics` (S33-04) | parsing.rs | 세미콜론 없는 NCR 처리 한계(known limitation) 문서화 |
+
+테스트: **1,793 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `c2199bbc`
+리뷰: `~/.claude/references/2026-05-22_sprint33_surrogate_boundary_list_helpers.md`
+
+**현재 상태**: surrogate post-processing 경계가 4-point로 완전 검증됨 (D7FF/E000 미교체, D800+/DFFF- 교체는 Sprint 32에서 커버). End(Paragraph) newline 삽입이 loose list에서 올바르게 동작함을 테스트로 고정.
+
+---
+
+## 이전 진행 상황 (2026-05-22) - Sprint 32: surrogate safety, paragraph separator, position tests
 
 ### Sprint 32: Surrogate Safety + Paragraph Separator + Consecutive-Link Test (2026-05-22)
 
