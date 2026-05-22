@@ -112,6 +112,20 @@ fn code_language_regex() -> &'static Regex {
     })
 }
 
+fn surrogate_hex_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    // Matches hex numeric character references; caller checks if codepoint
+    // is in the surrogate range 0xD800–0xDFFF.
+    RE.get_or_init(|| Regex::new(r"(?i)&#x([0-9a-f]+);").unwrap())
+}
+
+fn surrogate_dec_regex() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    // Matches decimal numeric character references; caller checks if codepoint
+    // is in the surrogate range 55296–57343.
+    RE.get_or_init(|| Regex::new(r"&#([0-9]+);").unwrap())
+}
+
 // ── scraper-based HTML extractors ────────────────────────────────────────────
 
 /// Extract title, headings, and links in a single html5ever parse.
@@ -199,10 +213,14 @@ fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) 
 ///
 /// Two categories of invalid codepoints are replaced with U+FFFD:
 /// - NUL bytes (`&#0;` / `&#x0;`): invalid in PostgreSQL TEXT columns.
-/// - Surrogate codepoints U+D800–U+DFFF (`&#xD800;` / `&#55296;` etc.):
+/// - Direct surrogate NCRs U+D800–U+DFFF (`&#xD800;` / `&#55296;` etc.):
 ///   `char::from_u32` returns `None` for surrogates, so html_escape
-///   preserves their entity form verbatim.  Replacing them matches
-///   html5ever's behavior in the heading/link extraction path.
+///   preserves their entity form verbatim.  html5ever (heading/link path)
+///   replaces direct surrogate NCRs with U+FFFD in the same way.
+///   Note: an escaped-ampersand form (`&amp;#xD800;`) reaches this function
+///   as the literal text `&#xD800;` after `&amp;` → `&` decoding, and is
+///   also replaced with U+FFFD here — slightly more aggressive than html5ever
+///   (which would preserve that text node verbatim), but safe for indexing.
 ///
 /// Shared by the plain-text body and code-block extraction paths to ensure
 /// consistent decoding without html5ever's tree-restructuring side effects.
@@ -220,10 +238,8 @@ fn decode_html_entities(s: &str) -> String {
     // literal entity text because `char::from_u32` returns `None` for them.
     // Replace with U+FFFD to match html5ever's heading/link path behavior.
     if result.contains("&#") {
-        static HEX_RE: OnceLock<Regex> = OnceLock::new();
-        let hex_re = HEX_RE.get_or_init(|| Regex::new(r"(?i)&#x([0-9a-f]+);").unwrap());
-        static DEC_RE: OnceLock<Regex> = OnceLock::new();
-        let dec_re = DEC_RE.get_or_init(|| Regex::new(r"&#([0-9]+);").unwrap());
+        let hex_re = surrogate_hex_regex();
+        let dec_re = surrogate_dec_regex();
 
         let after_hex = hex_re.replace_all(&result, |caps: &regex::Captures| {
             match u32::from_str_radix(&caps[1], 16) {
@@ -1635,6 +1651,81 @@ fn main() {}
             &html[parsed.links[1].position..parsed.links[1].position + 2],
             "<a",
             "link[1] position must point to `<a`"
+        );
+    }
+
+    // ── S33-01: Surrogate range boundary tests ────────────────────────────────
+
+    /// U+D7FF is just below the surrogate range (0xD800–0xDFFF) and is a
+    /// valid Unicode character.  The surrogate post-processing must NOT replace it.
+    #[test]
+    fn decode_html_entities_boundary_d7ff_not_replaced() {
+        let result = decode_html_entities("&#xD7FF;");
+        assert!(
+            !result.contains('\u{FFFD}'),
+            "U+D7FF is not a surrogate — must not produce U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            result.contains('\u{D7FF}'),
+            "&#xD7FF; must decode to U+D7FF: got {:?}",
+            result
+        );
+    }
+
+    /// U+E000 is just above the surrogate range and is a valid Unicode character
+    /// (Private Use Area).  The surrogate post-processing must NOT replace it.
+    #[test]
+    fn decode_html_entities_boundary_e000_not_replaced() {
+        let result = decode_html_entities("&#xE000;");
+        assert!(
+            !result.contains('\u{FFFD}'),
+            "U+E000 is not a surrogate — must not produce U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            result.contains('\u{E000}'),
+            "&#xE000; must decode to U+E000: got {:?}",
+            result
+        );
+    }
+
+    // ── S33-02: End(Paragraph) affects list items ─────────────────────────────
+
+    /// pulldown-cmark emits Start/End(Paragraph) inside list items.
+    /// The S32-03 End(Paragraph) '\n' insertion therefore also separates
+    /// list items — this test pins that behavior.
+    #[test]
+    fn markdown_list_items_are_newline_separated() {
+        let stage = ParsingStage::new();
+        let raw = make_raw_doc("- item one\n\n- item two", "text/markdown");
+        let parsed = stage.parse_markdown(&raw).unwrap();
+        assert!(
+            parsed.plain_text.contains("item one\nitem two"),
+            "list items must be newline-separated via End(Paragraph): got {:?}",
+            parsed.plain_text
+        );
+    }
+
+    // ── S33-04: Unsemicoloned NCR — known limitation documentation ────────────
+
+    /// Numeric char refs without a trailing semicolon (`&#xD800` vs `&#xD800;`)
+    /// are NOT handled by the surrogate post-processing regex (which requires ';').
+    /// html5ever processes some unsemicoloned NCRs as parse errors, but the
+    /// body/code path does not.  This is a documented limitation — the body path
+    /// receives already-stripped HTML where html5ever would not have acted on
+    /// bare `&#xD800` text.  The function must not panic on this input.
+    #[test]
+    fn decode_html_entities_unsemicoloned_ncr_not_panics() {
+        let result = decode_html_entities("x&#xD800y");
+        // Must complete without panic; content is implementation-defined.
+        assert!(!result.is_empty());
+        // The semicoloned form, by contrast, is guaranteed to produce U+FFFD.
+        let semicoloned = decode_html_entities("x&#xD800;y");
+        assert!(
+            semicoloned.contains('\u{FFFD}'),
+            "semicoloned &#xD800; must produce U+FFFD: got {:?}",
+            semicoloned
         );
     }
 
