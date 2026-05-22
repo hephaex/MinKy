@@ -510,14 +510,28 @@
 - 커밋: `dc829253` (S31-01~03), `b285e90f` (리뷰 H1/H2 수정)
 - 결과: 1,784 Rust pass / 0 fail / 0 clippy warnings
 
-## Sprint 32 로드맵
+## Sprint 32 완료 (2026-05-22) — Surrogate Safety, Paragraph Separator, Position Tests
 
-- P1: `html_invalid_hex_entity_surrogate_preserved` 테스트 이름 수정 ("preserved" → "replaced_with_fffd")
-- P2: surrogate numeric entity(`&#xD800;`) 처리 경로 일관성 —
-  body/code path(html-escape)도 U+FFFD 반환하도록 맞추기 (현재 heading/link는 html5ever → U+FFFD)
-- P3: `End(Paragraph)` 에 separator 추가 검토 — 현재 plain_text에 단락-heading 경계 구분자 없음
-  (`"introHeader link"` — "intro" 다음 바로 heading 텍스트가 붙음)
-- P4: 연속 `<a>` 태그 position 검증 테스트 (`a_search_start = position + 1` 패턴 검증)
+- [x] S32-01: `html_invalid_hex_entity_surrogate_preserved` → `html_invalid_hex_entity_surrogate_replaced_with_fffd` (이름 수정)
+- [x] S32-02: `decode_html_entities()` — 서로게이트 NCR(`&#xD800;`, `&#55296;` 등) → U+FFFD (body/code path 일관성)
+  - hex/dec OnceLock regex post-processing 추가
+  - clippy `as_bytes` 경고 2건 수정 (scraper_extract_all)
+  - 테스트 2건: hex/decimal surrogate replacement
+- [x] S32-03: `End(Paragraph)` — `\n` 구분자 삽입 (가드: `!ends_with('\n')`)
+  - 단락-단락, 단락-heading 경계 분리
+  - 기존 S31-03 테스트 position 12→13 수정
+  - 테스트 2건 신규
+- [x] S32-04: `html_consecutive_links_positions_distinct` — 연속 `<a>` 위치 self-consistency 검증
+- [x] 리뷰 MEDIUM: docstring `&amp;#xD800;` edge case 명시
+- 결과: 1,789 Rust pass / 0 fail / 0 clippy warnings
+- 커밋: `b2741f8a`
+
+## Sprint 33 로드맵
+
+- P1: surrogate range 경계 테스트 — `&#xD7FF;` (U+D7FF, 범위 외) 는 교체하지 않음 검증; `&#xE000;` (U+E000) 도 동일
+- P2: `markdown_list_items_are_newline_separated` — S32-03 `End(Paragraph)` 변경이 list item에 미치는 영향 고정 테스트
+- P3: `surrogate_hex_regex()` / `surrogate_dec_regex()` 헬퍼 함수 추출 — 인라인 `static` → 파일 스타일 일치
+- P4: unsemicoloned NCR (`&#xD800` without `;`) — html5ever와 일관성 검토 (LOW, 실제 영향 없음)
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 

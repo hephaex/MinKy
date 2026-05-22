@@ -5,7 +5,31 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-22) - Sprint 31: html-escape entity decode, head>title, link position
+## 현재 진행 상황 (2026-05-22) - Sprint 32: surrogate safety, paragraph separator, position tests
+
+### Sprint 32: Surrogate Safety + Paragraph Separator + Consecutive-Link Test (2026-05-22)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| 테스트 이름 수정 (S32-01) | parsing.rs | `_preserved` → `_replaced_with_fffd` (이름이 동작과 불일치) |
+| `decode_html_entities` 서로게이트 처리 (S32-02) | parsing.rs | hex/dec regex post-processing으로 U+D800–U+DFFF → U+FFFD |
+| clippy `as_bytes` fix (S32-02 부수) | parsing.rs | `html[start..].as_bytes()` → `html.as_bytes()[start..]` 2곳 |
+| `End(Paragraph)` 분리자 (S32-03) | parsing.rs | 단락 경계에서 `\n` 삽입 (가드: `!ends_with('\n')`) |
+| S31-03 테스트 position 12→13 수정 (S32-03 부수) | parsing.rs | End(Paragraph) `\n` 추가로 link offset 1 증가 |
+| 서로게이트 hex/dec 테스트 2건 (S32-02) | parsing.rs | `&#xD800;` 및 `&#55296;` → U+FFFD 검증 |
+| 단락 분리 테스트 2건 (S32-03) | parsing.rs | 단락-단락, 단락-heading 분리 검증 |
+| 연속 `<a>` position 테스트 (S32-04) | parsing.rs | `a_search_start+1` advance로 두 링크 위치 구별 검증 |
+| docstring 수정 (리뷰 MEDIUM) | parsing.rs | `&amp;#xD800;` 경우 html5ever보다 더 적극적 교체임을 명시 |
+
+테스트: 1,789 Rust pass / 0 fail / 0 clippy warnings
+커밋: `b2741f8a` (S32-01~04)
+리뷰: `~/.claude/references/2026-05-22_sprint32_surrogate_paragraph_position.md`
+
+**현재 상태**: decode_html_entities가 서로게이트 NCR도 U+FFFD로 교체. 단락 경계에 `\n` 삽입으로 plain_text가 heading/code와 분리됨.
+
+---
+
+## 이전 진행 상황 (2026-05-22) - Sprint 31: html-escape entity decode, head>title, link position
 
 ### Sprint 31: Full HTML5 Entity Decode + SVG Title Fix + Link-in-Heading Position (2026-05-22)
 
