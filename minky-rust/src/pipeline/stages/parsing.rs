@@ -1834,6 +1834,102 @@ fn main() {}
         );
     }
 
+    // ── S35-01: Decimal upper endpoint (U+DFFF = 57343) ──────────────────────
+
+    /// U+DFFF in decimal NCR form (`&#57343;`) — upper inclusive endpoint of the
+    /// surrogate range via the decimal path.  html_escape leaves it verbatim
+    /// (Rust `String` cannot hold surrogates), so `surrogate_dec_regex()` runs
+    /// and replaces it with U+FFFD.  Symmetric with the hex form S34-04.
+    #[test]
+    fn decode_html_entities_surrogate_decimal_dfff_replaced_with_fffd() {
+        let result = decode_html_entities("&#57343;");
+        assert!(
+            result.contains('\u{FFFD}'),
+            "U+DFFF decimal (57343) must be replaced with U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            !result.contains("&#57343;"),
+            "&#57343; must not appear verbatim after replacement: got {:?}",
+            result
+        );
+    }
+
+    // ── S35-02: Unsemicoloned NCR surrounding-character survival ──────────────
+
+    /// Verifies that characters adjacent to an unsemicoloned NCR (`x&#xD800y`)
+    /// survive the function unchanged.  A regression in the regex (e.g. a
+    /// greedy pattern) could accidentally consume neighbouring bytes.
+    #[test]
+    fn decode_html_entities_unsemicoloned_ncr_surrounding_chars_survive() {
+        let result = decode_html_entities("x&#xD800y");
+        assert!(
+            result.starts_with('x'),
+            "character before unsemicoloned NCR must survive: got {:?}",
+            result
+        );
+        assert!(
+            result.ends_with('y'),
+            "character after unsemicoloned NCR must survive: got {:?}",
+            result
+        );
+    }
+
+    // ── S35-03: Mixed-NCR sequence (surrogates + valid codepoints) ────────────
+
+    /// A single input mixing two surrogates and two valid adjacent codepoints:
+    ///   &#xD800;  — lower surrogate → U+FFFD (hex regex)
+    ///   &#xDFFF;  — upper surrogate → U+FFFD (hex regex)
+    ///   &#55295;  — U+D7FF (valid, html_escape decodes before regex runs)
+    ///   &#xE000;  — U+E000 PUA (valid, html_escape decodes before regex runs)
+    ///
+    /// Verifies that the two-pass regex chain (hex then dec) handles each NCR
+    /// independently without cross-contamination.
+    #[test]
+    fn decode_html_entities_mixed_ncr_sequence() {
+        let input = "&#xD800;&#xDFFF;&#55295;&#xE000;";
+        let result = decode_html_entities(input);
+        // Two surrogates → two U+FFFD replacements.
+        let fffd_count = result.chars().filter(|&c| c == '\u{FFFD}').count();
+        assert_eq!(
+            fffd_count, 2,
+            "mixed NCR sequence must produce exactly 2 U+FFFD replacements: got {:?}",
+            result
+        );
+        // Valid adjacent codepoints must be preserved.
+        assert!(
+            result.contains('\u{D7FF}'),
+            "U+D7FF must be preserved in mixed sequence: got {:?}",
+            result
+        );
+        assert!(
+            result.contains('\u{E000}'),
+            "U+E000 must be preserved in mixed sequence: got {:?}",
+            result
+        );
+    }
+
+    // ── S35-04: Astral-plane NCR (4-byte UTF-8) ───────────────────────────────
+
+    /// `&#128512;` is U+1F600 (😀), a 4-byte UTF-8 codepoint in the Supplementary
+    /// Multilingual Plane.  `html_escape` decodes it directly; the surrogate
+    /// post-processing is short-circuited (result does not contain "&#" after
+    /// decoding).  Pins the astral-plane path that was previously untested.
+    #[test]
+    fn decode_html_entities_astral_plane_ncr_preserved() {
+        let result = decode_html_entities("&#128512;");
+        assert!(
+            result.contains('\u{1F600}'),
+            "&#128512; must decode to U+1F600 (😀): got {:?}",
+            result
+        );
+        assert!(
+            !result.contains('\u{FFFD}'),
+            "astral-plane NCR must not produce U+FFFD: got {:?}",
+            result
+        );
+    }
+
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
 
     /// `OnceLock<Selector>` in `scraper_extract_all` is shared across Axum
