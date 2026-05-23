@@ -2044,6 +2044,9 @@ fn main() {}
     /// html5ever (heading/link path) would treat `&amp;#xD800;` as a text node
     /// containing the literal characters `&#xD800;` and preserve them as-is;
     /// `decode_html_entities` produces U+FFFD instead, which is safe for indexing.
+    ///
+    /// Verified against html-escape 0.2.x (Cargo.toml). Bumps must re-verify the
+    /// peel-once &amp;→& behavior and the surrogate-verbatim contract.
     #[test]
     fn decode_html_entities_amp_escaped_surrogate_produces_fffd() {
         // bare escaped-ampersand form
@@ -2062,6 +2065,8 @@ fn main() {}
 
     /// Decimal variant: `&amp;#55296;` (= &#55296; = U+D800 in decimal).
     /// Same peel-then-regex path as the hex variant.
+    ///
+    /// Verified against html-escape 0.2.x (Cargo.toml).
     #[test]
     fn decode_html_entities_amp_escaped_surrogate_decimal_produces_fffd() {
         assert_eq!(
@@ -2219,6 +2224,8 @@ fn main() {}
     /// regex block is entered, but `(?i)&#x([0-9a-f]+);` requires a trailing
     /// semicolon and `replace_all` finds no match.  The input is returned
     /// unchanged as `"&#xD800"` — verbatim, no panic.
+    ///
+    /// Verified against html-escape 0.2.x (Cargo.toml).
     #[test]
     fn decode_html_entities_amp_escaped_surrogate_no_semicolon_verbatim() {
         // Bare form: no trailing semicolon after hex digits
@@ -2312,6 +2319,167 @@ fn main() {}
         assert_eq!(
             result2, "&#99999999999;",
             "&#99999999999; (10-digit decimal) must be verbatim; got {:?}", result2
+        );
+    }
+
+    // ── S39-01: Decimal regex match-arm structural coverage ──────────────────
+
+    /// Decimal counterpart of S38-03: explicitly annotates which arm of the
+    /// decimal surrogate `match` each case exercises.
+    ///
+    /// ```text
+    /// match caps[1].parse::<u32>() {
+    ///     Ok(cp) if (0xD800..=0xDFFF).contains(&cp) => U+FFFD,  // ARM-A
+    ///     _                                          => verbatim, // ARM-B/C
+    /// }
+    /// ```
+    ///
+    /// ARM-A: parse-Ok + in surrogate range → U+FFFD
+    ///        html_escape leaves surrogates verbatim; decimal regex match runs.
+    /// ARM-B: parse-Ok + NOT in surrogate range → verbatim
+    ///        Must be above-Unicode (>U+10FFFF) so html_escape leaves it verbatim.
+    ///        Valid codepoints (e.g. 55295, 57344) are decoded by html_escape
+    ///        upstream; see S33/S34 tests for those boundary assertions.
+    /// ARM-C: parse-Err (u32 overflow) → verbatim (same `_ =>` arm as ARM-B)
+    ///        Covered by S38-04; repeated here for structural completeness.
+    ///
+    /// Verified against html-escape 0.2.x (Cargo.toml).
+    #[test]
+    fn decode_html_entities_decimal_regex_match_arm_coverage() {
+        // ARM-A: Ok(cp) in 0xD800..=0xDFFF → U+FFFD
+        // html_escape leaves surrogates verbatim (char::try_from fails for surrogates);
+        // decimal regex runs; in-range guard fires.
+        // parse::<u32>() = Ok(55296) — lower bound (U+D800)
+        assert_eq!(decode_html_entities("&#55296;"), "\u{FFFD}", "ARM-A lower bound");
+        // parse::<u32>() = Ok(57343) — upper bound (U+DFFF)
+        assert_eq!(decode_html_entities("&#57343;"), "\u{FFFD}", "ARM-A upper bound");
+
+        // ARM-B: Ok(cp) NOT in 0xD800..=0xDFFF → verbatim
+        // &#2097152; = 0x200000 (> U+10FFFF): html_escape leaves verbatim (char::try_from
+        // fails for above-Unicode); decimal regex matches; cp = 2097152 ∉ surrogate range.
+        assert_eq!(decode_html_entities("&#2097152;"), "&#2097152;", "ARM-B: above-Unicode verbatim");
+        // &#4294967295; = u32::MAX: html_escape verbatim; decimal regex matches; cp ∉ range.
+        assert_eq!(decode_html_entities("&#4294967295;"), "&#4294967295;", "ARM-B: u32::MAX verbatim");
+
+        // ARM-C: Err (u32 overflow) → verbatim (same `_` arm as ARM-B)
+        // parse::<u32>() on "4294967296" → Err(PosOverflow)
+        // (mirrors S38-04 which pins this as a standalone test)
+        assert_eq!(decode_html_entities("&#4294967296;"), "&#4294967296;", "ARM-C: overflow verbatim");
+    }
+
+    // ── S39-02: Cross-path divergence table (decimal + boundary variants) ────
+
+    /// Extends the S37-04 divergence test to cover decimal surrogate forms
+    /// and the boundary non-surrogate case.
+    ///
+    /// Summary of intentional asymmetry (docstring line ~220-223):
+    /// - `&amp;#<SURROGATE>;` → heading preserves literal `"&#...;"`, body → U+FFFD
+    /// - `&amp;#<NON-SURROGATE>;` → both paths produce literal `"&#<value>;"` (AGREE)
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x and html-escape 0.2.x.
+    #[test]
+    fn scraper_heading_decode_html_entities_diverge_on_decimal_surrogate() {
+        // Decimal D800 form: html5ever peels &amp;→& → text "&#55296;", verbatim.
+        // decode_html_entities: peels &amp;→& → "&#55296;" → decimal regex → U+FFFD.
+        let html = "<html><body><h1>&amp;#55296;</h1></body></html>";
+        let (_, headings, _) = scraper_extract_all(html);
+        assert_eq!(headings.len(), 1);
+        assert_eq!(headings[0].text, "&#55296;",
+            "html5ever must preserve &amp;#55296; as literal text");
+        assert_eq!(decode_html_entities("&amp;#55296;"), "\u{FFFD}",
+            "body path must produce U+FFFD for &amp;#55296;");
+        assert_ne!(headings[0].text, decode_html_entities("&amp;#55296;"),
+            "decimal surrogate divergence must be preserved");
+    }
+
+    /// Hex U+DFFF (upper bound): same asymmetry as U+D800 (S37-04 M2 test),
+    /// extended to the upper endpoint of the surrogate range.
+    #[test]
+    fn scraper_heading_decode_html_entities_diverge_on_hex_dfff() {
+        let html = "<html><body><h1>&amp;#xDFFF;</h1></body></html>";
+        let (_, headings, _) = scraper_extract_all(html);
+        assert_eq!(headings.len(), 1);
+        assert_eq!(headings[0].text, "&#xDFFF;",
+            "html5ever must preserve &amp;#xDFFF; as literal text");
+        assert_eq!(decode_html_entities("&amp;#xDFFF;"), "\u{FFFD}",
+            "body path must produce U+FFFD for &amp;#xDFFF;");
+    }
+
+    /// Non-surrogate case: `&amp;#xD7FF;` (U+D7FF, just below surrogate range).
+    /// Both paths agree — neither produces U+FFFD; both preserve `"&#xD7FF;"`.
+    ///
+    /// Heading path: html5ever peels `&amp;` → `&`, leaving `#xD7FF;` as text
+    ///   → element text = `"&#xD7FF;"` (literal entity string, not decoded).
+    /// Body path: html_escape peels `&amp;` → `&` → `"&#xD7FF;"` → hex regex
+    ///   matches, cp=55295 ∉ surrogate range → fallback, verbatim `"&#xD7FF;"`.
+    #[test]
+    fn scraper_heading_decode_html_entities_agree_on_non_surrogate_amp_escaped() {
+        let html = "<html><body><h1>&amp;#xD7FF;</h1></body></html>";
+        let (_, headings, _) = scraper_extract_all(html);
+        assert_eq!(headings.len(), 1);
+        let body_result = decode_html_entities("&amp;#xD7FF;");
+        assert_eq!(headings[0].text, "&#xD7FF;",
+            "html5ever must produce literal '&#xD7FF;' for &amp;#xD7FF;");
+        assert_eq!(body_result, "&#xD7FF;",
+            "body path must produce literal '&#xD7FF;' for &amp;#xD7FF;");
+        assert_eq!(headings[0].text, body_result,
+            "both paths must agree for non-surrogate amp-escaped form");
+    }
+
+    // ── S39-03: html_escape behavior contract ────────────────────────────────
+
+    /// Pins the five html_escape 0.2.x behaviors that `decode_html_entities`
+    /// relies on.  If html-escape bumps and any of these change, tests in
+    /// S37/S38/S39 that depend on them will need re-verification.
+    ///
+    /// Note: this test calls `html_escape::decode_html_entities` directly, not
+    /// the local `decode_html_entities` wrapper, to isolate library behavior.
+    ///
+    /// Verified against html-escape 0.2.x (Cargo.toml).
+    #[test]
+    fn html_escape_library_behavior_contract() {
+        // Contract 1 — Named entity peel-once: &amp; → & (one level only)
+        assert_eq!(
+            html_escape::decode_html_entities("&amp;").as_ref(), "&",
+            "html_escape: &amp; must decode to &"
+        );
+        // Peel-once: &amp;amp; → &amp; (NOT &)
+        assert_eq!(
+            html_escape::decode_html_entities("&amp;amp;").as_ref(), "&amp;",
+            "html_escape: &amp;amp; peels one level to &amp;"
+        );
+
+        // Contract 2 — Other named entities decoded
+        assert_eq!(
+            html_escape::decode_html_entities("&lt;&gt;").as_ref(), "<>",
+            "html_escape: &lt;&gt; → <>"
+        );
+
+        // Contract 3 — Valid scalar NCR decoded to char
+        // &#65; = U+0041 'A'; &#xD7FF; = U+D7FF (just below surrogate range)
+        assert_eq!(
+            html_escape::decode_html_entities("&#65;").as_ref(), "A",
+            "html_escape: &#65; → 'A'"
+        );
+        assert_eq!(
+            html_escape::decode_html_entities("&#xD7FF;").as_ref(), "\u{D7FF}",
+            "html_escape: &#xD7FF; → U+D7FF (valid scalar decoded)"
+        );
+
+        // Contract 4 — Surrogate NCR left verbatim (char::try_from fails for surrogates)
+        assert_eq!(
+            html_escape::decode_html_entities("&#xD800;").as_ref(), "&#xD800;",
+            "html_escape: &#xD800; must remain verbatim (surrogate)"
+        );
+        assert_eq!(
+            html_escape::decode_html_entities("&#xDFFF;").as_ref(), "&#xDFFF;",
+            "html_escape: &#xDFFF; must remain verbatim (surrogate)"
+        );
+
+        // Contract 5 — Above-Unicode NCR left verbatim (char::try_from fails)
+        assert_eq!(
+            html_escape::decode_html_entities("&#x110000;").as_ref(), "&#x110000;",
+            "html_escape: &#x110000; must remain verbatim (above-Unicode)"
         );
     }
 
