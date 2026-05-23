@@ -140,6 +140,18 @@ fn surrogate_dec_regex() -> &'static Regex {
 ///   derived via case-insensitive byte window search to handle `<H1>` source.
 ///   The scan advances in DOM order so multiple headings of the same level each
 ///   resolve to their own offset.
+///
+/// **Surrogate NCR behavior** (heading text and `Link::url` are symmetric):
+///
+/// | HTML source form     | Heading text / `Link::url` |
+/// |----------------------|----------------------------|
+/// | `&#xD800;`           | `"\u{FFFD}"` (U+FFFD)      |
+/// | `&#xDFFF;`           | `"\u{FFFD}"` (U+FFFD)      |
+/// | `&amp;#xD800;`       | `"&#xD800;"` (literal)     |
+/// | `&amp;#55296;`       | `"&#55296;"` (literal)     |
+///
+/// Compare [`decode_html_entities`]: it also converts `&amp;`-escaped forms to
+/// U+FFFD (more aggressive), so the two functions diverge on `&amp;#xD800;`.
 fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) {
     use scraper::{Html, Selector};
     static H_SEL: OnceLock<Selector> = OnceLock::new();
@@ -2644,6 +2656,55 @@ fn main() {}
         );
         assert_eq!(links[0].url, headings[0].text,
             "href attribute and heading text: symmetric peel-once behavior (AGREE)");
+    }
+
+    // ── S42-01: Upper-surrogate boundary in href — &#xDFFF; ─────────────────
+
+    /// `&#xDFFF;` (U+DFFF) is the upper endpoint of the surrogate range.
+    /// html5ever replaces it with U+FFFD in the href attribute value, symmetric
+    /// with `&#xD800;` (S41-01a, lower endpoint) and with the heading text path
+    /// (S39-02b: `&#xDFFF;` in `<h1>` → U+FFFD).
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
+    #[test]
+    fn scraper_link_href_upper_surrogate_boundary_produces_fffd() {
+        let html = r#"<html><body><a href="&#xDFFF;">text</a></body></html>"#;
+        let (_, _, links) = scraper_extract_all(html);
+        assert_eq!(links.len(), 1, "expected one link");
+        assert_eq!(
+            links[0].url,
+            "\u{FFFD}",
+            "direct &#xDFFF; in href: html5ever replaces upper-boundary surrogate with U+FFFD"
+        );
+    }
+
+    // ── S42-02: Decimal amp-escaped surrogate in href — &amp;#55296; ────────
+
+    /// `&amp;#55296;` in href follows peel-once: html5ever decodes `&amp;` → `&`,
+    /// leaving `#55296;` without a leading `&` — not an entity — so `Link::url`
+    /// is the literal string `"&#55296;"`.  Symmetric with the hex form (S41-01c:
+    /// `&amp;#xD800;` in href → `"&#xD800;"`) and with the heading text path
+    /// (S39-02a: `&amp;#55296;` in `<h1>` → `"&#55296;"`).
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
+    #[test]
+    fn scraper_link_href_decimal_amp_escaped_surrogate_produces_literal() {
+        let html = r#"<html><body><a href="&amp;#55296;">text</a></body></html>"#;
+        let (_, _, links) = scraper_extract_all(html);
+        assert_eq!(links.len(), 1);
+        assert_eq!(
+            links[0].url,
+            "&#55296;",
+            "&amp;#55296; in href: peel-once leaves literal &#55296; (NOT U+D800 char)"
+        );
+
+        // AGREE with heading text for the same input form (S39-02a)
+        let heading_html = r#"<html><body><h1>&amp;#55296;</h1></body></html>"#;
+        let (_, headings, _) = scraper_extract_all(heading_html);
+        assert_eq!(headings[0].text, "&#55296;",
+            "heading text: &amp;#55296; → literal &#55296; (S39-02a)");
+        assert_eq!(links[0].url, headings[0].text,
+            "href attr and heading text: symmetric peel-once behavior (AGREE)");
     }
 
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
