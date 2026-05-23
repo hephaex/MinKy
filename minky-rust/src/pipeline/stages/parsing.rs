@@ -2127,6 +2127,10 @@ fn main() {}
     /// surrogate NCR input.  This pins the docstring contract (line ~218-219)
     /// that the two paths "replace direct surrogate NCRs with U+FFFD in the
     /// same way."
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
+    /// If this test fails after a scraper bump, audit html5ever's tokenizer
+    /// surrogate-NCR replacement behavior before adjusting the assertion.
     #[test]
     fn scraper_heading_and_decode_html_entities_agree_on_surrogate_fffd() {
         // Heading path (scraper / html5ever)
@@ -2154,6 +2158,8 @@ fn main() {}
 
     /// Decimal surrogate NCR cross-path consistency — same contract as hex.
     /// U+DFFF (decimal 57343) is the upper endpoint of the surrogate range.
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
     #[test]
     fn scraper_heading_and_decode_html_entities_agree_on_surrogate_decimal() {
         let html = "<html><body><h1>&#57343;</h1></body></html>";
@@ -2166,6 +2172,41 @@ fn main() {}
         let body_result = decode_html_entities("&#57343;");
         assert_eq!(body_result, "\u{FFFD}");
         assert_eq!(headings[0].text, body_result);
+    }
+
+    /// Pins the intentional asymmetry between paths documented at line ~220-223:
+    /// html5ever treats `&amp;#xD800;` as a text node and preserves it verbatim
+    /// as the characters `&#xD800;`; `decode_html_entities` peels the `&amp;`
+    /// first (html_escape), making the entity active, then replaces it with U+FFFD.
+    ///
+    /// This divergence is deliberate — the body/code path is "slightly more
+    /// aggressive" to ensure surrogate NCRs never reach the PostgreSQL index.
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x.
+    #[test]
+    fn scraper_heading_and_decode_html_entities_diverge_on_amp_escaped_surrogate() {
+        // html5ever heading path: &amp; is a text-level entity; the resulting
+        // text node contains the literal characters '&', '#', 'x', 'D', '8', '0', '0', ';'
+        let html = "<html><body><h1>&amp;#xD800;</h1></body></html>";
+        let (_, headings, _) = scraper_extract_all(html);
+        assert_eq!(headings.len(), 1);
+        assert_eq!(
+            headings[0].text, "&#xD800;",
+            "html5ever heading path must preserve &amp;#xD800; as literal text &#xD800;"
+        );
+
+        // decode_html_entities body path: peels &amp; → & → &#xD800; → U+FFFD
+        let body_result = decode_html_entities("&amp;#xD800;");
+        assert_eq!(
+            body_result, "\u{FFFD}",
+            "decode_html_entities body path must produce U+FFFD for &amp;#xD800;"
+        );
+
+        // Intentional asymmetry — they must NOT agree on this input
+        assert_ne!(
+            headings[0].text, body_result,
+            "divergence at parsing.rs:~220-223 must be preserved"
+        );
     }
 
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
