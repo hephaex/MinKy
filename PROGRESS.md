@@ -5,7 +5,25 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-23) - Sprint 42: Upper-Surrogate href, Decimal Amp-Escaped, Matrix
+## 현재 진행 상황 (2026-05-23) - Sprint 43: Decimal DFFF href, Hex Amp-Escaped DFFF href, Rename
+
+### Sprint 43: href Matrix Completion + Naming Hygiene (2026-05-23)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `&#57343;` in href → U+FFFD (S43-01) | parsing.rs | decimal upper-boundary (57343=0xDFFF); 4-corner direct matrix 완성 |
+| `&amp;#xDFFF;` in href → "&#xDFFF;" literal (S43-02) | parsing.rs | hex amp-escaped upper; AGREE with heading text S39-02b |
+| test rename S43-03 | parsing.rs | `..._amp_escaped_*` → `..._hex_amp_escaped_*`; S42-02 docstring cross-ref 갱신 |
+
+테스트: **1,834 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `454806d9` (S43-01/02/03)
+리뷰: `~/.claude/references/2026-05-23_sprint43_decimal_dfff_hex_amp_dfff_rename.md`
+
+**현재 상태**: href 8-corner matrix 7/8 완성. 남은 gap: `&amp;#57343;` decimal amp-escaped upper. Sprint 44에서 P1로 닫힘.
+
+---
+
+## 이전 진행 상황 (2026-05-23) - Sprint 42: Upper-Surrogate href, Decimal Amp-Escaped, Matrix
 
 ### Sprint 42: href Attribute Coverage Completion (2026-05-23)
 

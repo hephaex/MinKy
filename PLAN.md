@@ -627,12 +627,20 @@
 - 결과: **1,832 pass / 0 fail / 0 clippy warnings**
 - 커밋: `2ca5f50f` (S42-01~03), `f97b6bcd` (review M1/L1)
 
-## Sprint 43 로드맵
+## Sprint 43 완료 (2026-05-23) — Decimal DFFF href, Hex Amp-Escaped DFFF href, Test Rename
 
-- P1: `&#57343;` (decimal DFFF) in href — {hex,decimal}×{direct,amp}×{lower,upper} 8-corner 완성
-- P2: `&amp;#xDFFF;` in href — hex amp-escaped upper boundary (S41-01c upper symmetric)
-- P3: S41-01c rename → `scraper_link_href_hex_amp_escaped_surrogate_produces_literal`
-- P4: Implementation — vault watcher 파이프라인 연동 또는 fastembed local embedding smoke test
+- [x] S43-01: `&#57343;` (decimal 0xDFFF) in href → U+FFFD (completes {hex,decimal}×{lower,upper} direct matrix)
+- [x] S43-02: `&amp;#xDFFF;` in href → "&#xDFFF;" literal (AGREE with heading text S39-02b)
+- [x] S43-03: rename `scraper_link_href_amp_escaped_*` → `scraper_link_href_hex_amp_escaped_*`; S42-02 cross-ref updated
+- 결과: **1,834 pass / 0 fail / 0 clippy warnings**
+- 커밋: `454806d9` (S43-01/02/03)
+
+## Sprint 44 로드맵
+
+- P1: `&amp;#57343;` decimal amp-escaped upper in href → 8-corner matrix 완성 (마지막 1 corner)
+- P2: Direct hex href test rename — `scraper_link_href_direct_*` → `hex_lower_*`, `upper_*` → `hex_upper_*`
+- P3: S43-02 docstring wording — "DIVERGE test" 맥락 명확화 (href↔heading AGREE vs heading↔body DIVERGE)
+- P4: Implementation — vault watcher 파이프라인 또는 fastembed local embedding smoke test
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 
