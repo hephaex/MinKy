@@ -150,6 +150,9 @@ fn surrogate_dec_regex() -> &'static Regex {
 /// | `&amp;#xD800;`       | `"&#xD800;"` (literal)     |
 /// | `&amp;#55296;`       | `"&#55296;"` (literal)     |
 ///
+/// (Rows 3-4 use hex and decimal notations independently; peel-once behavior is
+/// identical for both notations — the table illustrates both for coverage.)
+///
 /// Compare [`decode_html_entities`]: it also converts `&amp;`-escaped forms to
 /// U+FFFD (more aggressive), so the two functions diverge on `&amp;#xD800;`.
 fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) {
@@ -2663,7 +2666,7 @@ fn main() {}
     /// `&#xDFFF;` (U+DFFF) is the upper endpoint of the surrogate range.
     /// html5ever replaces it with U+FFFD in the href attribute value, symmetric
     /// with `&#xD800;` (S41-01a, lower endpoint) and with the heading text path
-    /// (S39-02b: `&#xDFFF;` in `<h1>` → U+FFFD).
+    /// (`&#57343;` decimal upper bound in `scraper_heading_and_decode_html_entities_agree_on_surrogate_decimal`).
     ///
     /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
     #[test]
