@@ -82,7 +82,7 @@ url = "2.5"
 futures-util = "0.3.32"
 tokio-stream = "0.1.18"
 async-stream = "0.3.6"
-html-escape = "0.2"  # bumps must re-verify peel-once + surrogate-preservation — see S37/S38 tests in pipeline/stages/parsing.rs
+html-escape = "0.2"  # bumps must re-verify peel-once + surrogate-preservation — see S37/S38/S39 tests in pipeline/stages/parsing.rs
 
 # Syntax Highlighting
 syntect = "5"

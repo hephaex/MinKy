@@ -2489,6 +2489,88 @@ fn main() {}
         );
     }
 
+    // ── S40-02: ARM-A mid-range surrogate coverage ───────────────────────────
+
+    /// Pins ARM-A for mid-range surrogate values (not just boundary endpoints
+    /// D800/DFFF).  Confirms that `(0xD800..=0xDFFF).contains(&cp)` fires for
+    /// interior codepoints, not only at boundaries already covered by S34/S38-03.
+    #[test]
+    fn decode_html_entities_surrogate_mid_range_produces_fffd() {
+        // &#xDA00; = 0xDA00 = 55808 — mid-range high surrogate, hex form
+        assert_eq!(
+            decode_html_entities("&#xDA00;"),
+            "\u{FFFD}",
+            "&#xDA00; (0xDA00, mid-range high surrogate) must produce U+FFFD"
+        );
+        // &#56320; = 0xDC00 = 56320 — low surrogate lead (U+DC00), decimal form
+        // Symmetric with hex path; exercises decimal regex ARM-A interior.
+        assert_eq!(
+            decode_html_entities("&#56320;"),
+            "\u{FFFD}",
+            "&#56320; (0xDC00, low surrogate, decimal) must produce U+FFFD"
+        );
+    }
+
+    // ── S40-03: &amp;#xE000; above-surrogate AGREE corner ───────────────────
+
+    /// Symmetric counterpart of S39-02c (`&amp;#xD7FF;` below-surrogate AGREE).
+    /// U+E000 is just above the surrogate range; both paths produce literal
+    /// `"&#xE000;"`, not U+E000 char.
+    ///
+    /// html5ever peels `&amp;` → `&`, leaving `#xE000;` as text → `"&#xE000;"`.
+    /// Body path: html_escape peels → `"&#xE000;"` → hex regex matches,
+    /// cp=0xE000=57344 ∉ 0xD800..=0xDFFF → fallback verbatim `"&#xE000;"`.
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x and html-escape 0.2.x.
+    #[test]
+    fn scraper_heading_decode_html_entities_agree_on_above_surrogate_amp_escaped() {
+        let html = "<html><body><h1>&amp;#xE000;</h1></body></html>";
+        let (_, headings, _) = scraper_extract_all(html);
+        assert_eq!(headings.len(), 1);
+        let body_result = decode_html_entities("&amp;#xE000;");
+        assert_eq!(headings[0].text, "&#xE000;",
+            "html5ever must produce literal '&#xE000;' for &amp;#xE000;");
+        assert_eq!(body_result, "&#xE000;",
+            "body path must produce literal '&#xE000;' for &amp;#xE000;");
+        assert_eq!(headings[0].text, body_result,
+            "both paths must agree for above-surrogate amp-escaped form");
+    }
+
+    // ── S40-04: Fast-path identity (no `&#` → regex block skipped) ──────────
+
+    /// Pins the `result.contains("&#")` guard's fast path: when the input
+    /// contains no `&#` substring, the entire regex block is skipped and the
+    /// string is returned unchanged.  This includes the empty-string edge case
+    /// and strings with `&` but no `#`.
+    #[test]
+    fn decode_html_entities_fast_path_no_entity_marker() {
+        // Empty string — must not panic and must return ""
+        assert_eq!(decode_html_entities(""), "", "empty string must return empty");
+
+        // ASCII-only — no `&` at all, fastest path
+        assert_eq!(
+            decode_html_entities("hello world"),
+            "hello world",
+            "plain ASCII must be returned unchanged"
+        );
+
+        // `&` present but no `#` following — `result.contains("&#")` is false;
+        // regex block is skipped; html_escape may decode named entities here,
+        // but no surrogate post-processing runs.
+        assert_eq!(
+            decode_html_entities("AT&T and D&D"),
+            "AT&T and D&D",
+            "bare & without # must not trigger regex post-processing"
+        );
+
+        // `&amp;` present (→ `&` after peel) but still no `&#` → guard false
+        assert_eq!(
+            decode_html_entities("&amp;T"),
+            "&T",
+            "&amp;T → &T via html_escape; no &#  → regex block skipped"
+        );
+    }
+
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
 
     /// `OnceLock<Selector>` in `scraper_extract_all` is shared across Axum
