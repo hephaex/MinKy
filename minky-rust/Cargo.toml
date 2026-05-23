@@ -77,7 +77,7 @@ redis = { version = "0.28", features = ["tokio-comp", "connection-manager"] }
 # Text Processing
 regex = "1.11"
 pulldown-cmark = "0.9"
-scraper = "0.20"
+scraper = "0.20"  # html5ever surrogate-NCR behavior pinned in S37-04 tests (parsing.rs)
 url = "2.5"
 futures-util = "0.3.32"
 tokio-stream = "0.1.18"

@@ -2209,6 +2209,100 @@ fn main() {}
         );
     }
 
+    // ── S38-01: &amp;#xD800 (no trailing semicolon) verbatim ──────────────────
+
+    /// Pins the interaction between S33-04 (unsemicoloned NCR) and S37-01
+    /// (&amp;-escaped surrogate chain).
+    ///
+    /// `&amp;#xD800` (no `;`) → html_escape peels `&amp;` → `&`, leaving
+    /// `&#xD800` (no `;`).  The hex regex `(?i)&#x([0-9a-f]+);` requires a
+    /// trailing semicolon and therefore produces no match.  The entity is
+    /// preserved verbatim as `"&#xD800"`, and the function must not panic.
+    #[test]
+    fn decode_html_entities_amp_escaped_surrogate_no_semicolon_verbatim() {
+        // Bare form: no trailing semicolon after hex digits
+        let result = decode_html_entities("&amp;#xD800");
+        assert_eq!(
+            result, "&#xD800",
+            "&amp;#xD800 (no ';') must be verbatim after &amp; peel; got {:?}", result
+        );
+
+        // With surrounding text — surrounding chars must survive
+        let result2 = decode_html_entities("before&amp;#xD800 after");
+        assert_eq!(
+            result2, "before&#xD800 after",
+            "surrounding text must be preserved; got {:?}", result2
+        );
+
+        // Decimal form: &amp;#55296 (no ';')
+        let result3 = decode_html_entities("&amp;#55296");
+        assert_eq!(
+            result3, "&#55296",
+            "&amp;#55296 (no ';') must be verbatim; got {:?}", result3
+        );
+    }
+
+    // ── S38-03: Hex regex match-arm structural coverage ─────────────────────
+
+    /// Table-driven test that explicitly marks which arm of the hex surrogate
+    /// `match` (parsing.rs lines ~245-248) each case exercises:
+    ///
+    /// ```text
+    /// match u32::from_str_radix(&caps[1], 16) {
+    ///     Ok(cp) if (0xD800..=0xDFFF).contains(&cp) => U+FFFD,  // ARM-A
+    ///     _                                          => verbatim, // ARM-B/C
+    /// }
+    /// ```
+    ///
+    /// ARM-A: parse succeeds + value in surrogate range → U+FFFD
+    /// ARM-B: parse succeeds + value NOT in surrogate range → verbatim (Err/non-surrogate fallback)
+    /// ARM-C: parse fails (u32 overflow) → verbatim (same `_ =>` arm as B)
+    #[test]
+    fn decode_html_entities_hex_regex_match_arm_coverage() {
+        // ARM-A: Ok(cp) in 0xD800..=0xDFFF → U+FFFD
+        // u32::from_str_radix("D800", 16) = Ok(55296) — in range
+        assert_eq!(decode_html_entities("&#xD800;"), "\u{FFFD}", "ARM-A lower bound");
+        // u32::from_str_radix("DFFF", 16) = Ok(57343) — in range
+        assert_eq!(decode_html_entities("&#xDFFF;"), "\u{FFFD}", "ARM-A upper bound");
+
+        // ARM-B: Ok(cp) NOT in 0xD800..=0xDFFF → verbatim
+        // u32::from_str_radix("D7FF", 16) = Ok(55295) — just below range
+        assert_eq!(decode_html_entities("&#xD7FF;"), "\u{D7FF}", "ARM-B: D7FF below surrogate range");
+        // u32::from_str_radix("E000", 16) = Ok(57344) — just above range
+        assert_eq!(decode_html_entities("&#xE000;"), "\u{E000}", "ARM-B: E000 above surrogate range");
+        // u32::from_str_radix("FFFFFFFF", 16) = Ok(4294967295) — way above range
+        assert_eq!(decode_html_entities("&#xFFFFFFFF;"), "&#xFFFFFFFF;", "ARM-B: u32::MAX verbatim");
+
+        // ARM-C: Err (u32 overflow) → verbatim (same `_` arm as B)
+        // u32::from_str_radix("FFFFFFFFF", 16) → PosOverflow error
+        assert_eq!(decode_html_entities("&#xFFFFFFFFF;"), "&#xFFFFFFFFF;", "ARM-C: overflow verbatim");
+    }
+
+    // ── S38-04: Decimal NCR u32 overflow — verbatim (S37-03 decimal symmetric) ─
+
+    /// Decimal counterpart of S37-03: `&#4294967296;` = 2^32, which exceeds
+    /// `u32::MAX` (4294967295).  `caps[1].parse::<u32>()` returns
+    /// `Err(PosOverflow)`, and the `_ =>` fallback arm must return the entity
+    /// verbatim without panicking.
+    ///
+    /// Note: html_escape 0.2.x also leaves this verbatim (char::try_from fails).
+    #[test]
+    fn decode_html_entities_decimal_u32_overflow_preserved_verbatim() {
+        // 2^32 = 4294967296 — first value that overflows u32
+        let result = decode_html_entities("&#4294967296;");
+        assert_eq!(
+            result, "&#4294967296;",
+            "&#4294967296; (> u32::MAX decimal) must be verbatim; got {:?}", result
+        );
+
+        // Even larger: 10 digits
+        let result2 = decode_html_entities("&#99999999999;");
+        assert_eq!(
+            result2, "&#99999999999;",
+            "&#99999999999; (10-digit decimal) must be verbatim; got {:?}", result2
+        );
+    }
+
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
 
     /// `OnceLock<Selector>` in `scraper_extract_all` is shared across Axum
