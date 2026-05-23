@@ -555,12 +555,23 @@
 - 결과: **1,802 pass / 0 fail / 0 clippy warnings**
 - 커밋: `b3082d23`
 
-## Sprint 36 로드맵
+## Sprint 36 완료 (2026-05-23) — Above-Unicode, Case Sensitivity, Union Assertion, Idempotency
 
-- P1: `&#x110000;` / `&#1114112;` (above-Unicode codepoint) — verbatim-or-FFFD 계약 명시 테스트
-- P2: `&#xd800;` (lowercase x) / `&#XD800;` (uppercase X) — hex regex `(?i)` flag 대소문자 커버
-- P3: S35-02 assertion 강화 — `starts_with/ends_with` → `result == "x&#xD800y" || result == "x\u{FFFD}y"` union pin
-- P4: idempotency test — `decode_html_entities(decode_html_entities(input))` = `decode_html_entities(input)`
+- [x] S36-01: `&#x110000;` / `&#1114112;` → verbatim (html_escape 0.2.x: char::try_from Err → verbatim, not FFFD)
+- [x] S36-02: `&#xd800;` lowercase + `&#XD800;` uppercase X → U+FFFD ((?i) flag load-bearing)
+- [x] S36-03: surrounding-char union 강화 — `"x&#xD800y" || "x\u{FFFD}y"` (exact pin, both arms documented)
+- [x] S36-04: idempotency (single-decoded outputs) + `&amp;amp;` peel-one-level counter-test
+- [x] Review M1: above-Unicode union → `assert_eq!` verbatim pin + docstring 설명
+- [x] Review M2: idempotency docstring narrowing + non-idempotent counter-test 추가
+- 결과: **1,808 pass / 0 fail / 0 clippy warnings**
+- 커밋: `4eca3c15` (S36-01~04), `6fa93786` (review M1/M2)
+
+## Sprint 37 로드맵
+
+- P1: `&amp;#xD800;` end-to-end 계약 테스트 — docstring 명시 "more aggressive than html5ever" 계약 pin
+- P2: `&#xDc00;` mixed-case hex digit — `(?i)` flag의 digit-case axis 검증
+- P3: hex u32 overflow — `&#xFFFFFFFF;` / `&#xFFFFFFFFF;` verbatim (parse Err path pin)
+- P4: cross-path consistency — heading path (scraper/html5ever) vs body path (decode_html_entities)에서 동일 서로게이트 → 모두 U+FFFD
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 

@@ -5,7 +5,28 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-23) - Sprint 35: Decimal DFFF, Surrounding-Char, Mixed-NCR, Astral-Plane
+## 현재 진행 상황 (2026-05-23) - Sprint 36: Above-Unicode, Case Sensitivity, Union Assertion, Idempotency
+
+### Sprint 36: Contract Completeness Round (2026-05-23)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `&#x110000;`/`&#1114112;` verbatim pin (S36-01) | parsing.rs | html_escape 0.2.x: char::try_from Err → verbatim (not FFFD) |
+| `&#xd800;` lowercase + `&#XD800;` uppercase X (S36-02) | parsing.rs | hex regex `(?i)` flag load-bearing — both → U+FFFD |
+| surrounding-char union 강화 (S36-03) | parsing.rs | `starts_with/ends_with` → `"x&#xD800y" \|\| "x\u{FFFD}y"` exact pin |
+| idempotency test + `&amp;amp;` counter-test (S36-04) | parsing.rs | single-decoded idempotent; chained &amp; peels one level per call |
+| above-Unicode `assert_eq!` 강화 (review M1) | parsing.rs | union 사 dead branch → exact verbatim pin with library-version note |
+| idempotency docstring narrowing (review M2) | parsing.rs | overclaim 제거 + non-idempotent case 명시 counter-test |
+
+테스트: **1,808 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `4eca3c15` (S36-01~04), `6fa93786` (review M1/M2)
+리뷰: `~/.claude/references/2026-05-23_sprint36_above_unicode_case_sensitivity_idempotency.md`
+
+**현재 상태**: decode_html_entities 계약이 완성됨. above-Unicode verbatim 동작, (?i) flag scope, 비멱등성(chained &amp;)이 모두 명시적 테스트로 문서화됨.
+
+---
+
+## 이전 진행 상황 (2026-05-23) - Sprint 35: Decimal DFFF, Surrounding-Char, Mixed-NCR, Astral-Plane
 
 ### Sprint 35: Coverage Completeness Round (2026-05-23)
 
