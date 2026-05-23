@@ -566,12 +566,23 @@
 - 결과: **1,808 pass / 0 fail / 0 clippy warnings**
 - 커밋: `4eca3c15` (S36-01~04), `6fa93786` (review M1/M2)
 
-## Sprint 37 로드맵
+## Sprint 37 완료 (2026-05-23) — &amp;#xD800; End-to-End, Mixed-Case Digit, Hex Overflow, Cross-Path
 
-- P1: `&amp;#xD800;` end-to-end 계약 테스트 — docstring 명시 "more aggressive than html5ever" 계약 pin
-- P2: `&#xDc00;` mixed-case hex digit — `(?i)` flag의 digit-case axis 검증
-- P3: hex u32 overflow — `&#xFFFFFFFF;` / `&#xFFFFFFFFF;` verbatim (parse Err path pin)
-- P4: cross-path consistency — heading path (scraper/html5ever) vs body path (decode_html_entities)에서 동일 서로게이트 → 모두 U+FFFD
+- [x] S37-01: `&amp;#xD800;` / `&amp;#55296;` end-to-end → U+FFFD (peel-then-regex, docstring "more aggressive" contract pin)
+- [x] S37-02: `&#xDc00;` mixed-case hex digit + `&#xDFFF;` all-upper → U+FFFD ((?i) digit-case axis)
+- [x] S37-03: `&#xFFFFFFFF;` (u32::MAX) + `&#xFFFFFFFFF;` (>u32 overflow) → verbatim (parse fallback arm pin)
+- [x] S37-04: cross-path consistency — scraper/html5ever heading path and decode_html_entities body path both → U+FFFD for `&#xD800;` / `&#57343;`
+- [x] Review M1: S37-04 annotated with scraper 0.20.x / html5ever 0.27.x version reference
+- [x] Review M2: `scraper_heading_and_decode_html_entities_diverge_on_amp_escaped_surrogate` — pins intentional path asymmetry
+- 결과: **1,816 pass / 0 fail / 0 clippy warnings**
+- 커밋: `563235ac` (S37-01~04), `406e2643` (review M1/M2)
+
+## Sprint 38 로드맵
+
+- P1: `&amp;#xD800` (no semicolon) end-to-end — `&amp;` 소비 후 `&#xD800` 남음 (세미콜론 없음) → regex 매칭 안 됨 → verbatim + no-panic pin
+- P2: html5ever version bump guard — `Cargo.toml`의 `scraper` 의존성에 cross-reference 코멘트 추가 (S37-04 버전 어노테이션 보완)
+- P3: match-arm structural test — hex regex `match` 각 arm (Ok(surrogate) / Ok(non-surrogate) / Err(overflow)) 개별 pin 테이블
+- P4: decimal NCR 에도 overflow 확인 — `&#4294967296;` (>u32::MAX decimal) → verbatim pin (S37-03 decimal 대칭)
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 

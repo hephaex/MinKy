@@ -5,7 +5,28 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-23) - Sprint 36: Above-Unicode, Case Sensitivity, Union Assertion, Idempotency
+## 현재 진행 상황 (2026-05-23) - Sprint 37: &amp;#xD800; End-to-End, Mixed-Case Digit, Hex Overflow, Cross-Path
+
+### Sprint 37: Contract Completeness Round (2026-05-23)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `&amp;#xD800;` / `&amp;#55296;` end-to-end pin (S37-01) | parsing.rs | peel &amp;→& → &#xD800; → hex regex → U+FFFD. "more aggressive than html5ever" 계약 |
+| `&#xDc00;` mixed-case digit + `&#xDFFF;` all-upper (S37-02) | parsing.rs | (?i) flag의 digit-case axis (D/c mixed) 검증 |
+| `&#xFFFFFFFF;` (u32::MAX) + `&#xFFFFFFFFF;` (>u32 overflow) verbatim (S37-03) | parsing.rs | fallback `_ => caps[0].to_owned()` arm: Ok(non-surrogate) + Err(overflow) 모두 verbatim |
+| cross-path consistency hex + decimal (S37-04) | parsing.rs | scraper heading path ≡ body path for &#xD800; / &#57343; → 모두 U+FFFD |
+| html5ever version annotation (review M1) | parsing.rs | S37-04 tests에 scraper 0.20.x / html5ever 0.27.x 버전 레퍼런스 추가 |
+| divergence test (review M2) | parsing.rs | `&amp;#xD800;` heading path="&#xD800;" vs body path=U+FFFD 의도적 비대칭 pin |
+
+테스트: **1,816 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `563235ac` (S37-01~04), `406e2643` (review M1/M2)
+리뷰: `~/.claude/references/2026-05-23_sprint37_amp_escaped_mixed_case_overflow_cross_path.md`
+
+**현재 상태**: decode_html_entities ↔ scraper_extract_all 교차 경로 계약 완성. &amp; 이스케이프 체인, 대소문자 혼합 hex digit, u32 overflow, 경로 비대칭 모두 명시적 테스트로 문서화됨.
+
+---
+
+## 이전 진행 상황 (2026-05-23) - Sprint 36: Above-Unicode, Case Sensitivity, Union Assertion, Idempotency
 
 ### Sprint 36: Contract Completeness Round (2026-05-23)
 
