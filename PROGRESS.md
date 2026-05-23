@@ -5,7 +5,26 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-23) - Sprint 34: Decimal Boundary Tests, Tight List Pin, Inclusive Endpoints
+## 현재 진행 상황 (2026-05-23) - Sprint 35: Decimal DFFF, Surrounding-Char, Mixed-NCR, Astral-Plane
+
+### Sprint 35: Coverage Completeness Round (2026-05-23)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `&#57343;` decimal U+DFFF endpoint 테스트 (S35-01) | parsing.rs | decimal regex 실제 실행 확인 — `surr_dec_regex()` 상한 symmetric |
+| unsemicoloned NCR 주변 문자 생존 (S35-02) | parsing.rs | `x&#xD800y` → starts_with('x') && ends_with('y') pin |
+| mixed-NCR 시퀀스 (S35-03) | parsing.rs | 2 U+FFFD + U+D7FF + U+E000 독립 처리, count assertion |
+| astral-plane NCR (S35-04) | parsing.rs | `&#128512;` → U+1F600 (😀), html_escape 처리, regex 스킵 |
+
+테스트: **1,802 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `b3082d23`
+리뷰: `~/.claude/references/2026-05-23_sprint35_decimal_dfff_mixed_ncr_astral.md`
+
+**현재 상태**: decode_html_entities의 모든 핵심 경로 테스트 완료. hex/decimal × 경계/내부/외부 × 단독/혼합 시나리오 커버. 4바이트 UTF-8 path (astral plane) 확인.
+
+---
+
+## 이전 진행 상황 (2026-05-23) - Sprint 34: Decimal Boundary Tests, Tight List Pin, Inclusive Endpoints
 
 ### Sprint 34: Decimal Boundary + Tight List + Assertion Strengthening (2026-05-23)
 

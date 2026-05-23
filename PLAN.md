@@ -546,12 +546,21 @@
 - 결과: **1,798 pass / 0 fail / 0 clippy warnings**
 - 커밋: `6e0c3dc9` (S34-01~04), `a3c9e49e` (review fix)
 
-## Sprint 35 로드맵
+## Sprint 35 완료 (2026-05-23) — Decimal DFFF, Surrounding-Char Survival, Mixed-NCR, Astral-Plane
 
-- P1: `&#57343;` (U+DFFF decimal, 57343) — hex S34-04 upper endpoint의 decimal 대칭 검증
-- P2: unsemicoloned NCR 주변 문자 생존 pin — `decode_html_entities("x&#xD800y")` 결과에 'x', 'y' 존재 확인
-- P3: mixed-NCR sequence test — `&#xD800;&#xDFFF;&#55295;&#xE000;` 섞인 입력에서 각 NCR 독립 처리 검증
-- P4: astral-plane NCR test — `&#128512;` (U+1F600, emoji) → 4바이트 UTF-8 path 검증 (html_escape가 처리)
+- [x] S35-01: `&#57343;` decimal U+DFFF upper endpoint → U+FFFD (실제 `surrogate_dec_regex()` 실행 확인)
+- [x] S35-02: `x&#xD800y` surrounding chars x/y survival — `starts_with('x') && ends_with('y')` pin
+- [x] S35-03: mixed `&#xD800;&#xDFFF;&#55295;&#xE000;` — 2 U+FFFD + U+D7FF/E000 보존 (2-count pin)
+- [x] S35-04: `&#128512;` → U+1F600 😀 (html_escape path, "&#" 없음, regex 스킵)
+- 결과: **1,802 pass / 0 fail / 0 clippy warnings**
+- 커밋: `b3082d23`
+
+## Sprint 36 로드맵
+
+- P1: `&#x110000;` / `&#1114112;` (above-Unicode codepoint) — verbatim-or-FFFD 계약 명시 테스트
+- P2: `&#xd800;` (lowercase x) / `&#XD800;` (uppercase X) — hex regex `(?i)` flag 대소문자 커버
+- P3: S35-02 assertion 강화 — `starts_with/ends_with` → `result == "x&#xD800y" || result == "x\u{FFFD}y"` union pin
+- P4: idempotency test — `decode_html_entities(decode_html_entities(input))` = `decode_html_entities(input)`
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 
