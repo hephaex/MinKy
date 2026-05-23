@@ -2215,9 +2215,10 @@ fn main() {}
     /// (&amp;-escaped surrogate chain).
     ///
     /// `&amp;#xD800` (no `;`) → html_escape peels `&amp;` → `&`, leaving
-    /// `&#xD800` (no `;`).  The hex regex `(?i)&#x([0-9a-f]+);` requires a
-    /// trailing semicolon and therefore produces no match.  The entity is
-    /// preserved verbatim as `"&#xD800"`, and the function must not panic.
+    /// `&#xD800` (no `;`).  The `result.contains("&#")` guard succeeds, so the
+    /// regex block is entered, but `(?i)&#x([0-9a-f]+);` requires a trailing
+    /// semicolon and `replace_all` finds no match.  The input is returned
+    /// unchanged as `"&#xD800"` — verbatim, no panic.
     #[test]
     fn decode_html_entities_amp_escaped_surrogate_no_semicolon_verbatim() {
         // Bare form: no trailing semicolon after hex digits
@@ -2245,36 +2246,42 @@ fn main() {}
     // ── S38-03: Hex regex match-arm structural coverage ─────────────────────
 
     /// Table-driven test that explicitly marks which arm of the hex surrogate
-    /// `match` (parsing.rs lines ~245-248) each case exercises:
+    /// `match` (parsing.rs lines ~245-248) each case exercises.  To reach any
+    /// arm, the input must survive html_escape decoding with `"&#"` still present.
     ///
     /// ```text
     /// match u32::from_str_radix(&caps[1], 16) {
     ///     Ok(cp) if (0xD800..=0xDFFF).contains(&cp) => U+FFFD,  // ARM-A
-    ///     _                                          => verbatim, // ARM-B/C
+    ///     _                                          => verbatim, // ARM-B (Ok, out-of-range)
+    ///                                                             // ARM-C (Err, overflow)
     /// }
     /// ```
     ///
     /// ARM-A: parse succeeds + value in surrogate range → U+FFFD
-    /// ARM-B: parse succeeds + value NOT in surrogate range → verbatim (Err/non-surrogate fallback)
-    /// ARM-C: parse fails (u32 overflow) → verbatim (same `_ =>` arm as B)
+    ///        html_escape leaves surrogates verbatim; regex match runs.
+    /// ARM-B: parse succeeds + value NOT in surrogate range → verbatim
+    ///        Must be above-Unicode so html_escape also leaves it verbatim.
+    ///        Valid Unicode codepoints (e.g. U+D7FF, U+E000) are decoded by
+    ///        html_escape upstream and never reach this arm — see S33/S34 tests.
+    /// ARM-C: parse fails (u32 overflow) → verbatim (same `_ =>` arm as ARM-B)
     #[test]
     fn decode_html_entities_hex_regex_match_arm_coverage() {
         // ARM-A: Ok(cp) in 0xD800..=0xDFFF → U+FFFD
+        // html_escape preserves surrogates verbatim; regex runs; in-range guard fires.
         // u32::from_str_radix("D800", 16) = Ok(55296) — in range
         assert_eq!(decode_html_entities("&#xD800;"), "\u{FFFD}", "ARM-A lower bound");
         // u32::from_str_radix("DFFF", 16) = Ok(57343) — in range
         assert_eq!(decode_html_entities("&#xDFFF;"), "\u{FFFD}", "ARM-A upper bound");
 
         // ARM-B: Ok(cp) NOT in 0xD800..=0xDFFF → verbatim
-        // u32::from_str_radix("D7FF", 16) = Ok(55295) — just below range
-        assert_eq!(decode_html_entities("&#xD7FF;"), "\u{D7FF}", "ARM-B: D7FF below surrogate range");
-        // u32::from_str_radix("E000", 16) = Ok(57344) — just above range
-        assert_eq!(decode_html_entities("&#xE000;"), "\u{E000}", "ARM-B: E000 above surrogate range");
-        // u32::from_str_radix("FFFFFFFF", 16) = Ok(4294967295) — way above range
+        // &#x200000; = 2097152 (> U+10FFFF): html_escape leaves verbatim (char::try_from
+        // fails for above-Unicode); regex matches; cp = 0x200000 ∉ surrogate range → fallback.
+        assert_eq!(decode_html_entities("&#x200000;"), "&#x200000;", "ARM-B: above-Unicode verbatim");
+        // &#xFFFFFFFF; = u32::MAX: html_escape verbatim; regex matches; cp ∉ surrogate range.
         assert_eq!(decode_html_entities("&#xFFFFFFFF;"), "&#xFFFFFFFF;", "ARM-B: u32::MAX verbatim");
 
-        // ARM-C: Err (u32 overflow) → verbatim (same `_` arm as B)
-        // u32::from_str_radix("FFFFFFFFF", 16) → PosOverflow error
+        // ARM-C: Err (u32 overflow) → verbatim (same `_` arm as ARM-B)
+        // u32::from_str_radix("FFFFFFFFF", 16) → Err(PosOverflow)
         assert_eq!(decode_html_entities("&#xFFFFFFFFF;"), "&#xFFFFFFFFF;", "ARM-C: overflow verbatim");
     }
 
@@ -2285,7 +2292,12 @@ fn main() {}
     /// `Err(PosOverflow)`, and the `_ =>` fallback arm must return the entity
     /// verbatim without panicking.
     ///
-    /// Note: html_escape 0.2.x also leaves this verbatim (char::try_from fails).
+    /// Note: html_escape 0.2.x also leaves these verbatim — its decimal parse
+    /// step rejects values that exceed u32::MAX before `char::try_from` is reached.
+    ///
+    /// See also `decode_html_entities_above_unicode_decimal_preserved_verbatim` (S36)
+    /// which covers above-Unicode but parse-Ok values (e.g. 1114112).  This test
+    /// covers parse-Err (overflow).
     #[test]
     fn decode_html_entities_decimal_u32_overflow_preserved_verbatim() {
         // 2^32 = 4294967296 — first value that overflows u32

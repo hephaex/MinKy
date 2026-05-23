@@ -77,12 +77,12 @@ redis = { version = "0.28", features = ["tokio-comp", "connection-manager"] }
 # Text Processing
 regex = "1.11"
 pulldown-cmark = "0.9"
-scraper = "0.20"  # html5ever surrogate-NCR behavior pinned in S37-04 tests (parsing.rs)
+scraper = "0.20"  # bumps must re-verify html5ever surrogate-NCR behavior — see S37-04/S38-03 tests in pipeline/stages/parsing.rs
 url = "2.5"
 futures-util = "0.3.32"
 tokio-stream = "0.1.18"
 async-stream = "0.3.6"
-html-escape = "0.2"
+html-escape = "0.2"  # bumps must re-verify peel-once + surrogate-preservation — see S37/S38 tests in pipeline/stages/parsing.rs
 
 # Syntax Highlighting
 syntect = "5"
