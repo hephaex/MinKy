@@ -2639,7 +2639,7 @@ fn main() {}
     ///
     /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
     #[test]
-    fn scraper_link_href_amp_escaped_surrogate_produces_literal() {
+    fn scraper_link_href_hex_amp_escaped_surrogate_produces_literal() {
         let html = r#"<html><body><a href="&amp;#xD800;">text</a></body></html>"#;
         let (_, _, links) = scraper_extract_all(html);
         assert_eq!(links.len(), 1);
@@ -2685,8 +2685,8 @@ fn main() {}
 
     /// `&amp;#55296;` in href follows peel-once: html5ever decodes `&amp;` → `&`,
     /// leaving `#55296;` without a leading `&` — not an entity — so `Link::url`
-    /// is the literal string `"&#55296;"`.  Symmetric with the hex form (S41-01c:
-    /// `&amp;#xD800;` in href → `"&#xD800;"`) and with the heading text path
+    /// is the literal string `"&#55296;"`.  Symmetric with the hex form
+    /// (`scraper_link_href_hex_amp_escaped_surrogate_produces_literal`) and with the heading text path
     /// (S39-02a: `&amp;#55296;` in `<h1>` → `"&#55296;"`).
     ///
     /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
@@ -2706,6 +2706,60 @@ fn main() {}
         let (_, headings, _) = scraper_extract_all(heading_html);
         assert_eq!(headings[0].text, "&#55296;",
             "heading text: &amp;#55296; → literal &#55296; (S39-02a)");
+        assert_eq!(links[0].url, headings[0].text,
+            "href attr and heading text: symmetric peel-once behavior (AGREE)");
+    }
+
+    // ── S43-01: Decimal DFFF direct in href ──────────────────────────────────
+
+    /// `&#57343;` (decimal 57343 = 0xDFFF) is the upper endpoint of the surrogate
+    /// range in decimal notation.  html5ever replaces it with U+FFFD in the href
+    /// attribute, completing the {hex,decimal} × {lower,upper} direct surrogate
+    /// matrix for href:
+    ///   - `&#xD800;` hex lower: U+FFFD (S41-01a)
+    ///   - `&#55296;` decimal lower: U+FFFD (S41-01b)
+    ///   - `&#xDFFF;` hex upper: U+FFFD (S42-01)
+    ///   - `&#57343;` decimal upper: U+FFFD (S43-01, this test)
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
+    #[test]
+    fn scraper_link_href_decimal_upper_surrogate_boundary_produces_fffd() {
+        let html = r#"<html><body><a href="&#57343;">text</a></body></html>"#;
+        let (_, _, links) = scraper_extract_all(html);
+        assert_eq!(links.len(), 1, "expected one link");
+        assert_eq!(
+            links[0].url,
+            "\u{FFFD}",
+            "direct &#57343; in href: decimal upper-boundary surrogate → U+FFFD via html5ever"
+        );
+    }
+
+    // ── S43-02: Hex amp-escaped upper surrogate in href — &amp;#xDFFF; ───────
+
+    /// `&amp;#xDFFF;` in href follows peel-once: html5ever decodes `&amp;` → `&`,
+    /// leaving `#xDFFF;` without a leading `&` — not an entity — so `Link::url`
+    /// is the literal string `"&#xDFFF;"`.  Symmetric with `&amp;#xD800;` in href
+    /// (`scraper_link_href_hex_amp_escaped_surrogate_produces_literal`, lower hex)
+    /// and with `&amp;#xDFFF;` in heading text (S39-02b DIVERGE test: heading
+    /// path produces literal `"&#xDFFF;"`).
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
+    #[test]
+    fn scraper_link_href_hex_amp_escaped_upper_surrogate_produces_literal() {
+        let html = r#"<html><body><a href="&amp;#xDFFF;">text</a></body></html>"#;
+        let (_, _, links) = scraper_extract_all(html);
+        assert_eq!(links.len(), 1);
+        assert_eq!(
+            links[0].url,
+            "&#xDFFF;",
+            "&amp;#xDFFF; in href: peel-once leaves literal &#xDFFF; (NOT U+DFFF char)"
+        );
+
+        // AGREE with heading text for the same input form (S39-02b)
+        let heading_html = r#"<html><body><h1>&amp;#xDFFF;</h1></body></html>"#;
+        let (_, headings, _) = scraper_extract_all(heading_html);
+        assert_eq!(headings[0].text, "&#xDFFF;",
+            "heading text: &amp;#xDFFF; → literal &#xDFFF; (S39-02b)");
         assert_eq!(links[0].url, headings[0].text,
             "href attr and heading text: symmetric peel-once behavior (AGREE)");
     }
