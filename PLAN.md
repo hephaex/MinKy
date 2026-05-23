@@ -617,12 +617,22 @@
 - 결과: **1,830 pass / 0 fail / 0 clippy warnings**
 - 커밋: `4694d71f` (S41-01~02), `3ac9d0fa` (review fixes)
 
-## Sprint 42 로드맵
+## Sprint 42 완료 (2026-05-23) — Upper-Surrogate Boundary href, Decimal Amp-Escaped href, Cross-Path Matrix
 
-- P1: `&#xDFFF;` in href attribute (upper-surrogate boundary, mirror S34-04 for href path)
-- P2: `&amp;#55296;` in href attribute (decimal amp-escaped, S41-01c decimal symmetric)
-- P3: Implementation — vault watcher 파이프라인 연동 smoke test 또는 fastembed local model integration test
-- P4: cross-path matrix doc in `scraper_extract_all` (tabular summary symmetric with S41-02 decode_html_entities table)
+- [x] S42-01: `&#xDFFF;` in href → U+FFFD (upper-surrogate boundary, symmetric with S41-01a lower bound)
+- [x] S42-02: `&amp;#55296;` in href → "&#55296;" literal (decimal amp-escaped, AGREE with heading text S39-02a)
+- [x] S42-03: 4-row surrogate table in `scraper_extract_all` docstring + notation note
+- [x] Review M1: S42-01 docstring cross-ref corrected (S39-02b → correct existing test)
+- [x] Review L1: matrix notation note added (rows 3-4 intentional hex/decimal mix)
+- 결과: **1,832 pass / 0 fail / 0 clippy warnings**
+- 커밋: `2ca5f50f` (S42-01~03), `f97b6bcd` (review M1/L1)
+
+## Sprint 43 로드맵
+
+- P1: `&#57343;` (decimal DFFF) in href — {hex,decimal}×{direct,amp}×{lower,upper} 8-corner 완성
+- P2: `&amp;#xDFFF;` in href — hex amp-escaped upper boundary (S41-01c upper symmetric)
+- P3: S41-01c rename → `scraper_link_href_hex_amp_escaped_surrogate_produces_literal`
+- P4: Implementation — vault watcher 파이프라인 연동 또는 fastembed local embedding smoke test
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 

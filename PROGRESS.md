@@ -5,7 +5,27 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-23) - Sprint 41: href Attribute Surrogate, Behavior Table
+## 현재 진행 상황 (2026-05-23) - Sprint 42: Upper-Surrogate href, Decimal Amp-Escaped, Matrix
+
+### Sprint 42: href Attribute Coverage Completion (2026-05-23)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `&#xDFFF;` in href → U+FFFD (S42-01) | parsing.rs | upper-surrogate boundary, symmetric with S41-01a (D800 lower) |
+| `&amp;#55296;` in href → "&#55296;" literal (S42-02) | parsing.rs | decimal amp-escaped, AGREE with heading text S39-02a |
+| 4-row matrix in `scraper_extract_all` docstring (S42-03) | parsing.rs | hex/decimal × direct/amp-escaped table + notation note |
+| S42-01 cross-ref 교정 (review M1) | parsing.rs | S39-02b(존재안함) → 실제 decimal upper-boundary 테스트명 |
+| matrix 표기 혼용 note 추가 (review L1) | parsing.rs | rows 3-4 의도적 hex/decimal 혼용 설명 |
+
+테스트: **1,832 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `2ca5f50f` (S42-01~03), `f97b6bcd` (review M1/L1)
+리뷰: `~/.claude/references/2026-05-23_sprint42_upper_boundary_decimal_amp_matrix.md`
+
+**현재 상태**: href attribute surrogate NCR coverage 5-corner 완성 (hex direct D800/DFFF, decimal direct D800, hex amp-escaped D800, decimal amp-escaped D800). 8-corner 완성까지 decimal DFFF + hex/decimal amp-escaped upper boundary 남음.
+
+---
+
+## 이전 진행 상황 (2026-05-23) - Sprint 41: href Attribute Surrogate, Behavior Table
 
 ### Sprint 41: html5ever Attribute Path Coverage (2026-05-23)
 
