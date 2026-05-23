@@ -2324,8 +2324,10 @@ fn main() {}
 
     // ── S39-01: Decimal regex match-arm structural coverage ──────────────────
 
-    /// Decimal counterpart of S38-03: explicitly annotates which arm of the
-    /// decimal surrogate `match` each case exercises.
+    /// Decimal counterpart of S38-03 (`decode_html_entities_hex_regex_match_arm_coverage`):
+    /// explicitly annotates which arm of the decimal surrogate `match` each case
+    /// exercises.  ARM-B uses `&#2097152;` (decimal 0x200000) to mirror S38-03's
+    /// `&#x200000;`.
     ///
     /// ```text
     /// match caps[1].parse::<u32>() {
@@ -2403,6 +2405,10 @@ fn main() {}
             "html5ever must preserve &amp;#xDFFF; as literal text");
         assert_eq!(decode_html_entities("&amp;#xDFFF;"), "\u{FFFD}",
             "body path must produce U+FFFD for &amp;#xDFFF;");
+        assert_ne!(
+            headings[0].text, decode_html_entities("&amp;#xDFFF;"),
+            "divergence at parsing.rs:~220-223 must be preserved for upper-bound surrogate"
+        );
     }
 
     /// Non-surrogate case: `&amp;#xD7FF;` (U+D7FF, just below surrogate range).
