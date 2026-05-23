@@ -588,12 +588,23 @@
 - 결과: **1,819 pass / 0 fail / 0 clippy warnings**
 - 커밋: `5b1d6037` (S38-01~04), `0bcf0f8c` (review H1/M1/M2)
 
-## Sprint 39 로드맵
+## Sprint 39 완료 (2026-05-23) — Decimal Match-Arm, Divergence Table, Library Contract, Version Pins
 
-- P1: decimal regex match-arm structural test — S38-03 decimal 대칭 (ARM-A: &#55296;, ARM-B: &#2097152; = 0x200000, ARM-C: &#4294967296;)
-- P2: cross-path divergence 확장 table — `&amp;#55296;` decimal / `&amp;#xDFFF;` upper bound / `&amp;#xD7FF;` non-surrogate (heading=char vs body=?)
-- P3: html_escape behavior contract test — peel-once + named entity + valid-scalar + surrogate + above-Unicode 계약 하나의 함수로 집약
-- P4: html-escape version annotation — S37/S38 테스트 docstring에 html-escape 버전 참조 추가 (scraper S37-04 방식)
+- [x] S39-01: decimal regex ARM-A/B/C structural (&#55296;/&#57343; → U+FFFD; &#2097152;/&#4294967295; → verbatim; &#4294967296; → verbatim)
+- [x] S39-02: cross-path divergence table — `&amp;#55296;` decimal DIVERGE, `&amp;#xDFFF;` hex DIVERGE, `&amp;#xD7FF;` non-surrogate AGREE
+- [x] S39-03: html_escape library behavior contract (5 contracts: peel-once, named, valid-scalar, surrogate-verbatim, above-Unicode-verbatim)
+- [x] S39-04: html-escape version annotations on S37-01 (hex+decimal) and S38-01 docstrings
+- [x] Review LOW-3: assert_ne! added to S39-02b for consistency
+- [x] Review LOW-1: S39-01 docstring cross-references S38-03
+- 결과: **1,824 pass / 0 fail / 0 clippy warnings**
+- 커밋: `df4cd4a5` (S39-01~04), `adb33b09` (review LOW-1/LOW-3)
+
+## Sprint 40 로드맵
+
+- P1: Cargo.toml html-escape bump-warning comment 확장 (S37/S38 → S37/S38/S39)
+- P2: ARM-A mid-range surrogate coverage — `&#xDA00;` / `&#56320;` (U+DC00) non-boundary in-range pin
+- P3: `&amp;#xE000;` above-surrogate AGREE corner — S39-02c 대칭 (D7FF 아래 AGREE + E000 위 AGREE)
+- P4: fast-path identity assertions — `""`, `"hello"`, `"no & here"` (result.contains("&#") = false 경로 pin)
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 

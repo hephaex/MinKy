@@ -5,7 +5,28 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-23) - Sprint 38: Unsemicoloned Chain, Match-Arm Coverage, Decimal Overflow
+## 현재 진행 상황 (2026-05-23) - Sprint 39: Decimal Match-Arm, Divergence Table, Library Contract
+
+### Sprint 39: Coverage Completeness + Library Contract (2026-05-23)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| decimal regex ARM-A/B/C structural (S39-01) | parsing.rs | decimal ↔ hex S38-03 symmetric; ARM-B: &#2097152; (above-Unicode, parse-Ok, not surrogate) |
+| cross-path divergence table 3종 (S39-02) | parsing.rs | decimal DIVERGE + hex DFFF DIVERGE + D7FF AGREE. AGREE: both produce "&#xD7FF;" literal |
+| html_escape 5-contract test (S39-03) | parsing.rs | peel-once/named/valid-scalar/surrogate-verbatim/above-Unicode-verbatim 직접 pin |
+| html-escape version annotations (S39-04) | parsing.rs | S37-01 + S38-01 docstrings에 "Verified against html-escape 0.2.x" 추가 |
+| S39-02b assert_ne! 추가 (review LOW-3) | parsing.rs | hex DFFF divergence test에 diverge relationship lock |
+| S39-01 cross-ref note (review LOW-1) | parsing.rs | S38-03 hex counterpart 명시, 2097152=0x200000 대칭 |
+
+테스트: **1,824 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `df4cd4a5` (S39-01~04), `adb33b09` (review LOW-1/LOW-3)
+리뷰: `~/.claude/references/2026-05-23_sprint39_decimal_match_arm_divergence_contract.md`
+
+**현재 상태**: {hex,decimal} × {surrogate,non-surrogate} divergence 4-corner 완성. html_escape library behavior 계약 독립 pin. ARM 구조적 커버리지 hex+decimal 양쪽 완성.
+
+---
+
+## 이전 진행 상황 (2026-05-23) - Sprint 38: Unsemicoloned Chain, Match-Arm Coverage, Decimal Overflow
 
 ### Sprint 38: Structural Coverage + Upgrade Safety (2026-05-23)
 
