@@ -608,12 +608,21 @@
 - 결과: **1,827 pass / 0 fail / 0 clippy warnings**
 - 커밋: `e8b9c7cd` (S40-01~04)
 
-## Sprint 41 로드맵
+## Sprint 41 완료 (2026-05-23) — Surrogate NCR in href Attribute + Behavior Table
 
-- P1: Implementation pivot — fastembed 로컬 임베딩 재활성화 또는 pgvector 마이그레이션 검증 (Phase 1 checklist)
-- P2: entity-in-attribute test — `<a href="&#xD800;">` → heading path behavior (attribute vs text-content divergence)
-- P3: proptest invariant — surrogate NCR (any range) never survives `decode_html_entities` as surrogate char
-- P4: behavior table in `decode_html_entities` docstring — 3-row summary (direct NCR / &amp;-escaped / above-Unicode)
+- [x] S41-01: html5ever attribute path — `&#xD800;` in href → U+FFFD (hex+decimal); `&amp;#xD800;` in href → "&#xD800;" literal (AGREE with heading text)
+- [x] S41-02: `decode_html_entities` docstring behavior table (3 rows: direct/amp-escaped/above-Unicode)
+- [x] Review H1: table row 2 corrected (`&amp;#xD800;` → `"\u{FFFD}"`, not literal — the literal is the html5ever scraper path)
+- [x] Review L1/L2: S41-01c docstring phrasing + rustfmt formatting
+- 결과: **1,830 pass / 0 fail / 0 clippy warnings**
+- 커밋: `4694d71f` (S41-01~02), `3ac9d0fa` (review fixes)
+
+## Sprint 42 로드맵
+
+- P1: `&#xDFFF;` in href attribute (upper-surrogate boundary, mirror S34-04 for href path)
+- P2: `&amp;#55296;` in href attribute (decimal amp-escaped, S41-01c decimal symmetric)
+- P3: Implementation — vault watcher 파이프라인 연동 smoke test 또는 fastembed local model integration test
+- P4: cross-path matrix doc in `scraper_extract_all` (tabular summary symmetric with S41-02 decode_html_entities table)
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 

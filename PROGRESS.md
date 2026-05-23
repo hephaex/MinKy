@@ -5,7 +5,28 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-23) - Sprint 40: Mid-Range Surrogate, E000 AGREE, Fast-Path Identity
+## 현재 진행 상황 (2026-05-23) - Sprint 41: href Attribute Surrogate, Behavior Table
+
+### Sprint 41: html5ever Attribute Path Coverage (2026-05-23)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `&#xD800;` in href → U+FFFD (S41-01a) | parsing.rs | html5ever 속성값에서도 surrogate NCR → U+FFFD (text content 동일) |
+| `&#55296;` in href → U+FFFD (S41-01b) | parsing.rs | decimal surrogate in href, symmetric with hex |
+| `&amp;#xD800;` in href → `"&#xD800;"` (S41-01c) | parsing.rs | peel-once in attr → literal, AGREE with heading text path |
+| `decode_html_entities` 3-row behavior table (S41-02) | parsing.rs | direct/amp-escaped/above-Unicode 결과 일람 |
+| table row 2 정정 (review H1) | parsing.rs | `&amp;#xD800;` → `"\u{FFFD}"` (함수 자체 동작; literal은 html5ever 경로) |
+| docstring 표현 + formatting (review L1/L2) | parsing.rs | S37-04 diverge 설명 명확화, rustfmt 스타일 |
+
+테스트: **1,830 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `4694d71f` (S41-01~02), `3ac9d0fa` (review H1/L1/L2)
+리뷰: `~/.claude/references/2026-05-23_sprint41_href_attribute_surrogate_behavior_table.md`
+
+**현재 상태**: html5ever 속성값 경로 pin 완성. {direct NCR, amp-escaped} × {text content, href attribute} 4-corner matrix 완성. decode_html_entities docstring에 정확한 동작 테이블 추가.
+
+---
+
+## 이전 진행 상황 (2026-05-23) - Sprint 40: Mid-Range Surrogate, E000 AGREE, Fast-Path Identity
 
 ### Sprint 40: Coverage Completeness Final Round (2026-05-23)
 
