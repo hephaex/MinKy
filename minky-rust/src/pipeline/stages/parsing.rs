@@ -1930,27 +1930,29 @@ fn main() {}
     // ── S36-01: Above-Unicode codepoints (> U+10FFFF) ────────────────────────
 
     /// `&#x110000;` (hex) and `&#1114112;` (decimal) are one past U+10FFFF, the
-    /// highest valid Unicode scalar value.  `char::from_u32(1114112)` returns `None`.
-    /// html_escape replaces such codepoints with U+FFFD per the HTML5 spec.
-    /// If html_escape leaves them verbatim, neither NCR is in the surrogate range
-    /// (0xD800–0xDFFF), so the surrogate post-processing also leaves them verbatim.
-    /// Either way the function must not panic; the contract is verbatim-or-FFFD.
+    /// highest valid Unicode scalar value.  `char::try_from(1114112)` returns `Err`.
+    /// Under `html_escape 0.2.13` the state machine requires a successful
+    /// `char::try_from` conversion; on failure it preserves the entity verbatim
+    /// (does NOT produce U+FFFD).  The surrogate post-processing also leaves them
+    /// untouched (1114112 is not in 0xD800–0xDFFF).  Both passes converge to
+    /// verbatim, pinned here.  If `html_escape` ever adopts the HTML5-spec
+    /// replacement-character behaviour (U+FFFD for > U+10FFFF), update these tests.
     #[test]
-    fn decode_html_entities_above_unicode_hex_not_panic() {
+    fn decode_html_entities_above_unicode_hex_preserved_verbatim() {
         let result = decode_html_entities("&#x110000;");
-        assert!(
-            result.contains("&#x110000;") || result.contains('\u{FFFD}'),
-            "&#x110000; must produce verbatim leak or U+FFFD; got {:?}",
+        assert_eq!(
+            result, "&#x110000;",
+            "&#x110000; must be preserved verbatim (html_escape 0.2.x): got {:?}",
             result
         );
     }
 
     #[test]
-    fn decode_html_entities_above_unicode_decimal_not_panic() {
+    fn decode_html_entities_above_unicode_decimal_preserved_verbatim() {
         let result = decode_html_entities("&#1114112;");
-        assert!(
-            result.contains("&#1114112;") || result.contains('\u{FFFD}'),
-            "&#1114112; must produce verbatim leak or U+FFFD; got {:?}",
+        assert_eq!(
+            result, "&#1114112;",
+            "&#1114112; must be preserved verbatim (html_escape 0.2.x): got {:?}",
             result
         );
     }
@@ -1992,18 +1994,23 @@ fn main() {}
 
     // ── S36-04: Idempotency of decode_html_entities ───────────────────────────
 
-    /// Running `decode_html_entities` twice must produce the same result as
-    /// running it once.  The output (U+FFFD chars, decoded Unicode, plain text)
-    /// contains no entities that would be re-processed on a second call.
+    /// For single-decoded outputs (surrogate → U+FFFD, NCR → char, U+FFFD passthrough,
+    /// plain text), running `decode_html_entities` a second time returns the same string.
+    ///
+    /// Note: this property does NOT hold for chained `&amp;` forms — e.g.
+    /// `"&amp;amp;"` decodes to `"&amp;"` on the first pass and `"&"` on the second.
+    /// See `decode_html_entities_amp_chain_peels_one_level` for that contract.
+    /// Production call sites invoke this function exactly once per source string, so
+    /// chained forms do not arise.
     #[test]
-    fn decode_html_entities_is_idempotent() {
+    fn decode_html_entities_is_idempotent_for_single_decoded_outputs() {
         let cases = [
-            "&#xD800;",      // surrogate → U+FFFD on first pass
-            "&#55296;",      // surrogate decimal → U+FFFD on first pass
-            "hello &amp; world", // named entity → '&' on first pass
-            "&#128512;",     // astral plane → U+1F600 on first pass
-            "\u{FFFD}",      // already U+FFFD — must survive second pass unchanged
-            "plain text",    // no entities
+            "&#xD800;",          // surrogate → U+FFFD on first pass
+            "&#55296;",          // surrogate decimal → U+FFFD on first pass
+            "hello &amp; world", // named entity &amp; → '&' followed by space, not re-parseable
+            "&#128512;",         // astral plane → U+1F600 on first pass
+            "\u{FFFD}",          // already U+FFFD — must survive second pass unchanged
+            "plain text",        // no entities
         ];
         for input in &cases {
             let once = decode_html_entities(input);
@@ -2015,6 +2022,16 @@ fn main() {}
                 input, once, twice
             );
         }
+    }
+
+    /// Pins the peel-one-level contract for chained `&amp;` forms.
+    /// This is intentionally NOT idempotent: each call peels one layer of encoding.
+    /// Production callers invoke this function once per source string, so the
+    /// non-idempotent chain case does not arise in practice.
+    #[test]
+    fn decode_html_entities_amp_chain_peels_one_level() {
+        assert_eq!(decode_html_entities("&amp;amp;"), "&amp;");
+        assert_eq!(decode_html_entities("&amp;"), "&");
     }
 
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
