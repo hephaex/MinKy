@@ -577,12 +577,23 @@
 - 결과: **1,816 pass / 0 fail / 0 clippy warnings**
 - 커밋: `563235ac` (S37-01~04), `406e2643` (review M1/M2)
 
-## Sprint 38 로드맵
+## Sprint 38 완료 (2026-05-23) — Unsemicoloned Chain, Match-Arm Coverage, Decimal Overflow, Version Pins
 
-- P1: `&amp;#xD800` (no semicolon) end-to-end — `&amp;` 소비 후 `&#xD800` 남음 (세미콜론 없음) → regex 매칭 안 됨 → verbatim + no-panic pin
-- P2: html5ever version bump guard — `Cargo.toml`의 `scraper` 의존성에 cross-reference 코멘트 추가 (S37-04 버전 어노테이션 보완)
-- P3: match-arm structural test — hex regex `match` 각 arm (Ok(surrogate) / Ok(non-surrogate) / Err(overflow)) 개별 pin 테이블
-- P4: decimal NCR 에도 overflow 확인 — `&#4294967296;` (>u32::MAX decimal) → verbatim pin (S37-03 decimal 대칭)
+- [x] S38-01: `&amp;#xD800` (no `;`) verbatim — peel + regex entered but no match (`;` required); no panic. Decimal variant too.
+- [x] S38-02: Cargo.toml scraper upgrade-safety comment ("re-verify before bumping"); html-escape comment added
+- [x] S38-03: hex regex match-arm structural — ARM-A (Ok, surrogate), ARM-B (Ok, above-Unicode `&#x200000;`), ARM-C (Err overflow)
+- [x] S38-04: decimal u32 overflow `&#4294967296;` / `&#99999999999;` → verbatim (S37-03 decimal symmetric)
+- [x] Review H1: ARM-B labels fixed — D7FF/E000 replaced with `&#x200000;` (genuine above-Unicode, html_escape verbatim)
+- [x] Review M1/M2: S38-01 + S38-04 docstring accuracy fixed
+- 결과: **1,819 pass / 0 fail / 0 clippy warnings**
+- 커밋: `5b1d6037` (S38-01~04), `0bcf0f8c` (review H1/M1/M2)
+
+## Sprint 39 로드맵
+
+- P1: decimal regex match-arm structural test — S38-03 decimal 대칭 (ARM-A: &#55296;, ARM-B: &#2097152; = 0x200000, ARM-C: &#4294967296;)
+- P2: cross-path divergence 확장 table — `&amp;#55296;` decimal / `&amp;#xDFFF;` upper bound / `&amp;#xD7FF;` non-surrogate (heading=char vs body=?)
+- P3: html_escape behavior contract test — peel-once + named entity + valid-scalar + surrogate + above-Unicode 계약 하나의 함수로 집약
+- P4: html-escape version annotation — S37/S38 테스트 docstring에 html-escape 버전 참조 추가 (scraper S37-04 방식)
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 

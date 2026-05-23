@@ -5,7 +5,28 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-23) - Sprint 37: &amp;#xD800; End-to-End, Mixed-Case Digit, Hex Overflow, Cross-Path
+## 현재 진행 상황 (2026-05-23) - Sprint 38: Unsemicoloned Chain, Match-Arm Coverage, Decimal Overflow
+
+### Sprint 38: Structural Coverage + Upgrade Safety (2026-05-23)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `&amp;#xD800` / `&amp;#55296` (no `;`) verbatim (S38-01) | parsing.rs | regex block entered, replace_all finds no match (`;` required) |
+| scraper + html-escape upgrade-safety comments (S38-02) | Cargo.toml | "re-verify before bumping" + test cross-ref |
+| hex regex match-arm structural ARM-A/B/C (S38-03) | parsing.rs | ARM-B: `&#x200000;` (above-Unicode, html_escape verbatim, regex-Ok-non-surrogate) |
+| decimal u32 overflow `&#4294967296;` (S38-04) | parsing.rs | S37-03 decimal symmetric: parse Err path |
+| ARM-B label fix (review H1) | parsing.rs | D7FF/E000 replaced with `&#x200000;` — genuine ARM-B, not html_escape path |
+| S38-01/S38-04 docstring accuracy (review M1/M2) | parsing.rs | clarified regex-entered-but-no-match + html_escape parse step vs char::try_from |
+
+테스트: **1,819 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `5b1d6037` (S38-01~04), `0bcf0f8c` (review H1/M1/M2)
+리뷰: `~/.claude/references/2026-05-23_sprint38_unsemicoloned_match_arm_decimal_overflow.md`
+
+**현재 상태**: hex regex의 모든 실행 경로(ARM-A/B/C)가 구조적으로 pin됨. html_escape upstream 처리 vs regex 처리 경계가 명확히 문서화됨.
+
+---
+
+## 이전 진행 상황 (2026-05-23) - Sprint 37: &amp;#xD800; End-to-End, Mixed-Case Digit, Hex Overflow, Cross-Path
 
 ### Sprint 37: Contract Completeness Round (2026-05-23)
 
@@ -20,7 +41,7 @@
 
 테스트: **1,816 Rust pass / 0 fail / 0 clippy warnings**
 커밋: `563235ac` (S37-01~04), `406e2643` (review M1/M2)
-리뷰: `~/.claude/references/2026-05-23_sprint37_amp_escaped_mixed_case_overflow_cross_path.md`
+리뷰: `~/.claude/references/2026-05-23_sprint38_unsemicoloned_match_arm_decimal_overflow.md`
 
 **현재 상태**: decode_html_entities ↔ scraper_extract_all 교차 경로 계약 완성. &amp; 이스케이프 체인, 대소문자 혼합 hex digit, u32 overflow, 경로 비대칭 모두 명시적 테스트로 문서화됨.
 
