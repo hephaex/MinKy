@@ -1860,17 +1860,14 @@ fn main() {}
     /// Verifies that characters adjacent to an unsemicoloned NCR (`x&#xD800y`)
     /// survive the function unchanged.  A regression in the regex (e.g. a
     /// greedy pattern) could accidentally consume neighbouring bytes.
+    /// The union assertion pins both the surrounding bytes and the middle:
+    /// either the NCR leaks verbatim or only the middle is replaced with U+FFFD.
     #[test]
     fn decode_html_entities_unsemicoloned_ncr_surrounding_chars_survive() {
         let result = decode_html_entities("x&#xD800y");
         assert!(
-            result.starts_with('x'),
-            "character before unsemicoloned NCR must survive: got {:?}",
-            result
-        );
-        assert!(
-            result.ends_with('y'),
-            "character after unsemicoloned NCR must survive: got {:?}",
+            result == "x&#xD800y" || result == "x\u{FFFD}y",
+            "unsemicoloned NCR: expected verbatim leak or middle-only U+FFFD; got {:?}",
             result
         );
     }
@@ -1928,6 +1925,96 @@ fn main() {}
             "astral-plane NCR must not produce U+FFFD: got {:?}",
             result
         );
+    }
+
+    // ── S36-01: Above-Unicode codepoints (> U+10FFFF) ────────────────────────
+
+    /// `&#x110000;` (hex) and `&#1114112;` (decimal) are one past U+10FFFF, the
+    /// highest valid Unicode scalar value.  `char::from_u32(1114112)` returns `None`.
+    /// html_escape replaces such codepoints with U+FFFD per the HTML5 spec.
+    /// If html_escape leaves them verbatim, neither NCR is in the surrogate range
+    /// (0xD800–0xDFFF), so the surrogate post-processing also leaves them verbatim.
+    /// Either way the function must not panic; the contract is verbatim-or-FFFD.
+    #[test]
+    fn decode_html_entities_above_unicode_hex_not_panic() {
+        let result = decode_html_entities("&#x110000;");
+        assert!(
+            result.contains("&#x110000;") || result.contains('\u{FFFD}'),
+            "&#x110000; must produce verbatim leak or U+FFFD; got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn decode_html_entities_above_unicode_decimal_not_panic() {
+        let result = decode_html_entities("&#1114112;");
+        assert!(
+            result.contains("&#1114112;") || result.contains('\u{FFFD}'),
+            "&#1114112; must produce verbatim leak or U+FFFD; got {:?}",
+            result
+        );
+    }
+
+    // ── S36-02: Case sensitivity of hex NCR prefix ────────────────────────────
+
+    /// The hex regex uses `(?i)`, making the `x` in `&#x...;` case-insensitive.
+    /// `&#xd800;` (lowercase digits and x) and `&#XD800;` (uppercase X) must
+    /// both produce U+FFFD, proving the `(?i)` flag is load-bearing.
+    #[test]
+    fn decode_html_entities_lowercase_hex_surrogate_replaced_with_fffd() {
+        let result = decode_html_entities("&#xd800;");
+        assert!(
+            result.contains('\u{FFFD}'),
+            "&#xd800; (lowercase) must be replaced with U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            !result.contains("&#xd800;"),
+            "&#xd800; must not appear verbatim after replacement: got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn decode_html_entities_uppercase_x_surrogate_replaced_with_fffd() {
+        let result = decode_html_entities("&#XD800;");
+        assert!(
+            result.contains('\u{FFFD}'),
+            "&#XD800; (uppercase X) must be replaced with U+FFFD: got {:?}",
+            result
+        );
+        assert!(
+            !result.contains("&#XD800;"),
+            "&#XD800; must not appear verbatim after replacement: got {:?}",
+            result
+        );
+    }
+
+    // ── S36-04: Idempotency of decode_html_entities ───────────────────────────
+
+    /// Running `decode_html_entities` twice must produce the same result as
+    /// running it once.  The output (U+FFFD chars, decoded Unicode, plain text)
+    /// contains no entities that would be re-processed on a second call.
+    #[test]
+    fn decode_html_entities_is_idempotent() {
+        let cases = [
+            "&#xD800;",      // surrogate → U+FFFD on first pass
+            "&#55296;",      // surrogate decimal → U+FFFD on first pass
+            "hello &amp; world", // named entity → '&' on first pass
+            "&#128512;",     // astral plane → U+1F600 on first pass
+            "\u{FFFD}",      // already U+FFFD — must survive second pass unchanged
+            "plain text",    // no entities
+        ];
+        for input in &cases {
+            let once = decode_html_entities(input);
+            let twice = decode_html_entities(&once);
+            assert_eq!(
+                once, twice,
+                "decode_html_entities must be idempotent for {:?}: \
+                 first pass={:?}, second pass={:?}",
+                input, once, twice
+            );
+        }
     }
 
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
