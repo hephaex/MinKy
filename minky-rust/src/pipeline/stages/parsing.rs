@@ -224,6 +224,12 @@ fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) 
 ///
 /// Shared by the plain-text body and code-block extraction paths to ensure
 /// consistent decoding without html5ever's tree-restructuring side effects.
+///
+/// | Input form                        | Result                            |
+/// |-----------------------------------|-----------------------------------|
+/// | `&#xD800;` (direct surrogate)     | `"\u{FFFD}"` (replacement char)   |
+/// | `&amp;#xD800;` (amp-escaped)      | `"&#xD800;"` (literal string)     |
+/// | `&#x200000;` (above Unicode)      | `"&#x200000;"` (verbatim)         |
 fn decode_html_entities(s: &str) -> String {
     let decoded = html_escape::decode_html_entities(s);
 
@@ -2568,6 +2574,77 @@ fn main() {}
             decode_html_entities("&amp;T"),
             "&T",
             "&amp;T → &T via html_escape; no &#  → regex block skipped"
+        );
+    }
+
+    // ── S41-01: Surrogate NCR in `href` attribute — html5ever attribute path ──
+
+    /// html5ever processes character references in attribute values by the same
+    /// rules as in text content.  A direct surrogate NCR in an `href` attribute
+    /// (`&#xD800;`) is a parse error; html5ever replaces it with U+FFFD, so
+    /// `Link::url` equals `"\u{FFFD}"`.  This is symmetric with the heading
+    /// text path (S37-04).
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
+    #[test]
+    fn scraper_link_href_direct_surrogate_ncr_produces_fffd() {
+        let html = r#"<html><body><a href="&#xD800;">text</a></body></html>"#;
+        let (_, _, links) = scraper_extract_all(html);
+        assert_eq!(links.len(), 1, "expected one link");
+        assert_eq!(
+            links[0].url,
+            "\u{FFFD}",
+            "direct &#xD800; in href: html5ever replaces surrogate NCR in attribute with U+FFFD"
+        );
+        assert_eq!(links[0].text, "text", "link text must be unaffected");
+    }
+
+    /// Decimal surrogate NCR in href attribute (`&#55296;` = U+D800).
+    /// html5ever attribute path is symmetric with the hex form (S41-01a).
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
+    #[test]
+    fn scraper_link_href_decimal_surrogate_ncr_produces_fffd() {
+        let html = r#"<html><body><a href="&#55296;">text</a></body></html>"#;
+        let (_, _, links) = scraper_extract_all(html);
+        assert_eq!(links.len(), 1);
+        assert_eq!(
+            links[0].url,
+            "\u{FFFD}",
+            "direct &#55296; in href: decimal surrogate NCR → U+FFFD via html5ever attribute path"
+        );
+    }
+
+    /// `&amp;#xD800;` in href follows peel-once: html5ever decodes `&amp;` → `&`,
+    /// leaving `#xD800;` without a leading `&` — not an entity — so `Link::url`
+    /// is the literal string `"&#xD800;"`.  This is symmetric with heading text
+    /// extraction (S37-04 diverge): both the href attribute path and the heading
+    /// text path produce the same literal string for `&amp;`-escaped forms (AGREE).
+    ///
+    /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
+    #[test]
+    fn scraper_link_href_amp_escaped_surrogate_produces_literal() {
+        let html = r#"<html><body><a href="&amp;#xD800;">text</a></body></html>"#;
+        let (_, _, links) = scraper_extract_all(html);
+        assert_eq!(links.len(), 1);
+        assert_eq!(
+            links[0].url,
+            "&#xD800;",
+            "&amp;#xD800; in href: peel-once leaves literal &#xD800; (NOT U+D800 char)"
+        );
+
+        // Confirm AGREE with heading text for the same input form
+        let heading_html = r#"<html><body><h1>&amp;#xD800;</h1></body></html>"#;
+        let (_, headings, _) = scraper_extract_all(heading_html);
+        assert_eq!(
+            headings[0].text,
+            "&#xD800;",
+            "heading path: &amp;#xD800; in text → literal &#xD800;"
+        );
+        assert_eq!(
+            links[0].url,
+            headings[0].text,
+            "href attribute and heading text: symmetric peel-once behavior (AGREE)"
         );
     }
 
