@@ -5,7 +5,26 @@
 
 ---
 
-## 현재 진행 상황 (2026-05-23) - Sprint 39: Decimal Match-Arm, Divergence Table, Library Contract
+## 현재 진행 상황 (2026-05-23) - Sprint 40: Mid-Range Surrogate, E000 AGREE, Fast-Path Identity
+
+### Sprint 40: Coverage Completeness Final Round (2026-05-23)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| html-escape comment 확장 (S40-01) | Cargo.toml | "S37/S38" → "S37/S38/S39" — html_escape_library_behavior_contract test 반영 |
+| ARM-A mid-range surrogate pin (S40-02) | parsing.rs | `&#xDA00;` → U+FFFD; `&#56320;` (0xDC00 decimal) → U+FFFD. 경계 아닌 중간값 |
+| `&amp;#xE000;` AGREE corner (S40-03) | parsing.rs | both paths = "&#xE000;" literal. S39-02c 대칭 (D7FF below + E000 above = both AGREE) |
+| fast-path identity assertions (S40-04) | parsing.rs | "", "hello world", "AT&T and D&D", "&amp;T"→"&T" all skip regex (no "&#" in result) |
+
+테스트: **1,827 Rust pass / 0 fail / 0 clippy warnings**
+커밋: `e8b9c7cd` (S40-01~04)
+리뷰: `~/.claude/references/2026-05-23_sprint40_mid_range_e000_fast_path.md`
+
+**현재 상태**: decode_html_entities 테스트 커버리지 완성. ARM-A 전체 범위 (boundary + mid-range), 교차 경로 5-corner matrix (D800/55296/DFFF DIVERGE + D7FF/E000 AGREE), 라이브러리 계약, fast-path, ARM-B/C 구조 모두 pin. Sprint 41은 implementation pivot 권장.
+
+---
+
+## 이전 진행 상황 (2026-05-23) - Sprint 39: Decimal Match-Arm, Divergence Table, Library Contract
 
 ### Sprint 39: Coverage Completeness + Library Contract (2026-05-23)
 

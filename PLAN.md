@@ -599,12 +599,21 @@
 - 결과: **1,824 pass / 0 fail / 0 clippy warnings**
 - 커밋: `df4cd4a5` (S39-01~04), `adb33b09` (review LOW-1/LOW-3)
 
-## Sprint 40 로드맵
+## Sprint 40 완료 (2026-05-23) — Mid-Range Surrogate, E000 AGREE, Fast-Path Identity, Comment Update
 
-- P1: Cargo.toml html-escape bump-warning comment 확장 (S37/S38 → S37/S38/S39)
-- P2: ARM-A mid-range surrogate coverage — `&#xDA00;` / `&#56320;` (U+DC00) non-boundary in-range pin
-- P3: `&amp;#xE000;` above-surrogate AGREE corner — S39-02c 대칭 (D7FF 아래 AGREE + E000 위 AGREE)
-- P4: fast-path identity assertions — `""`, `"hello"`, `"no & here"` (result.contains("&#") = false 경로 pin)
+- [x] S40-01: Cargo.toml html-escape comment 확장 — "S37/S38/S39" (S39 tests 추가)
+- [x] S40-02: ARM-A mid-range pin — `&#xDA00;` (hex mid-range) → U+FFFD; `&#56320;` (decimal 0xDC00) → U+FFFD
+- [x] S40-03: `&amp;#xE000;` above-surrogate AGREE — both paths produce "&#xE000;" literal (S39-02c symmetric)
+- [x] S40-04: fast-path identity assertions — `""`, `"hello world"`, `"AT&T and D&D"`, `"&amp;T"` all skip regex block
+- 결과: **1,827 pass / 0 fail / 0 clippy warnings**
+- 커밋: `e8b9c7cd` (S40-01~04)
+
+## Sprint 41 로드맵
+
+- P1: Implementation pivot — fastembed 로컬 임베딩 재활성화 또는 pgvector 마이그레이션 검증 (Phase 1 checklist)
+- P2: entity-in-attribute test — `<a href="&#xD800;">` → heading path behavior (attribute vs text-content divergence)
+- P3: proptest invariant — surrogate NCR (any range) never survives `decode_html_entities` as surrogate char
+- P4: behavior table in `decode_html_entities` docstring — 3-row summary (direct NCR / &amp;-escaped / above-Unicode)
 
 ## Rust TODO 현황 (29건, 2026-05-21 업데이트)
 
