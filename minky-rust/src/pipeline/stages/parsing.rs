@@ -228,7 +228,7 @@ fn scraper_extract_all(html: &str) -> (Option<String>, Vec<Heading>, Vec<Link>) 
 /// | Input form                        | Result                            |
 /// |-----------------------------------|-----------------------------------|
 /// | `&#xD800;` (direct surrogate)     | `"\u{FFFD}"` (replacement char)   |
-/// | `&amp;#xD800;` (amp-escaped)      | `"&#xD800;"` (literal string)     |
+/// | `&amp;#xD800;` (amp-escaped)      | `"\u{FFFD}"` (peel-then-regex)    |
 /// | `&#x200000;` (above Unicode)      | `"&#x200000;"` (verbatim)         |
 fn decode_html_entities(s: &str) -> String {
     let decoded = html_escape::decode_html_entities(s);
@@ -2617,9 +2617,10 @@ fn main() {}
 
     /// `&amp;#xD800;` in href follows peel-once: html5ever decodes `&amp;` → `&`,
     /// leaving `#xD800;` without a leading `&` — not an entity — so `Link::url`
-    /// is the literal string `"&#xD800;"`.  This is symmetric with heading text
-    /// extraction (S37-04 diverge): both the href attribute path and the heading
+    /// is the literal string `"&#xD800;"`.  The href attribute path and the heading
     /// text path produce the same literal string for `&amp;`-escaped forms (AGREE).
+    /// Note: S37-04 pins a divergence between the heading path and
+    /// `decode_html_entities` (body) — not between the heading path and href.
     ///
     /// Verified against scraper 0.20.x / html5ever 0.27.x (Cargo.toml).
     #[test]
@@ -2641,11 +2642,8 @@ fn main() {}
             "&#xD800;",
             "heading path: &amp;#xD800; in text → literal &#xD800;"
         );
-        assert_eq!(
-            links[0].url,
-            headings[0].text,
-            "href attribute and heading text: symmetric peel-once behavior (AGREE)"
-        );
+        assert_eq!(links[0].url, headings[0].text,
+            "href attribute and heading text: symmetric peel-once behavior (AGREE)");
     }
 
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
