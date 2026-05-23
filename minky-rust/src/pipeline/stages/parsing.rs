@@ -2034,6 +2034,140 @@ fn main() {}
         assert_eq!(decode_html_entities("&amp;"), "&");
     }
 
+    // ── S37-01: &amp;#xD800; end-to-end contract ──────────────────────────────
+
+    /// Pins the docstring contract (line ~220-223): an escaped-ampersand surrogate
+    /// form `&amp;#xD800;` is "more aggressive than html5ever" — the `&amp;` is
+    /// peeled to `&` by html_escape, yielding `&#xD800;`, which the hex-surrogate
+    /// regex then replaces with U+FFFD.  The entire sequence resolves in one call.
+    ///
+    /// html5ever (heading/link path) would treat `&amp;#xD800;` as a text node
+    /// containing the literal characters `&#xD800;` and preserve them as-is;
+    /// `decode_html_entities` produces U+FFFD instead, which is safe for indexing.
+    #[test]
+    fn decode_html_entities_amp_escaped_surrogate_produces_fffd() {
+        // bare escaped-ampersand form
+        assert_eq!(
+            decode_html_entities("&amp;#xD800;"),
+            "\u{FFFD}",
+            "&amp;#xD800; must decode to U+FFFD via peel-then-regex path"
+        );
+        // with surrounding text — surrounding chars must survive
+        assert_eq!(
+            decode_html_entities("before&amp;#xD800;after"),
+            "before\u{FFFD}after",
+            "surrounding text must be preserved around &amp;#xD800;"
+        );
+    }
+
+    /// Decimal variant: `&amp;#55296;` (= &#55296; = U+D800 in decimal).
+    /// Same peel-then-regex path as the hex variant.
+    #[test]
+    fn decode_html_entities_amp_escaped_surrogate_decimal_produces_fffd() {
+        assert_eq!(
+            decode_html_entities("&amp;#55296;"),
+            "\u{FFFD}",
+            "&amp;#55296; must decode to U+FFFD via peel-then-regex path"
+        );
+    }
+
+    // ── S37-02: Mixed-case hex digit in surrogate NCR ────────────────────────
+
+    /// Exercises the `(?i)` flag's digit-case axis — not just the `x`/`X` prefix
+    /// axis tested in S36-02.  `&#xDc00;` has an uppercase `D` and lowercase `c`
+    /// in the hex payload, which `[0-9a-f]` with `(?i)` must match.
+    ///
+    /// 0xDC00 = 56320 ∈ [0xD800, 0xDFFF] → U+FFFD.
+    #[test]
+    fn decode_html_entities_mixed_case_hex_digit_surrogate_produces_fffd() {
+        assert_eq!(
+            decode_html_entities("&#xDc00;"),
+            "\u{FFFD}",
+            "&#xDc00; (mixed-case digits) must match (?i) pattern and produce U+FFFD"
+        );
+        // Companion: all-uppercase digits
+        assert_eq!(
+            decode_html_entities("&#xDFFF;"),
+            "\u{FFFD}",
+            "&#xDFFF; (all-uppercase) must produce U+FFFD"
+        );
+    }
+
+    // ── S37-03: Hex u32 overflow — parse-Err path verbatim ──────────────────
+
+    /// `&#xFFFFFFFF;` (u32::MAX = 4294967295) — parse succeeds as u32 but the
+    /// value is far outside the surrogate range (0xD800..=0xDFFF), so the
+    /// fallback arm `_ => caps[0].to_owned()` returns the entity verbatim.
+    /// html_escape also leaves it verbatim (char::try_from fails for >U+10FFFF).
+    #[test]
+    fn decode_html_entities_hex_u32_max_preserved_verbatim() {
+        let result = decode_html_entities("&#xFFFFFFFF;");
+        assert_eq!(
+            result, "&#xFFFFFFFF;",
+            "&#xFFFFFFFF; (u32::MAX) must be preserved verbatim; got {:?}", result
+        );
+    }
+
+    /// `&#xFFFFFFFFF;` (9 hex digits, > u32::MAX) — `u32::from_str_radix` returns
+    /// `Err` (overflow).  The `_ =>` fallback must return the entity verbatim, not
+    /// panic or silently truncate.
+    #[test]
+    fn decode_html_entities_hex_u32_overflow_preserved_verbatim() {
+        let result = decode_html_entities("&#xFFFFFFFFF;");
+        assert_eq!(
+            result, "&#xFFFFFFFFF;",
+            "&#xFFFFFFFFF; (> u32::MAX) must be preserved verbatim; got {:?}", result
+        );
+    }
+
+    // ── S37-04: Cross-path consistency (scraper heading vs decode_html_entities) ─
+
+    /// Both the html5ever/scraper heading-extraction path and the
+    /// `decode_html_entities` body path must produce U+FFFD for the same
+    /// surrogate NCR input.  This pins the docstring contract (line ~218-219)
+    /// that the two paths "replace direct surrogate NCRs with U+FFFD in the
+    /// same way."
+    #[test]
+    fn scraper_heading_and_decode_html_entities_agree_on_surrogate_fffd() {
+        // Heading path (scraper / html5ever)
+        let html = "<html><body><h1>&#xD800;</h1></body></html>";
+        let (_, headings, _) = scraper_extract_all(html);
+        assert_eq!(headings.len(), 1);
+        assert_eq!(
+            headings[0].text, "\u{FFFD}",
+            "scraper heading path must produce U+FFFD for &#xD800;"
+        );
+
+        // Body path (decode_html_entities)
+        let body_result = decode_html_entities("&#xD800;");
+        assert_eq!(
+            body_result, "\u{FFFD}",
+            "decode_html_entities body path must produce U+FFFD for &#xD800;"
+        );
+
+        // Cross-path agreement
+        assert_eq!(
+            headings[0].text, body_result,
+            "heading path and body path must agree on surrogate → U+FFFD"
+        );
+    }
+
+    /// Decimal surrogate NCR cross-path consistency — same contract as hex.
+    /// U+DFFF (decimal 57343) is the upper endpoint of the surrogate range.
+    #[test]
+    fn scraper_heading_and_decode_html_entities_agree_on_surrogate_decimal() {
+        let html = "<html><body><h1>&#57343;</h1></body></html>";
+        let (_, headings, _) = scraper_extract_all(html);
+        assert_eq!(headings.len(), 1);
+        assert_eq!(
+            headings[0].text, "\u{FFFD}",
+            "scraper heading path must produce U+FFFD for &#57343;"
+        );
+        let body_result = decode_html_entities("&#57343;");
+        assert_eq!(body_result, "\u{FFFD}");
+        assert_eq!(headings[0].text, body_result);
+    }
+
     // ── Compile-time safety: scraper::Selector must be Sync + Send ───────────
 
     /// `OnceLock<Selector>` in `scraper_extract_all` is shared across Axum
