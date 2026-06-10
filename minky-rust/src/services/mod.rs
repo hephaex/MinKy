@@ -26,6 +26,7 @@ mod notification_service;
 mod ocr_service;
 pub mod query_expansion;
 mod rag_service;
+pub mod reasoning;
 mod search_service;
 mod security_service;
 mod skill_service;
