@@ -1,11 +1,13 @@
-import { render, screen, waitFor } from '../test-utils';
+import { render, screen, waitFor, fireEvent } from '../test-utils';
 
-// Mock useParams and useNavigate before importing component
+// Mock useParams, useNavigate and useLocation before importing component
 const mockNavigate = jest.fn();
+let mockLocation = { key: 'default', pathname: '/documents/1' };
 jest.mock('react-router-dom', () => ({
   ...jest.requireActual('react-router-dom'),
   useParams: () => ({ id: '1' }),
   useNavigate: () => mockNavigate,
+  useLocation: () => mockLocation,
 }));
 
 // Mock react-markdown to avoid ESM issues
@@ -59,6 +61,7 @@ describe('DocumentView', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockNavigate.mockClear();
+    mockLocation = { key: 'default', pathname: '/documents/1' };
   });
 
   describe('loading state', () => {
@@ -111,6 +114,36 @@ describe('DocumentView', () => {
       await waitFor(() => {
         expect(documentService.getDocument).toHaveBeenCalledWith('1');
       });
+    });
+  });
+
+  describe('back navigation', () => {
+    it('goes back to the previous view when opened from within the app', async () => {
+      // In-app navigation gives the location a non-default key.
+      mockLocation = { key: 'abc123', pathname: '/documents/1' };
+      documentService.getDocument.mockRejectedValue(new Error('Network error'));
+
+      render(<DocumentView />);
+
+      const backLink = await screen.findByText('Back to Documents');
+      fireEvent.click(backLink);
+
+      expect(mockNavigate).toHaveBeenCalledWith(-1);
+    });
+
+    it('falls back to all documents when opened directly (no history)', async () => {
+      // Direct load: React Router gives the initial entry the 'default' key.
+      mockLocation = { key: 'default', pathname: '/documents/1' };
+      documentService.getDocument.mockRejectedValue(new Error('Network error'));
+
+      render(<DocumentView />);
+
+      const backLink = await screen.findByText('Back to Documents');
+      // The link still points at '/', so a normal click navigates there.
+      expect(backLink).toHaveAttribute('href', '/');
+      fireEvent.click(backLink);
+
+      expect(mockNavigate).not.toHaveBeenCalledWith(-1);
     });
   });
 });

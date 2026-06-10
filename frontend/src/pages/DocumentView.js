@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -23,6 +23,18 @@ import './DocumentView.css';
 const DocumentView = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Return to the exact previous view (its list page/filters are restored from
+  // sessionStorage) when the document was opened from within the app; fall back
+  // to all documents when it was opened directly (no in-app history).
+  const handleBack = (e) => {
+    if (location.key !== 'default') {
+      e.preventDefault();
+      navigate(-1);
+    }
+  };
+
   const [document, setDocument] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -156,7 +168,7 @@ const DocumentView = () => {
     return (
       <div className="error">
         {error}
-        <Link to="/" className="btn btn-secondary">
+        <Link to="/" className="btn btn-secondary" onClick={handleBack}>
           Back to Documents
         </Link>
       </div>
@@ -167,7 +179,7 @@ const DocumentView = () => {
     return (
       <div className="error">
         Document not found
-        <Link to="/" className="btn btn-secondary">
+        <Link to="/" className="btn btn-secondary" onClick={handleBack}>
           Back to Documents
         </Link>
       </div>
@@ -178,7 +190,7 @@ const DocumentView = () => {
     <div className="document-view">
       <div className="document-header">
         <div className="document-nav">
-          <Link to="/" className="back-link">
+          <Link to="/" className="back-link" onClick={handleBack}>
             ← Back to Documents
           </Link>
         </div>
