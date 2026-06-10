@@ -72,6 +72,38 @@
 | 원본 보호 | minky DB SELECT-only (ALTER/DROP/UPDATE/DELETE 없음) |
 | 실행 순서 | users → categories → tags → documents → document_tags → comments → document_versions |
 
+### Slice: 결정A 적용 (Flask-compat response shape + nginx 라우팅) — 2026-06-11
+
+- 변경 파일:
+  - `minky-rust/src/routes/documents.rs` — Flask-compat 응답 타입 추가 + 핸들러 반환 타입 변경
+  - `frontend/nginx.conf` — `/api/documents` 블록 → rust-backend:8000 추가
+- 변경 내용:
+  - `FlaskDocumentItem`: `markdown_content` (content 필드 rename), additive 컬럼, `tag_names: Vec<String>`
+  - `FlaskListResponse`: `{documents, pagination{page,per_page,total,pages}}` — frontend 기대 형태와 일치
+  - 단일 문서(get/create/update): `{success, data}` 래퍼 제거, 직접 dict 반환 (Flask와 동일)
+  - `ListQuery.per_page` 추가 (frontend가 `per_page` 파라미터 전송)
+  - `CreateDocumentRequest`, `UpdateDocumentRequest`: `markdown_content` 필드 (frontend가 보내는 키)
+  - nginx: `/api/documents` 블록이 `/api/` Flask catch-all보다 앞에 위치
+- 테스트: Rust `1850 passed` (SQLX_OFFLINE=true, +7 Flask-compat tests)
+- 커밋: `53fb5c66`
+- 상태: [DONE] [CAS-deferred: nginx 실구동 + Flask→Rust E2E 토큰 검증 → CAS 복구 후]
+
+**Phase 2 Demo Gate (로컬) — 전체 완료:**
+- migration 011 (additive columns) ✅
+- 이관 스크립트 단위테스트 39건 green ✅
+- Flask-compat response shape (Decision A) 구현 ✅
+- nginx `/api/documents` 블록 추가 ✅
+- Rust 1850 tests green ✅
+
+**프론트엔드 호환성 보장:**
+| 프론트 기대값 | Rust 응답 |
+|-------------|---------|
+| `response.data.documents` | `FlaskListResponse.documents` ✅ |
+| `response.data.pagination.per_page` | `FlaskPagination.per_page` ✅ |
+| `response.data.pagination.pages` | `FlaskPagination.pages` ✅ |
+| `data.markdown_content` (single GET) | `FlaskDocumentItem.markdown_content` ✅ |
+| request body `markdown_content` (POST/PUT) | `CreateDocumentRequest.markdown_content` ✅ |
+
 ## Phase 3 — Flask-only 도메인 분류 [🟢]
 _(대기)_
 
