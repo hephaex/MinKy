@@ -104,6 +104,38 @@
 | `data.markdown_content` (single GET) | `FlaskDocumentItem.markdown_content` ✅ |
 | request body `markdown_content` (POST/PUT) | `CreateDocumentRequest.markdown_content` ✅ |
 
+### Slice: Opus 리뷰 수정 (FlaskDocumentLite + consumer-contract + nginx M1 + H3) — 2026-06-11
+
+- 변경 파일:
+  - `minky-rust/src/routes/documents.rs` — FlaskDocumentLite/FlaskDocumentLiteRow 분리, FlaskPagination has_next/has_prev, list SQL LEFT JOIN+ARRAY_AGG, consumer-contract 테스트 17건 추가
+  - `frontend/nginx.conf` — /sync, /export, /tree 명시 Flask 블록 (M1 fix)
+  - `scripts/migrate_flask_to_rust.py` — is_published/is_public None 명시 coercion (H3 fix)
+  - `scripts/tests/test_migrate.py` — None coercion 테스트 5건 추가 (총 44건)
+- 수정 항목:
+  - C1: tag_names JOIN → ARRAY_AGG(t.name) FILTER(NOT NULL) from document_tags+tags
+  - C2: FlaskDocumentLite — 리스트에서 markdown_content/html_content 제거
+  - C3: FlaskPagination has_next/has_prev 추가 (Pagination.js PropTypes.isRequired)
+  - H1: consumer-contract 테스트 — Flask to_dict_lite 키 + Pagination.js 실소비 키 대조
+  - H3: None coercion (dict.get(k,default) → `v if v is not None else default`)
+  - M1: nginx /sync|export|tree → Flask 명시 블록, /api/documents prefix 앞에 배치
+- 테스트: Rust `1861 passed` (SQLX_OFFLINE=true, +11) + Python `44 passed` (+5)
+- 커밋: `457edb61`
+- 상태: [DONE] [CAS-deferred: nginx 실구동 + 이관 실행 → CAS 복구 후]
+
+**Demo Gate:**
+- Rust 1861 tests green ✅
+- Python 44 tests green ✅
+- consumer-contract 테스트가 FlaskDocumentLite와 Pagination.js 키 일치 보장 ✅
+- nginx prefix 순서: /sync|export|tree(Flask) → /api/documents(Rust) → /api/(Flask) ✅
+
+**프론트엔드 호환성 (갱신):**
+| 프론트 기대값 | Rust 응답 |
+|-------------|---------|
+| `doc.author`, `doc.updated_at`, `doc.title`, `doc.id` | `FlaskDocumentLite.*` ✅ |
+| `doc.tag_names` (string array) | `ARRAY_AGG(t.name)` ✅ |
+| `pagination.has_next`, `pagination.has_prev` | `FlaskPagination.has_next/has_prev` ✅ |
+| 리스트에 `markdown_content` 없음 | `FlaskDocumentLite` body 없음 ✅ |
+
 ## Phase 3 — Flask-only 도메인 분류 [🟢]
 _(대기)_
 
