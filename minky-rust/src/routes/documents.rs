@@ -68,7 +68,57 @@ pub struct PaginationMeta {
 
 // ── Flask-compat types (Decision A — response shape matching) ────────────────
 
-/// DB row fetched from documents table including additive columns (migration 011)
+/// DB row for lite list queries (no content/html fields; tag_names via ARRAY_AGG)
+#[derive(Debug, Clone, sqlx::FromRow)]
+struct FlaskDocumentLiteRow {
+    pub id: Uuid,
+    pub title: String,
+    pub author: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub user_id: i32,
+    pub category_id: Option<i32>,
+    pub is_public: bool,
+    pub is_published: Option<bool>,
+    pub published_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub tag_names: Vec<String>,
+}
+
+/// Flask-compatible list item matching to_dict_lite (no markdown_content; has tag_names)
+#[derive(Debug, Clone, Serialize)]
+pub struct FlaskDocumentLite {
+    pub id: Uuid,
+    pub title: String,
+    pub author: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub user_id: i32,
+    pub category_id: Option<i32>,
+    pub is_public: bool,
+    pub is_published: bool,
+    pub published_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub tag_names: Vec<String>,
+}
+
+impl From<FlaskDocumentLiteRow> for FlaskDocumentLite {
+    fn from(row: FlaskDocumentLiteRow) -> Self {
+        Self {
+            id: row.id,
+            title: row.title,
+            author: row.author,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            user_id: row.user_id,
+            category_id: row.category_id,
+            is_public: row.is_public,
+            is_published: row.is_published.unwrap_or(false),
+            published_at: row.published_at,
+            tag_names: row.tag_names,
+        }
+    }
+}
+
+/// DB row for single-document queries (includes content + html_content; migration 011 columns)
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct DocumentRow {
     pub id: Uuid,
@@ -86,7 +136,7 @@ struct DocumentRow {
     pub published_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-/// Flask-compatible document item (field `markdown_content`, no `{success, data}` wrapper)
+/// Flask-compatible single document (field `markdown_content`, no `{success, data}` wrapper)
 #[derive(Debug, Clone, Serialize)]
 pub struct FlaskDocumentItem {
     pub id: Uuid,
@@ -132,11 +182,13 @@ pub struct FlaskPagination {
     pub per_page: i32,
     pub total: i64,
     pub pages: i32,
+    pub has_next: bool,
+    pub has_prev: bool,
 }
 
 #[derive(Debug, Serialize)]
 pub struct FlaskListResponse {
-    pub documents: Vec<FlaskDocumentItem>,
+    pub documents: Vec<FlaskDocumentLite>,
     pub pagination: FlaskPagination,
 }
 
@@ -174,13 +226,20 @@ async fn list_documents(
             .await?
     };
 
-    let rows: Vec<DocumentRow> = if let Some(ref search) = query.search {
+    // LEFT JOIN document_tags+tags for ARRAY_AGG(tag name) → tag_names column
+    // GROUP BY avoids duplicating document rows when one doc has multiple tags
+    let rows: Vec<FlaskDocumentLiteRow> = if let Some(ref search) = query.search {
         sqlx::query_as(
-            r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
-                      author, html_content, is_published, published_at
-               FROM documents
-               WHERE (user_id = $1 OR is_public = true) AND title ILIKE '%' || $2 || '%'
-               ORDER BY created_at DESC
+            r#"SELECT d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
+                      d.is_public, d.is_published, d.published_at,
+                      COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names
+               FROM documents d
+               LEFT JOIN document_tags dt ON dt.document_id = d.id
+               LEFT JOIN tags t ON t.id = dt.tag_id
+               WHERE (d.user_id = $1 OR d.is_public = true) AND d.title ILIKE '%' || $2 || '%'
+               GROUP BY d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
+                        d.is_public, d.is_published, d.published_at
+               ORDER BY d.created_at DESC
                LIMIT $3 OFFSET $4"#
         )
         .bind(user_id)
@@ -191,11 +250,16 @@ async fn list_documents(
         .await?
     } else if let Some(cat_id) = query.category_id {
         sqlx::query_as(
-            r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
-                      author, html_content, is_published, published_at
-               FROM documents
-               WHERE (user_id = $1 OR is_public = true) AND category_id = $2
-               ORDER BY created_at DESC
+            r#"SELECT d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
+                      d.is_public, d.is_published, d.published_at,
+                      COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names
+               FROM documents d
+               LEFT JOIN document_tags dt ON dt.document_id = d.id
+               LEFT JOIN tags t ON t.id = dt.tag_id
+               WHERE (d.user_id = $1 OR d.is_public = true) AND d.category_id = $2
+               GROUP BY d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
+                        d.is_public, d.is_published, d.published_at
+               ORDER BY d.created_at DESC
                LIMIT $3 OFFSET $4"#
         )
         .bind(user_id)
@@ -206,11 +270,16 @@ async fn list_documents(
         .await?
     } else {
         sqlx::query_as(
-            r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
-                      author, html_content, is_published, published_at
-               FROM documents
-               WHERE user_id = $1 OR is_public = true
-               ORDER BY created_at DESC
+            r#"SELECT d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
+                      d.is_public, d.is_published, d.published_at,
+                      COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names
+               FROM documents d
+               LEFT JOIN document_tags dt ON dt.document_id = d.id
+               LEFT JOIN tags t ON t.id = dt.tag_id
+               WHERE d.user_id = $1 OR d.is_public = true
+               GROUP BY d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
+                        d.is_public, d.is_published, d.published_at
+               ORDER BY d.created_at DESC
                LIMIT $2 OFFSET $3"#
         )
         .bind(user_id)
@@ -221,7 +290,7 @@ async fn list_documents(
     };
 
     let total_pages = ((total.0 as f64) / (limit as f64)).ceil() as i32;
-    let documents: Vec<FlaskDocumentItem> = rows.into_iter().map(FlaskDocumentItem::from).collect();
+    let documents: Vec<FlaskDocumentLite> = rows.into_iter().map(FlaskDocumentLite::from).collect();
 
     Ok(Json(FlaskListResponse {
         documents,
@@ -230,6 +299,8 @@ async fn list_documents(
             per_page: limit,
             total: total.0,
             pages: total_pages,
+            has_next: page < total_pages,
+            has_prev: page > 1,
         },
     }))
 }
@@ -1353,6 +1424,35 @@ mod tests {
         }
     }
 
+    fn make_flask_lite() -> FlaskDocumentLite {
+        FlaskDocumentLite {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            title: "Test".to_string(),
+            author: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            user_id: 1,
+            category_id: None,
+            is_public: true,
+            is_published: false,
+            published_at: None,
+            tag_names: vec![],
+        }
+    }
+
+    fn make_pagination(page: i32, total_pages: i32, total: i64) -> FlaskPagination {
+        FlaskPagination {
+            page,
+            per_page: 20,
+            total,
+            pages: total_pages,
+            has_next: page < total_pages,
+            has_prev: page > 1,
+        }
+    }
+
+    // ── FlaskDocumentItem (single view) ──────────────────────────────────────
+
     #[test]
     fn flask_item_serializes_markdown_content_key() {
         let item = make_flask_item();
@@ -1377,23 +1477,113 @@ mod tests {
         assert_eq!(json["tag_names"], serde_json::json!([]));
     }
 
+    // ── FlaskDocumentLite consumer-contract (H1) ─────────────────────────────
+    // These tests verify Rust output matches what Flask to_dict_lite actually returns
+    // and what the frontend DocumentList.js actually reads.
+
+    #[test]
+    fn flask_lite_no_markdown_content_key() {
+        // C2: list items must NOT contain markdown_content (to_dict_lite omits it)
+        let item = make_flask_lite();
+        let json = serde_json::to_value(&item).unwrap();
+        assert!(json.get("markdown_content").is_none(), "list items must not contain markdown_content");
+        assert!(json.get("content").is_none(), "list items must not contain content");
+        assert!(json.get("html_content").is_none(), "list items must not contain html_content");
+    }
+
+    #[test]
+    fn flask_lite_has_required_to_dict_lite_keys() {
+        // Consumer-contract: keys match Flask to_dict_lite exactly
+        let item = make_flask_lite();
+        let json = serde_json::to_value(&item).unwrap();
+        for key in ["id", "title", "author", "created_at", "updated_at",
+                    "user_id", "category_id", "is_public", "is_published",
+                    "published_at", "tag_names"] {
+            assert!(json.get(key).is_some(), "missing key: {key}");
+        }
+    }
+
+    #[test]
+    fn flask_lite_tag_names_is_array_of_strings() {
+        let mut item = make_flask_lite();
+        item.tag_names = vec!["rust".to_string(), "backend".to_string()];
+        let json = serde_json::to_value(&item).unwrap();
+        let tags = json["tag_names"].as_array().unwrap();
+        assert_eq!(tags.len(), 2);
+        assert_eq!(tags[0], "rust");
+        assert_eq!(tags[1], "backend");
+    }
+
+    #[test]
+    fn flask_lite_no_view_count_key() {
+        // to_dict_lite does not include view_count
+        let item = make_flask_lite();
+        let json = serde_json::to_value(&item).unwrap();
+        assert!(json.get("view_count").is_none(), "list items must not contain view_count");
+    }
+
+    // ── FlaskPagination consumer-contract (C3, H1) ───────────────────────────
+
+    #[test]
+    fn flask_pagination_has_next_prev_keys() {
+        // C3: Pagination.js requires has_next and has_prev
+        let p = make_pagination(2, 5, 90);
+        let json = serde_json::to_value(&p).unwrap();
+        assert!(json.get("has_next").is_some(), "Pagination.js requires has_next");
+        assert!(json.get("has_prev").is_some(), "Pagination.js requires has_prev");
+    }
+
+    #[test]
+    fn flask_pagination_has_next_true_when_not_last_page() {
+        let p = make_pagination(2, 5, 90);
+        let json = serde_json::to_value(&p).unwrap();
+        assert_eq!(json["has_next"], true);
+        assert_eq!(json["has_prev"], true);
+    }
+
+    #[test]
+    fn flask_pagination_first_page_no_prev() {
+        let p = make_pagination(1, 5, 90);
+        let json = serde_json::to_value(&p).unwrap();
+        assert_eq!(json["has_prev"], false);
+        assert_eq!(json["has_next"], true);
+    }
+
+    #[test]
+    fn flask_pagination_last_page_no_next() {
+        let p = make_pagination(5, 5, 90);
+        let json = serde_json::to_value(&p).unwrap();
+        assert_eq!(json["has_next"], false);
+        assert_eq!(json["has_prev"], true);
+    }
+
+    #[test]
+    fn flask_pagination_single_page_no_next_no_prev() {
+        let p = make_pagination(1, 1, 5);
+        let json = serde_json::to_value(&p).unwrap();
+        assert_eq!(json["has_next"], false);
+        assert_eq!(json["has_prev"], false);
+    }
+
     #[test]
     fn flask_pagination_field_names() {
-        let pagination = FlaskPagination { page: 2, per_page: 10, total: 45, pages: 5 };
+        let pagination = make_pagination(2, 5, 45);
         let json = serde_json::to_value(&pagination).unwrap();
         assert_eq!(json["page"], 2);
-        assert_eq!(json["per_page"], 10);
+        assert_eq!(json["per_page"], 20);
         assert_eq!(json["total"], 45);
         assert_eq!(json["pages"], 5);
         assert!(json.get("limit").is_none(), "Flask uses per_page not limit");
         assert!(json.get("total_pages").is_none(), "Flask uses pages not total_pages");
     }
 
+    // ── FlaskListResponse consumer-contract ──────────────────────────────────
+
     #[test]
     fn flask_list_response_documents_key() {
         let resp = FlaskListResponse {
-            documents: vec![make_flask_item()],
-            pagination: FlaskPagination { page: 1, per_page: 20, total: 1, pages: 1 },
+            documents: vec![make_flask_lite()],
+            pagination: make_pagination(1, 1, 1),
         };
         let json = serde_json::to_value(&resp).unwrap();
         assert!(json.get("documents").is_some(), "key must be documents");
@@ -1401,6 +1591,34 @@ mod tests {
         assert!(json.get("success").is_none(), "Flask list has no success key");
         assert_eq!(json["documents"].as_array().unwrap().len(), 1);
     }
+
+    #[test]
+    fn flask_list_response_has_pagination_with_has_next_prev() {
+        let resp = FlaskListResponse {
+            documents: vec![make_flask_lite()],
+            pagination: make_pagination(1, 3, 55),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert!(json["pagination"].get("has_next").is_some());
+        assert!(json["pagination"].get("has_prev").is_some());
+        assert_eq!(json["pagination"]["has_next"], true);
+        assert_eq!(json["pagination"]["has_prev"], false);
+    }
+
+    #[test]
+    fn flask_list_document_items_have_no_content_key() {
+        // C2: list items inside documents[] must not have markdown_content
+        let resp = FlaskListResponse {
+            documents: vec![make_flask_lite()],
+            pagination: make_pagination(1, 1, 1),
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        let first = &json["documents"][0];
+        assert!(first.get("markdown_content").is_none());
+        assert!(first.get("content").is_none());
+    }
+
+    // ── ListQuery per_page alias ─────────────────────────────────────────────
 
     #[test]
     fn list_query_per_page_alias() {

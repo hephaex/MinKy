@@ -163,6 +163,32 @@ class TestMapDocumentFields:
         result = map_document_fields({**BASE_DOC, "is_public": False}, default_user_id=1)
         assert result["is_public"] is False
 
+    def test_is_public_none_coerces_to_true(self):
+        # H3: dict.get(key, default) passes None through; explicit coercion required
+        doc = {**BASE_DOC, "is_public": None}
+        result = map_document_fields(doc, default_user_id=1)
+        assert result["is_public"] is True, "None is_public must default to True, not None"
+
+    def test_is_published_false_preserved(self):
+        result = map_document_fields({**BASE_DOC, "is_published": False}, default_user_id=1)
+        assert result["is_published"] is False
+
+    def test_is_published_true_preserved(self):
+        result = map_document_fields({**BASE_DOC, "is_published": True}, default_user_id=1)
+        assert result["is_published"] is True
+
+    def test_is_published_none_coerces_to_false(self):
+        # H3: None value in NOT NULL column → IntegrityError without explicit coercion
+        doc = {**BASE_DOC, "is_published": None}
+        result = map_document_fields(doc, default_user_id=1)
+        assert result["is_published"] is False, "None is_published must default to False, not None"
+
+    def test_is_published_missing_key_coerces_to_false(self):
+        # Also handles case where Flask schema has no is_published column yet
+        doc = {k: v for k, v in BASE_DOC.items() if k != "is_published"}
+        result = map_document_fields(doc, default_user_id=1)
+        assert result["is_published"] is False
+
     def test_category_id_preserved(self):
         result = map_document_fields(BASE_DOC, default_user_id=1)
         assert result["category_id"] == 3
