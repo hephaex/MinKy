@@ -124,6 +124,11 @@ try:
 except ImportError as e:
     logger.debug(f"Local provider not available: {e}")
 
+try:
+    from .solar_provider import SolarProvider
+except ImportError as e:
+    logger.debug(f"Solar provider not available: {e}")
+
 
 __all__ = [
     'BaseLLMProvider',

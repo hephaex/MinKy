@@ -14,6 +14,7 @@ class ProviderType(Enum):
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
     LOCAL = "local"
+    SOLAR = "solar"
 
 
 @dataclass

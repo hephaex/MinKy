@@ -16,7 +16,8 @@ def get_env_keys() -> Dict[str, str]:
         'openai': os.getenv('OPENAI_API_KEY', ''),
         'anthropic': os.getenv('ANTHROPIC_API_KEY', ''),
         'google': os.getenv('GOOGLE_API_KEY', ''),
-        'local': os.getenv('LOCAL_LLM_URL', 'http://localhost:8080')
+        'local': os.getenv('LOCAL_LLM_URL', 'http://localhost:8080'),
+        'solar': os.getenv('UPSTAGE_API_KEY', ''),
     }
 
 
@@ -26,6 +27,8 @@ def get_default_config(env_keys: Dict[str, str]) -> Dict[str, Any]:
 
     if default_llm_provider == 'local':
         default_llm_model = os.getenv('LOCAL_LLM_MODEL', 'llama2')
+    elif default_llm_provider in ('solar', 'upstage'):
+        default_llm_model = os.getenv('DEFAULT_LLM_MODEL', 'solar-open2-260528')
     else:
         default_llm_model = os.getenv('DEFAULT_LLM_MODEL', 'gpt-3.5-turbo')
 
