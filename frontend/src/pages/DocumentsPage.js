@@ -3,13 +3,17 @@ import TreeSidebar from '../components/TreeSidebar';
 import DocumentList from './DocumentList';
 import './DocumentsPage.css';
 
+const MOBILE_BREAKPOINT = 768;
+
 const DocumentsPage = () => {
-  const [sidebarVisible, setSidebarVisible] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
+  // On mobile the sidebar overlays the list, so start it hidden there and let
+  // the user open it via the toggle; on desktop it stays open alongside the list.
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= MOBILE_BREAKPOINT);
+  const [sidebarVisible, setSidebarVisible] = useState(() => window.innerWidth > MOBILE_BREAKPOINT);
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
+      setIsMobile(window.innerWidth <= MOBILE_BREAKPOINT);
     };
 
     checkMobile();
