@@ -46,7 +46,31 @@
 - `[CAS-deferred]` 실호출: CAS 복구 후 `curl -X POST nginx:3000/api/hybrid/expand` 검증
 
 ## Phase 2 — 데이터 소유 도메인 (결정 C = A1 이관) [🟡]
-_(대기)_
+
+### Slice: 이관 자산 (migration 011 + 스크립트 + 단위테스트) — 2026-06-11
+
+- 변경 파일:
+  - `minky-rust/migrations/011_flask_compat_columns.sql` — additive columns + flask_document_id_mapping 테이블
+  - `scripts/migrate_flask_to_rust.py` — 이관 스크립트 (순수 함수 + DB 함수)
+  - `scripts/verify_migration.py` — row-count/hash/orphan 검증 쿼리
+  - `scripts/tests/test_migrate.py` — 단위 테스트 39건 (DB 없이)
+- 테스트: Python `39 passed` (`python -m pytest scripts/tests/test_migrate.py`) + Rust `1843 passed` (SQLX_OFFLINE=true)
+- 커밋: `50ff9e1d`
+- 상태: [DONE] [CAS-deferred: 실 이관 실행 + row-count/hash/orphan 검증 → CAS 복구 후 Mario 승인 필수]
+
+**Phase 2 Demo Gate (로컬):**
+- 스크립트 단위테스트 39건 green ✅
+- Rust 1843 tests green (migration 011은 additive, SQLX_OFFLINE 무관) ✅
+- [CAS-deferred] 실 이관·검증: `DRY_RUN=1 python scripts/migrate_flask_to_rust.py` → 통과 확인 후 Mario 승인 받고 실행
+
+**이관 자산 요약:**
+| 항목 | 내용 |
+|------|------|
+| UUID 매핑 | UUIDv5(namespace=`1d6b1000...`, `minky:document:{id}`) — 결정적·멱등 |
+| 필드 매핑 | `markdown_content` → `content`, `is_admin` → `role enum`, NULL user_id → default |
+| additive 컬럼 | documents 5개, categories 5개, tags 3개, document_versions 5개 |
+| 원본 보호 | minky DB SELECT-only (ALTER/DROP/UPDATE/DELETE 없음) |
+| 실행 순서 | users → categories → tags → documents → document_tags → comments → document_versions |
 
 ## Phase 3 — Flask-only 도메인 분류 [🟢]
 _(대기)_
