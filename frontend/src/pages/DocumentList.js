@@ -64,6 +64,13 @@ const DocumentList = () => {
   const pollTimerRef = useRef(null);
   const mountedRef = useRef(true);
 
+  // The list scrolls inside the .documents-content ancestor; track and restore
+  // its scroll position so returning from a document lands where the user was.
+  const listRef = useRef(null);
+  const scrollTopRef = useRef(0);
+  const scrollRestored = useRef(false);
+  const getScrollEl = () => listRef.current?.closest('.documents-content') || null;
+
   const pollPendingDocs = useCallback(async () => {
     if (pendingDocIds.length === 0) return;
     const remaining = [];
@@ -107,6 +114,40 @@ const DocumentList = () => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
+
+  // Keep the latest scroll position of the list container in a ref. The list
+  // only renders (and listRef attaches) once loading is false, so attach then.
+  useEffect(() => {
+    if (loading) return undefined;
+    const el = getScrollEl();
+    if (!el) return undefined;
+    const onScroll = () => {
+      scrollTopRef.current = el.scrollTop;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  // Persist the last scroll position on unmount (e.g. opening a document).
+  useEffect(() => {
+    return () => {
+      const saved = loadListState(LIST_STATE_KEY) || {};
+      saveListState(LIST_STATE_KEY, { ...saved, scrollTop: scrollTopRef.current });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Restore the saved scroll position once, after the first page renders.
+  useEffect(() => {
+    if (loading || scrollRestored.current) return;
+    scrollRestored.current = true;
+    const el = getScrollEl();
+    if (el && restoredState?.scrollTop) {
+      el.scrollTop = restoredState.scrollTop;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   const fetchDocuments = async (
     page = 1,
@@ -259,7 +300,7 @@ const DocumentList = () => {
   }
 
   return (
-    <div className="document-list">
+    <div className="document-list" ref={listRef}>
       <div className="document-list-header">
         <h2>Documents</h2>
         <div className="header-actions">

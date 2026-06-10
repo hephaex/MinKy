@@ -411,6 +411,24 @@ describe('DocumentList', () => {
         expect(saved).toMatchObject({ currentPage: 1 });
       });
     });
+
+    it('saves the scroll position when leaving the list', async () => {
+      // The list reads scroll from its .documents-content ancestor.
+      const { unmount } = render(
+        <div className="documents-content">
+          <DocumentList />
+        </div>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Document 1')).toBeInTheDocument();
+      });
+
+      unmount();
+
+      const saved = JSON.parse(sessionStorage.getItem('documentListState'));
+      expect(saved).toHaveProperty('scrollTop');
+    });
   });
 
   describe('navigation links', () => {
