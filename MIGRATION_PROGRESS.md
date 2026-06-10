@@ -37,7 +37,7 @@
 - Flask 상당 엔드포인트: **없음** → 결정 A(형태 변환) 불필요, Rust 응답 그대로 노출
 - 인증: hybrid/expand는 AuthUser extractor 없음 — 무인증 OK (DB-free LLM-only)
 - 테스트: `1843 passed` (SQLX_OFFLINE=true, query_expansion 14건 포함)
-- 커밋: _(아래 커밋 후 기입)_
+- 커밋: `be164be3`
 - 상태: [DONE] [CAS-deferred: nginx 실구동은 CAS 복구 후]
 
 **Demo Gate 달성:**
