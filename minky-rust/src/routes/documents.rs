@@ -33,6 +33,7 @@ pub fn routes() -> Router<AppState> {
 pub struct ListQuery {
     pub page: Option<i32>,
     pub limit: Option<i32>,
+    pub per_page: Option<i32>,  // Flask compat alias for limit
     pub category_id: Option<i32>,
     pub search: Option<String>,
 }
@@ -65,13 +66,87 @@ pub struct PaginationMeta {
     pub total_pages: i32,
 }
 
+// ── Flask-compat types (Decision A — response shape matching) ────────────────
+
+/// DB row fetched from documents table including additive columns (migration 011)
+#[derive(Debug, Clone, sqlx::FromRow)]
+struct DocumentRow {
+    pub id: Uuid,
+    pub title: String,
+    pub content: String,
+    pub category_id: Option<i32>,
+    pub user_id: i32,
+    pub is_public: bool,
+    pub view_count: i32,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub author: Option<String>,
+    pub html_content: Option<String>,
+    pub is_published: Option<bool>,
+    pub published_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// Flask-compatible document item (field `markdown_content`, no `{success, data}` wrapper)
+#[derive(Debug, Clone, Serialize)]
+pub struct FlaskDocumentItem {
+    pub id: Uuid,
+    pub title: String,
+    pub markdown_content: String,
+    pub category_id: Option<i32>,
+    pub user_id: i32,
+    pub is_public: bool,
+    pub view_count: i32,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub author: Option<String>,
+    pub html_content: Option<String>,
+    pub is_published: bool,
+    pub published_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub tag_names: Vec<String>,
+}
+
+impl From<DocumentRow> for FlaskDocumentItem {
+    fn from(row: DocumentRow) -> Self {
+        Self {
+            id: row.id,
+            title: row.title,
+            markdown_content: row.content,
+            category_id: row.category_id,
+            user_id: row.user_id,
+            is_public: row.is_public,
+            view_count: row.view_count,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            author: row.author,
+            html_content: row.html_content,
+            is_published: row.is_published.unwrap_or(false),
+            published_at: row.published_at,
+            tag_names: vec![],
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct FlaskPagination {
+    pub page: i32,
+    pub per_page: i32,
+    pub total: i64,
+    pub pages: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FlaskListResponse {
+    pub documents: Vec<FlaskDocumentItem>,
+    pub pagination: FlaskPagination,
+}
+
 async fn list_documents(
     State(state): State<AppState>,
     auth_user: AuthUser,
     Query(query): Query<ListQuery>,
-) -> AppResult<Json<ListResponse<DocumentResponse>>> {
+) -> AppResult<Json<FlaskListResponse>> {
     let page = query.page.unwrap_or(1).max(1);
-    let limit = query.limit.unwrap_or(20).clamp(1, 100);
+    let limit = query.limit.or(query.per_page).unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * limit;
     let user_id = auth_user.id;
 
@@ -99,9 +174,10 @@ async fn list_documents(
             .await?
     };
 
-    let documents: Vec<DocumentResponse> = if let Some(ref search) = query.search {
+    let rows: Vec<DocumentRow> = if let Some(ref search) = query.search {
         sqlx::query_as(
-            r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at
+            r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
+                      author, html_content, is_published, published_at
                FROM documents
                WHERE (user_id = $1 OR is_public = true) AND title ILIKE '%' || $2 || '%'
                ORDER BY created_at DESC
@@ -115,7 +191,8 @@ async fn list_documents(
         .await?
     } else if let Some(cat_id) = query.category_id {
         sqlx::query_as(
-            r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at
+            r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
+                      author, html_content, is_published, published_at
                FROM documents
                WHERE (user_id = $1 OR is_public = true) AND category_id = $2
                ORDER BY created_at DESC
@@ -129,7 +206,8 @@ async fn list_documents(
         .await?
     } else {
         sqlx::query_as(
-            r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at
+            r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
+                      author, html_content, is_published, published_at
                FROM documents
                WHERE user_id = $1 OR is_public = true
                ORDER BY created_at DESC
@@ -143,15 +221,15 @@ async fn list_documents(
     };
 
     let total_pages = ((total.0 as f64) / (limit as f64)).ceil() as i32;
+    let documents: Vec<FlaskDocumentItem> = rows.into_iter().map(FlaskDocumentItem::from).collect();
 
-    Ok(Json(ListResponse {
-        success: true,
-        data: documents,
-        meta: PaginationMeta {
-            total: total.0,
+    Ok(Json(FlaskListResponse {
+        documents,
+        pagination: FlaskPagination {
             page,
-            limit,
-            total_pages,
+            per_page: limit,
+            total: total.0,
+            pages: total_pages,
         },
     }))
 }
@@ -161,7 +239,7 @@ async fn list_documents(
 pub struct CreateDocumentRequest {
     #[validate(length(min = 1, max = 500, message = "Title must be 1-500 characters"))]
     pub title: String,
-    pub content: String,
+    pub markdown_content: String,
     pub category_id: Option<i32>,
     pub is_public: Option<bool>,
 }
@@ -176,41 +254,40 @@ async fn create_document(
     State(state): State<AppState>,
     auth_user: AuthUser,
     Json(payload): Json<CreateDocumentRequest>,
-) -> AppResult<Json<SingleResponse<DocumentResponse>>> {
+) -> AppResult<Json<FlaskDocumentItem>> {
     payload.validate().map_err(|e| AppError::Validation(e.to_string()))?;
 
     let user_id = auth_user.id;
     let is_public = payload.is_public.unwrap_or(false);
 
-    let doc: DocumentResponse = sqlx::query_as(
+    let row: DocumentRow = sqlx::query_as(
         r#"INSERT INTO documents (title, content, category_id, user_id, is_public)
            VALUES ($1, $2, $3, $4, $5)
-           RETURNING id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at"#
+           RETURNING id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
+                     author, html_content, is_published, published_at"#
     )
     .bind(&payload.title)
-    .bind(&payload.content)
+    .bind(&payload.markdown_content)
     .bind(payload.category_id)
     .bind(user_id)
     .bind(is_public)
     .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(SingleResponse {
-        success: true,
-        data: doc,
-    }))
+    Ok(Json(FlaskDocumentItem::from(row)))
 }
 
 async fn get_document(
     State(state): State<AppState>,
     auth_user: AuthUser,
     Path(id): Path<Uuid>,
-) -> AppResult<Json<SingleResponse<DocumentResponse>>> {
+) -> AppResult<Json<FlaskDocumentItem>> {
     let user_id = auth_user.id;
 
     // Only allow access to own documents or public documents
-    let doc: Option<DocumentResponse> = sqlx::query_as(
-        r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at
+    let row: Option<DocumentRow> = sqlx::query_as(
+        r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
+                  author, html_content, is_published, published_at
            FROM documents
            WHERE id = $1 AND (user_id = $2 OR is_public = true)"#
     )
@@ -219,7 +296,7 @@ async fn get_document(
     .fetch_optional(&state.db)
     .await?;
 
-    let doc = doc.ok_or_else(|| AppError::NotFound(format!("Document {} not found or access denied", id)))?;
+    let row = row.ok_or_else(|| AppError::NotFound(format!("Document {} not found or access denied", id)))?;
 
     // Increment view count
     sqlx::query("UPDATE documents SET view_count = view_count + 1 WHERE id = $1")
@@ -227,10 +304,7 @@ async fn get_document(
         .execute(&state.db)
         .await?;
 
-    Ok(Json(SingleResponse {
-        success: true,
-        data: doc,
-    }))
+    Ok(Json(FlaskDocumentItem::from(row)))
 }
 
 /// Update document request
@@ -238,7 +312,7 @@ async fn get_document(
 pub struct UpdateDocumentRequest {
     #[validate(length(min = 1, max = 500, message = "Title must be 1-500 characters"))]
     pub title: Option<String>,
-    pub content: Option<String>,
+    pub markdown_content: Option<String>,
     pub category_id: Option<i32>,
     pub is_public: Option<bool>,
 }
@@ -248,7 +322,7 @@ async fn update_document(
     auth_user: AuthUser,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateDocumentRequest>,
-) -> AppResult<Json<SingleResponse<DocumentResponse>>> {
+) -> AppResult<Json<FlaskDocumentItem>> {
     payload.validate().map_err(|e| AppError::Validation(e.to_string()))?;
 
     let user_id = auth_user.id;
@@ -265,7 +339,7 @@ async fn update_document(
     }
 
     // Build update query dynamically based on provided fields (only owner can update)
-    let doc: DocumentResponse = sqlx::query_as(
+    let row: DocumentRow = sqlx::query_as(
         r#"UPDATE documents
            SET
                title = COALESCE($1, title),
@@ -274,10 +348,11 @@ async fn update_document(
                is_public = COALESCE($5, is_public),
                updated_at = NOW()
            WHERE id = $6 AND user_id = $7
-           RETURNING id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at"#
+           RETURNING id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
+                     author, html_content, is_published, published_at"#
     )
     .bind(payload.title.as_deref())
-    .bind(payload.content.as_deref())
+    .bind(payload.markdown_content.as_deref())
     .bind(payload.category_id.is_some())
     .bind(payload.category_id)
     .bind(payload.is_public)
@@ -286,10 +361,7 @@ async fn update_document(
     .fetch_one(&state.db)
     .await?;
 
-    Ok(Json(SingleResponse {
-        success: true,
-        data: doc,
-    }))
+    Ok(Json(FlaskDocumentItem::from(row)))
 }
 
 #[derive(Debug, Serialize)]
@@ -596,6 +668,7 @@ mod tests {
         let query = ListQuery {
             page: None,
             limit: None,
+            per_page: None,
             category_id: None,
             search: None,
         };
@@ -610,6 +683,7 @@ mod tests {
         let query = ListQuery {
             page: Some(2),
             limit: Some(50),
+            per_page: None,
             category_id: Some(5),
             search: Some("test".to_string()),
         };
@@ -625,6 +699,7 @@ mod tests {
         let query = ListQuery {
             page: Some(0),
             limit: None,
+            per_page: None,
             category_id: None,
             search: None,
         };
@@ -637,6 +712,7 @@ mod tests {
         let query = ListQuery {
             page: Some(-5),
             limit: None,
+            per_page: None,
             category_id: None,
             search: None,
         };
@@ -649,6 +725,7 @@ mod tests {
         let query = ListQuery {
             page: None,
             limit: None,
+            per_page: None,
             category_id: None,
             search: None,
         };
@@ -661,6 +738,7 @@ mod tests {
         let query = ListQuery {
             page: None,
             limit: Some(500),
+            per_page: None,
             category_id: None,
             search: None,
         };
@@ -673,6 +751,7 @@ mod tests {
         let query = ListQuery {
             page: None,
             limit: Some(0),
+            per_page: None,
             category_id: None,
             search: None,
         };
@@ -782,7 +861,7 @@ mod tests {
     fn test_create_document_request_valid() {
         let req = CreateDocumentRequest {
             title: "Valid Title".to_string(),
-            content: "Some content".to_string(),
+            markdown_content: "Some content".to_string(),
             category_id: None,
             is_public: Some(true),
         };
@@ -794,7 +873,7 @@ mod tests {
     fn test_create_document_request_empty_title_fails() {
         let req = CreateDocumentRequest {
             title: "".to_string(),
-            content: "Content".to_string(),
+            markdown_content: "Content".to_string(),
             category_id: None,
             is_public: None,
         };
@@ -806,7 +885,7 @@ mod tests {
     fn test_create_document_request_title_too_long_fails() {
         let req = CreateDocumentRequest {
             title: "x".repeat(501),
-            content: "Content".to_string(),
+            markdown_content: "Content".to_string(),
             category_id: None,
             is_public: None,
         };
@@ -818,7 +897,7 @@ mod tests {
     fn test_create_document_request_max_title_length_ok() {
         let req = CreateDocumentRequest {
             title: "x".repeat(500),
-            content: "Content".to_string(),
+            markdown_content: "Content".to_string(),
             category_id: None,
             is_public: None,
         };
@@ -830,7 +909,7 @@ mod tests {
     fn test_create_document_is_public_default_false() {
         let req = CreateDocumentRequest {
             title: "Test".to_string(),
-            content: "Content".to_string(),
+            markdown_content: "Content".to_string(),
             category_id: None,
             is_public: None,
         };
@@ -843,7 +922,7 @@ mod tests {
     fn test_update_document_request_all_none() {
         let req = UpdateDocumentRequest {
             title: None,
-            content: None,
+            markdown_content: None,
             category_id: None,
             is_public: None,
         };
@@ -855,7 +934,7 @@ mod tests {
     fn test_update_document_request_partial() {
         let req = UpdateDocumentRequest {
             title: Some("New Title".to_string()),
-            content: None,
+            markdown_content: None,
             category_id: None,
             is_public: None,
         };
@@ -867,7 +946,7 @@ mod tests {
     fn test_update_document_request_empty_title_fails() {
         let req = UpdateDocumentRequest {
             title: Some("".to_string()),
-            content: None,
+            markdown_content: None,
             category_id: None,
             is_public: None,
         };
@@ -879,7 +958,7 @@ mod tests {
     fn test_update_document_request_title_too_long_fails() {
         let req = UpdateDocumentRequest {
             title: Some("x".repeat(501)),
-            content: None,
+            markdown_content: None,
             category_id: None,
             is_public: None,
         };
@@ -1251,5 +1330,89 @@ mod tests {
             let deserialized: ProcessingStatus = serde_json::from_value(serialized).unwrap();
             assert_eq!(deserialized, variant);
         }
+    }
+
+    // ── Flask-compat type tests ───────────────────────────────────────────────
+
+    fn make_flask_item() -> FlaskDocumentItem {
+        FlaskDocumentItem {
+            id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap(),
+            title: "Test".to_string(),
+            markdown_content: "# Hello".to_string(),
+            category_id: None,
+            user_id: 1,
+            is_public: true,
+            view_count: 0,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            author: None,
+            html_content: None,
+            is_published: false,
+            published_at: None,
+            tag_names: vec![],
+        }
+    }
+
+    #[test]
+    fn flask_item_serializes_markdown_content_key() {
+        let item = make_flask_item();
+        let json = serde_json::to_value(&item).unwrap();
+        assert!(json.get("markdown_content").is_some(), "key must be markdown_content");
+        assert!(json.get("content").is_none(), "old content key must not appear");
+        assert_eq!(json["markdown_content"], "# Hello");
+    }
+
+    #[test]
+    fn flask_item_no_success_wrapper() {
+        let item = make_flask_item();
+        let json = serde_json::to_value(&item).unwrap();
+        assert!(json.get("success").is_none(), "Flask single doc has no success wrapper");
+        assert!(json.get("data").is_none(), "Flask single doc has no data wrapper");
+    }
+
+    #[test]
+    fn flask_item_tag_names_empty_by_default() {
+        let item = make_flask_item();
+        let json = serde_json::to_value(&item).unwrap();
+        assert_eq!(json["tag_names"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn flask_pagination_field_names() {
+        let pagination = FlaskPagination { page: 2, per_page: 10, total: 45, pages: 5 };
+        let json = serde_json::to_value(&pagination).unwrap();
+        assert_eq!(json["page"], 2);
+        assert_eq!(json["per_page"], 10);
+        assert_eq!(json["total"], 45);
+        assert_eq!(json["pages"], 5);
+        assert!(json.get("limit").is_none(), "Flask uses per_page not limit");
+        assert!(json.get("total_pages").is_none(), "Flask uses pages not total_pages");
+    }
+
+    #[test]
+    fn flask_list_response_documents_key() {
+        let resp = FlaskListResponse {
+            documents: vec![make_flask_item()],
+            pagination: FlaskPagination { page: 1, per_page: 20, total: 1, pages: 1 },
+        };
+        let json = serde_json::to_value(&resp).unwrap();
+        assert!(json.get("documents").is_some(), "key must be documents");
+        assert!(json.get("data").is_none(), "Flask uses documents not data");
+        assert!(json.get("success").is_none(), "Flask list has no success key");
+        assert_eq!(json["documents"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn list_query_per_page_alias() {
+        let q = ListQuery { page: None, limit: None, per_page: Some(15), category_id: None, search: None };
+        let limit = q.limit.or(q.per_page).unwrap_or(20).clamp(1, 100);
+        assert_eq!(limit, 15);
+    }
+
+    #[test]
+    fn list_query_limit_takes_precedence_over_per_page() {
+        let q = ListQuery { page: None, limit: Some(10), per_page: Some(30), category_id: None, search: None };
+        let limit = q.limit.or(q.per_page).unwrap_or(20).clamp(1, 100);
+        assert_eq!(limit, 10);
     }
 }
