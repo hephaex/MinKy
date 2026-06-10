@@ -27,7 +27,23 @@
 **Phase 0→1 핸드오프 준비 완료.** Opus 확인 항목: §11 Phase 0→1 경계 참조.
 
 ## Phase 1 — DB-free 배선 증명 (query expansion) [🟢]
-_(대기)_
+
+### Slice: nginx /api/hybrid/ → Rust 배선 + UPSTAGE_API_KEY 전달 — 2026-06-11
+
+- 변경 파일:
+  - `frontend/nginx.conf` — `location /api/hybrid/` 블록 추가 (rust-backend:8000, `/api/` catch-all 앞)
+  - `docker-compose.cas.yml` — Rust 서비스에 `UPSTAGE_API_KEY=${UPSTAGE_API_KEY:-}` 추가
+- 경로 정정: 계획서 `/api/search/expand` → 실제 `POST /api/hybrid/expand` (routes/hybrid.rs 기준)
+- Flask 상당 엔드포인트: **없음** → 결정 A(형태 변환) 불필요, Rust 응답 그대로 노출
+- 인증: hybrid/expand는 AuthUser extractor 없음 — 무인증 OK (DB-free LLM-only)
+- 테스트: `1843 passed` (SQLX_OFFLINE=true, query_expansion 14건 포함)
+- 커밋: _(아래 커밋 후 기입)_
+- 상태: [DONE] [CAS-deferred: nginx 실구동은 CAS 복구 후]
+
+**Demo Gate 달성:**
+- Rust 통합테스트 1843 green ✅
+- nginx config: `/api/hybrid/` 블록이 `/api/` 보다 먼저 (longest-match prefix 우선) ✅
+- `[CAS-deferred]` 실호출: CAS 복구 후 `curl -X POST nginx:3000/api/hybrid/expand` 검증
 
 ## Phase 2 — 데이터 소유 도메인 (결정 C = A1 이관) [🟡]
 _(대기)_
