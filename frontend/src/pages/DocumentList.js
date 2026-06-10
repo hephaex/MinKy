@@ -11,6 +11,7 @@ import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
 import { logError } from '../utils/logger';
 import { formatDate } from '../utils/dateUtils';
+import { loadListState, saveListState } from '../utils/listStatePersistence';
 import './DocumentList.css';
 
 // Sort options configuration
@@ -33,26 +34,9 @@ const VIEW_MODES = {
 // from a document restores the page the user was on, not page 1.
 const LIST_STATE_KEY = 'documentListState';
 
-const loadListState = () => {
-  try {
-    const raw = sessionStorage.getItem(LIST_STATE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-};
-
-const saveListState = (state) => {
-  try {
-    sessionStorage.setItem(LIST_STATE_KEY, JSON.stringify(state));
-  } catch {
-    // sessionStorage unavailable or quota exceeded — non-fatal
-  }
-};
-
 const DocumentList = () => {
   // Restore the previous list view (page/filters) once on mount.
-  const [restoredState] = useState(loadListState);
+  const [restoredState] = useState(() => loadListState(LIST_STATE_KEY));
   const [documents, setDocuments] = useState([]);
   const [pagination, setPagination] = useState({});
   const [loading, setLoading] = useState(true);
@@ -171,7 +155,13 @@ const DocumentList = () => {
 
   // Persist list view state so navigating into a document and back restores it.
   useEffect(() => {
-    saveListState({ searchQuery, currentPage, selectedCategory, sortBy, selectedTags });
+    saveListState(LIST_STATE_KEY, {
+      searchQuery,
+      currentPage,
+      selectedCategory,
+      sortBy,
+      selectedTags,
+    });
   }, [searchQuery, currentPage, selectedCategory, sortBy, selectedTags]);
 
   const handleSearch = (query) => {

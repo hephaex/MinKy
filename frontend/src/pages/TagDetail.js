@@ -7,7 +7,11 @@ import Pagination from '../components/Pagination';
 import { highlightTextReact, truncateWithHighlight } from '../utils/highlightText';
 import { logError } from '../utils/logger';
 import { formatDateTime } from '../utils/dateUtils';
+import { loadListState, saveListState } from '../utils/listStatePersistence';
 import './TagDetail.css';
+
+// Page is persisted per tag so each tag remembers where the user was reading.
+const stateKey = (slug) => `tagDetailState:${slug}`;
 
 const TagDetail = () => {
   const { slug } = useParams();
@@ -16,12 +20,21 @@ const TagDetail = () => {
   const [pagination, setPagination] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(
+    () => loadListState(stateKey(slug))?.currentPage ?? 1
+  );
 
   useEffect(() => {
-    fetchTagData(1);
+    // Honour the page saved for this tag (e.g. returning from a document).
+    const savedPage = loadListState(stateKey(slug))?.currentPage ?? 1;
+    fetchTagData(savedPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  // Persist the current page per tag so navigating away and back restores it.
+  useEffect(() => {
+    saveListState(stateKey(slug), { currentPage });
+  }, [slug, currentPage]);
 
   const fetchTagData = async (page = 1) => {
     try {

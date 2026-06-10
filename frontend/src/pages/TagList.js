@@ -1,26 +1,44 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { tagService } from '../services/api';
 import SearchBar from '../components/SearchBar';
 import Pagination from '../components/Pagination';
 import { logError } from '../utils/logger';
+import { loadListState, saveListState } from '../utils/listStatePersistence';
 import './TagList.css';
 
+const LIST_STATE_KEY = 'tagListState';
+
 const TagList = () => {
+  // Restore the previous list view (page/filters) once on mount.
+  const [restoredState] = useState(() => loadListState(LIST_STATE_KEY));
   const [tags, setTags] = useState([]);
   const [statistics, setStatistics] = useState(null);
   const [pagination, setPagination] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [viewMode, setViewMode] = useState('all'); // 'all', 'popular', 'auto-generated'
+  const [searchQuery, setSearchQuery] = useState(restoredState?.searchQuery ?? '');
+  const [currentPage, setCurrentPage] = useState(restoredState?.currentPage ?? 1);
+  const [viewMode, setViewMode] = useState(restoredState?.viewMode ?? 'all'); // 'all', 'popular', 'auto-generated'
 
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    fetchTags(1, searchQuery);
+    if (isInitialMount.current) {
+      // First mount: honour the restored page (e.g. returning from a tag).
+      isInitialMount.current = false;
+      fetchTags(currentPage, searchQuery);
+    } else {
+      // A filter changed: reset to the first page.
+      fetchTags(1, searchQuery);
+    }
     fetchStatistics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, viewMode]);
+
+  // Persist list view state so navigating into a tag and back restores it.
+  useEffect(() => {
+    saveListState(LIST_STATE_KEY, { searchQuery, currentPage, viewMode });
+  }, [searchQuery, currentPage, viewMode]);
 
   const fetchTags = async (page = 1, search = '') => {
     try {

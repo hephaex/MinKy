@@ -7,17 +7,22 @@ import {
   AdminMaintenance,
   AdminTabs,
 } from '../components/admin';
+import { loadListState, saveListState } from '../utils/listStatePersistence';
 import '../styles/AdminPanel.css';
 
+const LIST_STATE_KEY = 'adminPanelState';
+
 const AdminPanel = () => {
-  const [activeTab, setActiveTab] = useState('overview');
+  // Restore the previous tab/page once on mount (e.g. returning from a document).
+  const [restoredState] = useState(() => loadListState(LIST_STATE_KEY));
+  const [activeTab, setActiveTab] = useState(restoredState?.activeTab ?? 'overview');
   const [users, setUsers] = useState([]);
   const [documents, setDocuments] = useState([]);
   const [systemStats, setSystemStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [userPage, setUserPage] = useState(1);
-  const [documentPage, setDocumentPage] = useState(1);
+  const [userPage, setUserPage] = useState(restoredState?.userPage ?? 1);
+  const [documentPage, setDocumentPage] = useState(restoredState?.documentPage ?? 1);
 
   useEffect(() => {
     if (activeTab === 'overview') {
@@ -28,6 +33,11 @@ const AdminPanel = () => {
       fetchDocuments();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, userPage, documentPage]);
+
+  // Persist tab/page so navigating away and back restores the admin view.
+  useEffect(() => {
+    saveListState(LIST_STATE_KEY, { activeTab, userPage, documentPage });
   }, [activeTab, userPage, documentPage]);
 
   const fetchSystemStats = async () => {
