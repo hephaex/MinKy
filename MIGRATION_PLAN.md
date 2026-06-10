@@ -116,6 +116,7 @@ Rust :  { "success":true, "data":[{id,title,content,...}], "meta":{total,page,li
 - Rust sqlx = 런타임 문자열(매크로 0) → `SQLX_OFFLINE=true`로 DB 없이 테스트.
 - DocumentView "뒤로"는 `to="/"` → sessionStorage 패턴 사용(이미 적용).
 - 라이브 `minky` ALTER/DROP 금지.
+- **[Phase 0 Opus 리뷰 발견] JWT 시크릿 env var 이름 불일치**: Flask는 `JWT_SECRET_KEY`, Rust는 `JWT_SECRET`을 읽음. `docker-compose.cas.yml` Rust 서비스: `JWT_SECRET=${JWT_SECRET:?...}` → `JWT_SECRET=${JWT_SECRET_KEY:?...}` 로 변경해 호스트 `.env`의 `JWT_SECRET_KEY` 하나로 통일. Phase 2(실 토큰 교차 검증) 전 반드시 배포 적용.
 
 ## 8. 무엇이 Sonnet-safe가 아닌가 (요약)
 - 🔴 결정C(스키마/데이터, 41파일·라이브 위험) → 분석만, 사람 승인.

@@ -1,0 +1,102 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.cas
+    ports:
+      - "5001:5000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-minky_app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${DB_HOST:?DB_HOST is required}:5432/${POSTGRES_DB:-minky}?client_encoding=UTF8
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - FLASK_ENV=internal
+      - MINKY_AUTH_REQUIRED=${MINKY_AUTH_REQUIRED:-false}
+      - RATELIMIT_ENABLED=${RATELIMIT_ENABLED:-false}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://172.20.0.110:3000}
+      - CACHE_TYPE=${CACHE_TYPE:-RedisCache}
+      - CACHE_DEFAULT_TIMEOUT=${CACHE_DEFAULT_TIMEOUT:-300}
+      - REDIS_URL=redis://redis:6379/0
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GOOGLE_CLOUD_API_KEY=${GOOGLE_CLOUD_API_KEY:-}
+      - LOCAL_LLM_ENABLED=${LOCAL_LLM_ENABLED:-false}
+      - LOCAL_LLM_URL=${LOCAL_LLM_URL:-http://100.64.0.15:8001}
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-exaone}
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-google}
+      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-gemini-1.5-flash}
+      - DEFAULT_AI_TAGS_ENABLED=${DEFAULT_AI_TAGS_ENABLED:-true}
+      - DEFAULT_AI_SUMMARY_ENABLED=${DEFAULT_AI_SUMMARY_ENABLED:-true}
+      # OpenSearch (shared CT202 opensearch1)
+      - OPENSEARCH_HOST=${OPENSEARCH_HOST:-172.20.0.151}
+      - OPENSEARCH_PORT=${OPENSEARCH_PORT:-9200}
+      - OPENSEARCH_USE_SSL=${OPENSEARCH_USE_SSL:-false}
+      - OPENSEARCH_VERIFY_CERTS=${OPENSEARCH_VERIFY_CERTS:-false}
+      - EXPORT_ENABLED=${EXPORT_ENABLED:-true}
+      - DEFAULT_EXPORT_FORMAT=${DEFAULT_EXPORT_FORMAT:-markdown}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+      - ./migrations:/app/migrations
+      - ./backup:/app/backup
+    restart: unless-stopped
+
+  rust-backend:
+    build:
+      context: ./minky-rust
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-minky_app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${DB_HOST:?DB_HOST is required}:5432/minky_rust
+      - JWT_SECRET=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - REDIS_URL=redis://redis:6379/0
+      - HOST=0.0.0.0
+      - PORT=8000
+      - RUST_LOG=${RUST_LOG:-minky=info,tower_http=info}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - rust_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - ./redisdata:/data
+    command: >
+      redis-server
+      --maxmemory ${REDIS_MAXMEMORY:-256mb}
+      --maxmemory-policy ${REDIS_MAXMEMORY_POLICY:-allkeys-lru}
+      --appendonly yes
+      --appendfsync everysec
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  rust_logs:
