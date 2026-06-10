@@ -45,6 +45,8 @@ jest.mock('../services/api', () => ({
   default: {
     get: jest.fn(),
     post: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn(),
   },
   documentService: {
     getDocument: jest.fn(),
@@ -55,7 +57,8 @@ jest.mock('../services/api', () => ({
 
 // Import after mocks are set up
 import DocumentView from './DocumentView';
-import { documentService } from '../services/api';
+import api, { documentService } from '../services/api';
+import { extractFrontmatter } from '../utils/obsidianRenderer';
 
 describe('DocumentView', () => {
   beforeEach(() => {
@@ -144,6 +147,58 @@ describe('DocumentView', () => {
       fireEvent.click(backLink);
 
       expect(mockNavigate).not.toHaveBeenCalledWith(-1);
+    });
+  });
+
+  describe('delete navigation', () => {
+    const loadedDoc = {
+      id: 1,
+      title: 'Doc One',
+      markdown_content: '# hello',
+      tags: [{ name: 'keep' }], // non-empty avoids the auto-tagging API path
+      processing_status: 'completed',
+      author: null,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      // CRA's resetMocks wipes factory implementations, so re-establish the
+      // frontmatter parser used while rendering the loaded document.
+      extractFrontmatter.mockReturnValue({ metadata: {}, content: '# hello' });
+    });
+
+    it('returns to the previous list after deleting (in-app)', async () => {
+      mockLocation = { key: 'abc123', pathname: '/documents/1' };
+      window.confirm = jest.fn(() => true);
+      documentService.getDocument.mockResolvedValue(loadedDoc);
+      api.delete.mockResolvedValue({});
+
+      render(<DocumentView />);
+
+      const deleteBtn = await screen.findByText('Delete');
+      fireEvent.click(deleteBtn);
+
+      await waitFor(() => {
+        expect(api.delete).toHaveBeenCalledWith('/documents/1');
+      });
+      expect(mockNavigate).toHaveBeenCalledWith(-1);
+    });
+
+    it('goes to all documents after deleting when opened directly', async () => {
+      mockLocation = { key: 'default', pathname: '/documents/1' };
+      window.confirm = jest.fn(() => true);
+      documentService.getDocument.mockResolvedValue(loadedDoc);
+      api.delete.mockResolvedValue({});
+
+      render(<DocumentView />);
+
+      const deleteBtn = await screen.findByText('Delete');
+      fireEvent.click(deleteBtn);
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/');
+      });
     });
   });
 });

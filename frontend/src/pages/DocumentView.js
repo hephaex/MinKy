@@ -28,7 +28,16 @@ const DocumentView = () => {
   // Return to the exact previous view (its list page/filters are restored from
   // sessionStorage) when the document was opened from within the app; fall back
   // to all documents when it was opened directly (no in-app history).
+  const goToPreviousView = () => {
+    if (location.key !== 'default') {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
+
   const handleBack = (e) => {
+    // Let direct loads fall through to the link's '/' href.
     if (location.key !== 'default') {
       e.preventDefault();
       navigate(-1);
@@ -138,7 +147,7 @@ const DocumentView = () => {
     if (window.confirm('Are you sure you want to delete this document?')) {
       try {
         await api.delete(`/documents/${id}`);
-        navigate('/');
+        goToPreviousView();
       } catch (err) {
         setError('Failed to delete document');
         logError('DocumentView.handleDelete', err);
