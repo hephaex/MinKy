@@ -83,11 +83,32 @@ Rust :  { "success":true, "data":[{id,title,content,...}], "meta":{total,page,li
 프론트 영향(무변경 목표): DocumentList.js가 response.data.documents/.pagination 사용 → 그대로 동작해야 함
 ```
 
-## 6. 검증으로 채울 칸 (Sonnet이 Phase 0에서 기록)
-- [ ] 프론트 토큰 전송 방식: ____ (쿠키 / body+헤더주입 / 기타)
-- [ ] Flask JWT_TOKEN_LOCATION 설정 위치: ____
-- [ ] 쿠키명(있다면): ____
-- [ ] 결정C 방향(Mario 승인): ____
+## 6. 검증으로 채울 칸 (2026-06-10 Phase 0 실측 완료)
+
+- [x] **프론트 토큰 전송 방식: 없음 (무인증 동작)**
+  - `api.js`: `withCredentials: true` (Flask session 쿠키용)이지만 JWT 토큰을 어디에도 저장하지 않음
+  - `authService.login()`: 서버 응답 body에서 `access_token` 수신 → `sessionStorage('user')` 저장 **끝** (토큰 자체 미저장)
+  - Authorization 헤더 인터셉터 없음
+  - 일부 컴포넌트(DateSidebar 등)가 `localStorage.getItem('token')` 시도 → 항상 null (저장되지 않음)
+  - `authService.getToken()` 호출하는 컴포넌트 존재 → 하지만 `authService`에 해당 메서드 미정의(항상 undefined)
+  - **결론**: 현재 시스템은 `@jwt_required(optional=True)` 기반 사실상 무인증으로 동작. Login UI 없음, 개인 지식베이스 용도.
+
+- [x] **Flask JWT_TOKEN_LOCATION: 미설정 (기본값 = headers)**
+  - `app/__init__.py`에 `JWT_TOKEN_LOCATION` 없음 → flask-jwt-extended 기본 = `["headers"]`
+  - JWT sub = `str(user.id)` (문자열 "1", "2" ...) HS256
+  - login 응답: body로만 반환(`success_response({"access_token": ...})`). HttpOnly 쿠키 미설정.
+  - api.js 코멘트 "HttpOnly cookie by the backend"는 **미구현 계획임** — 실제와 다름.
+
+- [x] **쿠키명: access_token (Rust extractor.rs에만 정의, Flask가 설정하지 않음)**
+  - Rust `extractor.rs`는 이미 `Authorization: Bearer` → cookie `access_token` fallback 구현됨
+  - 하지만 Flask가 해당 쿠키를 발급하지 않으므로 현재 경로 미활성
+
+- [x] **결정C 방향: A1 (데이터 이관) — Opus 2026-06-10 확정** (§2 참조)
+
+**Phase 0 코드 수정 결론 (🟢 Sonnet-safe, 플랜 §4-1 명시)**:
+- `Claims.sub: i32` → `String` (Flask sub=str와 일치, Rust 자체 생성 시 `user.id.to_string()`)
+- `extractor.rs`: `id: claims.sub.parse::<i32>()` (AuthUser.id는 i32 유지 — DB FK 타입 보존)
+- 프론트 Bearer 인터셉터 추가는 Phase 2 이후로 연기 (무인증으로 Phase 1 진행 가능)
 
 ## 7. 함정 모음 (이번 세션 실측)
 - CRA `resetMocks:true` → jest.mock 팩토리 구현 리셋. mock 반환은 **테스트 본문**에서 설정.

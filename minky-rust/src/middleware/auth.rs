@@ -34,7 +34,7 @@ pub async fn auth_middleware(
 
     match auth_service.validate_token(token) {
         Ok(claims) => {
-            // Insert user ID into request extensions for handlers to access
+            // Insert user ID (as String) into request extensions for handlers to access
             request.extensions_mut().insert(claims.sub);
             request.extensions_mut().insert(claims.role);
             Ok(next.run(request).await)

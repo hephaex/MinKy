@@ -77,8 +77,13 @@ where
             .validate_token(&token)
             .map_err(|_| AuthError("Invalid or expired token".to_string()))?;
 
+        let id = claims
+            .sub
+            .parse::<i32>()
+            .map_err(|_| AuthError("Invalid user ID in token".to_string()))?;
+
         Ok(AuthUser {
-            id: claims.sub,
+            id,
             email: claims.email,
             role: claims.role,
         })
@@ -107,15 +112,19 @@ where
             .and_then(|h| h.strip_prefix("Bearer ").map(|s| s.to_string()))
             .or_else(|| extract_cookie_value(&parts.headers, "access_token"));
 
-        let auth_user = token.and_then(|t| {
-            let auth_service = AuthService::new(state.db.clone(), state.config.clone());
-            auth_service.validate_token(&t).ok()
-        })
-        .map(|claims| AuthUser {
-            id: claims.sub,
-            email: claims.email,
-            role: claims.role,
-        });
+        let auth_user = token
+            .and_then(|t| {
+                let auth_service = AuthService::new(state.db.clone(), state.config.clone());
+                auth_service.validate_token(&t).ok()
+            })
+            .and_then(|claims| {
+                let id = claims.sub.parse::<i32>().ok()?;
+                Some(AuthUser {
+                    id,
+                    email: claims.email,
+                    role: claims.role,
+                })
+            });
 
         Ok(OptionalAuthUser(auth_user))
     }

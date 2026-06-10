@@ -14,7 +14,7 @@ use crate::{config::Config, error::AppError, models::User};
 /// JWT claims structure
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: i32,       // user id
+    pub sub: String,    // user id (string to match Flask jwt identity format)
     pub email: String,
     pub role: String,
     pub exp: i64,       // expiration timestamp
@@ -59,7 +59,7 @@ impl AuthService {
             .timestamp();
 
         let claims = Claims {
-            sub: user.id,
+            sub: user.id.to_string(),
             email: user.email.clone(),
             role: format!("{:?}", user.role).to_lowercase(),
             exp: expiration,
@@ -83,7 +83,7 @@ impl AuthService {
             .timestamp();
 
         let claims = Claims {
-            sub: user.id,
+            sub: user.id.to_string(),
             email: user.email.clone(),
             role: format!("{:?}", user.role).to_lowercase(),
             exp: expiration,
@@ -276,7 +276,7 @@ mod tests {
         let user = make_user();
         let token = svc.generate_access_token(&user).unwrap();
         let claims = svc.validate_token(&token).expect("Token should be valid");
-        assert_eq!(claims.sub, user.id);
+        assert_eq!(claims.sub, user.id.to_string());
         assert_eq!(claims.email, user.email);
         assert_eq!(claims.role, "user");
     }
@@ -384,5 +384,43 @@ mod tests {
         let token = svc.generate_access_token(&admin_user).unwrap();
         let claims = svc.validate_token(&token).unwrap();
         assert_eq!(claims.role, "admin");
+    }
+
+    /// Phase 0 Demo Gate: Rust validates a Flask-format token (sub=String "1", HS256, same secret).
+    /// Flask issues: create_access_token(identity=str(user.id)) → sub is a JSON string.
+    /// Before this fix Claims.sub was i32 so Flask tokens would fail deserialization.
+    #[tokio::test]
+    async fn test_validate_flask_format_token_sub_is_string() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use serde_json::json;
+
+        let secret = "test-secret-key-for-unit-tests";
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        let svc = AuthService::new(pool, make_config()); // same secret
+
+        // Build a token the same way Flask does: sub = "42" (string), HS256
+        let now = chrono::Utc::now().timestamp();
+        let flask_payload = json!({
+            "sub": "42",           // Flask: str(user.id)
+            "email": "test@example.com",
+            "role": "user",
+            "exp": now + 3600,
+            "iat": now,
+        });
+        // Encode as raw JSON claims to avoid Rust struct type constraints
+        let flask_token = encode(
+            &Header::default(),
+            &flask_payload,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .expect("should encode flask-format token");
+
+        let claims = svc
+            .validate_token(&flask_token)
+            .expect("Rust must accept Flask-format token with string sub");
+
+        assert_eq!(claims.sub, "42", "sub should be string '42'");
+        assert_eq!(claims.email, "test@example.com");
+        assert_eq!(claims.role, "user");
     }
 }
