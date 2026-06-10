@@ -55,6 +55,7 @@ describe('DocumentList', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    sessionStorage.clear();
     api.get.mockImplementation((url) => {
       if (url.includes('/categories')) {
         return Promise.resolve({ data: { data: { categories: mockCategories } } });
@@ -358,6 +359,57 @@ describe('DocumentList', () => {
 
       // Pagination should be rendered when documents exist
       expect(document.querySelector('.pagination')).toBeInTheDocument();
+    });
+  });
+
+  describe('page persistence across navigation', () => {
+    it('restores the saved page on mount instead of resetting to page 1', async () => {
+      // User was reading on page 3 before navigating into a document
+      sessionStorage.setItem(
+        'documentListState',
+        JSON.stringify({
+          searchQuery: '',
+          currentPage: 3,
+          selectedCategory: '',
+          sortBy: 'updated_desc',
+          selectedTags: [],
+        })
+      );
+
+      render(<DocumentList />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Document 1')).toBeInTheDocument();
+      });
+
+      // The documents fetch must request page 3, not page 1
+      const documentsCall = api.get.mock.calls.find(([url]) => url.includes('/documents'));
+      expect(documentsCall).toBeDefined();
+      expect(documentsCall[0]).toContain('page=3');
+    });
+
+    it('defaults to page 1 when no saved state exists', async () => {
+      render(<DocumentList />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Document 1')).toBeInTheDocument();
+      });
+
+      const documentsCall = api.get.mock.calls.find(([url]) => url.includes('/documents'));
+      expect(documentsCall[0]).toContain('page=1');
+    });
+
+    it('persists the current page to sessionStorage when paging', async () => {
+      render(<DocumentList />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Test Document 1')).toBeInTheDocument();
+      });
+
+      await waitFor(() => {
+        const saved = JSON.parse(sessionStorage.getItem('documentListState'));
+        expect(saved).toMatchObject({ currentPage: 1 });
+      });
     });
   });
 

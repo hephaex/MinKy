@@ -29,17 +29,40 @@ const VIEW_MODES = {
   LIST: 'list',
 };
 
+// Persist list view state (page + filters) across navigation so returning
+// from a document restores the page the user was on, not page 1.
+const LIST_STATE_KEY = 'documentListState';
+
+const loadListState = () => {
+  try {
+    const raw = sessionStorage.getItem(LIST_STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveListState = (state) => {
+  try {
+    sessionStorage.setItem(LIST_STATE_KEY, JSON.stringify(state));
+  } catch {
+    // sessionStorage unavailable or quota exceeded — non-fatal
+  }
+};
+
 const DocumentList = () => {
+  // Restore the previous list view (page/filters) once on mount.
+  const [restoredState] = useState(loadListState);
   const [documents, setDocuments] = useState([]);
   const [pagination, setPagination] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState(restoredState?.searchQuery ?? '');
+  const [currentPage, setCurrentPage] = useState(restoredState?.currentPage ?? 1);
   const [showUpload, setShowUpload] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [sortBy, setSortBy] = useState('updated_desc');
+  const [selectedCategory, setSelectedCategory] = useState(restoredState?.selectedCategory ?? '');
+  const [sortBy, setSortBy] = useState(restoredState?.sortBy ?? 'updated_desc');
   const [viewMode, setViewMode] = useState(() => {
     return localStorage.getItem('documentViewMode') || VIEW_MODES.GRID;
   });
@@ -50,7 +73,7 @@ const DocumentList = () => {
   // Use custom hooks for categories and tags
   const { categories } = useCategories();
   const { tags: availableTags } = useTags({ popular: true });
-  const [selectedTags, setSelectedTags] = useState([]);
+  const [selectedTags, setSelectedTags] = useState(restoredState?.selectedTags ?? []);
 
   // Auto-polling for recently uploaded documents
   const [pendingDocIds, setPendingDocIds] = useState([]);
@@ -133,10 +156,23 @@ const DocumentList = () => {
     }
   };
 
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    fetchDocuments(1, searchQuery, selectedCategory, sortBy, selectedTags);
+    if (isInitialMount.current) {
+      // First mount: honour the restored page (e.g. returning from a document).
+      isInitialMount.current = false;
+      fetchDocuments(currentPage, searchQuery, selectedCategory, sortBy, selectedTags);
+    } else {
+      // A filter changed: reset to the first page.
+      fetchDocuments(1, searchQuery, selectedCategory, sortBy, selectedTags);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, selectedCategory, sortBy, selectedTags]);
+
+  // Persist list view state so navigating into a document and back restores it.
+  useEffect(() => {
+    saveListState({ searchQuery, currentPage, selectedCategory, sortBy, selectedTags });
+  }, [searchQuery, currentPage, selectedCategory, sortBy, selectedTags]);
 
   const handleSearch = (query) => {
     setSearchQuery(query);
