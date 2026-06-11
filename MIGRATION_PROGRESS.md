@@ -223,13 +223,56 @@
 | 비인증 GET /api/documents → 공개 문서 | `is_public = true` only ✅ |
 | 비인증 GET /api/categories → 전체 카테고리 | user_id 필터 없음 ✅ |
 
-**남은 Flask compat 확인 필요:**
+### Slice: search+AI OptionalAuth + Flask compat shape — 2026-06-12
+
+- 변경 파일:
+  - `minky-rust/src/routes/search.rs` — AuthUser → OptionalAuthUser (search, autocomplete)
+  - `minky-rust/src/routes/rag.rs` — AuthUser → OptionalAuthUser (ask, ask_stream, semantic_search, search_history)
+  - `minky-rust/src/routes/ai.rs` — 전 핸들러 OptionalAuthUser; `/suggest-tags` dash alias; suggest_tags 응답 shape `{suggested_tags:[...]}` (comma-split → Vec<String>)
+  - `frontend/nginx.conf` — `/api/search`, `/api/ai`, `/api/tags` 블록 추가
+- 수정 내용:
+  - **search/rag 비인증 허용**: 사실상 무인증 KB에서 검색 가능
+  - **AI suggest-tags Flask compat**: 프론트 `/ai/suggest-tags`(dash) 호출 → alias 라우트; `response.data.suggested_tags`(flat array) 기대 → `SuggestTagsResponseBody` 새 반환 타입
+  - **ai.rs LLM 콤마 파싱**: `SuggestionResponse.suggestion` (String) → `split(',').trim()` → `Vec<String>`
+- 테스트: Rust `1867 passed` (SQLX_OFFLINE=true, +4 consumer-contract tests in ai.rs)
+- 커밋: `f56f211f`
+- 상태: [DONE] [CAS-deferred: nginx 실구동 + /ai/suggest-tags 실호출 → CAS 복구 후]
+
+**Demo Gate:**
+- Rust 1867 tests green ✅
+- nginx `/api/search`, `/api/ai` 블록이 `/api/` Flask catch-all 앞에 위치 ✅
+- `/suggest-tags` dash alias + `{suggested_tags:[...]}` shape ✅
+
+### Slice: tags slug routing + missing routes + Flask compat shape — 2026-06-12
+
+- 변경 파일:
+  - `minky-rust/src/routes/tags.rs` — 전면 재작성: `/{id}(i32)` → `/{slug}(String)`; TagListResponse `{data:{tags,pagination,total}}`; `/statistics`, `/suggest` 라우트 추가; OptionalAuthUser for reads
+  - `minky-rust/src/services/tag_service.rs` — `list_all()`, `get_by_name(name)` 추가
+  - `frontend/nginx.conf` — `/api/tags` 블록 (이미 Phase search slice에서 추가됨)
+- 수정 내용:
+  - **slug routing**: 프론트가 `/tags/rust`(이름 문자열) 로 접근 → `Path<String>` + `get_by_name` LOWER() 대소문자 비교
+  - **list shape**: `{data:{tags:[...], pagination:{page,per_page,total,pages,has_next,has_prev}, total:N}}` — useTags.js: `response.data?.data?.tags`
+  - **통계**: `GET /tags/statistics` → top_tags + total_tag_usage
+  - **자동완성**: `GET /tags/suggest?q=&limit=` → prefix 필터
+  - **literal 라우트 우선순위**: `/statistics`, `/suggest` → `/{slug}` 순서로 충돌 방지
+- 테스트: Rust `1864 passed` (SQLX_OFFLINE=true)
+- 커밋: `25256515`
+- 상태: [DONE] [CAS-deferred: nginx 실구동 + /tags/ 실호출 E2E → CAS 복구 후]
+
+**Demo Gate:**
+- Rust 1864 tests green ✅
+- literal routes (statistics/suggest) precede /{slug} ✅
+- `{data:{tags,pagination,total}}` shape — useTags.js `data?.data?.tags` 대응 ✅
+
+**Phase 4 Flask compat 완료 현황:**
 | 도메인 | 상태 |
 |--------|------|
-| `/api/tags` | 🟡 미검토 (slug routing + shape mismatch) |
+| `/api/documents` | ✅ [DONE] (Phase 2) |
+| `/api/categories` | ✅ [DONE] (Phase 4 Slice 1) |
+| `/api/search` | ✅ [DONE] (Phase 4 Slice 2) |
+| `/api/ai` | ✅ [DONE] (Phase 4 Slice 2) |
+| `/api/tags` | ✅ [DONE] (Phase 4 Slice 3) |
 | `/api/auth` | 🔴 JWT_SECRET_KEY vs JWT_SECRET 통일 — Mario 승인 필수 |
-| `/api/ai` | 🟡 UPSTAGE_API_KEY 전달은 Phase 1에서 완료, 경로 확인 필요 |
-| `/api/search` | 🟡 미검토 |
 
 ## Phase F — Flask 폐기 [🔴 Mario 승인]
 _(대기)_
