@@ -272,7 +272,45 @@
 | `/api/search` | ✅ [DONE] (Phase 4 Slice 2) |
 | `/api/ai` | ✅ [DONE] (Phase 4 Slice 2) |
 | `/api/tags` | ✅ [DONE] (Phase 4 Slice 3) |
-| `/api/auth` | 🔴 JWT_SECRET_KEY vs JWT_SECRET 통일 — Mario 승인 필수 |
+| `/api/auth` | ✅ [DONE] (Phase 4 Slice 4) |
+
+### Slice: auth bcrypt+argon2 이중 검증 + Flask compat + JWT_SECRET 통일 — 2026-06-12
+
+- 변경 파일:
+  - `minky-rust/Cargo.toml` — `bcrypt = "0.15"` 추가
+  - `minky-rust/src/services/auth_service.rs` — `verify_password`: `$2b$/$2a$/$2y$` → bcrypt, `$argon2` → argon2 이중 지원; `find_user_by_identifier(username OR email)` 추가
+  - `minky-rust/src/routes/auth.rs` — `LoginRequest`: `email:String` → `username:Option + email:Option` (Flask `{username,password}` 허용); `find_user_by_email` → `find_user_by_identifier`
+  - `docker-compose.yml` — `JWT_SECRET=${JWT_SECRET:?}` → `JWT_SECRET=${JWT_SECRET_KEY:?}` (Flask와 동일 키 사용)
+  - `frontend/nginx.conf` — `/api/auth` → rust-backend:8000 블록 추가
+- 핵심 수정:
+  - **bcrypt 호환**: 기존 Flask 사용자(DB 패스워드가 `$2b$` bcrypt 해시)가 Rust 엔드포인트로 로그인 가능
+  - **JWT_SECRET 통일**: Flask의 `JWT_SECRET_KEY`를 Rust도 동일하게 사용 — 두 서버가 서로의 토큰 검증 가능
+  - **Flask 로그인 필드**: Flask는 `{username: "alice"}` 전송, Rust는 `{email: "..."}` 전송 — 두 형식 모두 수용
+  - **nginx 라우팅**: `/api/auth` → Rust (Flask catch-all 앞에 위치)
+- 테스트: Rust `1866 passed` (SQLX_OFFLINE=true, bcrypt 단위테스트 포함)
+- 커밋: `fa6ada18`
+- 상태: [DONE] [CAS-deferred: 실 bcrypt 해시로 로그인 E2E + HttpOnly 쿠키 설정 확인 → CAS 복구 후]
+
+**Demo Gate:**
+- `verify_password` bcrypt 분기 + argon2 분기 모두 테스트 ✅
+- `find_user_by_identifier` username OR email 쿼리 ✅
+- `docker-compose.yml` JWT_SECRET = JWT_SECRET_KEY (단일 비밀) ✅
+- nginx `/api/auth` 블록 추가 ✅
+
+**Phase 4 전체 완료:**
+| 도메인 | 상태 |
+|--------|------|
+| `/api/documents` | ✅ Phase 2 |
+| `/api/categories` | ✅ Phase 4 Slice 1 |
+| `/api/search` + `/api/ai` | ✅ Phase 4 Slice 2 |
+| `/api/tags` | ✅ Phase 4 Slice 3 |
+| `/api/auth` | ✅ Phase 4 Slice 4 |
+
+**남은 CAS-deferred 검증 항목** (CAS 복구 후 Mario 승인):
+1. `docker-compose.cas.yml` 실가동: `JWT_SECRET_KEY` 단일 환경변수로 Flask+Rust 동시 구동
+2. Flask 사용자 bcrypt 패스워드로 Rust `/api/auth/login` E2E
+3. Rust가 발행한 HttpOnly 쿠키로 `/api/auth/me` 조회
+4. 기존 Flask 발행 JWT로 Rust 보호 엔드포인트 접근 (Claims.sub=String Phase 0 브리지)
 
 ## Phase F — Flask 폐기 [🔴 Mario 승인]
 _(대기)_
