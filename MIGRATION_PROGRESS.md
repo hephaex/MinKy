@@ -137,7 +137,54 @@
 | 리스트에 `markdown_content` 없음 | `FlaskDocumentLite` body 없음 ✅ |
 
 ## Phase 3 — Flask-only 도메인 분류 [🟢]
-_(대기)_
+
+### 분류 완료 — 2026-06-12
+
+**분류 기준**: 프론트 실 API 호출 여부 × 컴포넌트 실 렌더링 여부 × Rust 라우트 존재 여부
+
+#### A. 계획상 "Flask-only 5개" 분류 결과
+
+| 도메인 | 프론트 호출 경로 | 컴포넌트 렌더? | Rust 라우트 | 판정 |
+|--------|--------------|-------------|------------|------|
+| **org_roam** | 0건 | N/A | 없음 | `[DROP]` — 호출 없음, 안전 폐기 |
+| **clustering** | `DocumentClustering.js`→`/api/clustering/*` | ❌ 어느 페이지도 임포트 안 함 (orphan) | `/ml/clustering` (경로 불일치) | `[DROP-ORPHAN]` — 컴포넌트 미연결, 폐기 가능 |
+| **ml-analytics** | `MLAnalytics.js`→`/api/ml-analytics/*` | ❌ 어느 페이지도 임포트 안 함 (orphan) | `/ml/*` (경로 불일치 `/ml-analytics`≠`/ml`) | `[DROP-ORPHAN]` — 컴포넌트 미연결, 폐기 가능 |
+| **collaboration** | `CollaborativeEditor.js` (socket.io WebSocket) | ✅ `DocumentEdit.js` → App.js | Rust: `ws.rs` → `/ws` (axum WebSocket, 단일 엔드포인트) | `[ASSESS]` — Flask socket.io ≠ Rust `/ws`. 기능 차이 분석 필요 (Mario 승인 후 방향 결정) |
+| **chat** | `chatService.js`→`/api/chat/{message,sessions}` | ✅ `ChatPage` → App.js `/chat` | ❌ 없음 (mod.rs에 chat 없음) | `[FLASK-STAY]` — Rust 구현 없음. Flask 유지 (Phase F까지) |
+
+#### B. "Rust 있지만 nginx가 Flask로 보내는" 도메인 — 추가 발견
+
+현재 nginx catch-all(`/api/ → Flask`)이 Rust 구현이 있는 도메인도 Flask로 보내고 있음.
+이 도메인들은 Phase 3 범위 외이나, Phase F 준비를 위해 목록화:
+
+| Rust 라우트 | 프론트 호출 | 전환 조건 | 우선순위 |
+|-----------|-----------|---------|---------|
+| `/auth/*` | ✅ login/logout/me/refresh | Flask JWT_SECRET_KEY ↔ Rust JWT_SECRET 통일 필요 (§7 함정) | 🔴 Mario 확인 |
+| `/categories/*` | ✅ categories CRUD | Flask compat 응답 형태 확인 필요 | 🟡 |
+| `/tags/*` | ✅ tags CRUD + statistics | Flask compat 확인 필요 | 🟡 |
+| `/ai/*` | ✅ suggestions/autocomplete | UPSTAGE_API_KEY 전달 확인 (Phase 1에서 완료) | 🟡 |
+| `/ocr/*` | ✅ OCRPage, ImportPage, DocumentCreate | ocr.rs 구현 상태 확인 필요 | 🟡 |
+| `/knowledge/*` | ✅ KnowledgeSearch, KnowledgeGraphPage | knowledge.rs 구현 상태 확인 필요 | 🟡 |
+| `/analytics/*` | ✅ AnalyticsDashboard | analytics.rs 확인 필요 | 🟡 |
+| `/git/*` | ✅ GitSettings | git.rs 확인 필요 | 🟡 |
+| `/admin/*` | ✅ AdminPanel | admin.rs 확인 필요 | 🟡 |
+| `/search/*` | ✅ search/ask, search/semantic | search.rs 확인 필요 | 🟡 |
+
+#### C. 핵심 발견 — 경로 불일치 2건
+
+- **Frontend → `/api/clustering/*`** but **Rust → `/api/ml/clustering`** (nginx 전환 시 404)
+- **Frontend → `/api/ml-analytics/*`** but **Rust → `/api/ml/*`** (nginx 전환 시 404)
+- 두 컴포넌트 모두 orphan → nginx 전환 불필요, 현 상태 유지로 충분
+
+#### D. 다음 단계 제안 (Mario 확인 필요)
+
+현재 Phase 3 분류 완료. 남은 전환 작업:
+1. **auth 도메인 전환** (🔴) — JWT 시크릿 통일(`JWT_SECRET_KEY`) + nginx `/api/auth → Rust` 전환
+2. **categories/tags/search 전환** (🟡) — Flask compat 응답 확인 후 nginx 추가
+3. **collaboration** (🟡 ASSESS) — socket.io(Flask) vs WebSocket(Rust `/ws`) 기능 비교
+4. **chat** (Flask 유지) — Phase F에서 Rust 구현 여부 결정
+
+**커밋**: 코드 변경 없음 (grep+분류 only), 이 문서만 업데이트
 
 ## Phase F — Flask 폐기 [🔴 Mario 승인]
 _(대기)_
