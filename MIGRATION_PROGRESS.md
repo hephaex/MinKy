@@ -186,5 +186,50 @@
 
 **커밋**: 코드 변경 없음 (grep+분류 only), 이 문서만 업데이트
 
+## Phase 4 — Auth Blocker + Categories Flask Compat [🟢]
+
+### Slice: OptionalAuthUser + categories Flask 응답 형태 + nginx — 2026-06-12
+
+- 변경 파일:
+  - `minky-rust/src/routes/documents.rs` — list_documents, get_document: AuthUser → OptionalAuthUser (sentinel -1)
+  - `minky-rust/src/routes/categories.rs` — 전면 재작성: OptionalAuthUser, Json<Value> 반환, format=flat|tree 분기
+  - `minky-rust/src/services/category_service.rs` — list_flat_optional, list_tree_optional 추가 (None = show all)
+  - `frontend/nginx.conf` — /api/categories → Rust 블록 추가
+- 수정 내용:
+  - **인증 차단자 해소**: AuthUser(401 반환) → OptionalAuthUser(None 허용) for all read endpoints
+  - **문서 GET 비인증 동작**: `user_id = -1` 센티넬 → `WHERE (user_id = -1 OR is_public = true)` → 공개 문서만
+  - **카테고리 비인증 동작**: `list_flat_optional(None)` → `SELECT` 전체 (user_id 필터 없음) → 개인 KB에서 모든 카테고리 노출
+  - **카테고리 Flask 응답 형태**:
+    - `format=flat` → `{success, data:{categories:[...], count:N}}` (useCategories.js: `response.data.data?.categories`)
+    - `format=tree` → `{success, data:{tree:[...], count:N}}` (CategoryManager.js: `response.data.data?.tree`)
+  - **nginx `/api/categories` 블록**: Rust로 라우팅 (Phase 4 Demo Gate)
+  - **소비자 계약 테스트**: 4건 추가 (`flask_flat_response_has_categories_key` 등)
+- 테스트: Rust `1863 passed` (SQLX_OFFLINE=true, +2 net) + Python `44 passed`
+- 커밋: `91329f08`
+- 상태: [DONE] [CAS-deferred: nginx 실구동 + /categories/ 실호출 E2E → CAS 복구 후]
+
+**Demo Gate:**
+- Rust 1863 tests green ✅
+- nginx `/api/categories` 블록이 `/api/` Flask catch-all 앞에 위치 ✅
+- `format=flat|tree` 분기로 Flask와 동일 응답 키 보장 ✅
+- 소비자 계약 테스트가 `data.categories` / `data.tree` 키 확인 ✅
+
+**프론트엔드 호환성 (갱신):**
+| 프론트 기대값 | Rust 응답 |
+|-------------|---------|
+| `response.data.data?.categories \|\| []` (useCategories) | `data.categories: [...]` ✅ |
+| `response.data.data?.tree \|\| []` (CategoryManager) | `data.tree: [...]` ✅ |
+| `response.data.data?.count` | `data.count: N` ✅ |
+| 비인증 GET /api/documents → 공개 문서 | `is_public = true` only ✅ |
+| 비인증 GET /api/categories → 전체 카테고리 | user_id 필터 없음 ✅ |
+
+**남은 Flask compat 확인 필요:**
+| 도메인 | 상태 |
+|--------|------|
+| `/api/tags` | 🟡 미검토 (slug routing + shape mismatch) |
+| `/api/auth` | 🔴 JWT_SECRET_KEY vs JWT_SECRET 통일 — Mario 승인 필수 |
+| `/api/ai` | 🟡 UPSTAGE_API_KEY 전달은 Phase 1에서 완료, 경로 확인 필요 |
+| `/api/search` | 🟡 미검토 |
+
 ## Phase F — Flask 폐기 [🔴 Mario 승인]
 _(대기)_
