@@ -24,7 +24,7 @@ use tokio_stream::StreamExt;
 
 use crate::{
     error::AppResult,
-    middleware::AuthUser,
+    middleware::OptionalAuthUser,
     models::{
         RagAskRequest, RagAskResponse, RagSemanticSearchRequest,
         RagSemanticSearchResponse, RagSource, SearchHistoryEntry, SearchHistoryQuery,
@@ -106,7 +106,7 @@ struct HistoryResponseBody {
 /// ```
 async fn ask(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Json(payload): Json<RagAskRequest>,
 ) -> AppResult<Json<AskResponseBody>> {
     if payload.question.trim().is_empty() {
@@ -156,7 +156,7 @@ async fn ask(
 /// ```
 async fn semantic_search(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Json(payload): Json<RagSemanticSearchRequest>,
 ) -> AppResult<Json<SemanticResponseBody>> {
     if payload.query.trim().is_empty() {
@@ -193,7 +193,7 @@ async fn semantic_search(
 /// ```
 async fn search_history(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Query(query): Query<SearchHistoryQuery>,
 ) -> AppResult<Json<HistoryResponseBody>> {
     let service = RagService::new(state.db.clone(), state.config.clone());
@@ -249,7 +249,7 @@ enum StreamEvent {
 /// ```
 async fn ask_stream(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Json(payload): Json<RagAskRequest>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let stream = async_stream::stream! {

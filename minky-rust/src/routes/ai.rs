@@ -8,7 +8,7 @@ use validator::Validate;
 
 use crate::{
     error::AppResult,
-    middleware::AuthUser,
+    middleware::OptionalAuthUser,
     models::{EmbeddingResponse, SuggestionRequest, SuggestionResponse, SuggestionType},
     services::AIService,
     AppState,
@@ -19,7 +19,9 @@ pub fn routes() -> Router<AppState> {
         .route("/suggest", post(generate_suggestion))
         .route("/suggest/title", post(suggest_title))
         .route("/suggest/summary", post(suggest_summary))
+        // Flask compat: frontend calls /ai/suggest-tags (dash), canonical is /ai/suggest/tags (slash)
         .route("/suggest/tags", post(suggest_tags))
+        .route("/suggest-tags", post(suggest_tags))
         .route("/improve", post(improve_text))
         .route("/embedding", post(generate_embedding))
 }
@@ -40,7 +42,7 @@ pub struct SuggestionResponseBody {
 
 async fn generate_suggestion(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Json(payload): Json<SuggestionRequestBody>,
 ) -> AppResult<Json<SuggestionResponseBody>> {
     let service = AIService::new(state.config.clone());
@@ -68,7 +70,7 @@ pub struct ContentRequest {
 
 async fn suggest_title(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Json(payload): Json<ContentRequest>,
 ) -> AppResult<Json<SuggestionResponseBody>> {
     let service = AIService::new(state.config.clone());
@@ -89,7 +91,7 @@ async fn suggest_title(
 
 async fn suggest_summary(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Json(payload): Json<ContentRequest>,
 ) -> AppResult<Json<SuggestionResponseBody>> {
     let service = AIService::new(state.config.clone());
@@ -108,11 +110,19 @@ async fn suggest_summary(
     }))
 }
 
+#[derive(Debug, Serialize)]
+pub struct SuggestTagsResponseBody {
+    pub success: bool,
+    pub suggested_tags: Vec<String>,
+}
+
+// Flask compat: frontend reads response.data.suggested_tags (flat Vec<String>).
+// The LLM returns a comma-separated string in SuggestionResponse.suggestion.
 async fn suggest_tags(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Json(payload): Json<ContentRequest>,
-) -> AppResult<Json<SuggestionResponseBody>> {
+) -> AppResult<Json<SuggestTagsResponseBody>> {
     let service = AIService::new(state.config.clone());
 
     let response = service
@@ -123,15 +133,22 @@ async fn suggest_tags(
         })
         .await?;
 
-    Ok(Json(SuggestionResponseBody {
+    let suggested_tags: Vec<String> = response
+        .suggestion
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    Ok(Json(SuggestTagsResponseBody {
         success: true,
-        data: response,
+        suggested_tags,
     }))
 }
 
 async fn improve_text(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Json(payload): Json<ContentRequest>,
 ) -> AppResult<Json<SuggestionResponseBody>> {
     let service = AIService::new(state.config.clone());
@@ -164,7 +181,7 @@ pub struct EmbeddingResponseBody {
 
 async fn generate_embedding(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Json(payload): Json<EmbeddingRequest>,
 ) -> AppResult<Json<EmbeddingResponseBody>> {
     let service = AIService::new(state.config.clone());
@@ -328,6 +345,50 @@ mod tests {
         };
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"dimensions\":1536"));
+    }
+
+    // -------------------------------------------------------------------------
+    // SuggestTagsResponseBody tests (Flask compat shape)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn flask_suggest_tags_has_flat_array() {
+        let body = SuggestTagsResponseBody {
+            success: true,
+            suggested_tags: vec!["rust".to_string(), "axum".to_string()],
+        };
+        let json = serde_json::to_string(&body).unwrap();
+        assert!(json.contains("\"suggested_tags\":[\"rust\",\"axum\"]"));
+        assert!(json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn suggestion_comma_split_parses_to_vec() {
+        let raw = "rust, axum, tokio,  serde  ";
+        let tags: Vec<String> = raw.split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        assert_eq!(tags, vec!["rust", "axum", "tokio", "serde"]);
+    }
+
+    #[test]
+    fn suggestion_comma_split_empty_string_gives_empty_vec() {
+        let raw = "";
+        let tags: Vec<String> = raw.split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn content_request_ignores_document_id_field() {
+        // Frontend sends {content, document_id} — serde ignores unknown fields
+        let json = r#"{"content": "some text", "document_id": 42}"#;
+        let req: ContentRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.content, "some text");
+        assert!(req.context.is_none());
     }
 
     // -------------------------------------------------------------------------

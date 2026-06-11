@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{AppError, AppResult},
-    middleware::{AdminUser, AuthUser},
+    middleware::{AdminUser, OptionalAuthUser},
     models::{AutocompleteSuggestion, SearchHit, SearchQuery, SearchResponse},
     services::{AIService, SearchService},
     AppState,
@@ -40,7 +40,7 @@ pub struct SearchResponseBody {
 
 async fn search(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Query(query): Query<SearchQuery>,
 ) -> AppResult<Json<SearchResponseBody>> {
     let search_service = SearchService::new(&state.config).await
@@ -106,7 +106,7 @@ pub struct AutocompleteResponse {
 
 async fn autocomplete(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    _auth_user: OptionalAuthUser,
     Query(query): Query<AutocompleteQuery>,
 ) -> AppResult<Json<AutocompleteResponse>> {
     let search_service = SearchService::new(&state.config).await
