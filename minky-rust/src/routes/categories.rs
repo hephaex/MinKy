@@ -5,11 +5,12 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use validator::Validate;
 
 use crate::{
-    error::AppResult,
-    middleware::AuthUser,
+    error::{AppError, AppResult},
+    middleware::{AuthUser, OptionalAuthUser},
     models::{CategoryTree, CategoryWithCount, CreateCategory, UpdateCategory},
     services::CategoryService,
     AppState,
@@ -27,45 +28,50 @@ pub fn routes() -> Router<AppState> {
 pub struct ListQuery {
     #[allow(dead_code)]
     pub flat: Option<bool>,
+    /// Flask compat: ?format=flat | ?format=tree
+    pub format: Option<String>,
+    #[allow(dead_code)]
+    pub include_inactive: Option<bool>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct CategoryListResponse {
-    pub success: bool,
-    pub data: Vec<CategoryWithCount>,
-}
-
+/// Flask compat: GET /categories/?format=flat → {success, data: {categories, count}}
+///               GET /categories/?format=tree → {success, data: {tree, count}}
+///
+/// Frontend reads:
+///   useCategories.js  → response.data.data?.categories || []
+///   CategoryManager.js → response.data.data?.tree || []
 async fn list_categories(
     State(state): State<AppState>,
-    auth_user: AuthUser,
-    Query(_query): Query<ListQuery>,
-) -> AppResult<Json<CategoryListResponse>> {
+    auth_user: OptionalAuthUser,
+    Query(query): Query<ListQuery>,
+) -> AppResult<Json<Value>> {
     let service = CategoryService::new(state.db.clone());
-    let categories = service.list_flat(auth_user.id).await?;
+    let user_id = auth_user.0.map(|u| u.id);
 
-    Ok(Json(CategoryListResponse {
-        success: true,
-        data: categories,
-    }))
+    if query.format.as_deref() == Some("tree") {
+        let tree = service.list_tree_optional(user_id).await
+            .map_err(AppError::Internal)?;
+        let count = tree.len();
+        Ok(Json(json!({"success": true, "data": {"tree": tree, "count": count}})))
+    } else {
+        let categories = service.list_flat_optional(user_id).await
+            .map_err(AppError::Internal)?;
+        let count = categories.len();
+        Ok(Json(json!({"success": true, "data": {"categories": categories, "count": count}})))
+    }
 }
 
-#[derive(Debug, Serialize)]
-pub struct CategoryTreeResponse {
-    pub success: bool,
-    pub data: Vec<CategoryTree>,
-}
-
+/// Legacy endpoint kept for direct access; frontend uses /categories/?format=tree instead
 async fn list_categories_tree(
     State(state): State<AppState>,
-    auth_user: AuthUser,
-) -> AppResult<Json<CategoryTreeResponse>> {
+    auth_user: OptionalAuthUser,
+) -> AppResult<Json<Value>> {
     let service = CategoryService::new(state.db.clone());
-    let tree = service.list_tree(auth_user.id).await?;
-
-    Ok(Json(CategoryTreeResponse {
-        success: true,
-        data: tree,
-    }))
+    let user_id = auth_user.0.map(|u| u.id);
+    let tree = service.list_tree_optional(user_id).await
+        .map_err(AppError::Internal)?;
+    let count = tree.len();
+    Ok(Json(json!({"success": true, "data": {"tree": tree, "count": count}})))
 }
 
 #[derive(Debug, Serialize)]
@@ -76,11 +82,13 @@ pub struct CategoryResponse {
 
 async fn get_category(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    auth_user: OptionalAuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<CategoryResponse>> {
     let service = CategoryService::new(state.db.clone());
-    let category = service.get(id, auth_user.id).await?;
+    // When unauthenticated, use sentinel -1 so only non-user-scoped GET works
+    let user_id = auth_user.0.map(|u| u.id).unwrap_or(-1);
+    let category = service.get(id, user_id).await?;
 
     Ok(Json(CategoryResponse {
         success: true,
@@ -204,20 +212,32 @@ mod tests {
     // ListQuery tests
     #[test]
     fn test_list_query_flat_none() {
-        let query = ListQuery { flat: None };
+        let query = ListQuery { flat: None, format: None, include_inactive: None };
         assert!(query.flat.is_none());
     }
 
     #[test]
     fn test_list_query_flat_true() {
-        let query = ListQuery { flat: Some(true) };
+        let query = ListQuery { flat: Some(true), format: None, include_inactive: None };
         assert_eq!(query.flat, Some(true));
     }
 
     #[test]
     fn test_list_query_flat_false() {
-        let query = ListQuery { flat: Some(false) };
+        let query = ListQuery { flat: Some(false), format: None, include_inactive: None };
         assert_eq!(query.flat, Some(false));
+    }
+
+    #[test]
+    fn test_list_query_format_tree() {
+        let query = ListQuery { flat: None, format: Some("tree".to_string()), include_inactive: None };
+        assert_eq!(query.format.as_deref(), Some("tree"));
+    }
+
+    #[test]
+    fn test_list_query_format_flat() {
+        let query = ListQuery { flat: None, format: Some("flat".to_string()), include_inactive: None };
+        assert_eq!(query.format.as_deref(), Some("flat"));
     }
 
     // CreateCategoryRequest validation tests
@@ -342,54 +362,50 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // CategoryListResponse tests
+    // Flask-compat consumer-contract tests for list response shapes
+    // Frontend reads:
+    //   useCategories.js     → response.data.data?.categories || []
+    //   CategoryManager.js   → response.data.data?.tree || []
+
     #[test]
-    fn test_category_list_response_creation() {
-        let categories = vec![CategoryWithCount {
-            id: 1,
-            name: "Work".to_string(),
-            parent_id: None,
-            user_id: 42,
-            document_count: 10,
+    fn flask_flat_response_has_categories_key() {
+        // Simulate what list_categories returns for format=flat
+        let categories: Vec<CategoryWithCount> = vec![CategoryWithCount {
+            id: 1, name: "Work".to_string(), parent_id: None, user_id: 42, document_count: 10,
         }];
-        let response = CategoryListResponse {
-            success: true,
-            data: categories,
-        };
-        assert!(response.success);
-        assert_eq!(response.data.len(), 1);
+        let count = categories.len();
+        let v = json!({"success": true, "data": {"categories": categories, "count": count}});
+        // useCategories.js: response.data.data?.categories
+        assert!(v["data"]["categories"].is_array(), "flat: must have data.categories");
+        assert_eq!(v["data"]["count"], 1);
+        assert!(v["data"]["tree"].is_null(), "flat: must NOT have tree key");
     }
 
     #[test]
-    fn test_category_list_response_empty() {
-        let response = CategoryListResponse {
-            success: true,
-            data: vec![],
-        };
-        assert!(response.data.is_empty());
+    fn flask_flat_response_categories_key_absent_gives_empty() {
+        // When categories is empty list, still serialise the key (not omit it)
+        let v = json!({"success": true, "data": {"categories": Vec::<CategoryWithCount>::new(), "count": 0}});
+        assert!(v["data"]["categories"].is_array());
+        assert_eq!(v["data"]["categories"].as_array().unwrap().len(), 0);
     }
 
-    // CategoryTreeResponse tests
     #[test]
-    fn test_category_tree_response_creation() {
+    fn flask_tree_response_has_tree_key() {
+        // Simulate what list_categories returns for format=tree
+        let tree: Vec<CategoryTree> = vec![CategoryTree {
+            id: 1, name: "Root".to_string(), parent_id: None, document_count: 5, children: vec![],
+        }];
+        let count = tree.len();
+        let v = json!({"success": true, "data": {"tree": tree, "count": count}});
+        // CategoryManager.js: response.data.data?.tree
+        assert!(v["data"]["tree"].is_array(), "tree: must have data.tree");
+        assert_eq!(v["data"]["count"], 1);
+        assert!(v["data"]["categories"].is_null(), "tree: must NOT have categories key");
+    }
+
+    #[test]
+    fn flask_tree_with_children() {
         let tree = vec![CategoryTree {
-            id: 1,
-            name: "Root".to_string(),
-            parent_id: None,
-            document_count: 5,
-            children: vec![],
-        }];
-        let response = CategoryTreeResponse {
-            success: true,
-            data: tree,
-        };
-        assert!(response.success);
-        assert_eq!(response.data[0].name, "Root");
-    }
-
-    #[test]
-    fn test_category_tree_with_children() {
-        let tree = [CategoryTree {
             id: 1,
             name: "Parent".to_string(),
             parent_id: None,

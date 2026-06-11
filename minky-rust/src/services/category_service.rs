@@ -36,6 +36,46 @@ impl CategoryService {
         Ok(CategoryTree::build_tree(categories, None))
     }
 
+    /// List all categories flat — optional user (None = personal KB, show all)
+    pub async fn list_flat_optional(&self, user_id: Option<i32>) -> Result<Vec<CategoryWithCount>> {
+        match user_id {
+            Some(uid) => self.list_flat(uid).await,
+            None => {
+                let cats = sqlx::query_as::<_, CategoryWithCount>(
+                    r#"SELECT c.id, c.name, c.parent_id, c.user_id,
+                              COUNT(d.id) as document_count
+                       FROM categories c
+                       LEFT JOIN documents d ON c.id = d.category_id
+                       GROUP BY c.id
+                       ORDER BY c.name"#,
+                )
+                .fetch_all(&self.db)
+                .await?;
+                Ok(cats)
+            }
+        }
+    }
+
+    /// List all categories as tree — optional user (None = personal KB, show all)
+    pub async fn list_tree_optional(&self, user_id: Option<i32>) -> Result<Vec<CategoryTree>> {
+        match user_id {
+            Some(uid) => self.list_tree(uid).await,
+            None => {
+                let categories = sqlx::query_as::<_, CategoryWithCount>(
+                    r#"SELECT c.id, c.name, c.parent_id, c.user_id,
+                              COUNT(d.id) as document_count
+                       FROM categories c
+                       LEFT JOIN documents d ON c.id = d.category_id
+                       GROUP BY c.id
+                       ORDER BY c.name"#,
+                )
+                .fetch_all(&self.db)
+                .await?;
+                Ok(CategoryTree::build_tree(categories, None))
+            }
+        }
+    }
+
     /// List all categories flat
     pub async fn list_flat(&self, user_id: i32) -> Result<Vec<CategoryWithCount>> {
         let categories = sqlx::query_as::<_, CategoryWithCount>(

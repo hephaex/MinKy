@@ -9,7 +9,7 @@ use validator::Validate;
 
 use secrecy::ExposeSecret;
 
-use crate::{error::{AppError, AppResult}, middleware::AuthUser, AppState};
+use crate::{error::{AppError, AppResult}, middleware::{AuthUser, OptionalAuthUser}, AppState};
 use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
 use crate::services::{EmbeddingConfig, EmbeddingService};
 
@@ -194,13 +194,14 @@ pub struct FlaskListResponse {
 
 async fn list_documents(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    auth_user: OptionalAuthUser,
     Query(query): Query<ListQuery>,
 ) -> AppResult<Json<FlaskListResponse>> {
     let page = query.page.unwrap_or(1).max(1);
     let limit = query.limit.or(query.per_page).unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * limit;
-    let user_id = auth_user.id;
+    // Unauthenticated: sentinel -1 → only is_public=true docs match (personal KB, no token sent)
+    let user_id = auth_user.0.map(|u| u.id).unwrap_or(-1);
 
     // Only return user's own documents or public documents
     let total: (i64,) = if let Some(ref search) = query.search {
@@ -350,10 +351,11 @@ async fn create_document(
 
 async fn get_document(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    auth_user: OptionalAuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<FlaskDocumentItem>> {
-    let user_id = auth_user.id;
+    // Unauthenticated: sentinel -1 → only is_public=true docs accessible
+    let user_id = auth_user.0.map(|u| u.id).unwrap_or(-1);
 
     // Only allow access to own documents or public documents
     let row: Option<DocumentRow> = sqlx::query_as(
