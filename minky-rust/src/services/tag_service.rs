@@ -17,6 +17,44 @@ impl TagService {
         Self { db }
     }
 
+    /// List all tags across all users (personal KB / public mode)
+    pub async fn list_all(&self) -> Result<Vec<TagWithCount>> {
+        let tags = sqlx::query_as::<_, TagWithCount>(
+            r#"
+            SELECT t.id, t.name, t.user_id, t.created_at,
+                   COUNT(dt.document_id) as document_count
+            FROM tags t
+            LEFT JOIN document_tags dt ON t.id = dt.tag_id
+            GROUP BY t.id
+            ORDER BY t.name
+            "#,
+        )
+        .fetch_all(&self.db)
+        .await?;
+
+        Ok(tags)
+    }
+
+    /// Get a tag by name (case-insensitive) for slug routing
+    pub async fn get_by_name(&self, name: &str) -> Result<Option<TagWithCount>> {
+        let tag = sqlx::query_as::<_, TagWithCount>(
+            r#"
+            SELECT t.id, t.name, t.user_id, t.created_at,
+                   COUNT(dt.document_id) as document_count
+            FROM tags t
+            LEFT JOIN document_tags dt ON t.id = dt.tag_id
+            WHERE LOWER(t.name) = LOWER($1)
+            GROUP BY t.id
+            LIMIT 1
+            "#,
+        )
+        .bind(name)
+        .fetch_optional(&self.db)
+        .await?;
+
+        Ok(tag)
+    }
+
     /// List all tags for a user with document counts
     pub async fn list(&self, user_id: i32) -> Result<Vec<TagWithCount>> {
         let tags = sqlx::query_as::<_, TagWithCount>(
