@@ -42,13 +42,20 @@ impl AuthService {
         Ok(hash.to_string())
     }
 
-    /// Verify a password against a hash
+    /// Verify a password against a hash.
+    /// Supports both Flask bcrypt hashes ($2b$/$2a$/$2y$) and Rust argon2 hashes ($argon2).
     pub fn verify_password(&self, password: &str, hash: &str) -> Result<bool> {
-        let parsed_hash = PasswordHash::new(hash)
-            .map_err(|e| anyhow::anyhow!("Invalid password hash: {}", e))?;
-        Ok(Argon2::default()
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .is_ok())
+        if hash.starts_with("$2b$") || hash.starts_with("$2a$") || hash.starts_with("$2y$") {
+            // Flask-issued bcrypt hash — delegate to bcrypt crate
+            Ok(bcrypt::verify(password, hash)?)
+        } else {
+            // Rust argon2 PHC format hash
+            let parsed_hash = PasswordHash::new(hash)
+                .map_err(|e| anyhow::anyhow!("Invalid password hash: {}", e))?;
+            Ok(Argon2::default()
+                .verify_password(password.as_bytes(), &parsed_hash)
+                .is_ok())
+        }
     }
 
     /// Generate JWT access token
@@ -117,6 +124,18 @@ impl AuthService {
             .bind(email)
             .fetch_optional(&self.db)
             .await?;
+
+        Ok(user)
+    }
+
+    /// Find user by username or email (Flask compat: Flask sends `username` field for both)
+    pub async fn find_user_by_identifier(&self, identifier: &str) -> Result<Option<User>> {
+        let user = sqlx::query_as::<_, User>(
+            "SELECT * FROM users WHERE username = $1 OR email = $1 LIMIT 1",
+        )
+        .bind(identifier)
+        .fetch_optional(&self.db)
+        .await?;
 
         Ok(user)
     }

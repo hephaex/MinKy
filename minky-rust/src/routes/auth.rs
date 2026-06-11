@@ -48,10 +48,12 @@ pub fn routes() -> Router<AppState> {
         .route("/me", get(me))
 }
 
+/// Flask compat: Flask sends `{username, password}`; Rust clients send `{email, password}`.
+/// `username` takes priority (Flask path), `email` is the fallback.
 #[derive(Debug, Deserialize, Validate)]
 pub struct LoginRequest {
-    #[validate(email(message = "Invalid email format"))]
-    pub email: String,
+    pub username: Option<String>,
+    pub email: Option<String>,
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
     pub password: String,
 }
@@ -82,8 +84,13 @@ async fn login(
 
     let auth_service = AuthService::new(state.db.clone(), state.config.clone());
 
+    // Flask sends `username` field; Rust clients send `email`; accept either
+    let identifier = payload.username
+        .or(payload.email)
+        .ok_or_else(|| AppError::Validation("username or email is required".to_string()))?;
+
     let user = auth_service
-        .find_user_by_email(&payload.email)
+        .find_user_by_identifier(&identifier)
         .await?
         .ok_or(AppError::Unauthorized)?;
 
@@ -443,11 +450,19 @@ mod tests {
     }
 
     #[test]
-    fn test_login_request_deserialize() {
+    fn test_login_request_deserialize_email() {
         let json = r#"{"email": "test@example.com", "password": "password123"}"#;
         let req: LoginRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.email, "test@example.com");
+        assert_eq!(req.email.as_deref(), Some("test@example.com"));
         assert_eq!(req.password, "password123");
+    }
+
+    #[test]
+    fn flask_login_request_deserialize_username() {
+        let json = r#"{"username": "alice", "password": "password123"}"#;
+        let req: LoginRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.username.as_deref(), Some("alice"));
+        assert!(req.email.is_none());
     }
 
     #[test]
@@ -507,19 +522,10 @@ mod tests {
     }
 
     #[test]
-    fn test_login_request_validation_email() {
-        let req = LoginRequest {
-            email: "invalid-email".to_string(),
-            password: "password123".to_string(),
-        };
-        let result = req.validate();
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_login_request_validation_password_too_short() {
         let req = LoginRequest {
-            email: "test@example.com".to_string(),
+            username: None,
+            email: Some("test@example.com".to_string()),
             password: "short".to_string(),
         };
         let result = req.validate();
@@ -527,13 +533,36 @@ mod tests {
     }
 
     #[test]
-    fn test_login_request_validation_success() {
+    fn test_login_request_validation_success_with_email() {
         let req = LoginRequest {
-            email: "test@example.com".to_string(),
+            username: None,
+            email: Some("test@example.com".to_string()),
             password: "validpassword".to_string(),
         };
         let result = req.validate();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn flask_login_request_username_field() {
+        let req = LoginRequest {
+            username: Some("alice".to_string()),
+            email: None,
+            password: "validpassword".to_string(),
+        };
+        let result = req.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn login_request_identifier_prefers_username() {
+        let req = LoginRequest {
+            username: Some("alice".to_string()),
+            email: Some("alice@example.com".to_string()),
+            password: "validpassword".to_string(),
+        };
+        let ident = req.username.clone().or(req.email).unwrap();
+        assert_eq!(ident, "alice");
     }
 
     #[test]

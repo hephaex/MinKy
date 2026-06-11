@@ -65,7 +65,7 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-minky_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/minky_rust_db
-      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - JWT_SECRET=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - REDIS_URL=redis://redis:6379/0
