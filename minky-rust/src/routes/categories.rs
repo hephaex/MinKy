@@ -11,7 +11,7 @@ use validator::Validate;
 use crate::{
     error::{AppError, AppResult},
     middleware::{AuthUser, OptionalAuthUser},
-    models::{CategoryTree, CategoryWithCount, CreateCategory, UpdateCategory},
+    models::{CategoryWithCount, CreateCategory, UpdateCategory},
     services::CategoryService,
     AppState,
 };
@@ -208,6 +208,7 @@ async fn delete_category(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::CategoryTree;
 
     // ListQuery tests
     #[test]
@@ -405,7 +406,7 @@ mod tests {
 
     #[test]
     fn flask_tree_with_children() {
-        let tree = vec![CategoryTree {
+        let tree = [CategoryTree {
             id: 1,
             name: "Parent".to_string(),
             parent_id: None,

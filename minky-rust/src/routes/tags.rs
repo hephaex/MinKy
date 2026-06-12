@@ -77,7 +77,7 @@ async fn list_tags(
 
     // popular = sort by document_count desc
     if query.popular.as_deref() == Some("true") {
-        filtered.sort_by(|a, b| b.document_count.cmp(&a.document_count));
+        filtered.sort_by_key(|t| std::cmp::Reverse(t.document_count));
     }
 
     let total = filtered.len() as i64;
@@ -229,7 +229,7 @@ async fn tag_statistics(
     let total_tags = all_tags.len() as i64;
     let total_tag_usage: i64 = all_tags.iter().map(|t| t.document_count).sum();
     let mut sorted = all_tags;
-    sorted.sort_by(|a, b| b.document_count.cmp(&a.document_count));
+    sorted.sort_by_key(|t| std::cmp::Reverse(t.document_count));
     let top_tags = sorted.into_iter().take(10).collect();
 
     Ok(Json(TagStatisticsResponse {
