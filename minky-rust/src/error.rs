@@ -55,7 +55,7 @@ impl IntoResponse for AppError {
             }
             AppError::ExternalService(msg) => {
                 tracing::error!("External service error: {}", msg);
-                (StatusCode::BAD_GATEWAY, msg.clone())
+                (StatusCode::BAD_GATEWAY, "External service error".to_string())
             }
             AppError::Database(e) => {
                 tracing::error!("Database error: {:?}", e);

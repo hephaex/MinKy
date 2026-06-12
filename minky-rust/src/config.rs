@@ -173,6 +173,12 @@ impl Config {
     pub fn jwt_secret_bytes(&self) -> &[u8] {
         self.jwt_secret.expose_secret().as_bytes()
     }
+
+    /// Returns true when auth cookies should include the Secure flag.
+    /// Uses an explicit allowlist so typos or missing env vars default to secure.
+    pub fn is_secure_cookies(&self) -> bool {
+        matches!(self.environment.as_str(), "production" | "prod" | "staging")
+    }
 }
 
 #[cfg(test)]

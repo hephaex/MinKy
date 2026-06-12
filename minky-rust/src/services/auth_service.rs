@@ -14,11 +14,12 @@ use crate::{config::Config, error::AppError, models::User};
 /// JWT claims structure
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,    // user id (string to match Flask jwt identity format)
+    pub sub: String,        // user id (string to match Flask jwt identity format)
     pub email: String,
     pub role: String,
-    pub exp: i64,       // expiration timestamp
-    pub iat: i64,       // issued at timestamp
+    pub token_type: String, // "access" or "refresh" — validated on every decode
+    pub exp: i64,           // expiration timestamp
+    pub iat: i64,           // issued at timestamp
 }
 
 /// Authentication service
@@ -69,6 +70,7 @@ impl AuthService {
             sub: user.id.to_string(),
             email: user.email.clone(),
             role: format!("{:?}", user.role).to_lowercase(),
+            token_type: "access".to_string(),
             exp: expiration,
             iat: Utc::now().timestamp(),
         };
@@ -93,6 +95,7 @@ impl AuthService {
             sub: user.id.to_string(),
             email: user.email.clone(),
             role: format!("{:?}", user.role).to_lowercase(),
+            token_type: "refresh".to_string(),
             exp: expiration,
             iat: Utc::now().timestamp(),
         };
@@ -106,7 +109,8 @@ impl AuthService {
         Ok(token)
     }
 
-    /// Validate and decode a JWT token
+    /// Validate and decode a JWT access token.
+    /// Rejects refresh tokens — pass `validate_refresh_token` for those.
     pub fn validate_token(&self, token: &str) -> Result<Claims, AppError> {
         let token_data = decode::<Claims>(
             token,
@@ -114,6 +118,27 @@ impl AuthService {
             &Validation::default(),
         )
         .map_err(|_| AppError::Unauthorized)?;
+
+        if token_data.claims.token_type != "access" {
+            return Err(AppError::Unauthorized);
+        }
+
+        Ok(token_data.claims)
+    }
+
+    /// Validate and decode a JWT refresh token.
+    /// Rejects access tokens.
+    pub fn validate_refresh_token(&self, token: &str) -> Result<Claims, AppError> {
+        let token_data = decode::<Claims>(
+            token,
+            &DecodingKey::from_secret(self.config.jwt_secret.expose_secret().as_bytes()),
+            &Validation::default(),
+        )
+        .map_err(|_| AppError::Unauthorized)?;
+
+        if token_data.claims.token_type != "refresh" {
+            return Err(AppError::Unauthorized);
+        }
 
         Ok(token_data.claims)
     }
@@ -349,12 +374,34 @@ mod tests {
         let refresh = svc.generate_refresh_token(&user).unwrap();
 
         let access_claims = svc.validate_token(&access).unwrap();
-        let refresh_claims = svc.validate_token(&refresh).unwrap();
+        let refresh_claims = svc.validate_refresh_token(&refresh).unwrap();
 
         assert!(
             refresh_claims.exp > access_claims.exp,
             "Refresh token should expire later than access token"
         );
+    }
+
+    #[tokio::test]
+    async fn test_refresh_token_rejected_by_validate_token() {
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        let svc = AuthService::new(pool, make_config());
+        let user = make_user();
+        let refresh = svc.generate_refresh_token(&user).unwrap();
+
+        let result = svc.validate_token(&refresh);
+        assert!(result.is_err(), "validate_token must reject refresh tokens");
+    }
+
+    #[tokio::test]
+    async fn test_access_token_rejected_by_validate_refresh_token() {
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        let svc = AuthService::new(pool, make_config());
+        let user = make_user();
+        let access = svc.generate_access_token(&user).unwrap();
+
+        let result = svc.validate_refresh_token(&access);
+        assert!(result.is_err(), "validate_refresh_token must reject access tokens");
     }
 
     #[tokio::test]
@@ -405,28 +452,28 @@ mod tests {
         assert_eq!(claims.role, "admin");
     }
 
-    /// Phase 0 Demo Gate: Rust validates a Flask-format token (sub=String "1", HS256, same secret).
-    /// Flask issues: create_access_token(identity=str(user.id)) → sub is a JSON string.
-    /// Before this fix Claims.sub was i32 so Flask tokens would fail deserialization.
+    /// Flask-format tokens (no token_type claim) must be rejected by validate_token.
+    /// Flask-issued tokens are handled by the legacy Flask backend; Rust issues its
+    /// own tokens with explicit token_type. Accepting legacy tokens without type
+    /// enforcement would allow refresh→access substitution.
     #[tokio::test]
-    async fn test_validate_flask_format_token_sub_is_string() {
+    async fn test_flask_format_token_without_token_type_is_rejected() {
         use jsonwebtoken::{encode, EncodingKey, Header};
         use serde_json::json;
 
         let secret = "test-secret-key-for-unit-tests";
         let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
-        let svc = AuthService::new(pool, make_config()); // same secret
+        let svc = AuthService::new(pool, make_config());
 
-        // Build a token the same way Flask does: sub = "42" (string), HS256
         let now = chrono::Utc::now().timestamp();
         let flask_payload = json!({
-            "sub": "42",           // Flask: str(user.id)
+            "sub": "42",
             "email": "test@example.com",
             "role": "user",
             "exp": now + 3600,
             "iat": now,
+            // no token_type — legacy Flask format
         });
-        // Encode as raw JSON claims to avoid Rust struct type constraints
         let flask_token = encode(
             &Header::default(),
             &flask_payload,
@@ -434,12 +481,7 @@ mod tests {
         )
         .expect("should encode flask-format token");
 
-        let claims = svc
-            .validate_token(&flask_token)
-            .expect("Rust must accept Flask-format token with string sub");
-
-        assert_eq!(claims.sub, "42", "sub should be string '42'");
-        assert_eq!(claims.email, "test@example.com");
-        assert_eq!(claims.role, "user");
+        let result = svc.validate_token(&flask_token);
+        assert!(result.is_err(), "Flask tokens without token_type must be rejected");
     }
 }

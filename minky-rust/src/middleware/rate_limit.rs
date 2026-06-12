@@ -99,12 +99,12 @@ impl RateLimiterBackend for RedisRateLimiter {
     async fn check(&self, key: &str) -> bool {
         let redis_key = self.make_key(key);
 
-        // Try to get a connection
+        // Try to get a connection — fail closed on error (deny) to prevent brute force
         let mut conn = match self.client.get_multiplexed_async_connection().await {
             Ok(conn) => conn,
             Err(e) => {
-                tracing::warn!("Redis connection failed, allowing request: {}", e);
-                return true; // Fail open - allow request if Redis is down
+                tracing::error!("Redis connection failed, denying request: {}", e);
+                return false;
             }
         };
 
@@ -123,8 +123,8 @@ impl RateLimiterBackend for RedisRateLimiter {
                 count as usize <= self.max_requests
             }
             Err(e) => {
-                tracing::warn!("Redis INCR failed, allowing request: {}", e);
-                true // Fail open
+                tracing::error!("Redis INCR failed, denying request: {}", e);
+                false
             }
         }
     }

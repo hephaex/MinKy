@@ -116,11 +116,11 @@ pub struct TagResponse {
 
 async fn get_tag(
     State(state): State<AppState>,
-    _auth_user: OptionalAuthUser,
+    auth_user: AuthUser,
     Path(slug): Path<String>,
 ) -> AppResult<Json<TagResponse>> {
     let service = TagService::new(state.db.clone());
-    let tag = service.get_by_name(&slug).await.map_err(AppError::Internal)?
+    let tag = service.get_by_name(&slug, auth_user.id).await.map_err(AppError::Internal)?
         .ok_or_else(|| AppError::NotFound(format!("Tag '{}' not found", slug)))?;
 
     Ok(Json(TagResponse { success: true, data: tag }))
@@ -167,8 +167,8 @@ async fn update_tag(
     payload.validate().map_err(|e| AppError::Validation(e.to_string()))?;
 
     let service = TagService::new(state.db.clone());
-    // Resolve slug → id, then delegate to existing service method
-    let existing = service.get_by_name(&slug).await.map_err(AppError::Internal)?
+    // Resolve slug → id scoped to the requesting user
+    let existing = service.get_by_name(&slug, auth_user.id).await.map_err(AppError::Internal)?
         .ok_or_else(|| AppError::NotFound(format!("Tag '{}' not found", slug)))?;
 
     let tag = service.update(existing.id, auth_user.id, UpdateTag { name: payload.name }).await?;
@@ -195,7 +195,7 @@ async fn delete_tag(
     Path(slug): Path<String>,
 ) -> AppResult<Json<DeleteResponse>> {
     let service = TagService::new(state.db.clone());
-    let existing = service.get_by_name(&slug).await.map_err(AppError::Internal)?
+    let existing = service.get_by_name(&slug, auth_user.id).await.map_err(AppError::Internal)?
         .ok_or_else(|| AppError::NotFound(format!("Tag '{}' not found", slug)))?;
 
     service.delete(existing.id, auth_user.id).await?;

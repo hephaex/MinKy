@@ -111,8 +111,9 @@ async fn login(
         .verify_password(&payload.password, &user.password_hash)?;
 
     if !password_valid {
-        // Record failed attempt (ignore errors here)
-        let _ = auth_service.record_failed_login(user.id).await;
+        if let Err(e) = auth_service.record_failed_login(user.id).await {
+            tracing::error!("Failed to record failed login for user {}: {}", user.id, e);
+        }
         return Err(AppError::Unauthorized);
     }
 
@@ -126,7 +127,7 @@ async fn login(
         .generate_refresh_token(&user)?;
 
     // Set HttpOnly cookies
-    let is_secure = state.config.environment != "development";
+    let is_secure = state.config.is_secure_cookies();
     let mut headers = HeaderMap::new();
 
     headers.append(
@@ -218,7 +219,7 @@ async fn register(
         .generate_refresh_token(&user)?;
 
     // Set HttpOnly cookies
-    let is_secure = state.config.environment != "development";
+    let is_secure = state.config.is_secure_cookies();
     let mut headers = HeaderMap::new();
 
     headers.append(
@@ -266,7 +267,8 @@ pub struct RefreshRequest {
     pub refresh_token: Option<String>,
 }
 
-/// Extract refresh token from cookie header
+/// Extract refresh token from cookie header.
+/// Uses splitn(2, '=') so base64-padded values containing '=' are preserved.
 fn extract_cookie_value(headers: &axum::http::HeaderMap, name: &str) -> Option<String> {
     headers
         .get(axum::http::header::COOKIE)
@@ -276,7 +278,7 @@ fn extract_cookie_value(headers: &axum::http::HeaderMap, name: &str) -> Option<S
                 .split(';')
                 .map(|s| s.trim())
                 .find(|s| s.starts_with(&format!("{}=", name)))
-                .and_then(|s| s.split('=').nth(1))
+                .and_then(|s| s.splitn(2, '=').nth(1))
                 .map(|s| s.to_string())
         })
 }
@@ -295,7 +297,7 @@ async fn refresh_token(
         .ok_or(AppError::Unauthorized)?;
 
     let claims = auth_service
-        .validate_token(&token)
+        .validate_refresh_token(&token)
         .map_err(|_| AppError::Unauthorized)?;
 
     // Load user to verify still active
@@ -314,7 +316,7 @@ async fn refresh_token(
         .generate_refresh_token(&user)?;
 
     // Set HttpOnly cookies
-    let is_secure = state.config.environment != "development";
+    let is_secure = state.config.is_secure_cookies();
     let mut response_headers = HeaderMap::new();
 
     response_headers.append(

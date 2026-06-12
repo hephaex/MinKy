@@ -35,20 +35,21 @@ impl TagService {
         Ok(tags)
     }
 
-    /// Get a tag by name (case-insensitive) for slug routing
-    pub async fn get_by_name(&self, name: &str) -> Result<Option<TagWithCount>> {
+    /// Get a tag by name (case-insensitive) scoped to the requesting user.
+    pub async fn get_by_name(&self, name: &str, user_id: i32) -> Result<Option<TagWithCount>> {
         let tag = sqlx::query_as::<_, TagWithCount>(
             r#"
             SELECT t.id, t.name, t.user_id, t.created_at,
                    COUNT(dt.document_id) as document_count
             FROM tags t
             LEFT JOIN document_tags dt ON t.id = dt.tag_id
-            WHERE LOWER(t.name) = LOWER($1)
+            WHERE LOWER(t.name) = LOWER($1) AND t.user_id = $2
             GROUP BY t.id
             LIMIT 1
             "#,
         )
         .bind(name)
+        .bind(user_id)
         .fetch_optional(&self.db)
         .await?;
 
