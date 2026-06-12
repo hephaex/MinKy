@@ -1,14 +1,27 @@
 # =============================================================================
 # Stage 1: Build environment
-# Uses the official Rust image pinned to a stable toolchain.
+# Ubuntu 24.04 (glibc 2.39) required — fastembed ONNX Runtime binary needs
+# glibc 2.38+; Debian Bookworm (2.36) fails with __isoc23_strtoll undefined.
 # =============================================================================
-FROM rust:1.93-slim-bookworm AS builder
+FROM ubuntu:24.04 AS builder
 
-# Install build-time OS dependencies (libpq for sqlx, pkg-config for linking).
+ENV DEBIAN_FRONTEND=noninteractive
+
+# build-essential pulls in g++ and libstdc++-13-dev, satisfying -lstdc++ link.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
     libpq-dev \
     pkg-config \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Rust toolchain via rustup (no official Ubuntu 24.04 Rust image exists).
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --no-modify-path --default-toolchain 1.93.1 --profile minimal
 
 WORKDIR /app
 
@@ -19,7 +32,6 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 
 # Create dummy source files so cargo can resolve the dependency graph.
-# Include benches directory because Cargo.toml references a bench target.
 RUN mkdir -p src benches && \
     echo "fn main() {}" > src/main.rs && \
     echo "" > src/lib.rs && \
@@ -40,10 +52,11 @@ RUN touch src/lib.rs src/main.rs && cargo build --release
 
 # =============================================================================
 # Stage 2: Runtime image
-# Only copy the compiled binary and required runtime libs.
-# Result is a minimal, non-root image.
+# Ubuntu 24.04 required for glibc 2.38+ symbols from ONNX Runtime.
 # =============================================================================
-FROM debian:bookworm-slim AS runtime
+FROM ubuntu:24.04 AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install runtime OS dependencies only.
 RUN apt-get update && apt-get install -y --no-install-recommends \
