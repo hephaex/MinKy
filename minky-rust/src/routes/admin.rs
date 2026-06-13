@@ -6,7 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     middleware::AdminUser,
     models::{
         AuditLogEntry, BackupInfo, CreateBackupRequest, MaintenanceMode, SystemConfig,
@@ -128,9 +128,12 @@ pub struct DeleteResponse {
 
 async fn delete_user(
     State(state): State<AppState>,
-    _admin: AdminUser,
+    admin: AdminUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<DeleteResponse>> {
+    if admin.0.id == id {
+        return Err(AppError::Forbidden);
+    }
     let service = AdminService::new(state.db.clone());
     service.delete_user(id).await?;
 

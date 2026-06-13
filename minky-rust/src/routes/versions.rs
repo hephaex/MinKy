@@ -7,12 +7,29 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     middleware::AuthUser,
     models::{CreateVersion, VersionWithAuthor},
     services::{VersionDiff, VersionService},
     AppState,
 };
+
+/// Verify that the caller can read the given document (owns it or it is public).
+/// Returns NotFound (not Forbidden) to avoid leaking document existence.
+async fn check_document_access(db: &sqlx::PgPool, document_id: Uuid, user_id: i32) -> AppResult<()> {
+    let accessible: Option<(bool,)> = sqlx::query_as(
+        "SELECT true FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true)",
+    )
+    .bind(document_id)
+    .bind(user_id)
+    .fetch_optional(db)
+    .await?;
+
+    if accessible.is_none() {
+        return Err(AppError::NotFound("Document not found".to_string()));
+    }
+    Ok(())
+}
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -32,9 +49,10 @@ pub struct VersionListResponse {
 
 async fn list_versions(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> AppResult<Json<VersionListResponse>> {
+    check_document_access(&state.db, document_id, auth_user.id).await?;
     let service = VersionService::new(state.db.clone());
     let versions = service.list_for_document(document_id).await?;
     let count = service.count_for_document(document_id).await?;
@@ -64,11 +82,12 @@ pub struct VersionData {
 
 async fn get_version(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     Path(id): Path<i32>,
 ) -> AppResult<Json<VersionResponse>> {
     let service = VersionService::new(state.db.clone());
     let version = service.get(id).await?;
+    check_document_access(&state.db, version.document_id, auth_user.id).await?;
 
     Ok(Json(VersionResponse {
         success: true,
@@ -85,9 +104,10 @@ async fn get_version(
 
 async fn get_latest_version(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
 ) -> AppResult<Json<VersionResponse>> {
+    check_document_access(&state.db, document_id, auth_user.id).await?;
     let service = VersionService::new(state.db.clone());
     let version = service.get_latest(document_id).await?;
 
@@ -174,10 +194,11 @@ pub struct CompareResponse {
 
 async fn compare_versions(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     Path(document_id): Path<Uuid>,
     axum::extract::Query(query): axum::extract::Query<CompareQuery>,
 ) -> AppResult<Json<CompareResponse>> {
+    check_document_access(&state.db, document_id, auth_user.id).await?;
     let service = VersionService::new(state.db.clone());
 
     let from_version = service.get_by_number(document_id, query.from).await?;

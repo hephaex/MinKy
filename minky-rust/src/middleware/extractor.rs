@@ -1,13 +1,25 @@
 use axum::{
-    extract::{FromRef, FromRequestParts},
+    extract::{ConnectInfo, FromRef, FromRequestParts},
     http::{header, request::Parts, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
 use serde::Serialize;
 use serde_json::json;
+use std::{net::SocketAddr, sync::OnceLock};
 
 use crate::{services::AuthService, AppState};
+
+/// Returns true when TRUSTED_PROXY=true env var is set.
+/// Same semantics as rate_limit.rs — cached after first read.
+fn is_trusted_proxy() -> bool {
+    static TRUSTED: OnceLock<bool> = OnceLock::new();
+    *TRUSTED.get_or_init(|| {
+        std::env::var("TRUSTED_PROXY")
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+    })
+}
 
 /// Authenticated user extracted from JWT token
 #[derive(Debug, Clone)]
@@ -47,7 +59,7 @@ fn extract_cookie_value(headers: &axum::http::HeaderMap, name: &str) -> Option<S
                 .split(';')
                 .map(|s| s.trim())
                 .find(|s| s.starts_with(&format!("{}=", name)))
-                .and_then(|s| s.split('=').nth(1))
+                .and_then(|s| s.split_once('=').map(|x| x.1))
                 .map(|s| s.to_string())
         })
 }
@@ -204,18 +216,31 @@ where
     type Rejection = std::convert::Infallible;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let ip_address = parts
-            .headers
-            .get("x-forwarded-for")
-            .and_then(|h| h.to_str().ok())
-            .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
-            .or_else(|| {
-                parts
-                    .headers
-                    .get("x-real-ip")
-                    .and_then(|h| h.to_str().ok())
-                    .map(|s| s.to_string())
-            });
+        // Real peer IP from TCP connection (always available, not attacker-controllable)
+        let peer_ip = parts
+            .extensions
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|ci| ci.0.ip().to_string());
+
+        let ip_address = if is_trusted_proxy() {
+            // Behind a trusted reverse proxy: honour forwarded headers, fall back to peer
+            parts
+                .headers
+                .get("x-forwarded-for")
+                .and_then(|h| h.to_str().ok())
+                .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
+                .or_else(|| {
+                    parts
+                        .headers
+                        .get("x-real-ip")
+                        .and_then(|h| h.to_str().ok())
+                        .map(|s| s.to_string())
+                })
+                .or(peer_ip)
+        } else {
+            // Direct connection: use only the real TCP peer address
+            peer_ip
+        };
 
         let user_agent = parts
             .headers

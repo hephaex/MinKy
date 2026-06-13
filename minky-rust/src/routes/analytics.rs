@@ -105,14 +105,17 @@ pub struct ContentAnalysisResponse {
 
 async fn analyze_document_content(
     State(state): State<AppState>,
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     Path(id): Path<uuid::Uuid>,
 ) -> AppResult<Json<ContentAnalysisResponse>> {
-    // Fetch document content
-    let content: (String,) = sqlx::query_as("SELECT content FROM documents WHERE id = $1")
-        .bind(id)
-        .fetch_one(&state.db)
-        .await?;
+    // Fetch document content — scoped to documents the caller can read
+    let content: (String,) = sqlx::query_as(
+        "SELECT content FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true)",
+    )
+    .bind(id)
+    .bind(auth_user.id)
+    .fetch_one(&state.db)
+    .await?;
 
     let analysis = AnalyticsService::analyze_content(&content.0);
 

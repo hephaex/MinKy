@@ -126,6 +126,12 @@ impl AdminService {
     /// Update user admin settings
     pub async fn update_user(&self, user_id: i32, update: UpdateUserAdmin) -> Result<UserAdmin> {
         if let Some(role) = &update.role {
+            if role != "admin" && role != "user" {
+                return Err(anyhow::anyhow!(
+                    "Invalid role '{}': must be 'admin' or 'user'",
+                    role
+                ));
+            }
             sqlx::query("UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2")
                 .bind(role)
                 .bind(user_id)

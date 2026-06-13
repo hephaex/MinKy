@@ -197,6 +197,15 @@ async fn register(
         return Err(AppError::Conflict("Email already registered".to_string()));
     }
 
+    // Check if username already exists (prevents login ambiguity via username=email collision)
+    let existing_username = auth_service
+        .find_user_by_username(&payload.username)
+        .await?;
+
+    if existing_username.is_some() {
+        return Err(AppError::Conflict("Username already taken".to_string()));
+    }
+
     let password_hash = auth_service
         .hash_password(&payload.password)?;
 
@@ -278,7 +287,7 @@ fn extract_cookie_value(headers: &axum::http::HeaderMap, name: &str) -> Option<S
                 .split(';')
                 .map(|s| s.trim())
                 .find(|s| s.starts_with(&format!("{}=", name)))
-                .and_then(|s| s.splitn(2, '=').nth(1))
+                .and_then(|s| s.split_once('=').map(|x| x.1))
                 .map(|s| s.to_string())
         })
 }

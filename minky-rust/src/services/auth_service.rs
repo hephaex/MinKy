@@ -153,6 +153,16 @@ impl AuthService {
         Ok(user)
     }
 
+    /// Find user by exact username match
+    pub async fn find_user_by_username(&self, username: &str) -> Result<Option<User>> {
+        let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
+            .bind(username)
+            .fetch_optional(&self.db)
+            .await?;
+
+        Ok(user)
+    }
+
     /// Find user by username or email (Flask compat: Flask sends `username` field for both)
     pub async fn find_user_by_identifier(&self, identifier: &str) -> Result<Option<User>> {
         let user = sqlx::query_as::<_, User>(
