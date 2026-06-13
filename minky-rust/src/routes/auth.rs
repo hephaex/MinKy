@@ -366,21 +366,52 @@ async fn refresh_token(
     ))
 }
 
-/// Logout - clears HttpOnly cookies
-async fn logout() -> (HeaderMap, Json<serde_json::Value>) {
-    let mut headers = HeaderMap::new();
+/// Logout - revokes tokens in Redis (if available) and clears HttpOnly cookies
+async fn logout(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> (HeaderMap, Json<serde_json::Value>) {
+    if let Some(redis) = &state.redis_client {
+        let auth_service = AuthService::new(state.db.clone(), state.config.clone());
 
-    headers.append(
+        let access_token = headers
+            .get(axum::http::header::AUTHORIZATION)
+            .and_then(|h| h.to_str().ok())
+            .and_then(|h| h.strip_prefix("Bearer ").map(|s| s.to_string()))
+            .or_else(|| extract_cookie_value(&headers, ACCESS_TOKEN_COOKIE));
+
+        if let Some(token) = access_token {
+            if let Ok(claims) = auth_service.validate_token(&token) {
+                if let Some(jti) = &claims.jti {
+                    let ttl = claims.exp - Utc::now().timestamp();
+                    AuthService::revoke_token(jti, ttl, redis).await;
+                }
+            }
+        }
+
+        let refresh_token = extract_cookie_value(&headers, REFRESH_TOKEN_COOKIE);
+        if let Some(token) = refresh_token {
+            if let Ok(claims) = auth_service.validate_refresh_token(&token) {
+                if let Some(jti) = &claims.jti {
+                    let ttl = claims.exp - Utc::now().timestamp();
+                    AuthService::revoke_token(jti, ttl, redis).await;
+                }
+            }
+        }
+    }
+
+    let mut resp_headers = HeaderMap::new();
+    resp_headers.append(
         SET_COOKIE,
         HeaderValue::from_str(&build_delete_cookie(ACCESS_TOKEN_COOKIE)).unwrap(),
     );
-    headers.append(
+    resp_headers.append(
         SET_COOKIE,
         HeaderValue::from_str(&build_delete_cookie(REFRESH_TOKEN_COOKIE)).unwrap(),
     );
 
     (
-        headers,
+        resp_headers,
         Json(serde_json::json!({
             "success": true,
             "message": "Logged out successfully"

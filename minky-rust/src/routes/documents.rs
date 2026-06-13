@@ -377,7 +377,20 @@ async fn get_document(
         .execute(&state.db)
         .await?;
 
-    Ok(Json(FlaskDocumentItem::from(row)))
+    let mut item = FlaskDocumentItem::from(row);
+
+    // Fetch tag names (list queries use ARRAY_AGG; single doc needs a separate join)
+    let tag_rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT t.name FROM tags t \
+         JOIN document_tags dt ON dt.tag_id = t.id \
+         WHERE dt.document_id = $1 ORDER BY t.name",
+    )
+    .bind(id)
+    .fetch_all(&state.db)
+    .await?;
+    item.tag_names = tag_rows.into_iter().map(|r| r.0).collect();
+
+    Ok(Json(item))
 }
 
 /// Update document request

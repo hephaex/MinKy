@@ -5,7 +5,6 @@ use axum::{
     response::Response,
     Json,
 };
-use redis::AsyncCommands;
 use serde_json::json;
 use std::{
     collections::HashMap,
@@ -108,22 +107,26 @@ impl RateLimiterBackend for RedisRateLimiter {
             }
         };
 
-        // Use Redis INCR with EXPIRE for sliding window rate limiting
-        let result: Result<i64, redis::RedisError> = conn.incr(&redis_key, 1).await;
+        // Atomically INCR and set EXPIRE on first call via Lua script.
+        // Two-command INCR+EXPIRE is non-atomic: a crash between them leaves
+        // the key without a TTL, permanently blocking the IP.
+        const LUA: &str = r"
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+";
+        let result: Result<i64, redis::RedisError> = redis::Script::new(LUA)
+            .key(&redis_key)
+            .arg(self.window_secs as i64)
+            .invoke_async(&mut conn)
+            .await;
 
         match result {
-            Ok(count) => {
-                // Set expiry on first request
-                if count == 1 {
-                    let _: Result<(), redis::RedisError> = conn
-                        .expire(&redis_key, self.window_secs as i64)
-                        .await;
-                }
-
-                count as usize <= self.max_requests
-            }
+            Ok(count) => count as usize <= self.max_requests,
             Err(e) => {
-                tracing::error!("Redis INCR failed, denying request: {}", e);
+                tracing::error!("Redis rate-limit script failed, denying request: {}", e);
                 false
             }
         }

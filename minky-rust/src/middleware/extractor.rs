@@ -89,6 +89,12 @@ where
             .validate_token(&token)
             .map_err(|_| AuthError("Invalid or expired token".to_string()))?;
 
+        if let (Some(jti), Some(redis)) = (&claims.jti, &state.redis_client) {
+            if AuthService::is_token_revoked(jti, redis).await {
+                return Err(AuthError("Token has been revoked".to_string()));
+            }
+        }
+
         let id = claims
             .sub
             .parse::<i32>()

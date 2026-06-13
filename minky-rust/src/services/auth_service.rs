@@ -5,9 +5,11 @@ use argon2::{
 };
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use redis::AsyncCommands;
 use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::{config::Config, error::AppError, models::User};
 
@@ -20,6 +22,8 @@ pub struct Claims {
     pub token_type: String, // "access" or "refresh" — validated on every decode
     pub exp: i64,           // expiration timestamp
     pub iat: i64,           // issued at timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jti: Option<String>, // JWT ID for server-side revocation; None on legacy tokens
 }
 
 /// Authentication service
@@ -71,6 +75,7 @@ impl AuthService {
             email: user.email.clone(),
             role: format!("{:?}", user.role).to_lowercase(),
             token_type: "access".to_string(),
+            jti: Some(Uuid::new_v4().to_string()),
             exp: expiration,
             iat: Utc::now().timestamp(),
         };
@@ -96,6 +101,7 @@ impl AuthService {
             email: user.email.clone(),
             role: format!("{:?}", user.role).to_lowercase(),
             token_type: "refresh".to_string(),
+            jti: Some(Uuid::new_v4().to_string()),
             exp: expiration,
             iat: Utc::now().timestamp(),
         };
@@ -141,6 +147,36 @@ impl AuthService {
         }
 
         Ok(token_data.claims)
+    }
+
+    /// Add a token's jti to the Redis revocation blocklist.
+    /// TTL is set to the token's remaining lifetime so the entry self-expires.
+    /// Returns false if Redis is unavailable (graceful degradation — log, don't panic).
+    pub async fn revoke_token(jti: &str, ttl_secs: i64, redis: &redis::Client) -> bool {
+        if ttl_secs <= 0 {
+            return true; // already expired — nothing to store
+        }
+        let key = format!("minky:revoked:{}", jti);
+        match redis.get_multiplexed_async_connection().await {
+            Ok(mut conn) => conn
+                .set_ex::<_, _, ()>(&key, "1", ttl_secs as u64)
+                .await
+                .is_ok(),
+            Err(e) => {
+                tracing::warn!("Redis unavailable for token revocation: {}", e);
+                false
+            }
+        }
+    }
+
+    /// Return true if jti is present in the Redis revocation blocklist.
+    /// Returns false (not revoked) when Redis is unavailable — fail-open for availability.
+    pub async fn is_token_revoked(jti: &str, redis: &redis::Client) -> bool {
+        let key = format!("minky:revoked:{}", jti);
+        match redis.get_multiplexed_async_connection().await {
+            Ok(mut conn) => conn.exists::<_, bool>(&key).await.unwrap_or(false),
+            Err(_) => false,
+        }
     }
 
     /// Find user by email

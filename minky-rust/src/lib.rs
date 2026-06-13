@@ -38,6 +38,8 @@ pub struct AppState {
     pub ws_manager: Arc<WebSocketManager>,
     pub embedding_service: Arc<EmbeddingService>,
     pub vault_watcher: Arc<tokio::sync::Mutex<Option<crate::services::vault_watcher_service::VaultWatcherHandle>>>,
+    /// Redis client for rate limiting and JWT revocation. None when REDIS_URL is unset.
+    pub redis_client: Option<redis::Client>,
 }
 
 /// Create the application with all routes and middleware
@@ -115,12 +117,17 @@ pub async fn create_app(config: Config) -> Result<Router> {
         Arc::new(tokio::sync::Mutex::new(None))
     };
 
+    let redis_client = std::env::var("REDIS_URL")
+        .ok()
+        .and_then(|url| redis::Client::open(url).ok());
+
     let state = AppState {
         db,
         config: config.clone(),
         ws_manager,
         embedding_service,
         vault_watcher,
+        redis_client,
     };
 
     // Parse CORS allowed origins from config
