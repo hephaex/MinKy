@@ -12,6 +12,7 @@ pub struct Document {
     pub category_id: Option<i32>,
     pub user_id: i32,
     pub is_public: bool,
+    pub sensitivity: String,
     pub view_count: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -40,6 +41,9 @@ impl Document {
     }
 }
 
+/// Valid sensitivity values
+pub const SENSITIVITY_VALUES: &[&str] = &["confidential", "internal", "public"];
+
 /// DTO for creating a new document
 #[derive(Debug, Deserialize)]
 pub struct CreateDocument {
@@ -47,12 +51,18 @@ pub struct CreateDocument {
     pub content: String,
     pub category_id: Option<i32>,
     pub is_public: Option<bool>,
+    pub sensitivity: Option<String>,
 }
 
 impl CreateDocument {
     /// Return the effective visibility, defaulting to private.
     pub fn effective_is_public(&self) -> bool {
         self.is_public.unwrap_or(false)
+    }
+
+    /// Return the effective sensitivity, defaulting to internal.
+    pub fn effective_sensitivity(&self) -> &str {
+        self.sensitivity.as_deref().unwrap_or("internal")
     }
 
     /// Validate that the request has required fields.
@@ -62,6 +72,11 @@ impl CreateDocument {
         }
         if self.content.trim().is_empty() {
             return Err("content must not be empty");
+        }
+        if let Some(ref s) = self.sensitivity {
+            if !SENSITIVITY_VALUES.contains(&s.as_str()) {
+                return Err("sensitivity must be confidential, internal, or public");
+            }
         }
         Ok(())
     }
@@ -74,6 +89,7 @@ pub struct UpdateDocument {
     pub content: Option<String>,
     pub category_id: Option<i32>,
     pub is_public: Option<bool>,
+    pub sensitivity: Option<String>,
 }
 
 impl UpdateDocument {
@@ -83,6 +99,7 @@ impl UpdateDocument {
             || self.content.is_some()
             || self.category_id.is_some()
             || self.is_public.is_some()
+            || self.sensitivity.is_some()
     }
 }
 
@@ -109,6 +126,7 @@ mod tests {
             category_id: None,
             user_id: 42,
             is_public: false,
+            sensitivity: "internal".to_string(),
             view_count: 0,
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -209,6 +227,7 @@ mod tests {
             content: "C".to_string(),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         assert!(!req.effective_is_public());
     }
@@ -220,6 +239,7 @@ mod tests {
             content: "C".to_string(),
             category_id: None,
             is_public: Some(true),
+            sensitivity: None,
         };
         assert!(req.effective_is_public());
     }
@@ -233,6 +253,7 @@ mod tests {
             content: "Valid content".to_string(),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         assert!(req.validate().is_ok());
     }
@@ -244,6 +265,7 @@ mod tests {
             content: "Valid content".to_string(),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         assert!(req.validate().is_err());
     }
@@ -255,6 +277,7 @@ mod tests {
             content: "  ".to_string(),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         assert!(req.validate().is_err());
     }
@@ -268,6 +291,7 @@ mod tests {
             content: None,
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         assert!(!req.has_changes());
     }
@@ -279,6 +303,7 @@ mod tests {
             content: None,
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         assert!(req.has_changes());
     }
@@ -290,6 +315,7 @@ mod tests {
             content: None,
             category_id: None,
             is_public: Some(false),
+            sensitivity: None,
         };
         assert!(req.has_changes());
     }
@@ -301,6 +327,7 @@ mod tests {
             content: Some("new body".to_string()),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         assert!(req.has_changes());
     }
@@ -312,6 +339,7 @@ mod tests {
             content: None,
             category_id: Some(5),
             is_public: None,
+            sensitivity: None,
         };
         assert!(req.has_changes());
     }
@@ -353,6 +381,7 @@ mod tests {
             content: "some content".to_string(),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         assert_eq!(req.validate().unwrap_err(), "title must not be empty");
     }
@@ -364,6 +393,7 @@ mod tests {
             content: "".to_string(),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         assert_eq!(req.validate().unwrap_err(), "content must not be empty");
     }
@@ -375,8 +405,73 @@ mod tests {
             content: "C".to_string(),
             category_id: None,
             is_public: Some(false),
+            sensitivity: None,
         };
         assert!(!req.effective_is_public());
+    }
+
+    // sensitivity tests
+
+    #[test]
+    fn test_effective_sensitivity_defaults_to_internal() {
+        let req = CreateDocument {
+            title: "T".to_string(),
+            content: "Content here".to_string(),
+            category_id: None,
+            is_public: None,
+            sensitivity: None,
+        };
+        assert_eq!(req.effective_sensitivity(), "internal");
+    }
+
+    #[test]
+    fn test_effective_sensitivity_confidential() {
+        let req = CreateDocument {
+            title: "T".to_string(),
+            content: "Content here".to_string(),
+            category_id: None,
+            is_public: None,
+            sensitivity: Some("confidential".to_string()),
+        };
+        assert_eq!(req.effective_sensitivity(), "confidential");
+    }
+
+    #[test]
+    fn test_validate_rejects_invalid_sensitivity() {
+        let req = CreateDocument {
+            title: "T".to_string(),
+            content: "Content here".to_string(),
+            category_id: None,
+            is_public: None,
+            sensitivity: Some("top-secret".to_string()),
+        };
+        assert!(req.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_accepts_all_valid_sensitivity_values() {
+        for s in SENSITIVITY_VALUES {
+            let req = CreateDocument {
+                title: "T".to_string(),
+                content: "Content here".to_string(),
+                category_id: None,
+                is_public: None,
+                sensitivity: Some(s.to_string()),
+            };
+            assert!(req.validate().is_ok(), "expected ok for sensitivity={}", s);
+        }
+    }
+
+    #[test]
+    fn test_update_has_changes_with_sensitivity() {
+        let req = UpdateDocument {
+            title: None,
+            content: None,
+            category_id: None,
+            is_public: None,
+            sensitivity: Some("confidential".to_string()),
+        };
+        assert!(req.has_changes());
     }
 
     #[test]

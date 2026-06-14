@@ -46,6 +46,7 @@ pub struct DocumentResponse {
     pub category_id: Option<i32>,
     pub user_id: i32,
     pub is_public: bool,
+    pub sensitivity: String,
     pub view_count: i32,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -79,6 +80,7 @@ struct FlaskDocumentLiteRow {
     pub user_id: i32,
     pub category_id: Option<i32>,
     pub is_public: bool,
+    pub sensitivity: String,
     pub is_published: Option<bool>,
     pub published_at: Option<chrono::DateTime<chrono::Utc>>,
     pub tag_names: Vec<String>,
@@ -95,6 +97,7 @@ pub struct FlaskDocumentLite {
     pub user_id: i32,
     pub category_id: Option<i32>,
     pub is_public: bool,
+    pub sensitivity: String,
     pub is_published: bool,
     pub published_at: Option<chrono::DateTime<chrono::Utc>>,
     pub tag_names: Vec<String>,
@@ -111,6 +114,7 @@ impl From<FlaskDocumentLiteRow> for FlaskDocumentLite {
             user_id: row.user_id,
             category_id: row.category_id,
             is_public: row.is_public,
+            sensitivity: row.sensitivity,
             is_published: row.is_published.unwrap_or(false),
             published_at: row.published_at,
             tag_names: row.tag_names,
@@ -127,6 +131,7 @@ struct DocumentRow {
     pub category_id: Option<i32>,
     pub user_id: i32,
     pub is_public: bool,
+    pub sensitivity: String,
     pub view_count: i32,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -145,6 +150,7 @@ pub struct FlaskDocumentItem {
     pub category_id: Option<i32>,
     pub user_id: i32,
     pub is_public: bool,
+    pub sensitivity: String,
     pub view_count: i32,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -164,6 +170,7 @@ impl From<DocumentRow> for FlaskDocumentItem {
             category_id: row.category_id,
             user_id: row.user_id,
             is_public: row.is_public,
+            sensitivity: row.sensitivity,
             view_count: row.view_count,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -232,14 +239,14 @@ async fn list_documents(
     let rows: Vec<FlaskDocumentLiteRow> = if let Some(ref search) = query.search {
         sqlx::query_as(
             r#"SELECT d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
-                      d.is_public, d.is_published, d.published_at,
+                      d.is_public, d.sensitivity, d.is_published, d.published_at,
                       COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names
                FROM documents d
                LEFT JOIN document_tags dt ON dt.document_id = d.id
                LEFT JOIN tags t ON t.id = dt.tag_id
                WHERE (d.user_id = $1 OR d.is_public = true) AND d.title ILIKE '%' || $2 || '%'
                GROUP BY d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
-                        d.is_public, d.is_published, d.published_at
+                        d.is_public, d.sensitivity, d.is_published, d.published_at
                ORDER BY d.created_at DESC
                LIMIT $3 OFFSET $4"#
         )
@@ -252,14 +259,14 @@ async fn list_documents(
     } else if let Some(cat_id) = query.category_id {
         sqlx::query_as(
             r#"SELECT d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
-                      d.is_public, d.is_published, d.published_at,
+                      d.is_public, d.sensitivity, d.is_published, d.published_at,
                       COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names
                FROM documents d
                LEFT JOIN document_tags dt ON dt.document_id = d.id
                LEFT JOIN tags t ON t.id = dt.tag_id
                WHERE (d.user_id = $1 OR d.is_public = true) AND d.category_id = $2
                GROUP BY d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
-                        d.is_public, d.is_published, d.published_at
+                        d.is_public, d.sensitivity, d.is_published, d.published_at
                ORDER BY d.created_at DESC
                LIMIT $3 OFFSET $4"#
         )
@@ -272,14 +279,14 @@ async fn list_documents(
     } else {
         sqlx::query_as(
             r#"SELECT d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
-                      d.is_public, d.is_published, d.published_at,
+                      d.is_public, d.sensitivity, d.is_published, d.published_at,
                       COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names
                FROM documents d
                LEFT JOIN document_tags dt ON dt.document_id = d.id
                LEFT JOIN tags t ON t.id = dt.tag_id
                WHERE d.user_id = $1 OR d.is_public = true
                GROUP BY d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
-                        d.is_public, d.is_published, d.published_at
+                        d.is_public, d.sensitivity, d.is_published, d.published_at
                ORDER BY d.created_at DESC
                LIMIT $2 OFFSET $3"#
         )
@@ -314,6 +321,7 @@ pub struct CreateDocumentRequest {
     pub markdown_content: String,
     pub category_id: Option<i32>,
     pub is_public: Option<bool>,
+    pub sensitivity: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -331,11 +339,12 @@ async fn create_document(
 
     let user_id = auth_user.id;
     let is_public = payload.is_public.unwrap_or(false);
+    let sensitivity = payload.sensitivity.as_deref().unwrap_or("internal");
 
     let row: DocumentRow = sqlx::query_as(
-        r#"INSERT INTO documents (title, content, category_id, user_id, is_public)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
+        r#"INSERT INTO documents (title, content, category_id, user_id, is_public, sensitivity)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id, title, content, category_id, user_id, is_public, sensitivity, view_count, created_at, updated_at,
                      author, html_content, is_published, published_at"#
     )
     .bind(&payload.title)
@@ -343,6 +352,7 @@ async fn create_document(
     .bind(payload.category_id)
     .bind(user_id)
     .bind(is_public)
+    .bind(sensitivity)
     .fetch_one(&state.db)
     .await?;
 
@@ -359,7 +369,7 @@ async fn get_document(
 
     // Only allow access to own documents or public documents
     let row: Option<DocumentRow> = sqlx::query_as(
-        r#"SELECT id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
+        r#"SELECT id, title, content, category_id, user_id, is_public, sensitivity, view_count, created_at, updated_at,
                   author, html_content, is_published, published_at
            FROM documents
            WHERE id = $1 AND (user_id = $2 OR is_public = true)"#
@@ -401,6 +411,7 @@ pub struct UpdateDocumentRequest {
     pub markdown_content: Option<String>,
     pub category_id: Option<i32>,
     pub is_public: Option<bool>,
+    pub sensitivity: Option<String>,
 }
 
 async fn update_document(
@@ -432,9 +443,10 @@ async fn update_document(
                content = COALESCE($2, content),
                category_id = CASE WHEN $3::boolean THEN $4::integer ELSE category_id END,
                is_public = COALESCE($5, is_public),
+               sensitivity = COALESCE($6, sensitivity),
                updated_at = NOW()
-           WHERE id = $6 AND user_id = $7
-           RETURNING id, title, content, category_id, user_id, is_public, view_count, created_at, updated_at,
+           WHERE id = $7 AND user_id = $8
+           RETURNING id, title, content, category_id, user_id, is_public, sensitivity, view_count, created_at, updated_at,
                      author, html_content, is_published, published_at"#
     )
     .bind(payload.title.as_deref())
@@ -442,6 +454,7 @@ async fn update_document(
     .bind(payload.category_id.is_some())
     .bind(payload.category_id)
     .bind(payload.is_public)
+    .bind(payload.sensitivity.as_deref())
     .bind(id)
     .bind(user_id)
     .fetch_one(&state.db)
@@ -871,6 +884,7 @@ mod tests {
             category_id: Some(1),
             user_id: 42,
             is_public: true,
+            sensitivity: "internal".to_string(),
             view_count: 10,
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -889,6 +903,7 @@ mod tests {
             category_id: None,
             user_id: 1,
             is_public: false,
+            sensitivity: "confidential".to_string(),
             view_count: 0,
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -950,6 +965,7 @@ mod tests {
             markdown_content: "Some content".to_string(),
             category_id: None,
             is_public: Some(true),
+            sensitivity: None,
         };
         let result = req.validate();
         assert!(result.is_ok());
@@ -962,6 +978,7 @@ mod tests {
             markdown_content: "Content".to_string(),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         let result = req.validate();
         assert!(result.is_err());
@@ -974,6 +991,7 @@ mod tests {
             markdown_content: "Content".to_string(),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         let result = req.validate();
         assert!(result.is_err());
@@ -986,6 +1004,7 @@ mod tests {
             markdown_content: "Content".to_string(),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         let result = req.validate();
         assert!(result.is_ok());
@@ -998,6 +1017,7 @@ mod tests {
             markdown_content: "Content".to_string(),
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         let is_public = req.is_public.unwrap_or(false);
         assert!(!is_public);
@@ -1011,6 +1031,7 @@ mod tests {
             markdown_content: None,
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         let result = req.validate();
         assert!(result.is_ok());
@@ -1023,6 +1044,7 @@ mod tests {
             markdown_content: None,
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         let result = req.validate();
         assert!(result.is_ok());
@@ -1035,6 +1057,7 @@ mod tests {
             markdown_content: None,
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         let result = req.validate();
         assert!(result.is_err());
@@ -1047,6 +1070,7 @@ mod tests {
             markdown_content: None,
             category_id: None,
             is_public: None,
+            sensitivity: None,
         };
         let result = req.validate();
         assert!(result.is_err());
@@ -1062,6 +1086,7 @@ mod tests {
             category_id: None,
             user_id: 1,
             is_public: false,
+            sensitivity: "internal".to_string(),
             view_count: 0,
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -1106,6 +1131,7 @@ mod tests {
             category_id: Some(5),
             user_id: 10,
             is_public: true,
+            sensitivity: "public".to_string(),
             view_count: 100,
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -1428,6 +1454,7 @@ mod tests {
             category_id: None,
             user_id: 1,
             is_public: true,
+            sensitivity: "internal".to_string(),
             view_count: 0,
             created_at: Utc::now(),
             updated_at: Utc::now(),
@@ -1449,6 +1476,7 @@ mod tests {
             user_id: 1,
             category_id: None,
             is_public: true,
+            sensitivity: "internal".to_string(),
             is_published: false,
             published_at: None,
             tag_names: vec![],

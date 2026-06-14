@@ -60,6 +60,9 @@ pub struct StorageConfig {
 
     /// Category ID
     pub category_id: Option<i32>,
+
+    /// Document sensitivity: "confidential" | "internal" | "public"
+    pub sensitivity: String,
 }
 
 impl Default for StorageConfig {
@@ -70,6 +73,7 @@ impl Default for StorageConfig {
             user_id: None,
             is_public: false,
             category_id: None,
+            sensitivity: "internal".to_string(),
         }
     }
 }
@@ -101,6 +105,7 @@ impl StorageStage {
         let user_id = context.user_id.or(self.config.user_id).unwrap_or(1);
         let category_id = context.category_id.or(self.config.category_id);
         let is_public = self.config.is_public;
+        let sensitivity = &self.config.sensitivity;
         let source_path = doc.source_path.as_deref();
 
         // Check if document exists.
@@ -134,7 +139,7 @@ impl StorageStage {
             sqlx::query(
                 r#"
                 UPDATE documents
-                SET content = $2, category_id = $3, is_public = $4, source_path = $5, updated_at = NOW()
+                SET content = $2, category_id = $3, is_public = $4, source_path = $5, sensitivity = $6, updated_at = NOW()
                 WHERE id = $1
                 "#,
             )
@@ -143,6 +148,7 @@ impl StorageStage {
             .bind(category_id)
             .bind(is_public)
             .bind(source_path)
+            .bind(sensitivity)
             .execute(&self.pool)
             .await?;
 
@@ -151,8 +157,8 @@ impl StorageStage {
             // Insert new document
             let (id,): (Uuid,) = sqlx::query_as(
                 r#"
-                INSERT INTO documents (title, content, category_id, user_id, is_public, source_path)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO documents (title, content, category_id, user_id, is_public, source_path, sensitivity)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id
                 "#,
             )
@@ -162,6 +168,7 @@ impl StorageStage {
             .bind(user_id)
             .bind(is_public)
             .bind(source_path)
+            .bind(sensitivity)
             .fetch_one(&self.pool)
             .await?;
 
@@ -386,6 +393,16 @@ mod tests {
         assert!(config.replace_embeddings);
         assert!(!config.is_public);
         assert!(config.user_id.is_none());
+        assert_eq!(config.sensitivity, "internal");
+    }
+
+    #[test]
+    fn test_storage_config_sensitivity_can_be_set() {
+        let config = StorageConfig {
+            sensitivity: "confidential".to_string(),
+            ..StorageConfig::default()
+        };
+        assert_eq!(config.sensitivity, "confidential");
     }
 
     #[test]
