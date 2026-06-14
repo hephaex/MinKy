@@ -5,7 +5,30 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-14) — lab-minky Sprint 6 완료
+## 현재 진행 상황 (2026-06-14) — lab-minky Sprint 7 완료
+
+### Sprint 7: /lab-ingest 33개 문서 CT306 인제스트 (2026-06-14)
+
+| 변경 | 내용 |
+|------|------|
+| 업로드 방식 | `POST /api/documents/upload` 배치 (multipart, Mac → CT306) |
+| 인증 | JWT_SECRET 직접 서명 (sub="1", token_type=access, exp 30일) |
+| 파일 수 | 33개 (cne-infra: 3 / core: 9 / product: 13 / research: 8) |
+| 제외 | `_confidential/` 하위 전부 (finance/legal) |
+| 특이사항 | 20201014_s_seminar_lev.md: null byte 138개 → Python strip 후 재업로드 |
+| WARN | embedding_queue ON CONFLICT constraint 누락 (pre-existing) — documents 저장은 정상 |
+
+결과: DB 34 documents (Lab Test Doc 1 + 신규 33)
+
+**[IMPLEMENTED]** Demo Gate: CT306 DB `SELECT COUNT(*) FROM documents WHERE user_id=1` → 34 확인
+
+**교훈**:
+- PDF 변환 md에 null byte 포함 가능 (`0x00` × 138) — PG UTF-8 인서트 전 `replace(b'\x00', b'')` 필요
+- embedding_queue upsert의 ON CONFLICT constraint 누락 → WARN 반복 (Sprint 8 P1 수정 대상)
+
+---
+
+## 이전 진행 상황 (2026-06-14) — lab-minky Sprint 6 완료
 
 ### Sprint 6: CT306 배포 + category API 수정 (2026-06-14)
 

@@ -41,9 +41,16 @@
 - fix: category API 무인증 시 system categories 반환 (unwrap_or(1))
 - 1922 tests pass, commit `1ad73b1f`
 
-### 📋 Next Sprint 7 Roadmap
+### ✅ Sprint 7: /lab-ingest 33개 문서 CT306 인제스트 완료 (2026-06-14)
+- non-confidential .md 33개 → CT306 `POST /api/documents/upload` 배치 업로드
+- JWT: JWT_SECRET으로 직접 생성 (sub="1", email=lab@caster.link, token_type=access)
+- 20201014_s_seminar_lev.md: null byte 138개 제거 후 재업로드
+- WARN (embedding queue ON CONFLICT): pre-existing — document_queue 테이블 unique constraint 누락
+- DB 결과: 34 documents (Lab Test Doc 1개 + 신규 33개)
 
-**P1: /lab-ingest** — 75개 분류된 .md 파일 CT306 인제스트 (`/lab-ingest` 실행)
+### 📋 Next Sprint 8 Roadmap
+
+**P1 (버그)**: embedding_queue ON CONFLICT constraint 누락 수정 — `document_queue` 테이블에 unique constraint 추가 → WARN 해소
 **P2 보류**: git push frontend/node_modules bloat 해결 필요 (`git rm -r --cached frontend/node_modules` 선행)
 
 ---
