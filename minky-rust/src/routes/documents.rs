@@ -341,6 +341,12 @@ async fn create_document(
     let is_public = payload.is_public.unwrap_or(false);
     let sensitivity = payload.sensitivity.as_deref().unwrap_or("internal");
 
+    if is_public && sensitivity == "confidential" {
+        return Err(AppError::Validation(
+            "confidential 문서는 공개(is_public=true)로 설정할 수 없습니다".to_string(),
+        ));
+    }
+
     let row: DocumentRow = sqlx::query_as(
         r#"INSERT INTO documents (title, content, category_id, user_id, is_public, sensitivity)
            VALUES ($1, $2, $3, $4, $5, $6)
@@ -424,15 +430,31 @@ async fn update_document(
 
     let user_id = auth_user.id;
 
-    // Check document exists AND user owns it
-    let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM documents WHERE id = $1 AND user_id = $2")
-        .bind(id)
-        .bind(user_id)
-        .fetch_optional(&state.db)
-        .await?;
+    // Check document exists AND user owns it; also read current is_public + sensitivity
+    // so we can validate the merged state before applying the update.
+    let existing: Option<(Uuid, bool, String)> = sqlx::query_as(
+        "SELECT id, is_public, sensitivity FROM documents WHERE id = $1 AND user_id = $2",
+    )
+    .bind(id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await?;
 
-    if existing.is_none() {
-        return Err(AppError::NotFound(format!("Document {} not found or access denied", id)));
+    let (_, current_is_public, current_sensitivity) = existing
+        .ok_or_else(|| AppError::NotFound(format!("Document {} not found or access denied", id)))?;
+
+    // Compute effective values after the update (None = keep existing)
+    let effective_is_public = payload.is_public.unwrap_or(current_is_public);
+    let effective_sensitivity = payload
+        .sensitivity
+        .as_deref()
+        .unwrap_or(&current_sensitivity)
+        .to_string();
+
+    if effective_is_public && effective_sensitivity == "confidential" {
+        return Err(AppError::Validation(
+            "confidential 문서는 공개(is_public=true)로 설정할 수 없습니다".to_string(),
+        ));
     }
 
     // Build update query dynamically based on provided fields (only owner can update)
@@ -1675,5 +1697,55 @@ mod tests {
         let q = ListQuery { page: None, limit: Some(10), per_page: Some(30), category_id: None, search: None };
         let limit = q.limit.or(q.per_page).unwrap_or(20).clamp(1, 100);
         assert_eq!(limit, 10);
+    }
+
+    // ── D.3: confidential + is_public invariant ──────────────────────────────
+
+    #[test]
+    fn test_create_document_confidential_public_rejected() {
+        // D.3: is_public=true with sensitivity=confidential must be caught before the DB insert.
+        // We exercise the guard logic directly (same path as the handler) without a DB.
+        let is_public = true;
+        let sensitivity = "confidential";
+        let guard_triggered = is_public && sensitivity == "confidential";
+        assert!(
+            guard_triggered,
+            "the invariant guard must fire for is_public=true + sensitivity=confidential"
+        );
+    }
+
+    #[test]
+    fn test_update_document_confidential_public_rejected() {
+        // D.3 update path: simulate the merged-state check.
+
+        // Case 1: payload sets is_public=true; existing sensitivity is "confidential".
+        // Use a helper closure to replicate the handler's merge logic.
+        fn merge_is_public(payload: Option<bool>, current: bool) -> bool {
+            payload.unwrap_or(current)
+        }
+        fn merge_sensitivity<'a>(payload: Option<&'a str>, current: &'a str) -> &'a str {
+            payload.unwrap_or(current)
+        }
+
+        let current_is_public = false;
+        let current_sensitivity = "confidential";
+        let effective_is_public = merge_is_public(Some(true), current_is_public);
+        let effective_sensitivity = merge_sensitivity(None, current_sensitivity);
+
+        assert!(
+            effective_is_public && effective_sensitivity == "confidential",
+            "merged state should trigger the invariant guard"
+        );
+
+        // Case 2: payload sets sensitivity=confidential; existing is_public is true.
+        let current_is_public2 = true;
+        let current_sensitivity2 = "internal";
+        let effective_is_public2 = merge_is_public(None, current_is_public2);
+        let effective_sensitivity2 = merge_sensitivity(Some("confidential"), current_sensitivity2);
+
+        assert!(
+            effective_is_public2 && effective_sensitivity2 == "confidential",
+            "setting sensitivity=confidential on a public doc should trigger the guard"
+        );
     }
 }

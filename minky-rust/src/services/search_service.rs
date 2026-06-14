@@ -89,6 +89,8 @@ impl SearchService {
                     "created_at": { "type": "date" },
                     "updated_at": { "type": "date" },
                     "view_count": { "type": "integer" },
+                    "sensitivity": { "type": "keyword" },
+                    "is_public": { "type": "boolean" },
                     "embedding": {
                         "type": "knn_vector",
                         "dimension": 1536,
@@ -159,8 +161,10 @@ impl SearchService {
         Ok(documents.len())
     }
 
-    /// Search documents
-    pub async fn search(&self, query: SearchQuery) -> AppResult<SearchResponse> {
+    /// Search documents.
+    ///
+    /// `user_id`: `None` means unauthenticated — confidential documents are excluded.
+    pub async fn search(&self, query: SearchQuery, user_id: Option<i32>) -> AppResult<SearchResponse> {
         let start = Instant::now();
 
         let page = query.page.unwrap_or(1).clamp(1, 10_000);
@@ -241,12 +245,20 @@ impl SearchService {
             }
         };
 
+        // Unauthenticated callers cannot see confidential documents.
+        let mut search_query = json!({
+            "bool": {
+                "must": must_clauses
+            }
+        });
+        if user_id.is_none() {
+            search_query["bool"]["must_not"] = json!([
+                { "term": { "sensitivity": "confidential" } }
+            ]);
+        }
+
         let search_body = json!({
-            "query": {
-                "bool": {
-                    "must": must_clauses
-                }
-            },
+            "query": search_query,
             "sort": sort,
             "from": from,
             "size": limit,
@@ -353,9 +365,12 @@ impl SearchService {
         })
     }
 
-    /// Semantic search using embeddings
-    pub async fn semantic_search(&self, embedding: Vec<f32>, limit: i32) -> AppResult<Vec<SearchHit>> {
-        let search_body = json!({
+    /// Semantic search using embeddings.
+    ///
+    /// `user_id`: `None` means unauthenticated — confidential documents are excluded
+    /// via a `post_filter` on the `sensitivity` field.
+    pub async fn semantic_search(&self, embedding: Vec<f32>, limit: i32, user_id: Option<i32>) -> AppResult<Vec<SearchHit>> {
+        let mut search_body = json!({
             "size": limit,
             "query": {
                 "knn": {
@@ -366,6 +381,16 @@ impl SearchService {
                 }
             }
         });
+
+        if user_id.is_none() {
+            search_body["post_filter"] = json!({
+                "bool": {
+                    "must_not": [
+                        { "term": { "sensitivity": "confidential" } }
+                    ]
+                }
+            });
+        }
 
         let response = self.client
             .search(SearchParts::Index(&[INDEX_NAME]))
@@ -409,10 +434,12 @@ impl SearchService {
         Ok(hits)
     }
 
-    /// Autocomplete suggestions
-    pub async fn autocomplete(&self, prefix: &str, limit: i32) -> Result<Vec<AutocompleteSuggestion>> {
-
-        let search_body = json!({
+    /// Autocomplete suggestions.
+    ///
+    /// `user_id`: `None` means unauthenticated — a `post_filter` restricts results
+    /// so that confidential document titles are never surfaced.
+    pub async fn autocomplete(&self, prefix: &str, limit: i32, user_id: Option<i32>) -> Result<Vec<AutocompleteSuggestion>> {
+        let mut search_body = json!({
             "suggest": {
                 "title-suggest": {
                     "prefix": prefix,
@@ -424,6 +451,16 @@ impl SearchService {
                 }
             }
         });
+
+        if user_id.is_none() {
+            search_body["post_filter"] = json!({
+                "bool": {
+                    "must_not": [
+                        { "term": { "sensitivity": "confidential" } }
+                    ]
+                }
+            });
+        }
 
         let response = self.client
             .search(SearchParts::Index(&[INDEX_NAME]))
@@ -493,6 +530,18 @@ pub fn first_highlight(highlights: &[String]) -> String {
 /// Truncate content to at most `max_chars` characters
 pub fn truncate_content(content: &str, max_chars: usize) -> String {
     content.chars().take(max_chars).collect()
+}
+
+/// Return the `must_not` array that excludes confidential documents when the
+/// caller is unauthenticated (`user_id == None`).  Returns `None` for
+/// authenticated callers so the caller can skip adding the filter entirely.
+/// Pure function — testable without OpenSearch.
+pub fn build_confidential_filter(user_id: Option<i32>) -> Option<serde_json::Value> {
+    if user_id.is_none() {
+        Some(json!([{ "term": { "sensitivity": "confidential" } }]))
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -619,5 +668,32 @@ mod tests {
         let s = "안녕하세요 세계";
         let truncated = truncate_content(s, 3);
         assert_eq!(truncated, "안녕하");
+    }
+
+    // -------------------------------------------------------------------------
+    // Sensitivity filter logic tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_build_confidential_filter_unauthenticated_returns_some() {
+        let filter = build_confidential_filter(None);
+        assert!(filter.is_some());
+        let v = filter.unwrap();
+        let arr = v.as_array().expect("must_not should be an array");
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["term"]["sensitivity"], "confidential");
+    }
+
+    #[test]
+    fn test_build_confidential_filter_authenticated_returns_none() {
+        let filter = build_confidential_filter(Some(42));
+        assert!(filter.is_none());
+    }
+
+    #[test]
+    fn test_build_confidential_filter_user_id_zero_is_authenticated() {
+        // user_id = 0 is still a valid authenticated user
+        let filter = build_confidential_filter(Some(0));
+        assert!(filter.is_none());
     }
 }

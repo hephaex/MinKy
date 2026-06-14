@@ -101,6 +101,9 @@ pub struct SearchDocument {
     pub updated_at: DateTime<Utc>,
     pub view_count: i32,
     pub embedding: Option<Vec<f32>>,
+    /// "confidential" | "internal" | "public"
+    pub sensitivity: String,
+    pub is_public: bool,
 }
 
 /// Korean text analysis result
@@ -281,6 +284,8 @@ mod tests {
             updated_at: Utc::now(),
             view_count: 10,
             embedding: Some(vec![0.1, 0.2, 0.3]),
+            sensitivity: "internal".to_string(),
+            is_public: false,
         };
         let json = serde_json::to_string(&doc).unwrap();
         assert!(json.contains("\"title\":\"RAG Guide\""));
@@ -303,8 +308,58 @@ mod tests {
             updated_at: Utc::now(),
             view_count: 0,
             embedding: None,
+            sensitivity: "internal".to_string(),
+            is_public: false,
         };
         let json = serde_json::to_string(&doc).unwrap();
         assert!(json.contains("\"embedding\":null"));
+    }
+
+    #[test]
+    fn test_search_document_sensitivity_field_serializes() {
+        use chrono::Utc;
+        let doc = SearchDocument {
+            id: "doc-3".to_string(),
+            title: "Secret Doc".to_string(),
+            content: "classified".to_string(),
+            category_id: None,
+            category_name: None,
+            tags: vec![],
+            user_id: 1,
+            author_name: "Eve".to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            view_count: 0,
+            embedding: None,
+            sensitivity: "confidential".to_string(),
+            is_public: false,
+        };
+        let json = serde_json::to_string(&doc).unwrap();
+        assert!(json.contains("\"sensitivity\":\"confidential\""));
+        assert!(json.contains("\"is_public\":false"));
+    }
+
+    #[test]
+    fn test_search_document_public_sensitivity_serializes() {
+        use chrono::Utc;
+        let doc = SearchDocument {
+            id: "doc-4".to_string(),
+            title: "Public Doc".to_string(),
+            content: "open content".to_string(),
+            category_id: None,
+            category_name: None,
+            tags: vec![],
+            user_id: 1,
+            author_name: "Alice".to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            view_count: 5,
+            embedding: None,
+            sensitivity: "public".to_string(),
+            is_public: true,
+        };
+        let json = serde_json::to_string(&doc).unwrap();
+        assert!(json.contains("\"sensitivity\":\"public\""));
+        assert!(json.contains("\"is_public\":true"));
     }
 }

@@ -128,7 +128,7 @@ impl MetadataExtractionStage {
                 let key = key.trim();
 
                 if !key.is_empty() {
-                    map.insert(key.to_string(), Self::parse_value(value));
+                    map.insert(key.to_string(), Self::parse_value(key, value));
                 }
             }
         }
@@ -140,13 +140,18 @@ impl MetadataExtractionStage {
         }
     }
 
+    /// Keys whose comma-separated values should be split into a JSON array.
+    const ARRAY_KEYS: &'static [&'static str] = &[
+        "tags", "keywords", "labels", "categories", "authors",
+    ];
+
     /// Parse a single frontmatter value into a JSON value.
     ///
     /// Supports three forms:
-    /// - Inline array: `[rust, backend, axum]` → JSON array
-    /// - Comma-separated list: `rust, backend, axum` → JSON array
-    /// - Scalar: `My Document` → JSON string
-    fn parse_value(value: &str) -> serde_json::Value {
+    /// - Inline array: `[rust, backend, axum]` → JSON array (key-independent)
+    /// - Comma-separated list on an explicit array key (e.g. `tags`) → JSON array
+    /// - Scalar: everything else → JSON string
+    fn parse_value(key: &str, value: &str) -> serde_json::Value {
         let v = value.trim();
 
         if v.starts_with('[') && v.ends_with(']') {
@@ -159,8 +164,9 @@ impl MetadataExtractionStage {
                 .map(|s| serde_json::Value::String(s.to_string()))
                 .collect();
             serde_json::Value::Array(items)
-        } else if v.contains(',') {
-            // Comma-separated list
+        } else if v.contains(',') && Self::ARRAY_KEYS.contains(&key.to_lowercase().as_str()) {
+            // Comma-split only for explicit array keys to avoid mangling titles like
+            // "My doc, version 2" → should stay a scalar string.
             let items: Vec<serde_json::Value> = v
                 .split(',')
                 .map(|s| s.trim().trim_matches('"').trim_matches('\''))
@@ -169,7 +175,7 @@ impl MetadataExtractionStage {
                 .collect();
             serde_json::Value::Array(items)
         } else {
-            // Scalar
+            // Scalar: non-array key or no comma
             let scalar = v.trim_matches('"').trim_matches('\'');
             serde_json::Value::String(scalar.to_string())
         }
@@ -490,6 +496,20 @@ Content."#;
             fm.get("title").and_then(|v| v.as_str()),
             Some("My Doc"),
             "scalar value must remain a string"
+        );
+    }
+
+    #[test]
+    fn test_parse_frontmatter_comma_in_title() {
+        // C.2 regression: title with comma must NOT be split into an array.
+        let stage = MetadataExtractionStage::new();
+        let content = "---\ntitle: My doc, version 2\n---\n\nContent.";
+
+        let fm = stage.extract_frontmatter(content).unwrap();
+        assert_eq!(
+            fm.get("title").and_then(|v| v.as_str()),
+            Some("My doc, version 2"),
+            "comma inside a non-array key must produce a scalar string"
         );
     }
 

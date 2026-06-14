@@ -114,13 +114,13 @@ impl StorageStage {
     /// Resolve a category ID from the document frontmatter via a DB lookup.
     ///
     /// Looks up the `category` value against `slug`, `lab-{category}` slug, or
-    /// `name`, scoped to the owning user and active categories. Returns `None`
-    /// when the frontmatter has no `category` key or no matching row exists, so
-    /// the caller falls back to the context / config category.
+    /// `name` across all active categories. lab categories are global shared
+    /// resources so no user_id scoping is applied. Returns `None` when the
+    /// frontmatter has no `category` key or no matching row exists, so the
+    /// caller falls back to the context / config category.
     async fn resolve_category_from_frontmatter(
         &self,
         frontmatter: &serde_json::Value,
-        user_id: i32,
     ) -> PipelineResult<Option<i32>> {
         let name = match frontmatter.get("category").and_then(|v| v.as_str()) {
             Some(n) => n,
@@ -131,13 +131,11 @@ impl StorageStage {
         let row: Option<(i32,)> = sqlx::query_as(
             "SELECT id FROM categories
              WHERE (LOWER(slug) = $1 OR LOWER(slug) = $2 OR LOWER(name) = $1)
-               AND user_id = $3
                AND is_active = true
              LIMIT 1",
         )
         .bind(&name_lower)
         .bind(format!("lab-{}", name_lower))
-        .bind(user_id)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -161,7 +159,7 @@ impl StorageStage {
         // Frontmatter override: category, sensitivity
         let frontmatter = &doc.metadata.frontmatter;
         let category_id = if let Some(fm) = frontmatter {
-            self.resolve_category_from_frontmatter(fm, user_id)
+            self.resolve_category_from_frontmatter(fm)
                 .await?
                 .or_else(|| context.category_id.or(self.config.category_id))
         } else {

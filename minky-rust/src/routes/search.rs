@@ -13,7 +13,9 @@ use crate::{
     AppState,
 };
 
-/// Raw DB row type for document reindex query
+/// Raw DB row type for document reindex query.
+/// Fields: id, title, content, category_id, user_id, created_at, updated_at,
+///         view_count, sensitivity, is_public
 type DocumentRow = (
     String,
     String,
@@ -23,6 +25,8 @@ type DocumentRow = (
     chrono::DateTime<chrono::Utc>,
     chrono::DateTime<chrono::Utc>,
     i32,
+    String,
+    bool,
 );
 
 pub fn routes() -> Router<AppState> {
@@ -40,13 +44,14 @@ pub struct SearchResponseBody {
 
 async fn search(
     State(state): State<AppState>,
-    _auth_user: OptionalAuthUser,
+    auth_user: OptionalAuthUser,
     Query(query): Query<SearchQuery>,
 ) -> AppResult<Json<SearchResponseBody>> {
     let search_service = SearchService::new(&state.config).await
         .map_err(AppError::Internal)?;
 
-    let response = search_service.search(query).await?;
+    let user_id = auth_user.0.map(|u| u.id);
+    let response = search_service.search(query, user_id).await?;
 
     Ok(Json(SearchResponseBody {
         success: true,
@@ -82,9 +87,11 @@ async fn semantic_search(
     // Generate embedding for query
     let embedding_response = ai_service.generate_embedding(&payload.query).await?;
 
-    // Search using embedding
+    // Search using embedding.
+    // This handler is currently dead code; when wired up it should extract
+    // OptionalAuthUser and pass the real user_id instead of None.
     let limit = payload.limit.unwrap_or(10).min(50);
-    let hits = search_service.semantic_search(embedding_response.embedding, limit).await?;
+    let hits = search_service.semantic_search(embedding_response.embedding, limit, None).await?;
 
     Ok(Json(SemanticSearchResponse {
         success: true,
@@ -106,14 +113,15 @@ pub struct AutocompleteResponse {
 
 async fn autocomplete(
     State(state): State<AppState>,
-    _auth_user: OptionalAuthUser,
+    auth_user: OptionalAuthUser,
     Query(query): Query<AutocompleteQuery>,
 ) -> AppResult<Json<AutocompleteResponse>> {
     let search_service = SearchService::new(&state.config).await
         .map_err(AppError::Internal)?;
 
+    let user_id = auth_user.0.map(|u| u.id);
     let limit = query.limit.unwrap_or(10).min(20);
-    let suggestions = search_service.autocomplete(&query.q, limit).await
+    let suggestions = search_service.autocomplete(&query.q, limit, user_id).await
         .map_err(AppError::Internal)?;
 
     Ok(Json(AutocompleteResponse {
@@ -141,7 +149,9 @@ async fn reindex_all(
     search_service.create_index().await
         .map_err(AppError::Internal)?;
 
-    // Fetch all documents from database and index them
+    // Fetch all documents from database and index them.
+    // sensitivity and is_public are fetched so the index correctly reflects
+    // each document's access classification from the start.
     let documents: Vec<DocumentRow> = sqlx::query_as(
         r#"
         SELECT
@@ -152,7 +162,9 @@ async fn reindex_all(
             d.user_id,
             d.created_at,
             d.updated_at,
-            d.view_count
+            d.view_count,
+            d.sensitivity,
+            d.is_public
         FROM documents d
         "#
     )
@@ -173,6 +185,8 @@ async fn reindex_all(
             updated_at: d.6,
             view_count: d.7,
             embedding: None,
+            sensitivity: d.8,
+            is_public: d.9,
         })
         .collect();
 
