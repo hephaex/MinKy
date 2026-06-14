@@ -23,6 +23,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_documents).post(create_document))
         .merge(upload_route)
+        .route("/tree", get(get_document_tree))
         .route("/{id}", get(get_document).put(update_document).delete(delete_document))
         .route("/{id}/status", get(get_document_status))
         .route("/{id}/reprocess", post(reprocess_document))
@@ -36,6 +37,180 @@ pub struct ListQuery {
     pub per_page: Option<i32>,  // Flask compat alias for limit
     pub category_id: Option<i32>,
     pub search: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TreeQuery {
+    pub mode: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TreeNode {
+    pub id: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub node_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub document_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<TreeNode>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TreeResponse {
+    pub tree: Vec<TreeNode>,
+}
+
+async fn get_document_tree(
+    State(state): State<AppState>,
+    auth_user: OptionalAuthUser,
+    Query(query): Query<TreeQuery>,
+) -> AppResult<Json<TreeResponse>> {
+    let mode = query.mode.as_deref().unwrap_or("by-tag");
+    let user_id = auth_user.0.map(|u| u.id).unwrap_or(-1);
+
+    let tree = match mode {
+        "by-date" => build_tree_by_date(&state, user_id).await?,
+        _ => build_tree_by_tag(&state, user_id).await?,
+    };
+
+    Ok(Json(TreeResponse { tree }))
+}
+
+async fn build_tree_by_tag(state: &AppState, user_id: i32) -> AppResult<Vec<TreeNode>> {
+    // 태그별 문서 그룹 — 태그 없는 문서는 "태그 없음" 노드로
+    let rows: Vec<(Option<String>, Option<i32>, Uuid, String)> = sqlx::query_as(
+        r#"
+        SELECT t.name, t.id, d.id, d.title
+        FROM documents d
+        LEFT JOIN document_tags dt ON dt.document_id = d.id
+        LEFT JOIN tags t ON t.id = dt.tag_id
+        WHERE d.user_id = $1 OR d.is_public = true
+        ORDER BY t.name NULLS LAST, d.title
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    let mut tag_map: std::collections::BTreeMap<String, Vec<TreeNode>> = std::collections::BTreeMap::new();
+
+    for (tag_name, tag_id, doc_id, doc_title) in rows {
+        let key = match (&tag_name, &tag_id) {
+            (Some(name), Some(id)) => format!("tag:{id}:{name}"),
+            _ => "tag:untagged:태그 없음".to_string(),
+        };
+        let label = tag_name.unwrap_or_else(|| "태그 없음".to_string());
+        tag_map.entry(key.clone()).or_insert_with(|| vec![]);
+        // avoid duplicate doc entries when doc has multiple tags
+        let docs = tag_map.get_mut(&key).unwrap();
+        let doc_id_str = doc_id.to_string();
+        if !docs.iter().any(|n| n.document_id.as_deref() == Some(&doc_id_str)) {
+            docs.push(TreeNode {
+                id: format!("doc:{doc_id}"),
+                label: doc_title,
+                node_type: "document".to_string(),
+                document_id: Some(doc_id_str),
+                count: None,
+                children: None,
+            });
+        }
+        let _ = label; // used in entry key above
+    }
+
+    let tree = tag_map
+        .into_iter()
+        .map(|(key, children)| {
+            let parts: Vec<&str> = key.splitn(3, ':').collect();
+            let label = parts.get(2).copied().unwrap_or("").to_string();
+            let count = children.len() as i64;
+            TreeNode {
+                id: key,
+                label,
+                node_type: "tag".to_string(),
+                document_id: None,
+                count: Some(count),
+                children: Some(children),
+            }
+        })
+        .collect();
+
+    Ok(tree)
+}
+
+async fn build_tree_by_date(state: &AppState, user_id: i32) -> AppResult<Vec<TreeNode>> {
+    // 연도 > 월 > 문서 계층
+    let rows: Vec<(i32, i32, Uuid, String)> = sqlx::query_as(
+        r#"
+        SELECT
+            EXTRACT(YEAR FROM created_at)::int,
+            EXTRACT(MONTH FROM created_at)::int,
+            id, title
+        FROM documents
+        WHERE user_id = $1 OR is_public = true
+        ORDER BY created_at DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    let mut year_map: std::collections::BTreeMap<i32, std::collections::BTreeMap<i32, Vec<TreeNode>>> =
+        std::collections::BTreeMap::new();
+
+    for (year, month, doc_id, doc_title) in rows {
+        year_map
+            .entry(year)
+            .or_default()
+            .entry(month)
+            .or_default()
+            .push(TreeNode {
+                id: format!("doc:{doc_id}"),
+                label: doc_title,
+                node_type: "document".to_string(),
+                document_id: Some(doc_id.to_string()),
+                count: None,
+                children: None,
+            });
+    }
+
+    const MONTHS_KO: [&str; 12] = [
+        "1월", "2월", "3월", "4월", "5월", "6월",
+        "7월", "8월", "9월", "10월", "11월", "12월",
+    ];
+
+    let tree = year_map
+        .into_iter()
+        .map(|(year, month_map)| {
+            let month_nodes: Vec<TreeNode> = month_map
+                .into_iter()
+                .map(|(month, docs)| {
+                    let count = docs.len() as i64;
+                    TreeNode {
+                        id: format!("month:{year}-{month:02}"),
+                        label: MONTHS_KO[(month - 1) as usize].to_string(),
+                        node_type: "month".to_string(),
+                        document_id: None,
+                        count: Some(count),
+                        children: Some(docs),
+                    }
+                })
+                .collect();
+            let total: i64 = month_nodes.iter().map(|m| m.count.unwrap_or(0)).sum();
+            TreeNode {
+                id: format!("year:{year}"),
+                label: year.to_string(),
+                node_type: "year".to_string(),
+                document_id: None,
+                count: Some(total),
+                children: Some(month_nodes),
+            }
+        })
+        .collect();
+
+    Ok(tree)
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
