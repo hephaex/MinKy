@@ -21,12 +21,20 @@
 - `storage.rs`: frontmatter category/sensitivity override (DB lookup + 화이트리스트)
 - 1908 tests pass / 0 fail, commit `1e211b4d`
 
-### 📋 Next Sprint 4 Roadmap
+### ✅ Sprint 4: 레드팀 CRITICAL/HIGH 5건 수정 완료 (2026-06-14)
+- E.1: 013 migration FK 위반 방지 (SELECT FROM users 조건부)
+- B.3: resolver user_id 조건 제거 (카테고리 전역 공유)
+- D.1/D.2: 검색 sensitivity 필터 (무인증 confidential 제외)
+- C.2: parse_value 키 인식 comma-split (ARRAY_KEYS만)
+- D.3: confidential+is_public 불변식 (create/update 차단)
+- 1918 tests pass / 0 fail, commit `5e733da6`
 
-**P1: lab 문서 인제스트** — `/lab-ingest` 스킬로 75개 분류된 .md 파일 CT306 인제스트
-**P2: CT306 rsync + 재빌드** — Sprint 3 소스 CT306에 반영 (`rsync + docker build`)
-**P3: OpenSearch 가시성 필터** — search_service.rs sensitivity 필터링 (단일 사용자 VPN-only 환경에서 P2 후 검토)
-**P4 보류**: git push frontend/node_modules bloat 해결 필요 (`git rm -r --cached frontend/node_modules` 선행)
+### 📋 Next Sprint 5 Roadmap
+
+**P1: CT306 rsync + docker build** — Sprint 3-4 소스 CT306에 반영 (frontmatter override + security fix 배포)
+**P2: /lab-ingest** — 75개 분류된 .md 파일 CT306 인제스트 (Sprint 3 배포 후 의미 있음)
+**P3 보류**: git push frontend/node_modules bloat 해결 필요 (`git rm -r --cached frontend/node_modules` 선행)
+**Medium 잔여**: C.3 block scalar/CRLF 미지원, F.2 upload title upsert 동명 덮어씀
 
 ---
 

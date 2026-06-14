@@ -24,6 +24,23 @@
 
 ---
 
+### Sprint 4: 레드팀 CRITICAL/HIGH 5건 수정 (2026-06-14)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| E.1: FK 위반 방지 | `013_lab_categories_seed.sql` | `VALUES(1)` → `SELECT FROM users WHERE id=1` 조건부 |
+| B.3: resolver user_id 제거 | `storage.rs` | `AND user_id = $3` 삭제, 전역 카테고리로 변경 |
+| D.1/D.2: 검색 보안 | `search_service.rs`, `search.rs`, `models/search.rs` | SearchDocument에 sensitivity+is_public, 매핑 추가, 무인증 시 confidential 제외 필터 |
+| C.2: parse_value key-aware | `metadata.rs` | ARRAY_KEYS에만 comma-split, title/author 보존 |
+| D.3: 불변식 | `documents.rs` | confidential+is_public=true 조합 create/update에서 400 반환 |
+
+테스트: **1918 tests pass / 0 fail / 0 clippy**
+커밋: `5e733da6`
+
+**[IMPLEMENTED]** Demo Gate: 신규 단위 테스트 포함 전체 워크스페이스 통과. 검색 필터/불변식/파싱 동작 단위 검증됨.
+
+---
+
 ### Sprint 2: lab 카테고리 9개 시딩 (2026-06-14)
 
 | 변경 | 파일 | 설명 |
