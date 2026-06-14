@@ -101,7 +101,7 @@ impl MetadataExtractionStage {
 
     /// Extract YAML frontmatter from content
     fn extract_frontmatter(&self, content: &str) -> Option<serde_json::Value> {
-        let frontmatter_re = Regex::new(r"(?s)^---\n(.+?)\n---").unwrap();
+        let frontmatter_re = Regex::new(r"(?s)^---\r?\n(.+?)\r?\n---").unwrap();
 
         frontmatter_re
             .captures(content)
@@ -114,21 +114,56 @@ impl MetadataExtractionStage {
             })
     }
 
-    /// Simple YAML-like parser for frontmatter
+    /// Simple YAML-like parser for frontmatter.
+    ///
+    /// Handles:
+    /// - Scalar key-value pairs (`key: value`)
+    /// - Literal block scalars (`key: |`) — newlines preserved
+    /// - Folded block scalars (`key: >`) — newlines folded to spaces
+    /// - CRLF line endings (via `str::lines()` normalisation)
     fn parse_simple_yaml(&self, content: &str) -> Option<serde_json::Value> {
         let mut map = serde_json::Map::new();
+        let mut lines = content.lines().peekable();
 
-        for line in content.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
+        while let Some(line) = lines.next() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }
 
-            if let Some((key, value)) = line.split_once(':') {
-                let key = key.trim();
+            if let Some((key, value)) = trimmed.split_once(':') {
+                let key = key.trim().to_string();
+                if key.is_empty() {
+                    continue;
+                }
 
-                if !key.is_empty() {
-                    map.insert(key.to_string(), Self::parse_value(key, value));
+                let value_trimmed = value.trim();
+
+                if value_trimmed == "|" || value_trimmed == ">" {
+                    // Block scalar: collect indented continuation lines.
+                    let folded = value_trimmed == ">";
+                    let mut block_lines: Vec<&str> = Vec::new();
+                    while let Some(&next) = lines.peek() {
+                        if next.starts_with(' ') || next.starts_with('\t') {
+                            block_lines.push(next.trim());
+                            lines.next();
+                        } else {
+                            break;
+                        }
+                    }
+                    // Strip trailing blank lines (YAML "clip" / default chomping).
+                    while block_lines.last() == Some(&"") {
+                        block_lines.pop();
+                    }
+                    let joined = if folded {
+                        block_lines.join(" ")
+                    } else {
+                        block_lines.join("\n")
+                    };
+                    map.insert(key, serde_json::Value::String(joined));
+                } else {
+                    let parsed = Self::parse_value(&key, value);
+                    map.insert(key, parsed);
                 }
             }
         }
@@ -550,5 +585,51 @@ Content."#;
         let stage = MetadataExtractionStage::new();
         let doc_type = stage.detect_document_type("Step 1: Install the package\nStep 2: Configure", &[]);
         assert_eq!(doc_type, DocumentType::Tutorial);
+    }
+
+    // --- C.3 additions ---
+
+    #[test]
+    fn test_parse_frontmatter_crlf() {
+        let stage = MetadataExtractionStage::new();
+        // Embed CRLF line endings explicitly.
+        let content = "---\r\ntitle: My Doc\r\ncategory: finance\r\n---\r\nBody text";
+        let result = stage.extract_frontmatter(content);
+        assert!(result.is_some(), "CRLF frontmatter should be detected");
+        let fm = result.unwrap();
+        assert_eq!(fm["title"].as_str(), Some("My Doc"));
+        assert_eq!(fm["category"].as_str(), Some("finance"));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_literal_block_scalar() {
+        let stage = MetadataExtractionStage::new();
+        let content =
+            "---\ntitle: Test\ndescription: |\n  First line\n  Second line\ncategory: core\n---\nBody";
+        let result = stage.extract_frontmatter(content);
+        assert!(result.is_some(), "frontmatter with literal block scalar should parse");
+        let fm = result.unwrap();
+        assert_eq!(fm["title"].as_str(), Some("Test"));
+        assert_eq!(
+            fm["description"].as_str(),
+            Some("First line\nSecond line"),
+            "literal block scalar (|) must preserve newlines"
+        );
+        assert_eq!(fm["category"].as_str(), Some("core"));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_folded_block_scalar() {
+        let stage = MetadataExtractionStage::new();
+        let content =
+            "---\ntitle: Test\ndescription: >\n  First line\n  Second line\n---\nBody";
+        let result = stage.extract_frontmatter(content);
+        assert!(result.is_some(), "frontmatter with folded block scalar should parse");
+        let fm = result.unwrap();
+        assert_eq!(
+            fm["description"].as_str(),
+            Some("First line Second line"),
+            "folded block scalar (>) must join lines with a space"
+        );
     }
 }
