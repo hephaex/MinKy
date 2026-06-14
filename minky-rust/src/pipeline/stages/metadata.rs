@@ -126,13 +126,9 @@ impl MetadataExtractionStage {
 
             if let Some((key, value)) = line.split_once(':') {
                 let key = key.trim();
-                let value = value.trim().trim_matches('"').trim_matches('\'');
 
                 if !key.is_empty() {
-                    map.insert(
-                        key.to_string(),
-                        serde_json::Value::String(value.to_string()),
-                    );
+                    map.insert(key.to_string(), Self::parse_value(value));
                 }
             }
         }
@@ -141,6 +137,41 @@ impl MetadataExtractionStage {
             None
         } else {
             Some(serde_json::Value::Object(map))
+        }
+    }
+
+    /// Parse a single frontmatter value into a JSON value.
+    ///
+    /// Supports three forms:
+    /// - Inline array: `[rust, backend, axum]` → JSON array
+    /// - Comma-separated list: `rust, backend, axum` → JSON array
+    /// - Scalar: `My Document` → JSON string
+    fn parse_value(value: &str) -> serde_json::Value {
+        let v = value.trim();
+
+        if v.starts_with('[') && v.ends_with(']') {
+            // Inline array: [a, b, c]
+            let inner = &v[1..v.len() - 1];
+            let items: Vec<serde_json::Value> = inner
+                .split(',')
+                .map(|s| s.trim().trim_matches('"').trim_matches('\''))
+                .filter(|s| !s.is_empty())
+                .map(|s| serde_json::Value::String(s.to_string()))
+                .collect();
+            serde_json::Value::Array(items)
+        } else if v.contains(',') {
+            // Comma-separated list
+            let items: Vec<serde_json::Value> = v
+                .split(',')
+                .map(|s| s.trim().trim_matches('"').trim_matches('\''))
+                .filter(|s| !s.is_empty())
+                .map(|s| serde_json::Value::String(s.to_string()))
+                .collect();
+            serde_json::Value::Array(items)
+        } else {
+            // Scalar
+            let scalar = v.trim_matches('"').trim_matches('\'');
+            serde_json::Value::String(scalar.to_string())
         }
     }
 
@@ -407,6 +438,77 @@ Content here."#;
         let fm = fm.unwrap();
         assert_eq!(fm.get("title").and_then(|v| v.as_str()), Some("My Document"));
         assert_eq!(fm.get("author").and_then(|v| v.as_str()), Some("John Doe"));
+    }
+
+    #[test]
+    fn test_parse_frontmatter_inline_array() {
+        let stage = MetadataExtractionStage::new();
+        let content = r#"---
+tags: [rust, backend]
+---
+
+Content."#;
+
+        let fm = stage.extract_frontmatter(content).unwrap();
+        let tags = fm.get("tags").unwrap();
+        assert_eq!(
+            tags,
+            &serde_json::json!(["rust", "backend"]),
+            "inline array should parse into a JSON array"
+        );
+    }
+
+    #[test]
+    fn test_parse_frontmatter_comma_list() {
+        let stage = MetadataExtractionStage::new();
+        let content = r#"---
+tags: rust, backend, axum
+---
+
+Content."#;
+
+        let fm = stage.extract_frontmatter(content).unwrap();
+        let tags = fm.get("tags").unwrap();
+        assert_eq!(
+            tags,
+            &serde_json::json!(["rust", "backend", "axum"]),
+            "comma-separated value should parse into a JSON array"
+        );
+    }
+
+    #[test]
+    fn test_parse_frontmatter_scalar_unchanged() {
+        let stage = MetadataExtractionStage::new();
+        let content = r#"---
+title: My Doc
+---
+
+Content."#;
+
+        let fm = stage.extract_frontmatter(content).unwrap();
+        assert_eq!(
+            fm.get("title").and_then(|v| v.as_str()),
+            Some("My Doc"),
+            "scalar value must remain a string"
+        );
+    }
+
+    #[test]
+    fn test_parse_frontmatter_empty_array() {
+        let stage = MetadataExtractionStage::new();
+        let content = r#"---
+tags: []
+---
+
+Content."#;
+
+        let fm = stage.extract_frontmatter(content).unwrap();
+        let tags = fm.get("tags").unwrap();
+        assert_eq!(
+            tags,
+            &serde_json::json!([]),
+            "empty inline array should parse into an empty JSON array"
+        );
     }
 
     #[test]

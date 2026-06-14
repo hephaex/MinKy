@@ -96,6 +96,53 @@ impl StorageStage {
         Self::new(pool, StorageConfig::default())
     }
 
+    /// Extract a valid `sensitivity` value from the document frontmatter.
+    ///
+    /// Returns `Some(&str)` only when the frontmatter contains a `sensitivity`
+    /// key whose value is one of the allowed `SENSITIVITY_VALUES`. Unknown
+    /// values (e.g. `top-secret`) and a missing key both yield `None`, so the
+    /// caller falls back to the configured default.
+    pub(crate) fn extract_sensitivity_from_frontmatter(
+        frontmatter: &serde_json::Value,
+    ) -> Option<&str> {
+        frontmatter
+            .get("sensitivity")
+            .and_then(|v| v.as_str())
+            .filter(|s| crate::models::SENSITIVITY_VALUES.contains(s))
+    }
+
+    /// Resolve a category ID from the document frontmatter via a DB lookup.
+    ///
+    /// Looks up the `category` value against `slug`, `lab-{category}` slug, or
+    /// `name`, scoped to the owning user and active categories. Returns `None`
+    /// when the frontmatter has no `category` key or no matching row exists, so
+    /// the caller falls back to the context / config category.
+    async fn resolve_category_from_frontmatter(
+        &self,
+        frontmatter: &serde_json::Value,
+        user_id: i32,
+    ) -> PipelineResult<Option<i32>> {
+        let name = match frontmatter.get("category").and_then(|v| v.as_str()) {
+            Some(n) => n,
+            None => return Ok(None),
+        };
+
+        let row: Option<(i32,)> = sqlx::query_as(
+            "SELECT id FROM categories
+             WHERE (slug = $1 OR slug = $2 OR name = $1)
+               AND user_id = $3
+               AND is_active = true
+             LIMIT 1",
+        )
+        .bind(name)
+        .bind(format!("lab-{}", name))
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|(id,)| id))
+    }
+
     /// Store the document record
     async fn store_document(
         &self,
@@ -103,10 +150,25 @@ impl StorageStage {
         context: &PipelineContext,
     ) -> PipelineResult<Uuid> {
         let user_id = context.user_id.or(self.config.user_id).unwrap_or(1);
-        let category_id = context.category_id.or(self.config.category_id);
         let is_public = self.config.is_public;
-        let sensitivity = &self.config.sensitivity;
         let source_path = doc.source_path.as_deref();
+
+        // Frontmatter override: category, sensitivity
+        let frontmatter = &doc.metadata.frontmatter;
+        let category_id = if let Some(fm) = frontmatter {
+            self.resolve_category_from_frontmatter(fm, user_id)
+                .await?
+                .or_else(|| context.category_id.or(self.config.category_id))
+        } else {
+            context.category_id.or(self.config.category_id)
+        };
+        let sensitivity = if let Some(fm) = frontmatter {
+            Self::extract_sensitivity_from_frontmatter(fm)
+                .unwrap_or(self.config.sensitivity.as_str())
+                .to_string()
+        } else {
+            self.config.sensitivity.clone()
+        };
 
         // Check if document exists.
         // Prefer matching by (user_id, source_path) when source_path is present so
@@ -148,7 +210,7 @@ impl StorageStage {
             .bind(category_id)
             .bind(is_public)
             .bind(source_path)
-            .bind(sensitivity)
+            .bind(&sensitivity)
             .execute(&self.pool)
             .await?;
 
@@ -168,7 +230,7 @@ impl StorageStage {
             .bind(user_id)
             .bind(is_public)
             .bind(source_path)
-            .bind(sensitivity)
+            .bind(&sensitivity)
             .fetch_one(&self.pool)
             .await?;
 
@@ -403,6 +465,27 @@ mod tests {
             ..StorageConfig::default()
         };
         assert_eq!(config.sensitivity, "confidential");
+    }
+
+    #[test]
+    fn test_extract_sensitivity_from_frontmatter_valid() {
+        let fm = serde_json::json!({"sensitivity": "confidential"});
+        assert_eq!(
+            StorageStage::extract_sensitivity_from_frontmatter(&fm),
+            Some("confidential")
+        );
+    }
+
+    #[test]
+    fn test_extract_sensitivity_from_frontmatter_invalid_rejected() {
+        let fm = serde_json::json!({"sensitivity": "top-secret"});
+        assert!(StorageStage::extract_sensitivity_from_frontmatter(&fm).is_none());
+    }
+
+    #[test]
+    fn test_extract_sensitivity_from_frontmatter_missing() {
+        let fm = serde_json::json!({"category": "finance"});
+        assert!(StorageStage::extract_sensitivity_from_frontmatter(&fm).is_none());
     }
 
     #[test]
