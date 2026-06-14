@@ -150,12 +150,12 @@ impl MetadataExtractionStage {
         let v = value.trim();
 
         if v.starts_with('[') && v.ends_with(']') {
-            // Inline array: [a, b, c]
+            // Inline array: [a, b, c] or [ a , b , c ] or []
             let inner = &v[1..v.len() - 1];
             let items: Vec<serde_json::Value> = inner
                 .split(',')
                 .map(|s| s.trim().trim_matches('"').trim_matches('\''))
-                .filter(|s| !s.is_empty())
+                .filter(|s| !s.trim().is_empty())
                 .map(|s| serde_json::Value::String(s.to_string()))
                 .collect();
             serde_json::Value::Array(items)
@@ -164,7 +164,7 @@ impl MetadataExtractionStage {
             let items: Vec<serde_json::Value> = v
                 .split(',')
                 .map(|s| s.trim().trim_matches('"').trim_matches('\''))
-                .filter(|s| !s.is_empty())
+                .filter(|s| !s.trim().is_empty())
                 .map(|s| serde_json::Value::String(s.to_string()))
                 .collect();
             serde_json::Value::Array(items)

@@ -127,18 +127,23 @@ impl StorageStage {
             None => return Ok(None),
         };
 
+        let name_lower = name.to_lowercase();
         let row: Option<(i32,)> = sqlx::query_as(
             "SELECT id FROM categories
-             WHERE (slug = $1 OR slug = $2 OR name = $1)
+             WHERE (LOWER(slug) = $1 OR LOWER(slug) = $2 OR LOWER(name) = $1)
                AND user_id = $3
                AND is_active = true
              LIMIT 1",
         )
-        .bind(name)
-        .bind(format!("lab-{}", name))
+        .bind(&name_lower)
+        .bind(format!("lab-{}", name_lower))
         .bind(user_id)
         .fetch_optional(&self.pool)
         .await?;
+
+        if row.is_none() {
+            tracing::debug!(category = %name, "frontmatter category not matched in DB, falling back to StorageConfig");
+        }
 
         Ok(row.map(|(id,)| id))
     }
