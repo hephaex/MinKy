@@ -36,20 +36,16 @@ impl CategoryService {
         Ok(CategoryTree::build_tree(categories, None))
     }
 
-    /// List categories flat for a user. Returns empty vec for unauthenticated callers.
+    /// List categories flat for a user. Unauthenticated callers see system categories (user_id=1).
     pub async fn list_flat_optional(&self, user_id: Option<i32>) -> Result<Vec<CategoryWithCount>> {
-        match user_id {
-            Some(uid) => self.list_flat(uid).await,
-            None => Ok(Vec::new()),
-        }
+        let uid = user_id.unwrap_or(1);  // fallback: system categories (user_id=1)
+        self.list_flat(uid).await
     }
 
-    /// List categories as tree for a user. Returns empty vec for unauthenticated callers.
+    /// List categories as tree for a user. Unauthenticated callers see system categories (user_id=1).
     pub async fn list_tree_optional(&self, user_id: Option<i32>) -> Result<Vec<CategoryTree>> {
-        match user_id {
-            Some(uid) => self.list_tree(uid).await,
-            None => Ok(Vec::new()),
-        }
+        let uid = user_id.unwrap_or(1);  // fallback: system categories (user_id=1)
+        self.list_tree(uid).await
     }
 
     /// List all categories flat
