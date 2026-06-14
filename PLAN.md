@@ -34,11 +34,17 @@
 - F.2: upload title upsert에 `AND source_path IS NULL` 추가 → vault 파일 덮어씀 방지
 - 1922 tests pass / 0 fail, commit `f2eb08a3`
 
-### 📋 Next Sprint 6 Roadmap
+### ✅ Sprint 6: CT306 배포 완료 (2026-06-14)
+- Sprint 2-5 소스 rsync → CT306 (src/ + migrations/ 13개 파일 갱신)
+- docker build + 이미지 교체 (`--force-recreate`)
+- migration 013 체크섬 불일치 수정 (E.1 변경 후 체크섬 UPDATE)
+- fix: category API 무인증 시 system categories 반환 (unwrap_or(1))
+- 1922 tests pass, commit `1ad73b1f`
 
-**P1: CT306 rsync + docker build** — Sprint 1-5 소스 CT306에 반영 (전체 security fix + frontmatter + Medium 수정 배포)
-**P2: /lab-ingest** — 75개 분류된 .md 파일 CT306 인제스트 (Sprint 5 배포 후 의미 있음)
-**P3 보류**: git push frontend/node_modules bloat 해결 필요 (`git rm -r --cached frontend/node_modules` 선행)
+### 📋 Next Sprint 7 Roadmap
+
+**P1: /lab-ingest** — 75개 분류된 .md 파일 CT306 인제스트 (`/lab-ingest` 실행)
+**P2 보류**: git push frontend/node_modules bloat 해결 필요 (`git rm -r --cached frontend/node_modules` 선행)
 
 ---
 

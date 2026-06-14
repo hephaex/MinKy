@@ -5,7 +5,31 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-14) — lab-minky Sprint 5 완료
+## 현재 진행 상황 (2026-06-14) — lab-minky Sprint 6 완료
+
+### Sprint 6: CT306 배포 + category API 수정 (2026-06-14)
+
+| 변경 | 내용 |
+|------|------|
+| rsync | src/ + migrations/ (Sprint 2-5 변경분 전체) → CT306 `/opt/minky/minky-rust/` |
+| docker build | CT306에서 재빌드 (deps 캐시 재활용, 소스 레이어만 재컴파일) |
+| 배포 방식 수정 | `docker compose restart` → `up -d --force-recreate` (이미지 교체 보장) |
+| migration 013 체크섬 | E.1 수정으로 체크섬 불일치 → `UPDATE _sqlx_migrations SET checksum = decode(...)` |
+| category API | `list_flat_optional`/`list_tree_optional` None → unwrap_or(1) 시스템 카테고리 |
+
+테스트: 1922 pass / 0 fail
+커밋: `1ad73b1f`
+배포: CT306 192.168.29.22:8001 — health ✅, categories 10개 ✅
+
+**[IMPLEMENTED]** Demo Gate: CT306 `curl /api/categories/tree` → 10개 반환 확인
+
+**배포 교훈 (2종)**:
+1. `docker compose restart` ≠ 이미지 교체 → 신규 이미지 반영 시 `up -d --force-recreate`
+2. 이미 적용된 migration 파일을 수정하면 체크섬 불일치 → `_sqlx_migrations` UPDATE 필요 (데이터는 유지됨)
+
+---
+
+### Sprint 5: Medium 잔여 2건 수정 (2026-06-14) — 이전 기록
 
 ### Sprint 5: Medium 잔여 2건 수정 (2026-06-14)
 
