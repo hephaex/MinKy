@@ -29,12 +29,16 @@
 - D.3: confidential+is_public 불변식 (create/update 차단)
 - 1918 tests pass / 0 fail, commit `5e733da6`
 
-### 📋 Next Sprint 5 Roadmap
+### ✅ Sprint 5: Medium 잔여 2건 수정 완료 (2026-06-14)
+- C.3: extract_frontmatter() CRLF 지원 + parse_simple_yaml() block scalar (`|`/`>`) 파싱
+- F.2: upload title upsert에 `AND source_path IS NULL` 추가 → vault 파일 덮어씀 방지
+- 1922 tests pass / 0 fail, commit `f2eb08a3`
 
-**P1: CT306 rsync + docker build** — Sprint 3-4 소스 CT306에 반영 (frontmatter override + security fix 배포)
-**P2: /lab-ingest** — 75개 분류된 .md 파일 CT306 인제스트 (Sprint 3 배포 후 의미 있음)
+### 📋 Next Sprint 6 Roadmap
+
+**P1: CT306 rsync + docker build** — Sprint 1-5 소스 CT306에 반영 (전체 security fix + frontmatter + Medium 수정 배포)
+**P2: /lab-ingest** — 75개 분류된 .md 파일 CT306 인제스트 (Sprint 5 배포 후 의미 있음)
 **P3 보류**: git push frontend/node_modules bloat 해결 필요 (`git rm -r --cached frontend/node_modules` 선행)
-**Medium 잔여**: C.3 block scalar/CRLF 미지원, F.2 upload title upsert 동명 덮어씀
 
 ---
 

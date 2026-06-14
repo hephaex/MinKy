@@ -5,7 +5,25 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-14) — lab-minky Sprint 3 완료
+## 현재 진행 상황 (2026-06-14) — lab-minky Sprint 5 완료
+
+### Sprint 5: Medium 잔여 2건 수정 (2026-06-14)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| C.3: CRLF 정규식 | `metadata.rs` | `---\n` → `---\r?\n` (양쪽) |
+| C.3: block scalar 파싱 | `metadata.rs` | `parse_simple_yaml` Peekable 상태 머신: `\|`(literal) `>`(folded) 감지 후 들여쓰기 라인 수집 |
+| F.2: title upsert 격리 | `storage.rs` | `AND source_path IS NULL` 추가 — vault 파일과 upload 파일 upsert 키 분리 |
+
+테스트: **1922 tests pass / 0 fail / 0 clippy**
+커밋: `f2eb08a3`
+신규 테스트: `test_parse_frontmatter_crlf`, `test_parse_frontmatter_literal_block_scalar`, `test_parse_frontmatter_folded_block_scalar`, `test_storage_config_source_path_upsert_isolation`
+
+**[IMPLEMENTED]** Demo Gate: 4개 신규 단위 테스트 + 전체 워크스페이스 1922 pass
+
+---
+
+### Sprint 3: Frontmatter → DB 영속화 (2026-06-14) — 이전 기록
 
 ### Sprint 3: Frontmatter → DB 영속화 (2026-06-14)
 
