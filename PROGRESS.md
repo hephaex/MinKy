@@ -5,6 +5,52 @@
 
 ---
 
+## 현재 진행 상황 (2026-06-14) — lab-minky Sprint 3 완료
+
+### Sprint 3: Frontmatter → DB 영속화 (2026-06-14)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `parse_simple_yaml` inline array 지원 | `metadata.rs` | `[a, b]` → JSON array, `a, b` → JSON array |
+| `extract_sensitivity_from_frontmatter` | `storage.rs` | 화이트리스트 검증 (`pub(crate)` unit-testable) |
+| `resolve_category_from_frontmatter` | `storage.rs` | slug/lab-{name}/name DB lookup (async) |
+| `store_document` frontmatter override | `storage.rs` | category_id + sensitivity 우선순위: frontmatter > StorageConfig 기본값 |
+
+테스트: **1908 tests pass / 0 fail / 0 clippy warnings**
+커밋: `1e211b4d`
+신규 테스트: `test_parse_frontmatter_inline_array`, `test_parse_frontmatter_comma_list`, `test_parse_frontmatter_scalar_unchanged`, `test_parse_frontmatter_empty_array`, `test_extract_sensitivity_from_frontmatter_valid`, `test_extract_sensitivity_from_frontmatter_invalid_rejected`, `test_extract_sensitivity_from_frontmatter_missing`
+
+**[IMPLEMENTED]** Demo Gate: 7개 신규 단위 테스트 로컬 통과 + 전체 워크스페이스 1908 pass
+
+---
+
+### Sprint 2: lab 카테고리 9개 시딩 (2026-06-14)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| lab 부모 카테고리 | `013_lab_categories_seed.sql` | slug=lab, user_id=1 |
+| 9개 자식 카테고리 | `013_lab_categories_seed.sql` | finance/hr/sales/research/core/frontend/cne-infra/product/legal |
+
+커밋: `5dbb9e43`
+**[IMPLEMENTED]** `GET /api/categories/tree` → lab + 9 children 반환 확인
+
+---
+
+### Sprint 1: sensitivity 필드 + CT306 배포 (2026-06-14)
+
+| 변경 | 파일 | 설명 |
+|------|------|------|
+| `sensitivity` 컬럼 추가 | `012_document_sensitivity.sql` | `DEFAULT 'internal'`, CHECK (confidential/internal/public) |
+| `documents.rs` sensitivity 파라미터 | `routes/documents.rs` | CREATE/UPDATE/GET sensitivity 처리 |
+| CT306 lab-minky 배포 | `/opt/minky-lab/` on CT306 | CAS 독립, pgvector, Flask 없음 |
+
+커밋: `680b4a3a`
+**[IMPLEMENTED]** CT306 4컨테이너 all healthy, `POST /api/documents` sensitivity=confidential 반환 확인
+
+---
+
+## 이전 진행 상황 (2026-05-23) — hwp2md Sprint 43 (PROGRESS.md 혼용 주의)
+
 ## 현재 진행 상황 (2026-05-23) - Sprint 43: Decimal DFFF href, Hex Amp-Escaped DFFF href, Rename
 
 ### Sprint 43: href Matrix Completion + Naming Hygiene (2026-05-23)

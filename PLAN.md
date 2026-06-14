@@ -5,6 +5,31 @@
 
 ---
 
+## 🎯 lab-minky 현재 상태 (2026-06-14)
+
+### ✅ CT306 lab-minky 배포 완료 (Sprint 1)
+- CT306 GWA 192.168.29.22, CAS 독립 (로컬 PG+Redis)
+- sensitivity 필드 (migration 012: confidential/internal/public)
+- pgvector/pgvector:pg17 이미지, Flask 없음
+
+### ✅ Sprint 2: lab 카테고리 9개 시딩 완료
+- migration 013: lab + 9 children (finance/hr/sales/research/core/frontend/cne-infra/product/legal)
+- `ON CONFLICT (slug) WHERE slug IS NOT NULL DO NOTHING` 멱등 패턴
+
+### ✅ Sprint 3: Frontmatter → DB 영속화 완료 (2026-06-14)
+- `metadata.rs`: parse_simple_yaml inline array/comma-list 지원
+- `storage.rs`: frontmatter category/sensitivity override (DB lookup + 화이트리스트)
+- 1908 tests pass / 0 fail, commit `1e211b4d`
+
+### 📋 Next Sprint 4 Roadmap
+
+**P1: lab 문서 인제스트** — `/lab-ingest` 스킬로 75개 분류된 .md 파일 CT306 인제스트
+**P2: CT306 rsync + 재빌드** — Sprint 3 소스 CT306에 반영 (`rsync + docker build`)
+**P3: OpenSearch 가시성 필터** — search_service.rs sensitivity 필터링 (단일 사용자 VPN-only 환경에서 P2 후 검토)
+**P4 보류**: git push frontend/node_modules bloat 해결 필요 (`git rm -r --cached frontend/node_modules` 선행)
+
+---
+
 ## 🎯 다음 세션 우선 작업
 
 ### ✅ 보안 이슈 수정 완료 (2026-02-20)
