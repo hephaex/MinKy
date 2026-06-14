@@ -48,10 +48,16 @@
 - WARN (embedding queue ON CONFLICT): pre-existing — document_queue 테이블 unique constraint 누락
 - DB 결과: 34 documents (Lab Test Doc 1개 + 신규 33개)
 
-### 📋 Next Sprint 8 Roadmap
+### ✅ Sprint 8: embedding_queue partial unique index 추가 (2026-06-15)
+- migration 014: `CREATE UNIQUE INDEX idx_embedding_queue_document_pending ON embedding_queue(document_id) WHERE status = 'pending'`
+- CT306에 배포, migration 자동 적용 확인 (version 14, success=t)
+- WARN "no unique or exclusion constraint" 해소 확인 (업로드 후 로그 클린)
+- 1922 tests pass / 0 fail, commit `37882d42`
 
-**P1 (버그)**: embedding_queue ON CONFLICT constraint 누락 수정 — `document_queue` 테이블에 unique constraint 추가 → WARN 해소
-**P2 보류**: git push frontend/node_modules bloat 해결 필요 (`git rm -r --cached frontend/node_modules` 선행)
+### 📋 Next Sprint 9 Roadmap
+
+**P1 보류**: git push frontend/node_modules bloat 해결 (`git rm -r --cached frontend/node_modules` 선행)
+**현재 lab-minky CT306 상태**: 34 documents + embedding_queue 정상 작동
 
 ---
 

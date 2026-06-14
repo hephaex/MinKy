@@ -5,7 +5,26 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-14) — lab-minky Sprint 7 완료
+## 현재 진행 상황 (2026-06-15) — lab-minky Sprint 8 완료
+
+### Sprint 8: embedding_queue partial unique index 추가 (2026-06-15)
+
+| 변경 | 내용 |
+|------|------|
+| Migration | `014_embedding_queue_pending_unique.sql` |
+| Index | `idx_embedding_queue_document_pending` ON `embedding_queue(document_id) WHERE status = 'pending'` |
+| CT306 배포 | `migration version 14, success=t` |
+| WARN 해소 | 업로드 후 로그 클린 (no WARN 확인) |
+| 테스트 | 1922 pass / 0 fail (SQLX_OFFLINE=true) |
+| 커밋 | `37882d42` |
+
+**[IMPLEMENTED]** Demo Gate: CT306 `_sqlx_migrations` version 14 적용 확인 + 업로드 후 WARN 없음 확인
+
+**근본 원인**: `embedding_service.rs:queue_document()` — `ON CONFLICT (document_id) WHERE status = 'pending'` 구문에 대응하는 partial unique index가 없었음. migration 003에서 일반 `idx_embedding_queue_document_id` 인덱스만 생성.
+
+---
+
+## 이전 진행 상황 (2026-06-14) — lab-minky Sprint 7 완료
 
 ### Sprint 7: /lab-ingest 33개 문서 CT306 인제스트 (2026-06-14)
 
