@@ -21,6 +21,26 @@ fn is_trusted_proxy() -> bool {
     })
 }
 
+/// Returns true when BYPASS_AUTH=true env var is set.
+/// Intended for internal-only deployments where auth is not required.
+/// All requests are treated as the service admin user (id=1).
+fn is_bypass_auth() -> bool {
+    static BYPASS: OnceLock<bool> = OnceLock::new();
+    *BYPASS.get_or_init(|| {
+        std::env::var("BYPASS_AUTH")
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+    })
+}
+
+fn bypass_admin_user() -> AuthUser {
+    AuthUser {
+        id: 1,
+        email: "service@internal".to_string(),
+        role: "admin".to_string(),
+    }
+}
+
 /// Authenticated user extracted from JWT token
 #[derive(Debug, Clone)]
 pub struct AuthUser {
@@ -72,6 +92,10 @@ where
     type Rejection = AuthError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        if is_bypass_auth() {
+            return Ok(bypass_admin_user());
+        }
+
         let state = AppState::from_ref(state);
 
         // Try Authorization header first, then fall back to HttpOnly cookie
@@ -120,6 +144,10 @@ where
     type Rejection = std::convert::Infallible;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        if is_bypass_auth() {
+            return Ok(OptionalAuthUser(Some(bypass_admin_user())));
+        }
+
         let state = AppState::from_ref(state);
 
         // Try Authorization header first, then fall back to HttpOnly cookie

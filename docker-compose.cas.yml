@@ -52,6 +52,7 @@ services:
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-minky_app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${DB_HOST:?DB_HOST is required}:5432/minky_rust
       - JWT_SECRET=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      - BYPASS_AUTH=${BYPASS_AUTH:-true}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - UPSTAGE_API_KEY=${UPSTAGE_API_KEY:-}
