@@ -18,9 +18,15 @@
 | /save 연결 | [IMPLEMENTED] | `save.md` Step 8에 sync 명령 추가 |
 | BYPASS_AUTH | [IMPLEMENTED] | `extractor.rs` — 내부망 전용 무인증 접근, `docker-compose.cas.yml` 기본값 true |
 
-커밋: `9aa15f7d` (BYPASS_AUTH) — CT306 배포 진행 중 (--no-cache 재빌드)
+커밋: `9aa15f7d` (BYPASS_AUTH) + `7416c083` (docker-compose.yml)
 
-**[IMPLEMENTED]** Demo Gate: `curl http://192.168.29.22:8001/api/documents` (토큰 없음) → HTTP 200
+**CT306 배포 완료** (2026-06-17):
+- `/opt/minky-lab/.env` → `BYPASS_AUTH=true` 추가
+- `/opt/minky-lab/docker-compose.yml` → `BYPASS_AUTH=${BYPASS_AUTH:-true}` 추가
+- `docker build -t minky-rust-lab:latest ./minky-rust/` → 성공
+- `docker compose up -d --force-recreate rust-backend` → minky-lab-rust-backend-1 재기동
+
+**[IMPLEMENTED]** Demo Gate: 토큰 없이 `curl -F 'file=@test.md' http://localhost:8001/api/documents/upload` → HTTP 200 `{"success":true,"document":{"id":"b37608e9-..."}}`
 
 **기술 결정**:
 - MCP 등록: `claude mcp add --scope user` CLI → `~/.claude.json` (settings.json의 `mcpServers` 키는 스키마 오류)
