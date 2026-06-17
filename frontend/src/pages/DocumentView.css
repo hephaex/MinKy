@@ -356,7 +356,7 @@
 @media print {
   @page {
     size: A4;
-    margin: 2cm 2.5cm;
+    margin: 1.5cm 2cm;
   }
 
   /* 출력 시 숨길 요소 */
@@ -378,24 +378,24 @@
   }
 
   .document-header {
-    margin-bottom: 16pt;
+    margin-bottom: 10pt;
   }
 
   .document-title {
-    font-size: 18pt;
+    font-size: 13pt;
     color: #000;
-    margin-bottom: 6pt;
+    margin-bottom: 4pt;
   }
 
   .document-tags .document-tag {
-    font-size: 9pt;
+    font-size: 7pt;
     border: 1px solid #999;
     background: none;
     color: #333;
   }
 
   .document-meta {
-    font-size: 9pt;
+    font-size: 7pt;
     color: #444;
   }
 
@@ -404,30 +404,37 @@
     border-radius: 0;
   }
 
-  /* 본문: 12pt A4 기준 */
+  /* 본문: 9pt 요약 출력 기준 */
   .markdown-rendered {
     padding: 0;
-    font-size: 12pt;
-    line-height: 1.65;
+    font-size: 9pt;
+    line-height: 1.35;
     color: #000;
   }
 
-  .markdown-rendered h1 { font-size: 18pt; page-break-after: avoid; }
-  .markdown-rendered h2 { font-size: 15pt; page-break-after: avoid; }
-  .markdown-rendered h3 { font-size: 13pt; page-break-after: avoid; }
+  .markdown-rendered h1 { font-size: 13pt; margin-top: 1em; margin-bottom: 0.4em; page-break-after: avoid; }
+  .markdown-rendered h2 { font-size: 11pt; margin-top: 0.9em; margin-bottom: 0.35em; page-break-after: avoid; }
+  .markdown-rendered h3 { font-size: 10pt; margin-top: 0.8em; margin-bottom: 0.3em; page-break-after: avoid; }
   .markdown-rendered h4,
   .markdown-rendered h5,
-  .markdown-rendered h6 { font-size: 12pt; page-break-after: avoid; }
+  .markdown-rendered h6 { font-size: 9pt; margin-top: 0.7em; margin-bottom: 0.25em; page-break-after: avoid; }
 
-  .markdown-rendered p { orphans: 3; widows: 3; }
+  .markdown-rendered p { orphans: 3; widows: 3; margin-bottom: 0.5em; }
+
+  .markdown-rendered ul,
+  .markdown-rendered ol { margin-bottom: 0.4em; padding-left: 1.4em; }
+
+  .markdown-rendered li { margin-bottom: 0.1em; }
 
   .markdown-rendered pre,
   .markdown-rendered blockquote,
   .markdown-rendered table { page-break-inside: avoid; }
 
-  .markdown-rendered code { font-size: 10pt; }
+  .markdown-rendered code { font-size: 8pt; }
 
-  .markdown-rendered pre { background: #f5f5f5; border: 1px solid #ddd; padding: 8pt; }
+  .markdown-rendered pre { background: #f5f5f5; border: 1px solid #ddd; padding: 5pt; margin: 0.4em 0; }
+
+  .markdown-rendered blockquote { margin: 0.4em 0; padding: 0.3em 0.7em; }
 
   .markdown-rendered img {
     max-width: 100%;
@@ -437,20 +444,20 @@
   .markdown-rendered table {
     border-collapse: collapse;
     width: 100%;
-    font-size: 11pt;
+    font-size: 8.5pt;
   }
 
   .markdown-rendered th,
   .markdown-rendered td {
     border: 1px solid #bbb;
-    padding: 4pt 6pt;
+    padding: 2pt 4pt;
   }
 
   a { color: #000; text-decoration: underline; }
 
   a[href]::after {
     content: " (" attr(href) ")";
-    font-size: 9pt;
+    font-size: 7pt;
     color: #555;
   }
 
