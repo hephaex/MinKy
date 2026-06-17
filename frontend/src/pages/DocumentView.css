@@ -352,7 +352,113 @@
   word-wrap: break-word;
 }
 
-/* Bottom navigation */
+/* ── Print / PDF 출력 ────────────────────────────────────────── */
+@media print {
+  @page {
+    size: A4;
+    margin: 2cm 2.5cm;
+  }
+
+  /* 출력 시 숨길 요소 */
+  .document-nav,
+  .document-actions,
+  .document-bottom-nav,
+  .auto-tagging-status,
+  .ai-tags-applied,
+  .processing-badge,
+  .frontmatter-display,
+  .no-print {
+    display: none !important;
+  }
+
+  .document-view {
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .document-header {
+    margin-bottom: 16pt;
+  }
+
+  .document-title {
+    font-size: 18pt;
+    color: #000;
+    margin-bottom: 6pt;
+  }
+
+  .document-tags .document-tag {
+    font-size: 9pt;
+    border: 1px solid #999;
+    background: none;
+    color: #333;
+  }
+
+  .document-meta {
+    font-size: 9pt;
+    color: #444;
+  }
+
+  .document-content {
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  /* 본문: 12pt A4 기준 */
+  .markdown-rendered {
+    padding: 0;
+    font-size: 12pt;
+    line-height: 1.65;
+    color: #000;
+  }
+
+  .markdown-rendered h1 { font-size: 18pt; page-break-after: avoid; }
+  .markdown-rendered h2 { font-size: 15pt; page-break-after: avoid; }
+  .markdown-rendered h3 { font-size: 13pt; page-break-after: avoid; }
+  .markdown-rendered h4,
+  .markdown-rendered h5,
+  .markdown-rendered h6 { font-size: 12pt; page-break-after: avoid; }
+
+  .markdown-rendered p { orphans: 3; widows: 3; }
+
+  .markdown-rendered pre,
+  .markdown-rendered blockquote,
+  .markdown-rendered table { page-break-inside: avoid; }
+
+  .markdown-rendered code { font-size: 10pt; }
+
+  .markdown-rendered pre { background: #f5f5f5; border: 1px solid #ddd; padding: 8pt; }
+
+  .markdown-rendered img {
+    max-width: 100%;
+    page-break-inside: avoid;
+  }
+
+  .markdown-rendered table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 11pt;
+  }
+
+  .markdown-rendered th,
+  .markdown-rendered td {
+    border: 1px solid #bbb;
+    padding: 4pt 6pt;
+  }
+
+  a { color: #000; text-decoration: underline; }
+
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #555;
+  }
+
+  /* 내부 링크는 URL 주석 생략 */
+  a[href^="/"]::after { content: ""; }
+}
+
+/* ── Bottom navigation */
 .document-bottom-nav {
   display: flex;
   align-items: center;

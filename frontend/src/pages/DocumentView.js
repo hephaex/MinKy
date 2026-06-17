@@ -280,10 +280,13 @@ const DocumentView = () => {
           <button className="btn btn-secondary" onClick={() => setShowMarkdown(!showMarkdown)}>
             {showMarkdown ? 'Show Rendered' : 'Show Markdown'}
           </button>
-          <Link to={`/documents/${id}/edit`} className="btn btn-primary">
+          <button className="btn btn-secondary no-print" onClick={() => window.print()}>
+            🖨️ PDF 출력
+          </button>
+          <Link to={`/documents/${id}/edit`} className="btn btn-primary no-print">
             Edit
           </Link>
-          <button className="btn btn-danger" onClick={handleDelete}>
+          <button className="btn btn-danger no-print" onClick={handleDelete}>
             Delete
           </button>
         </div>

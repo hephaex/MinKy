@@ -84,6 +84,27 @@
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 
+/* ── Print: Header·sidebar 숨기고 문서 본문만 출력 ─── */
+@media print {
+  .header,
+  .documents-sidebar,
+  .sidebar-overlay,
+  .sidebar-toggle-btn,
+  .main-nav {
+    display: none !important;
+  }
+
+  .main-content {
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  .App {
+    background: white;
+  }
+}
+
 /* Responsive improvements */
 @media (max-width: 768px) {
   .main-content {
