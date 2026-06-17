@@ -5,7 +5,36 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-15) — lab-minky Sprint 8 완료
+## 현재 진행 상황 (2026-06-17) — lab-minky Sprint 9 완료
+
+### Sprint 9: MCP 서버 + gyeol 메모리 동기화 + BYPASS_AUTH (2026-06-17)
+
+| 항목 | 상태 | 세부 |
+|------|------|------|
+| migration 015 | [IMPLEMENTED] | memory category 시딩 (root:11, episode:12, semantic:13, bond:14, reflection:15, reference:16) |
+| kei 카테고리 | [IMPLEMENTED] | id=17, sort_order=0, color=#ec4899 — 최우선순위 |
+| MCP 서버 | [IMPLEMENTED] | `~/.config/gyeol/mcp/minky-mcp.py` — `claude mcp list` → ✔ Connected |
+| sync 스크립트 | [IMPLEMENTED] | `.memory/` + `~/.config/gyeol/memory/` → Minky pgvector 증분 동기화 (101파일) |
+| /save 연결 | [IMPLEMENTED] | `save.md` Step 8에 sync 명령 추가 |
+| BYPASS_AUTH | [IMPLEMENTED] | `extractor.rs` — 내부망 전용 무인증 접근, `docker-compose.cas.yml` 기본값 true |
+
+커밋: `9aa15f7d` (BYPASS_AUTH) — CT306 배포 진행 중 (--no-cache 재빌드)
+
+**[IMPLEMENTED]** Demo Gate: `curl http://192.168.29.22:8001/api/documents` (토큰 없음) → HTTP 200
+
+**기술 결정**:
+- MCP 등록: `claude mcp add --scope user` CLI → `~/.claude.json` (settings.json의 `mcpServers` 키는 스키마 오류)
+- 텍스트 검색: `/api/search` pgvector 미활성 → `/api/documents?search=QUERY` 대체
+- rate limit: 50/min → `sleep 1.3s` + 429 retry(65s)
+- 카테고리 ID 하드코딩: Minky `/api/categories` slug 필드 없음 → migration 015 고정 ID
+
+**버그 수정 (sync 스크립트)**:
+- `grep ... | awk ... | || true` — `set -euo pipefail`에서 grep no-match → exit 1 트랩
+- `n=$((n + 1))` 패턴 — `((n++))` n=0일 때 exit 1
+
+---
+
+## 이전 진행 상황 (2026-06-15) — lab-minky Sprint 8 완료
 
 ### Sprint 8: embedding_queue partial unique index 추가 (2026-06-15)
 
