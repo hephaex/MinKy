@@ -25,7 +25,10 @@ import requests
 
 # .env 자동 로드: 스크립트 기준 상위 디렉토리(프로젝트 루트)를 탐색
 def _load_dotenv() -> None:
-    """표준 dotenv 형식의 .env 파일을 os.environ에 주입 (이미 설정된 값은 덮어쓰지 않음)."""
+    """표준 dotenv 형식의 .env 파일을 os.environ에 주입.
+
+    프로젝트 .env가 쉘 환경보다 우선됩니다 (만료된 전역 키 방지).
+    """
     search = Path(__file__).resolve().parent
     for _ in range(3):
         candidate = search / ".env"
@@ -37,8 +40,9 @@ def _load_dotenv() -> None:
                         continue
                     key, _, val = line.partition("=")
                     key = key.strip()
-                    val = val.strip().strip('"').strip("'")
-                    if key and key not in os.environ:
+                    # 인라인 주석 제거 후 따옴표 strip
+                    val = val.split("#")[0].strip().strip('"').strip("'")
+                    if key and val:  # 값이 있는 항목만 오버라이드
                         os.environ[key] = val
             break
         search = search.parent
@@ -46,7 +50,7 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 UPSTAGE_URL = "https://api.upstage.ai/v1/chat/completions"
-MODEL = os.getenv("SOLAR_MODEL", "solar-open2-260528")
+MODEL = os.getenv("SOLAR_MODEL", "solar-open2")
 # UPSTAGE_API_KEY 우선, LLM_API_KEY 폴백 (baram 호환)
 API_KEY = os.getenv("UPSTAGE_API_KEY") or os.getenv("LLM_API_KEY", "")
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "2500"))

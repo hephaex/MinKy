@@ -17,7 +17,7 @@ const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10MB
 const MAX_SRT_SIZE: usize = 20 * 1024 * 1024;    // 20MB (자막 파일은 더 클 수 있음)
 
 const UPSTAGE_CHAT_URL: &str = "https://api.upstage.ai/v1/chat/completions";
-const SOLAR_MODEL: &str = "solar-open2-260528";
+const SOLAR_MODEL: &str = "solar-open2";
 const SRT_CHUNK_CHARS: usize = 2500;
 const SRT_NARRATIVE_SYSTEM: &str = "\
 당신은 경제·투자 대담 자막을 서술형 글로 변환하는 전문 편집자입니다.\n\
