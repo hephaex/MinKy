@@ -38,15 +38,27 @@
   border-left-color: #ff6b35;
 }
 
+.tree-node-branch:hover {
+  background-color: #f0f4ff;
+  color: #1a56db;
+}
+
 .tree-expand-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   color: #888;
   transition: transform 0.15s;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.tree-expand-icon:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+  color: #555;
 }
 
 .tree-expand-icon.expanded {

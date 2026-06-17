@@ -25,6 +25,21 @@ const DocumentView = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Prev / Next from the last-visited document list.
+  const { prevId, nextId } = (() => {
+    try {
+      const ctx = JSON.parse(sessionStorage.getItem('docListContext'));
+      if (!ctx?.ids) return { prevId: null, nextId: null };
+      const idx = ctx.ids.indexOf(id);
+      return {
+        prevId: idx > 0 ? ctx.ids[idx - 1] : null,
+        nextId: idx !== -1 && idx < ctx.ids.length - 1 ? ctx.ids[idx + 1] : null,
+      };
+    } catch (_) {
+      return { prevId: null, nextId: null };
+    }
+  })();
+
   // Return to the exact previous view (its list page/filters are restored from
   // sessionStorage) when the document was opened from within the app; fall back
   // to all documents when it was opened directly (no in-app history).
@@ -352,6 +367,29 @@ const DocumentView = () => {
           </div>
         )}
       </div>
+      {/* Bottom navigation: list / prev / next */}
+      <div className="document-bottom-nav">
+        <Link to="/" className="doc-nav-btn doc-nav-list" onClick={handleBack}>
+          ← 목록으로
+        </Link>
+        <div className="doc-nav-adjacent">
+          {prevId ? (
+            <Link to={`/documents/${prevId}`} className="doc-nav-btn doc-nav-prev">
+              ← 이전 문서
+            </Link>
+          ) : (
+            <span className="doc-nav-btn doc-nav-disabled">← 이전 문서</span>
+          )}
+          {nextId ? (
+            <Link to={`/documents/${nextId}`} className="doc-nav-btn doc-nav-next">
+              다음 문서 →
+            </Link>
+          ) : (
+            <span className="doc-nav-btn doc-nav-disabled">다음 문서 →</span>
+          )}
+        </div>
+      </div>
+
       {toast && (
         <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />
       )}

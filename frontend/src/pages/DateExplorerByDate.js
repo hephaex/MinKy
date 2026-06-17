@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import NewSimpleDateSidebar from '../components/NewSimpleDateSidebar';
 import SimpleDocumentsByDate from '../components/SimpleDocumentsByDate';
 import './DateExplorer.css';
 
 const DateExplorerByDate = () => {
-  const [selectedDateKey, setSelectedDateKey] = useState(null);
+  const [searchParams] = useSearchParams();
+  const [selectedDateKey, setSelectedDateKey] = useState(() => searchParams.get('date') || null);
   const navigate = useNavigate();
 
   const handleDateSelect = (dateKey) => {

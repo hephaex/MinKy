@@ -46,11 +46,34 @@ const TreeSidebar = ({ isVisible = true, onToggle = () => {} }) => {
 
   const handleSelect = useCallback(
     (node) => {
-      if (node.documentId) {
+      if (node.document_id) {
+        navigate(`/documents/${node.document_id}`);
+      } else if (node.documentId) {
         navigate(`/documents/${node.documentId}`);
       }
     },
     [navigate]
+  );
+
+  // Handle clicks on folder nodes (tag/year/month) — navigate to their page.
+  const handleNodeClick = useCallback(
+    (node) => {
+      if (mode === 'by-tag') {
+        // id format: "tag:SLUG:LABEL"
+        const parts = node.id.split(':');
+        if (parts.length >= 2 && parts[0] === 'tag') {
+          navigate(`/tags/${parts[1]}`);
+        }
+      } else if (mode === 'by-date') {
+        // id format: "year:2026" or "month:2026-06"
+        const parts = node.id.split(':');
+        if (parts.length >= 2) {
+          const dateKey = parts.slice(1).join(':');
+          navigate(`/explore-date?date=${dateKey}`);
+        }
+      }
+    },
+    [mode, navigate]
   );
 
   const handleNewDocument = useCallback(() => {
@@ -151,7 +174,7 @@ const TreeSidebar = ({ isVisible = true, onToggle = () => {} }) => {
           ) : error ? (
             <div className="empty-state">{error}</div>
           ) : (
-            <TreeView nodes={filteredTree} onSelect={handleSelect} />
+            <TreeView nodes={filteredTree} onSelect={handleSelect} onNodeClick={handleNodeClick} />
           )}
         </div>
       </div>

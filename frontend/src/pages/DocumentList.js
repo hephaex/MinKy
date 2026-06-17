@@ -169,10 +169,15 @@ const DocumentList = () => {
       }
 
       const response = await api.get(`/documents?${params.toString()}`);
-      setDocuments(response.data.documents);
+      const docs = response.data.documents;
+      setDocuments(docs);
       setPagination(response.data.pagination);
       setCurrentPage(page);
       setError(null);
+      // Store ordered doc IDs so DocumentView can show prev/next navigation.
+      try {
+        sessionStorage.setItem('docListContext', JSON.stringify({ ids: docs.map((d) => d.id) }));
+      } catch (_) {}
     } catch (err) {
       setError('Failed to fetch documents');
       logError('DocumentList.fetchDocuments', err);

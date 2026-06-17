@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
-const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, focusedId = null, onFocusChange }) => {
+const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, onNodeClick, focusedId = null, onFocusChange }) => {
   const nodeRef = useRef(null);
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
@@ -14,11 +14,20 @@ const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, focusedId = 
     }
   }, [isFocused]);
 
+  // Arrow click: only toggle expand/collapse, do not navigate.
+  const handleArrowClick = (e) => {
+    e.stopPropagation();
+    if (hasChildren) {
+      onToggle(node.id);
+    }
+  };
+
+  // Row click: navigate to document or folder page.
   const handleClick = () => {
     if (isDocument) {
       onSelect(node);
-    } else if (hasChildren) {
-      onToggle(node.id);
+    } else if (onNodeClick) {
+      onNodeClick(node);
     }
   };
 
@@ -62,7 +71,11 @@ const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, focusedId = 
         aria-selected={isDocument && isFocused}
       >
         {hasChildren && (
-          <span className={`tree-expand-icon ${isExpanded ? 'expanded' : ''}`}>
+          <span
+            className={`tree-expand-icon ${isExpanded ? 'expanded' : ''}`}
+            onClick={handleArrowClick}
+            aria-label={isExpanded ? '접기' : '펼치기'}
+          >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
               <path d="M3 1l5 4-5 4z" />
             </svg>
@@ -94,6 +107,7 @@ const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, focusedId = 
               expandedNodes={expandedNodes}
               onToggle={onToggle}
               onSelect={onSelect}
+              onNodeClick={onNodeClick}
               focusedId={focusedId}
               onFocusChange={onFocusChange}
             />
@@ -120,12 +134,13 @@ TreeNode.propTypes = {
   expandedNodes: PropTypes.instanceOf(Set).isRequired,
   onToggle: PropTypes.func.isRequired,
   onSelect: PropTypes.func.isRequired,
+  onNodeClick: PropTypes.func,
   focusedId: PropTypes.string,
   onFocusChange: PropTypes.func.isRequired,
 };
 
 
-const TreeView = ({ nodes = [], onSelect, className = '' }) => {
+const TreeView = ({ nodes = [], onSelect, onNodeClick, className = '' }) => {
   const [expandedNodes, setExpandedNodes] = useState(new Set());
   const [focusedId, setFocusedId] = useState(null);
   const treeRef = useRef(null);
@@ -198,6 +213,7 @@ const TreeView = ({ nodes = [], onSelect, className = '' }) => {
           expandedNodes={expandedNodes}
           onToggle={handleToggle}
           onSelect={onSelect}
+          onNodeClick={onNodeClick}
           focusedId={focusedId}
           onFocusChange={setFocusedId}
         />
@@ -209,6 +225,7 @@ const TreeView = ({ nodes = [], onSelect, className = '' }) => {
 TreeView.propTypes = {
   nodes: PropTypes.arrayOf(PropTypes.shape(nodeShape)),
   onSelect: PropTypes.func.isRequired,
+  onNodeClick: PropTypes.func,
   className: PropTypes.string,
 };
 
