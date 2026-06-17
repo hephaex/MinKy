@@ -72,6 +72,7 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - RUST_LOG=${RUST_LOG:-minky=info,tower_http=info}
+      - BYPASS_AUTH=${BYPASS_AUTH:-true}
     depends_on:
       db:
         condition: service_healthy
