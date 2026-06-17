@@ -14,11 +14,24 @@ use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
 use crate::services::{EmbeddingConfig, EmbeddingService};
 
 const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10MB
+const MAX_SRT_SIZE: usize = 20 * 1024 * 1024;    // 20MB (자막 파일은 더 클 수 있음)
+
+const UPSTAGE_CHAT_URL: &str = "https://api.upstage.ai/v1/chat/completions";
+const SOLAR_MODEL: &str = "solar-open2-260528";
+const SRT_CHUNK_CHARS: usize = 2500;
+const SRT_NARRATIVE_SYSTEM: &str = "\
+당신은 경제·투자 대담 자막을 서술형 글로 변환하는 전문 편집자입니다.\n\
+규칙:\n\
+- 자막 내용을 요약하지 말고, 원문의 논지·주장·수치·사례를 빠짐없이 유지하세요.\n\
+- \"이제\", \"막\", \"뭐\", \"그니까\", \"어\" 같은 구어 채움말은 정리하되 의미 있는 표현은 살리세요.\n\
+- 완성된 문단 형태의 문어체로 작성하세요.\n\
+- 마크다운 헤딩·리스트·강조 없이 흐르는 산문(prose)으로 작성하세요.";
 
 pub fn routes() -> Router<AppState> {
     let upload_route = Router::new()
         .route("/upload", post(upload_document))
-        .layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE));
+        .route("/upload/srt", post(upload_srt))
+        .layer(DefaultBodyLimit::max(MAX_SRT_SIZE));
 
     Router::new()
         .route("/", get(list_documents).post(create_document))
@@ -815,6 +828,256 @@ async fn upload_document(
 
     Err(AppError::Validation("No file field found in upload".to_string()))
 }
+
+// ── SRT 자막 업로드 ──────────────────────────────────────────────────────────
+
+/// Rolling 2-line SRT 자막에서 중복 제거 후 순수 텍스트 반환.
+///
+/// 각 블록의 마지막 비어있지 않은 줄이 '이번 블록의 새 텍스트'이므로
+/// 이전 블록과 다를 때만 수집한다.
+fn parse_srt_to_text(srt: &str) -> String {
+    let mut result: Vec<&str> = Vec::new();
+    let mut prev: &str = "";
+
+    for block in srt.split("\n\n") {
+        let new_line = block
+            .lines()
+            .filter(|l| {
+                let l = l.trim();
+                !l.is_empty()
+                    && !l.chars().all(|c| c.is_ascii_digit())
+                    && !l.contains("-->")
+            })
+            .last()
+            .map(|l| l.trim())
+            .unwrap_or("");
+
+        if !new_line.is_empty() && new_line != prev {
+            result.push(new_line);
+            prev = new_line;
+        }
+    }
+    result.join("\n")
+}
+
+/// 텍스트를 최대 `max_chars` 글자 단위 청크로 분할.
+fn chunk_srt_text(text: &str, max_chars: usize) -> Vec<String> {
+    let mut chunks: Vec<String> = Vec::new();
+    let mut buf: Vec<&str> = Vec::new();
+    let mut buf_len: usize = 0;
+
+    for line in text.lines() {
+        if buf_len + line.len() + 1 > max_chars && !buf.is_empty() {
+            chunks.push(buf.join("\n"));
+            buf.clear();
+            buf_len = 0;
+        }
+        buf.push(line);
+        buf_len += line.len() + 1;
+    }
+    if !buf.is_empty() {
+        chunks.push(buf.join("\n"));
+    }
+    chunks
+}
+
+/// Solar-Open2 think 태그 제거.
+fn strip_solar_think(text: &str) -> String {
+    use crate::services::reasoning::strip_reasoning;
+    strip_reasoning(text)
+}
+
+#[derive(Debug, Serialize)]
+struct SolarChatRequest {
+    model: String,
+    messages: Vec<SolarMessage>,
+    max_tokens: u32,
+    temperature: f32,
+}
+
+#[derive(Debug, Serialize)]
+struct SolarMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SolarChatResponse {
+    choices: Vec<SolarChoice>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SolarChoice {
+    message: SolarResponseMessage,
+}
+
+#[derive(Debug, Deserialize)]
+struct SolarResponseMessage {
+    #[serde(default)]
+    content: String,
+}
+
+/// Upstage Solar-Open2 API 단일 청크 호출.
+async fn call_solar_narrative(
+    client: &reqwest::Client,
+    api_key: &str,
+    chunk: &str,
+) -> AppResult<String> {
+    let payload = SolarChatRequest {
+        model: SOLAR_MODEL.to_string(),
+        messages: vec![
+            SolarMessage { role: "system".to_string(), content: SRT_NARRATIVE_SYSTEM.to_string() },
+            SolarMessage {
+                role: "user".to_string(),
+                content: format!("다음 자막을 서술형 글로 작성하세요:\n\n{chunk}"),
+            },
+        ],
+        max_tokens: 4096,
+        temperature: 0.3,
+    };
+
+    let resp = client
+        .post(UPSTAGE_CHAT_URL)
+        .bearer_auth(api_key)
+        .header("content-type", "application/json")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| AppError::ExternalService(format!("Solar API request failed: {e}")))?;
+
+    if !resp.status().is_success() {
+        let err = resp.text().await.unwrap_or_default();
+        return Err(AppError::ExternalService(format!("Solar API error: {err}")));
+    }
+
+    let body: SolarChatResponse = resp
+        .json()
+        .await
+        .map_err(|e| AppError::ExternalService(format!("Solar API parse error: {e}")))?;
+
+    let raw = body.choices.first().map(|c| c.message.content.as_str()).unwrap_or("");
+    Ok(strip_solar_think(raw))
+}
+
+/// SRT 자막 파일 업로드 → Solar-Open2 서술형 변환 → 문서 저장
+///
+/// POST /api/documents/upload/srt
+/// multipart field name: "file", content-type: text/plain or application/octet-stream
+async fn upload_srt(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+    mut multipart: Multipart,
+) -> Result<Json<UploadResponse>, AppError> {
+    let api_key = state.config.upstage_api_key
+        .as_ref()
+        .ok_or_else(|| AppError::Configuration("UPSTAGE_API_KEY not configured".to_string()))?
+        .expose_secret()
+        .to_string();
+
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        AppError::Validation(format!("Failed to read multipart field: {e}"))
+    })? {
+        if field.name().unwrap_or("") != "file" {
+            continue;
+        }
+
+        let filename = field
+            .file_name()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "subtitle.srt".to_string());
+
+        if !filename.to_lowercase().ends_with(".srt") {
+            return Err(AppError::Validation("Only .srt files are accepted".to_string()));
+        }
+        if filename.contains('/') || filename.contains('\\') || filename.contains('\0') {
+            return Err(AppError::Validation("Invalid filename".to_string()));
+        }
+
+        let data = field.bytes().await.map_err(|e| {
+            AppError::Validation(format!("Failed to read SRT data: {e}"))
+        })?;
+
+        if data.is_empty() {
+            return Err(AppError::Validation("SRT file is empty".to_string()));
+        }
+
+        let srt_text = std::str::from_utf8(&data)
+            .map_err(|_| AppError::Validation("SRT file must be valid UTF-8".to_string()))?;
+
+        // 자막 → 순수 텍스트
+        let clean_text = parse_srt_to_text(srt_text);
+        if clean_text.is_empty() {
+            return Err(AppError::Validation("No subtitle text found in SRT file".to_string()));
+        }
+
+        let chunks = chunk_srt_text(&clean_text, SRT_CHUNK_CHARS);
+        tracing::info!(
+            file = %filename,
+            chars = clean_text.len(),
+            chunks = chunks.len(),
+            "SRT upload: starting Solar-Open2 narrative conversion"
+        );
+
+        // Solar-Open2로 각 청크 변환
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(120))
+            .build()
+            .map_err(|e| AppError::Internal(anyhow::anyhow!("HTTP client error: {e}")))?;
+
+        let mut narratives: Vec<String> = Vec::with_capacity(chunks.len());
+        for (i, chunk) in chunks.iter().enumerate() {
+            tracing::info!(chunk = i + 1, total = chunks.len(), "Solar-Open2 chunk conversion");
+            let narrative = call_solar_narrative(&client, &api_key, chunk).await?;
+            narratives.push(narrative);
+        }
+
+        // 제목 추출: 'title.NA.channel.ko.srt' → 'title'
+        let title_raw = filename.strip_suffix(".srt").unwrap_or(&filename);
+        let title = title_raw
+            .split(".NA.")
+            .next()
+            .unwrap_or(title_raw)
+            .trim()
+            .to_string();
+        let title = if title.is_empty() { title_raw.to_string() } else { title };
+
+        // MD 조립
+        let md_content = format!("# {title}\n\n{}", narratives.join("\n\n"));
+
+        // 기존 파이프라인으로 문서 저장
+        let pipeline = DocumentPipelineBuilder::new()
+            .pool(state.db.clone())
+            .app_config(state.config.clone())
+            .semantic_chunking(512)
+            .user_id(auth_user.id)
+            .skip_embedding()
+            .skip_analysis()
+            .build();
+        let input = IngestionInput::from_text(title.clone(), md_content);
+
+        let output = pipeline.process(input).await.map_err(|e| {
+            tracing::error!("SRT upload pipeline failed: {}", e);
+            AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", e))
+        })?;
+
+        enqueue_for_embedding(&state, output.document_id).await;
+        tracing::info!(doc_id = %output.document_id, "SRT upload complete");
+
+        return Ok(Json(UploadResponse {
+            success: true,
+            document: UploadedDocument {
+                id: output.document_id,
+                title: output.title,
+                chunks_count: output.chunks_count,
+                processing_status: ProcessingStatus::Pending,
+            },
+        }));
+    }
+
+    Err(AppError::Validation("No file field found in upload".to_string()))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 fn embedding_service_from_state(state: &AppState) -> EmbeddingService {
     let config = EmbeddingConfig {
