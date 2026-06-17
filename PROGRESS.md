@@ -3110,6 +3110,37 @@ scripts/
 
 ---
 
+## Sprint 8 — gyeol MCP + 메모리 동기화 (2026-06-17)
+
+### 완료 항목
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| migration 015: memory 카테고리 시딩 | [IMPLEMENTED] | CT306 DB 적용, 멱등 |
+| 서비스 JWT 발급 | [IMPLEMENTED] | `~/.config/gyeol/.minky-service-token` chmod 600 |
+| sync-memory-to-minky.sh | [IMPLEMENTED] | 101개 파일 증분 동기화, rate limit 처리 포함 |
+| minky-mcp.py (MCP 서버) | [IMPLEMENTED] | `claude mcp list` → `✔ Connected` |
+| MCP user scope 등록 | [IMPLEMENTED] | `claude mcp add --scope user`, `~/.claude.json` |
+| /save 훅 연결 | [IMPLEMENTED] | `save.md` Step 8 추가 |
+
+### 카테고리 트리 (ID 고정)
+- 11: memory (root)
+- 12: episode (daily logs)
+- 13: semantic (knowledge/projects)
+- 14: bond (user/feedback)
+- 15: reflection (monthly)
+- 16: reference (tech ADR)
+
+### MCP 툴
+- `search_knowledge(query, limit?, category?)` → `/api/documents?search=`
+- `get_recent_episodes(limit?)` → category_id=12
+- `get_document(id)` → `/api/documents/{id}`
+
+### 커밋
+- `146aba12` — feat(memory): Sprint 8 migration 015 memory category seed
+
+---
+
 ## Session Log References
 
 최근 세션 로그:
