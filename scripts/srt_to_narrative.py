@@ -3,12 +3,16 @@
 SRT 자막 파일 → Solar-Open2 서술형 글 변환기
 
 사용법:
-  LLM_API_KEY=xxx python3 srt_to_narrative.py input.srt [output.md]
+  cd ~/Simon/minky && scripts/srt_to_narrative.py input.srt [output.md]
 
-환경변수:
-  LLM_API_KEY   Upstage API 키 (필수)
-  SOLAR_MODEL   모델 ID (기본: solar-open2-260528)
-  CHUNK_SIZE    청크 크기 글자수 (기본: 2500)
+  UPSTAGE_API_KEY 또는 LLM_API_KEY 를 ~/Simon/minky/.env 에 저장하면
+  매 실행마다 키를 지정할 필요가 없습니다.
+
+환경변수 (우선순위 높은 순):
+  UPSTAGE_API_KEY  Upstage API 키 (권장)
+  LLM_API_KEY      위 키가 없을 때 폴백
+  SOLAR_MODEL      모델 ID (기본: solar-open2-260528)
+  CHUNK_SIZE       청크 크기 글자수 (기본: 2500)
 """
 
 import os
@@ -19,9 +23,32 @@ from pathlib import Path
 
 import requests
 
+# .env 자동 로드: 스크립트 기준 상위 디렉토리(프로젝트 루트)를 탐색
+def _load_dotenv() -> None:
+    """표준 dotenv 형식의 .env 파일을 os.environ에 주입 (이미 설정된 값은 덮어쓰지 않음)."""
+    search = Path(__file__).resolve().parent
+    for _ in range(3):
+        candidate = search / ".env"
+        if candidate.is_file():
+            with open(candidate, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, val = line.partition("=")
+                    key = key.strip()
+                    val = val.strip().strip('"').strip("'")
+                    if key and key not in os.environ:
+                        os.environ[key] = val
+            break
+        search = search.parent
+
+_load_dotenv()
+
 UPSTAGE_URL = "https://api.upstage.ai/v1/chat/completions"
 MODEL = os.getenv("SOLAR_MODEL", "solar-open2-260528")
-API_KEY = os.getenv("LLM_API_KEY", "")
+# UPSTAGE_API_KEY 우선, LLM_API_KEY 폴백 (baram 호환)
+API_KEY = os.getenv("UPSTAGE_API_KEY") or os.getenv("LLM_API_KEY", "")
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "2500"))
 
 SYSTEM_PROMPT = """\
