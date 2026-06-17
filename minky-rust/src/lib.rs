@@ -40,6 +40,8 @@ pub struct AppState {
     pub vault_watcher: Arc<tokio::sync::Mutex<Option<crate::services::vault_watcher_service::VaultWatcherHandle>>>,
     /// Redis client for rate limiting and JWT revocation. None when REDIS_URL is unset.
     pub redis_client: Option<redis::Client>,
+    /// Shared HTTP client for external API calls (Solar, etc.). Created once at startup.
+    pub http_client: reqwest::Client,
 }
 
 /// Create the application with all routes and middleware
@@ -121,6 +123,11 @@ pub async fn create_app(config: Config) -> Result<Router> {
         .ok()
         .and_then(|url| redis::Client::open(url).ok());
 
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .expect("failed to build shared HTTP client");
+
     let state = AppState {
         db,
         config: config.clone(),
@@ -128,6 +135,7 @@ pub async fn create_app(config: Config) -> Result<Router> {
         embedding_service,
         vault_watcher,
         redis_client,
+        http_client,
     };
 
     // Parse CORS allowed origins from config

@@ -40,8 +40,13 @@ def _load_dotenv() -> None:
                         continue
                     key, _, val = line.partition("=")
                     key = key.strip()
-                    # 인라인 주석 제거 후 따옴표 strip
-                    val = val.split("#")[0].strip().strip('"').strip("'")
+                    val = val.strip()
+                    # 따옴표로 감싼 값은 # 제거 없이 따옴표만 벗김 (F6: # 포함 패스워드 보호)
+                    if (val.startswith('"') and val.endswith('"')) or \
+                       (val.startswith("'") and val.endswith("'")):
+                        val = val[1:-1]
+                    else:
+                        val = val.split("#")[0].strip()
                     if key and val:  # 값이 있는 항목만 오버라이드
                         os.environ[key] = val
             break

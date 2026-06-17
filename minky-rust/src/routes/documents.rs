@@ -15,6 +15,7 @@ use crate::services::{EmbeddingConfig, EmbeddingService};
 
 const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10MB
 const MAX_SRT_SIZE: usize = 20 * 1024 * 1024;    // 20MB (자막 파일은 더 클 수 있음)
+const MAX_SRT_CHUNKS: usize = 50;                 // F1: Solar API 호출 상한
 
 const UPSTAGE_CHAT_URL: &str = "https://api.upstage.ai/v1/chat/completions";
 const SOLAR_MODEL: &str = "solar-open2";
@@ -28,14 +29,11 @@ const SRT_NARRATIVE_SYSTEM: &str = "\
 - 마크다운 헤딩·리스트·강조 없이 흐르는 산문(prose)으로 작성하세요.";
 
 pub fn routes() -> Router<AppState> {
-    let upload_route = Router::new()
-        .route("/upload", post(upload_document))
-        .route("/upload/srt", post(upload_srt))
-        .layer(DefaultBodyLimit::max(MAX_SRT_SIZE));
-
+    // F3: 라우트별 body limit 분리 (/upload 10MB, /upload/srt 20MB)
     Router::new()
         .route("/", get(list_documents).post(create_document))
-        .merge(upload_route)
+        .route("/upload", post(upload_document).layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE)))
+        .route("/upload/srt", post(upload_srt).layer(DefaultBodyLimit::max(MAX_SRT_SIZE)))
         .route("/tree", get(get_document_tree))
         .route("/{id}", get(get_document).put(update_document).delete(delete_document))
         .route("/{id}/status", get(get_document_status))
@@ -946,8 +944,10 @@ async fn call_solar_narrative(
         .map_err(|e| AppError::ExternalService(format!("Solar API request failed: {e}")))?;
 
     if !resp.status().is_success() {
+        let status = resp.status();
         let err = resp.text().await.unwrap_or_default();
-        return Err(AppError::ExternalService(format!("Solar API error: {err}")));
+        tracing::error!(status = %status, body = %err, "Solar API error");
+        return Err(AppError::ExternalService("Solar API request failed".to_string()));
     }
 
     let body: SolarChatResponse = resp
@@ -1011,6 +1011,12 @@ async fn upload_srt(
         }
 
         let chunks = chunk_srt_text(&clean_text, SRT_CHUNK_CHARS);
+        if chunks.len() > MAX_SRT_CHUNKS {
+            return Err(AppError::Validation(format!(
+                "SRT file too large: {} chunks (max {}). Trim the file and retry.",
+                chunks.len(), MAX_SRT_CHUNKS
+            )));
+        }
         tracing::info!(
             file = %filename,
             chars = clean_text.len(),
@@ -1018,16 +1024,11 @@ async fn upload_srt(
             "SRT upload: starting Solar-Open2 narrative conversion"
         );
 
-        // Solar-Open2로 각 청크 변환
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
-            .build()
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("HTTP client error: {e}")))?;
-
+        // Solar-Open2로 각 청크 변환 (shared http_client 사용 — F2)
         let mut narratives: Vec<String> = Vec::with_capacity(chunks.len());
         for (i, chunk) in chunks.iter().enumerate() {
             tracing::info!(chunk = i + 1, total = chunks.len(), "Solar-Open2 chunk conversion");
-            let narrative = call_solar_narrative(&client, &api_key, chunk).await?;
+            let narrative = call_solar_narrative(&state.http_client, &api_key, chunk).await?;
             narratives.push(narrative);
         }
 
@@ -1888,6 +1889,92 @@ mod tests {
         assert_eq!(json["processing_status"], "completed");
         assert!(json["queue_position"].is_null());
         assert!(json["error_message"].is_null());
+    }
+
+    // ── SRT 파싱 + 청크 분할 (F4) ────────────────────────────────────────────
+
+    #[test]
+    fn parse_srt_basic_rolling_dedup() {
+        // rolling 2-line 형식: 블록마다 마지막 줄만 수집, 연속 중복 제거
+        let srt = "1\n00:00:01,000 --> 00:00:02,000\n안녕하세요\n\n\
+                   2\n00:00:02,000 --> 00:00:03,000\n안녕하세요\n반갑습니다\n\n\
+                   3\n00:00:03,000 --> 00:00:04,000\n반갑습니다\n잘 부탁드립니다";
+        let result = parse_srt_to_text(srt);
+        // 블록1 last: "안녕하세요", 블록2 last: "반갑습니다"(다름), 블록3 last: "잘 부탁드립니다"(다름)
+        assert_eq!(result, "안녕하세요\n반갑습니다\n잘 부탁드립니다");
+    }
+
+    #[test]
+    fn parse_srt_skips_duplicate_last_lines() {
+        let srt = "1\n00:00:01,000 --> 00:00:02,000\n같은 줄\n\n\
+                   2\n00:00:02,000 --> 00:00:03,000\n같은 줄\n\n\
+                   3\n00:00:03,000 --> 00:00:04,000\n다른 줄";
+        let result = parse_srt_to_text(srt);
+        assert_eq!(result, "같은 줄\n다른 줄");
+    }
+
+    #[test]
+    fn parse_srt_empty_input() {
+        assert_eq!(parse_srt_to_text(""), "");
+    }
+
+    #[test]
+    fn parse_srt_timestamp_only_blocks_skipped() {
+        // 타임스탬프만 있는 블록 → 텍스트 없음 → 수집 안 함
+        let srt = "1\n00:00:01,000 --> 00:00:02,000\n\n\
+                   2\n00:00:02,000 --> 00:00:03,000\n실제 텍스트";
+        let result = parse_srt_to_text(srt);
+        assert_eq!(result, "실제 텍스트");
+    }
+
+    #[test]
+    fn parse_srt_block_number_not_collected() {
+        // 숫자만으로 이루어진 블록 번호는 수집하지 않음
+        let srt = "1\n00:00:01,000 --> 00:00:02,000\n텍스트A\n\n\
+                   2\n00:00:02,000 --> 00:00:03,000\n텍스트B";
+        let result = parse_srt_to_text(srt);
+        assert!(!result.contains("1"), "block number must not appear in output");
+        assert!(!result.contains("2"), "block number must not appear in output");
+        assert_eq!(result, "텍스트A\n텍스트B");
+    }
+
+    #[test]
+    fn chunk_srt_text_single_chunk_when_short() {
+        let text = "짧은 텍스트";
+        let chunks = chunk_srt_text(text, 2500);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0], text);
+    }
+
+    #[test]
+    fn chunk_srt_text_splits_at_max_chars() {
+        // 100자 제한, 110자 텍스트 → 2개 청크
+        let line_a = "A".repeat(60);
+        let line_b = "B".repeat(60);
+        let text = format!("{line_a}\n{line_b}");
+        let chunks = chunk_srt_text(&text, 100);
+        assert_eq!(chunks.len(), 2);
+        assert!(chunks[0].contains(&line_a));
+        assert!(chunks[1].contains(&line_b));
+    }
+
+    #[test]
+    fn chunk_srt_text_empty_input() {
+        let chunks = chunk_srt_text("", 2500);
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn chunk_srt_text_preserves_content() {
+        let text = "줄1\n줄2\n줄3\n줄4\n줄5";
+        let chunks = chunk_srt_text(text, 2500);
+        let rejoined = chunks.join("\n");
+        assert_eq!(rejoined, text);
+    }
+
+    #[test]
+    fn max_srt_chunks_constant() {
+        assert_eq!(MAX_SRT_CHUNKS, 50);
     }
 
     #[test]
