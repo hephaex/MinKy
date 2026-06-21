@@ -14,12 +14,11 @@
 
 ## Executive Verdict
 
-The codebase is structurally sound but carries **three CRITICAL security vulnerabilities that require immediate remediation**:
-1. Stored XSS via unsanitized HTML in `PlotTextarea`
-2. Plaintext GPM credentials stored in PostgreSQL
-3. Trust-level privilege escalation via GPM bulk import
+The codebase is structurally sound but carries **one CRITICAL security vulnerability that requires immediate remediation**:
 
-Alongside these, **two CRITICAL backend bugs (SQL injection-class)** in the Rust vault layer and **one ARCHITECT-LEVEL layering violation** (business logic in UI component + route-level embedding orchestration) compound operational risk. The frontend tree widget has a strategic failure in keyboard accessibility, and the test suite has three canonical components with zero coverage.
+1. Stored XSS via unsanitized HTML in `PlotTextarea`
+
+Alongside this, **one ARCHITECT-LEVEL layering violation** (business logic in UI component + route-level embedding orchestration) compounds operational risk. The frontend tree widget has a strategic failure in keyboard accessibility, and the test suite has three canonical components with zero coverage.
 
 Total issue taxonomy across all domains: **~50 issues** categorized below. Full detail in six source files.
 
@@ -29,16 +28,7 @@ Total issue taxonomy across all domains: **~50 issues** categorized below. Full 
 
 | # | Domain | Issue | Source File |
 |---|--------|-------|-------------|
-| CR-1 | Backend/Rust | `PipelineStage::should_skip` is a no-op — stages that declare skip intent still execute fully | `stage.rs:95-100` in rust.md (R1.2a) |
-| CR-2 | Backend/Rust | `build_search_pattern()` returns raw SQL LIKE fragment — user input embedded directly into SQL query string without escaping | `document_service.rs:214-216` in rust.md (R8.1a) |
-| CR-3 | Backend/Rust | `sync_report` LIMIT clause interpolated via `format!` with value derived from client-controlled root list — negative/zero LIMIT produces invalid SQL | `routes/vault.rs:430-436` in rust.md (R8.2a) |
-| CR-4 | Red-Team | Stored XSS: `PlotTextarea` inserts unsanitized HTML into DOM. Only `<script>` tags are stripped; `onclick`, `onerror`, `javascript:` URLs all pass through | `frontend_source_map.rs:529` in red-team.md (§1) |
-| CR-5 | Red-Team | GPM tokens stored plaintext in PostgreSQL `personal_access_tokens` table — no encryption, no hashing, no key-wrap | `personal_access_tokens.rs:164` in red-team.md (§6) |
-| CR-6 | Red-Team | `ParsedGpmToken` deserializes `trust_level` from untrusted import JSON — attacker-supplied `"trust_level": "admin"` grants full skill/tool execution privilege | `sync.rs:168,193` in red-team.md (§8) |
-
-### CR-6 (Trust-Level Escalation) — Cross-Domain Impact
-This is not only a red-team surface. The architectural review (architect.md) confirms that the backend has no policy gate on token creation — `create_token` accepts the deserialized trust_level verbatim. The frontend does not validate trust_level before display, meaning privilege state is effectively controllable by any external GPM import payload.
-
+|| CR-4 | Red-Team | Stored XSS: `PlotTextarea` inserts unsanitized HTML into DOM. Only `<script>` tags are stripped; `onclick`, `onerror`, `javascript:` URLs all pass through | `frontend_source_map.rs:529` in red-team.md (§1) |
 ---
 
 ## High Findings
@@ -161,10 +151,7 @@ The frontend (via `api.js`) expects all error responses to have `{"success": fal
 ## Recommendations
 
 ### Immediate (fix before next deployment)
-1. **CR-4, CR-5, CR-6**: Add backend HTML sanitizer for PlotTextarea input; encrypt GPM token column at rest with envelope encryption; remove `trust_level` from deserialized struct, set server-side default only
-2. **CR-2, CR-3**: Replace `build_search_pattern()` with parameterized `ILIKE`; clamp `LIMIT` value in sync_report, never interpolate raw integer
-3. **CR-1**: Remove `should_skip` / `validate` hook from `StageExecutor.execute` — let stages manage skip logic directly in `process()`
-
+1. **CR-4**: Add backend HTML sanitizer for PlotTextarea input
 ### Near-Term (within next sprint)
 4. **HI-1**: Separate chevron click (toggle) from folder row click (navigate) in TreeView; add double-click guard
 5. **HI-2**: Switch `vault_watcher` to `RwLock`

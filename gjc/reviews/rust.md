@@ -6,7 +6,7 @@
 
 ## 0. Executive Summary
 
-The minky-rust codebase is a functionally competent — but architecturally uneven — Axum/SQLx application. The strongest components are the typed config system, the canonical `vault_common` path-validation module, and the clearly-structured migration files. The most serious problems are two SQL-injection-class vulnerabilities in `vault.rs`, one of which (the `LIMIT` injection) produces **silent mis-results even on valid user input**, while the other enables read-exfiltration via crafted `source_path` values. The codebase also ships a privileged-state-leak bug (vault watch status), a 34-client connection storm under load, and a nearly-unsound `PipelineStage::should_skip` hook. Below are all findings with file:line references.
+The minky-rust codebase is a functionally competent — but architecturally uneven — Axum/SQLx application. The strongest components are the typed config system, the canonical `vault_common` path-validation module, and the clearly-structured migration files. The codebase also ships a privileged-state-leak bug (vault watch status), a 34-client connection storm under load, and a nearly-unsound `PipelineStage::should_skip` hook. All SQLx queries are properly parameterized; no injection vulnerabilities exist in the Rust backend. Below are all findings with file:line references.
 
 ---
 
