@@ -22,10 +22,13 @@ const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, onNodeClick,
     }
   };
 
-  // Row click: navigate to document or folder page.
+  // Row click: expand/collapse folder via onToggle, or select document via onSelect.
+  // Falls back to onNodeClick for folders without children (custom navigation).
   const handleClick = () => {
     if (isDocument) {
       onSelect(node);
+    } else if (hasChildren) {
+      onToggle(node.id);
     } else if (onNodeClick) {
       onNodeClick(node);
     }
@@ -42,8 +45,8 @@ const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, onNodeClick,
         e.preventDefault();
         if (hasChildren && !isExpanded) {
           onToggle(node.id);
-        } else if (hasChildren && isExpanded && node.children.length > 0) {
-          onFocusChange(node.children[0].id);
+        } else if (onFocusChange) {
+          onFocusChange(node.id);
         }
         break;
       case 'ArrowLeft':
