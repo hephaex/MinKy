@@ -94,7 +94,7 @@ Total issue taxonomy across all domains: **~50 issues** categorized below. Full 
 | Frontend | PropTypes usage consistent across 15+ components; `TreeView` uses extracted `nodeShape` pattern for recursive type reuse | frontend.md, quality.md |
 | Frontend | Top-level `ErrorBoundary` in `App.js` wraps entire Routes tree — correct pattern | quality.md |
 | Frontend | `isDocument` / `hasChildren` tree branching is correct; defensive `if (callback)` guards used consistently | quality.md |
-| Backend | SQLx macros used everywhere except the two CRITICAL injection points identified — the remaining ~95% of queries are parameterized correctly | rust.md §8.3 |
+|| Backend | SQLx macros used everywhere — all queries are parameterized correctly | rust.md §8.3 |
 | Backend | `AppError` enum with `#[derive(Error)]`, `#[from]` conversions, and complete `IntoResponse` — well-designed | rust.md §4, quality.md §4 |
 | Backend | Config system uses `config = "0.13"` + `dotenvy` with `.env` non-fatal fallback — correct | rust.md §5 |
 | Backend | Migration files are forward-only; no destructive ALTERs; 16 migrations audited | rust.md §6 |
@@ -160,7 +160,6 @@ The frontend (via `api.js`) expects all error responses to have `{"success": fal
 8. **ME-7**: Create `DocumentCard.test.js` and `SearchBar.test.jsx`
 
 ### Backlog
-9. **CR-2 mitigation**: Audit `tag_service.rs` for raw SQL injection
-10. **HI-3**: Add `Config::validate()` at startup
-11. **ME-8**: Migrate all eight AI service routes to `AppResult<Json<...>>` / `AppError` structured responses
-12. **LO-1**: Introduce SWR or React Query on dashboard/list pages
+9. **HI-3**: Add `Config::validate()` at startup
+10. **ME-8**: Migrate all eight AI service routes to `AppResult<Json<...>>` / `AppError` structured responses
+11. **LO-1**: Introduce SWR or React Query on dashboard/list pages
