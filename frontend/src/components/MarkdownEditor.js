@@ -118,5 +118,4 @@ MarkdownEditor.propTypes = {
   showAISuggestions: PropTypes.bool,
 };
 
-
 export default MarkdownEditor;

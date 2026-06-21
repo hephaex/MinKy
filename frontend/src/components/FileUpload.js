@@ -184,5 +184,4 @@ FileUpload.propTypes = {
   onUploadError: PropTypes.func,
 };
 
-
 export default FileUpload;

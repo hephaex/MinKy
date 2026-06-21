@@ -31,7 +31,7 @@
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 30px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .stats-grid {
@@ -85,12 +85,14 @@
   color: white;
   font-size: 0.875rem;
   font-weight: 500;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 .popular-tag:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   color: white;
 }
 
@@ -99,7 +101,7 @@
 }
 
 .tag-count {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   padding: 2px 6px;
   border-radius: 10px;
   font-size: 0.75rem;
@@ -146,14 +148,16 @@
 .tag-card {
   background: white;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
   overflow: hidden;
 }
 
 .tag-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 .tag-link {
@@ -242,7 +246,7 @@
   color: #666;
   background: white;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   margin: 40px 0;
 }
 
@@ -263,42 +267,42 @@
   .tag-list {
     padding: 0 15px;
   }
-  
+
   .tag-list-header {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .tag-list-header h2 {
     font-size: 1.5rem;
   }
-  
+
   .stats-grid {
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap: 15px;
   }
-  
+
   .stat-number {
     font-size: 2rem;
   }
-  
+
   .tags-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .view-mode-tabs {
     flex-wrap: wrap;
   }
-  
+
   .tab {
     padding: 10px 15px;
     font-size: 0.9rem;
   }
-  
+
   .popular-tags {
     gap: 6px;
   }
-  
+
   .popular-tag {
     font-size: 0.8rem;
     padding: 5px 10px;
@@ -309,15 +313,15 @@
   .tag-statistics {
     padding: 20px 15px;
   }
-  
+
   .tag-card {
     margin: 0 -5px;
   }
-  
+
   .tag-link {
     padding: 15px;
   }
-  
+
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }

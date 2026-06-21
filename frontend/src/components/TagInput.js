@@ -194,5 +194,4 @@ TagInput.propTypes = {
   onSuggestionApply: PropTypes.func,
 };
 
-
 export default TagInput;

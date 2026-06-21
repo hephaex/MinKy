@@ -159,5 +159,4 @@ DateSidebar.propTypes = {
   selectedDateKey: PropTypes.string,
 };
 
-
 export default DateSidebar;

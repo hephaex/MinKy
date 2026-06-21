@@ -230,5 +230,4 @@ DocumentClustering.propTypes = {
   showFullInterface: PropTypes.bool,
 };
 
-
 export default DocumentClustering;

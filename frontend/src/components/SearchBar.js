@@ -49,5 +49,4 @@ SearchBar.propTypes = {
   initialValue: PropTypes.string,
 };
 
-
 export default SearchBar;

@@ -114,7 +114,7 @@ async fn build_tree_by_tag(state: &AppState, user_id: i32) -> AppResult<Vec<Tree
             _ => "tag:untagged:태그 없음".to_string(),
         };
         let label = tag_name.unwrap_or_else(|| "태그 없음".to_string());
-        tag_map.entry(key.clone()).or_insert_with(|| vec![]);
+        tag_map.entry(key.clone()).or_default();
         // avoid duplicate doc entries when doc has multiple tags
         let docs = tag_map.get_mut(&key).unwrap();
         let doc_id_str = doc_id.to_string();
@@ -840,13 +840,12 @@ fn parse_srt_to_text(srt: &str) -> String {
     for block in srt.split("\n\n") {
         let new_line = block
             .lines()
-            .filter(|l| {
+            .rfind(|l: &&str| {
                 let l = l.trim();
                 !l.is_empty()
                     && !l.chars().all(|c| c.is_ascii_digit())
                     && !l.contains("-->")
             })
-            .last()
             .map(|l| l.trim())
             .unwrap_or("");
 

@@ -251,34 +251,34 @@
   .category-manager {
     padding: 15px;
   }
-  
+
   .category-header {
     flex-direction: column;
     gap: 15px;
     align-items: flex-start;
   }
-  
+
   .category-form {
     width: 100%;
     margin: 20px;
     padding: 20px;
   }
-  
+
   .category-content {
     flex-direction: column;
     gap: 15px;
   }
-  
+
   .category-actions {
     width: 100%;
     justify-content: flex-end;
   }
-  
+
   .category-header {
     flex-wrap: wrap;
     gap: 8px;
   }
-  
+
   .form-actions {
     flex-direction: column;
   }

@@ -10,7 +10,7 @@
   background: white;
   padding: 20px;
   border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
   margin-bottom: 30px;
 }
 
@@ -54,7 +54,7 @@
   background: white;
   padding: 25px;
   border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
 .error-message {
@@ -298,12 +298,14 @@
   border-radius: 8px;
   padding: 15px;
   background: #f8f9fa;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 .document-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .document-header {
@@ -461,47 +463,47 @@
   .admin-panel {
     padding: 15px;
   }
-  
+
   .admin-tabs {
     flex-direction: column;
   }
-  
+
   .tab-button {
     text-align: center;
   }
-  
+
   .stats-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .activity-stats,
   .storage-stats {
     grid-template-columns: 1fr;
   }
-  
+
   .admin-table {
     font-size: 12px;
   }
-  
+
   .admin-table th,
   .admin-table td {
     padding: 8px 10px;
   }
-  
+
   .user-actions {
     flex-direction: column;
   }
-  
+
   .document-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
   }
-  
+
   .cleanup-actions {
     flex-direction: column;
   }
-  
+
   .cleanup-btn {
     width: 100%;
   }

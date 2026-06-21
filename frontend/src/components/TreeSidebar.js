@@ -187,5 +187,4 @@ TreeSidebar.propTypes = {
   onToggle: PropTypes.func,
 };
 
-
 export default TreeSidebar;

@@ -19,7 +19,7 @@
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 30px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .settings-section h3 {
@@ -91,7 +91,8 @@
 }
 
 /* Actions */
-.git-actions, .export-actions {
+.git-actions,
+.export-actions {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
@@ -267,8 +268,12 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Form elements in AI config */
@@ -318,7 +323,7 @@
   margin: 0;
 }
 
-.ai-config-group .checkbox-item input[type="checkbox"] {
+.ai-config-group .checkbox-item input[type='checkbox'] {
   width: auto;
   margin: 0;
   transform: scale(1.1);
@@ -329,30 +334,31 @@
   .settings {
     padding: 0 15px;
   }
-  
+
   .settings-header h2 {
     font-size: 1.5rem;
   }
-  
+
   .settings-section {
     padding: 20px 15px;
   }
-  
+
   .config-item {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
   }
-  
+
   .config-value {
     margin-left: 0;
     width: 100%;
   }
-  
-  .git-actions, .export-actions {
+
+  .git-actions,
+  .export-actions {
     flex-direction: column;
   }
-  
+
   .btn {
     justify-content: center;
   }

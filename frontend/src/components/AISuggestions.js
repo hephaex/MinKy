@@ -262,5 +262,4 @@ AISuggestions.propTypes = {
   isVisible: PropTypes.bool,
 };
 
-
 export default AISuggestions;

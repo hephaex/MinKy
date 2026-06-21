@@ -93,8 +93,12 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .ai-loading span {
@@ -225,11 +229,11 @@
     margin: 12px 0;
     padding: 12px;
   }
-  
+
   .ai-actions {
     grid-template-columns: 1fr;
   }
-  
+
   .ai-action-btn {
     font-size: 13px;
     padding: 10px 12px;

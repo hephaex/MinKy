@@ -340,7 +340,10 @@ describe('useDocumentStatus', () => {
     it('does not update state after unmount (mountedRef guard)', async () => {
       let resolveStatus;
       documentService.getDocumentStatus.mockImplementation(
-        () => new Promise((resolve) => { resolveStatus = resolve; })
+        () =>
+          new Promise((resolve) => {
+            resolveStatus = resolve;
+          })
       );
 
       const { result, unmount } = renderHook(() => useDocumentStatus('doc-1'));
@@ -365,10 +368,9 @@ describe('useDocumentStatus', () => {
   describe('documentId change', () => {
     it('stops any active polling when documentId changes', async () => {
       documentService.getDocumentStatus.mockResolvedValue(makePendingResponse());
-      const { result, rerender } = renderHook(
-        ({ id }) => useDocumentStatus(id),
-        { initialProps: { id: 'doc-1' } }
-      );
+      const { result, rerender } = renderHook(({ id }) => useDocumentStatus(id), {
+        initialProps: { id: 'doc-1' },
+      });
 
       await act(async () => {
         result.current.startPolling();
@@ -385,10 +387,9 @@ describe('useDocumentStatus', () => {
 
     it('does not carry over stale interval after documentId changes', async () => {
       documentService.getDocumentStatus.mockResolvedValue(makePendingResponse());
-      const { result, rerender } = renderHook(
-        ({ id }) => useDocumentStatus(id),
-        { initialProps: { id: 'doc-1' } }
-      );
+      const { result, rerender } = renderHook(({ id }) => useDocumentStatus(id), {
+        initialProps: { id: 'doc-1' },
+      });
 
       await act(async () => {
         result.current.startPolling();
@@ -410,10 +411,9 @@ describe('useDocumentStatus', () => {
 
     it('allows fresh polling to start after documentId changes', async () => {
       documentService.getDocumentStatus.mockResolvedValue(makePendingResponse());
-      const { result, rerender } = renderHook(
-        ({ id }) => useDocumentStatus(id),
-        { initialProps: { id: 'doc-1' } }
-      );
+      const { result, rerender } = renderHook(({ id }) => useDocumentStatus(id), {
+        initialProps: { id: 'doc-1' },
+      });
 
       await act(async () => {
         result.current.startPolling();

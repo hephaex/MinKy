@@ -106,7 +106,7 @@
 }
 
 .info-section h3:before {
-  content: "💡";
+  content: '💡';
   font-size: 1.1rem;
 }
 
@@ -134,15 +134,15 @@
 
 /* Different icons for different sections */
 .info-section:nth-child(1) h3:before {
-  content: "🔄";
+  content: '🔄';
 }
 
 .info-section:nth-child(2) h3:before {
-  content: "💡";
+  content: '💡';
 }
 
 .info-section:nth-child(3) h3:before {
-  content: "🌍";
+  content: '🌍';
 }
 
 /* Responsive Design */
@@ -151,7 +151,7 @@
     grid-template-columns: 1fr;
     gap: 30px;
   }
-  
+
   .ocr-info {
     order: -1;
   }
@@ -161,26 +161,26 @@
   .ocr-page {
     padding: 15px;
   }
-  
+
   .page-header {
     flex-direction: column;
     gap: 15px;
     align-items: stretch;
   }
-  
+
   .page-header .btn {
     margin-left: 0;
     align-self: flex-start;
   }
-  
+
   .page-header h1 {
     font-size: 1.75rem;
   }
-  
+
   .info-section {
     padding: 20px;
   }
-  
+
   .info-section h3 {
     font-size: 1.1rem;
   }
@@ -190,15 +190,15 @@
   .page-header h1 {
     font-size: 1.5rem;
   }
-  
+
   .page-header p {
     font-size: 1rem;
   }
-  
+
   .info-section {
     padding: 15px;
   }
-  
+
   .info-section ol,
   .info-section ul {
     padding-left: 16px;

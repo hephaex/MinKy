@@ -141,17 +141,17 @@
 }
 
 /* Connection status indicators */
-.collaborative-editor[data-status="connected"] .collaboration-header {
+.collaborative-editor[data-status='connected'] .collaboration-header {
   background: #d4edda;
   border-bottom-color: #c3e6cb;
 }
 
-.collaborative-editor[data-status="disconnected"] .collaboration-header {
+.collaborative-editor[data-status='disconnected'] .collaboration-header {
   background: #f8d7da;
   border-bottom-color: #f5c6cb;
 }
 
-.collaborative-editor[data-status="error"] .collaboration-header {
+.collaborative-editor[data-status='error'] .collaboration-header {
   background: #fff3cd;
   border-bottom-color: #ffeaa7;
 }
@@ -192,13 +192,13 @@
   .editor-with-ai {
     flex-direction: column;
   }
-  
+
   .collaboration-header {
     flex-direction: column;
     gap: 8px;
     align-items: flex-start;
   }
-  
+
   .active-users-list {
     padding: 8px 12px;
   }
@@ -209,11 +209,11 @@
     padding: 8px 12px;
     font-size: 13px;
   }
-  
+
   .active-users-list {
     display: none; /* Hide on mobile to save space */
   }
-  
+
   .user-badge {
     font-size: 10px;
     padding: 1px 6px;

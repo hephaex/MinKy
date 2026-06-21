@@ -1,7 +1,16 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import PropTypes from 'prop-types';
 
-const TreeNode = ({ node, level, expandedNodes, onToggle, onSelect, onNodeClick, focusedId = null, onFocusChange }) => {
+const TreeNode = ({
+  node,
+  level,
+  expandedNodes,
+  onToggle,
+  onSelect,
+  onNodeClick,
+  focusedId = null,
+  onFocusChange,
+}) => {
   const nodeRef = useRef(null);
   const hasChildren = node.children && node.children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
@@ -142,7 +151,6 @@ TreeNode.propTypes = {
   onFocusChange: PropTypes.func.isRequired,
 };
 
-
 const TreeView = ({ nodes = [], onSelect, onNodeClick, className = '' }) => {
   const [expandedNodes, setExpandedNodes] = useState(new Set());
   const [focusedId, setFocusedId] = useState(null);
@@ -231,6 +239,5 @@ TreeView.propTypes = {
   onNodeClick: PropTypes.func,
   className: PropTypes.string,
 };
-
 
 export default TreeView;

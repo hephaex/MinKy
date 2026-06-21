@@ -59,8 +59,12 @@
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .error {
@@ -216,31 +220,31 @@
   .documents-by-date {
     padding: 16px;
   }
-  
+
   .documents-header h2 {
     font-size: 24px;
   }
-  
+
   .documents-grid {
     grid-template-columns: 1fr;
     gap: 16px;
   }
-  
+
   .document-card {
     padding: 20px;
   }
-  
+
   .document-title {
     font-size: 18px;
   }
-  
+
   .no-selection,
   .loading,
   .error,
   .no-documents {
     padding: 60px 20px;
   }
-  
+
   .no-selection h3,
   .error h3,
   .no-documents h3 {

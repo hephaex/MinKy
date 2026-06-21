@@ -212,9 +212,7 @@ const DateExplorer = () => {
         </div>
       </div>
 
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />}
 
       {/* Sync Status Messages */}
       {syncStatus && (

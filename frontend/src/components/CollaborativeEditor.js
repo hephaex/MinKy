@@ -426,5 +426,4 @@ CollaborativeEditor.propTypes = {
   showAISuggestions: PropTypes.bool,
 };
 
-
 export default CollaborativeEditor;

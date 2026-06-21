@@ -43,7 +43,6 @@ CodeBlock.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-
 const markdownComponents = {
   code({ inline, className, children, ...props }) {
     const match = /language-(\w+)/.exec(className || '');
@@ -236,6 +235,5 @@ ChatMessage.propTypes = {
   }).isRequired,
   onCopy: PropTypes.func,
 };
-
 
 export default ChatMessage;

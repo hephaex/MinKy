@@ -257,5 +257,4 @@ NewSimpleDateSidebar.propTypes = {
   selectedDateKey: PropTypes.string,
 };
 
-
 export default NewSimpleDateSidebar;

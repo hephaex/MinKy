@@ -72,19 +72,19 @@
   .documents-main.with-sidebar {
     margin-left: 0;
   }
-  
+
   .sidebar-overlay {
     display: block;
   }
-  
+
   .documents-header {
     padding: 12px 16px;
   }
-  
+
   .documents-header h1 {
     font-size: 24px;
   }
-  
+
   .documents-content {
     padding: 16px;
   }
@@ -94,11 +94,11 @@
   .documents-header {
     padding: 8px 12px;
   }
-  
+
   .documents-header h1 {
     font-size: 20px;
   }
-  
+
   .documents-content {
     padding: 12px;
   }

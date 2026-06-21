@@ -112,7 +112,9 @@ const DocumentList = () => {
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   // Keep the latest scroll position of the list container in a ref. The list
@@ -483,10 +485,20 @@ const DocumentList = () => {
                     </div>
                   )}
                   {doc.processing_status === 'pending' && (
-                    <span className="processing-badge processing-badge--pending" aria-label="Processing pending">Pending</span>
+                    <span
+                      className="processing-badge processing-badge--pending"
+                      aria-label="Processing pending"
+                    >
+                      Pending
+                    </span>
                   )}
                   {doc.processing_status === 'completed' && (
-                    <span className="processing-badge processing-badge--completed" aria-label="Processing completed">Embedded</span>
+                    <span
+                      className="processing-badge processing-badge--completed"
+                      aria-label="Processing completed"
+                    >
+                      Embedded
+                    </span>
                   )}
                   {doc.processing_status === 'failed' && (
                     <button
@@ -522,9 +534,7 @@ const DocumentList = () => {
           />
         </>
       )}
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />}
     </div>
   );
 };

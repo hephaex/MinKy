@@ -474,5 +474,4 @@ KnowledgeGraph.propTypes = {
   onExportConnections: PropTypes.func,
 };
 
-
 export default KnowledgeGraph;

@@ -200,5 +200,4 @@ MLAnalytics.propTypes = {
   showCorpusAnalysis: PropTypes.bool,
 };
 
-
 export default MLAnalytics;

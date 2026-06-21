@@ -205,5 +205,4 @@ DocumentsByDate.propTypes = {
   onDocumentClick: PropTypes.func,
 };
 
-
 export default DocumentsByDate;

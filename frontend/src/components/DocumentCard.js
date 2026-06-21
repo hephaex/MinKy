@@ -5,7 +5,13 @@ import { formatDateTime } from '../utils/dateUtils';
 import { formatAuthor } from '../utils/documentUtils';
 import './DocumentCard.css';
 
-const DocumentCard = ({ document, searchQuery = '', showPreview = false, formatDate, onReprocess }) => {
+const DocumentCard = ({
+  document,
+  searchQuery = '',
+  showPreview = false,
+  formatDate,
+  onReprocess,
+}) => {
   const dateFormatter = formatDate || formatDateTime;
 
   // Show max 3 tags, with overflow indicator
@@ -43,7 +49,12 @@ const DocumentCard = ({ document, searchQuery = '', showPreview = false, formatD
           {document.processing_status === 'pending' && (
             <>
               <span className="meta-separator">•</span>
-              <span className="processing-badge processing-badge--pending" aria-label="Processing pending">Pending</span>
+              <span
+                className="processing-badge processing-badge--pending"
+                aria-label="Processing pending"
+              >
+                Pending
+              </span>
             </>
           )}
           {document.processing_status === 'failed' && (
@@ -62,14 +73,24 @@ const DocumentCard = ({ document, searchQuery = '', showPreview = false, formatD
                   Failed — Retry
                 </button>
               ) : (
-                <span className="processing-badge processing-badge--failed" aria-label="Processing failed">Failed</span>
+                <span
+                  className="processing-badge processing-badge--failed"
+                  aria-label="Processing failed"
+                >
+                  Failed
+                </span>
               )}
             </>
           )}
           {document.processing_status === 'completed' && (
             <>
               <span className="meta-separator">•</span>
-              <span className="processing-badge processing-badge--completed" aria-label="Processing completed">Embedded</span>
+              <span
+                className="processing-badge processing-badge--completed"
+                aria-label="Processing completed"
+              >
+                Embedded
+              </span>
             </>
           )}
         </div>

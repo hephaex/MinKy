@@ -172,13 +172,13 @@ const DocumentView = () => {
 
   const handleReprocess = async () => {
     const previousStatus = document?.processing_status;
-    setDocument((prev) => prev ? { ...prev, processing_status: 'pending' } : prev);
+    setDocument((prev) => (prev ? { ...prev, processing_status: 'pending' } : prev));
     try {
       await documentService.reprocessDocument(id);
       showToast('Document queued for reprocessing', 'success');
       startPolling();
     } catch (err) {
-      setDocument((prev) => prev ? { ...prev, processing_status: previousStatus } : prev);
+      setDocument((prev) => (prev ? { ...prev, processing_status: previousStatus } : prev));
       showToast('Failed to reprocess document', 'error');
       logError('DocumentView.handleReprocess', err);
     }
@@ -254,7 +254,10 @@ const DocumentView = () => {
               )}
             </span>
             {processingStatus === 'pending' && (
-              <span className="processing-badge processing-badge--pending" aria-label="Processing pending">
+              <span
+                className="processing-badge processing-badge--pending"
+                aria-label="Processing pending"
+              >
                 {isPolling ? 'Processing' : 'Pending'}
                 {queuePosition != null && ` (#${queuePosition})`}
               </span>
@@ -269,7 +272,10 @@ const DocumentView = () => {
               </button>
             )}
             {processingStatus === 'completed' && (
-              <span className="processing-badge processing-badge--completed" aria-label="Processing completed">
+              <span
+                className="processing-badge processing-badge--completed"
+                aria-label="Processing completed"
+              >
                 Completed
               </span>
             )}
@@ -393,9 +399,7 @@ const DocumentView = () => {
         </div>
       </div>
 
-      {toast && (
-        <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />
-      )}
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />}
     </div>
   );
 };

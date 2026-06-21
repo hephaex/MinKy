@@ -26,7 +26,7 @@
 .document-form-content {
   background: white;
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   padding: 30px;
 }
 
@@ -55,7 +55,9 @@
   border: 2px solid #ddd;
   border-radius: 6px;
   font-size: 14px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
   background: white;
 }
 
@@ -153,25 +155,25 @@
     align-items: stretch;
     gap: 20px;
   }
-  
+
   .document-form-header h2 {
     text-align: center;
   }
-  
+
   .form-actions {
     justify-content: stretch;
   }
-  
+
   .form-actions .btn {
     flex: 1;
     text-align: center;
   }
-  
+
   .form-row {
     grid-template-columns: 1fr;
     gap: 15px;
   }
-  
+
   .document-form-content {
     padding: 20px;
   }
@@ -181,11 +183,11 @@
   .document-form {
     margin: 0 10px;
   }
-  
+
   .document-form-content {
     padding: 15px;
   }
-  
+
   .form-actions {
     flex-direction: column;
     gap: 10px;

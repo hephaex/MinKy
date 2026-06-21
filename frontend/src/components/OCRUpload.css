@@ -233,7 +233,7 @@
   color: #333;
 }
 
-.document-form-fields input[type="text"] {
+.document-form-fields input[type='text'] {
   width: 100%;
 }
 
@@ -250,7 +250,7 @@
   cursor: pointer;
 }
 
-.checkbox-group input[type="checkbox"] {
+.checkbox-group input[type='checkbox'] {
   width: auto;
   margin: 0;
 }
@@ -381,35 +381,35 @@
     padding: 15px;
     margin: 10px;
   }
-  
+
   .file-upload-area {
     padding: 30px 15px;
   }
-  
+
   .upload-icon {
     font-size: 2rem;
   }
-  
+
   .result-meta {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .text-header {
     flex-direction: column;
     gap: 10px;
     align-items: flex-start;
   }
-  
+
   .language-selection select {
     width: 100%;
   }
-  
+
   .capability-item {
     flex-direction: column;
     gap: 5px;
   }
-  
+
   .status-item {
     flex-direction: column;
     gap: 5px;
@@ -422,7 +422,7 @@
     min-width: auto;
     width: 100%;
   }
-  
+
   .file-name {
     max-width: 250px;
   }
