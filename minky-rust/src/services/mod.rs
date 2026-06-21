@@ -42,6 +42,7 @@ pub mod vault_watcher_service;
 mod version_service;
 mod websocket_service;
 mod workflow_service;
+mod migration_service;
 
 pub use admin_service::*;
 pub use agent_service::*;
@@ -77,3 +78,4 @@ pub use understanding_service::*;
 pub use version_service::*;
 pub use websocket_service::*;
 pub use workflow_service::*;
+pub use migration_service::*;

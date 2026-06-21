@@ -32,6 +32,7 @@ mod user;
 mod version;
 mod websocket;
 mod workflow;
+mod migration;
 
 pub use admin::*;
 pub use agent::*;
@@ -65,3 +66,4 @@ pub use user::*;
 pub use version::*;
 pub use websocket::*;
 pub use workflow::*;
+pub use migration::*;
