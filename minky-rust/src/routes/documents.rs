@@ -36,6 +36,7 @@ pub fn routes() -> Router<AppState> {
         .route("/", get(list_documents).post(create_document))
         .route("/upload", post(upload_document).layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE)))
         .route("/upload/srt", post(upload_srt).layer(DefaultBodyLimit::max(MAX_SRT_SIZE)))
+        .route("/archived", get(list_archived))
         .route("/duplicates", get(list_duplicates))
         .route("/duplicates/resolve", post(resolve_duplicates))
         .route("/tree", get(get_document_tree))
@@ -1162,6 +1163,79 @@ async fn upload_srt(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// List duplicate document groups for the authenticated user.
+/// Query parameters for archived document listing
+#[derive(Debug, Deserialize)]
+pub struct ArchivedQuery {
+    pub page: Option<i32>,
+    pub limit: Option<i32>,
+}
+
+/// Archived document summary (no content field — lite view)
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct ArchivedDocRow {
+    pub id: Uuid,
+    pub title: String,
+    pub category_id: Option<i32>,
+    pub user_id: i32,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub archived_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub content_hash: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ArchivedListResponse {
+    pub success: bool,
+    pub total: i64,
+    pub page: i32,
+    pub limit: i32,
+    pub documents: Vec<ArchivedDocRow>,
+}
+
+/// GET /api/documents/archived — list soft-archived documents (owner only, paginated)
+///
+/// Returns documents belonging to the authenticated user that have `archived=true`.
+/// Sorted by `archived_at DESC` so the most-recently-archived (typically auto-archived
+/// duplicates) appear first.
+async fn list_archived(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+    Query(query): Query<ArchivedQuery>,
+) -> AppResult<Json<ArchivedListResponse>> {
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.limit.unwrap_or(100).clamp(1, 200);
+    let offset = (page - 1) * limit;
+
+    let total: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM documents WHERE user_id = $1 AND archived = true",
+    )
+    .bind(auth_user.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(AppError::Database)?;
+
+    let documents: Vec<ArchivedDocRow> = sqlx::query_as(
+        r#"SELECT id, title, category_id, user_id, created_at, archived_at, content_hash
+           FROM documents
+           WHERE user_id = $1 AND archived = true
+           ORDER BY archived_at DESC NULLS LAST, created_at DESC
+           LIMIT $2 OFFSET $3"#,
+    )
+    .bind(auth_user.id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(Json(ArchivedListResponse {
+        success: true,
+        total: total.0,
+        page,
+        limit,
+        documents,
+    }))
+}
+
 ///
 /// `GET /api/documents/duplicates`
 ///
@@ -2547,5 +2621,126 @@ mod tests {
             effective_is_public2 && effective_sensitivity2 == "confidential",
             "setting sensitivity=confidential on a public doc should trigger the guard"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // ArchivedQuery tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_archived_query_defaults() {
+        let json = r#"{}"#;
+        let q: ArchivedQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(q.page, None);
+        assert_eq!(q.limit, None);
+    }
+
+    #[test]
+    fn test_archived_query_with_values() {
+        let json = r#"{"page": 3, "limit": 50}"#;
+        let q: ArchivedQuery = serde_json::from_str(json).unwrap();
+        assert_eq!(q.page, Some(3));
+        assert_eq!(q.limit, Some(50));
+    }
+
+    #[test]
+    fn test_archived_query_pagination_clamping() {
+        // page < 1 → clamped to 1 (simulate handler logic)
+        fn clamp_page(p: Option<i32>) -> i32 { p.unwrap_or(1).max(1) }
+        assert_eq!(clamp_page(Some(0)), 1);
+        assert_eq!(clamp_page(Some(-5)), 1);
+        assert_eq!(clamp_page(None), 1);
+        assert_eq!(clamp_page(Some(3)), 3);
+
+        // limit: default 100, clamped 1..=200
+        fn clamp_limit(l: Option<i32>) -> i32 { l.unwrap_or(100).clamp(1, 200) }
+        assert_eq!(clamp_limit(None), 100);
+        assert_eq!(clamp_limit(Some(300)), 200);
+        assert_eq!(clamp_limit(Some(0)), 1);
+        assert_eq!(clamp_limit(Some(50)), 50);
+    }
+
+    // -------------------------------------------------------------------------
+    // ArchivedDocRow tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_archived_doc_row_serializes() {
+        let id = uuid::Uuid::nil();
+        let now = Utc::now();
+        let row = ArchivedDocRow {
+            id,
+            title: "Test Doc".to_string(),
+            category_id: Some(1),
+            user_id: 42,
+            created_at: now,
+            archived_at: Some(now),
+            content_hash: Some("abc123".to_string()),
+        };
+        let json = serde_json::to_string(&row).unwrap();
+        assert!(json.contains("Test Doc"));
+        assert!(json.contains("abc123"));
+    }
+
+    #[test]
+    fn test_archived_doc_row_optional_fields_null() {
+        let id = uuid::Uuid::nil();
+        let now = Utc::now();
+        let row = ArchivedDocRow {
+            id,
+            title: "No Category".to_string(),
+            category_id: None,
+            user_id: 1,
+            created_at: now,
+            archived_at: None,
+            content_hash: None,
+        };
+        let json = serde_json::to_string(&row).unwrap();
+        assert!(json.contains("\"category_id\":null"));
+        assert!(json.contains("\"archived_at\":null"));
+        assert!(json.contains("\"content_hash\":null"));
+    }
+
+    // -------------------------------------------------------------------------
+    // ArchivedListResponse tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_archived_list_response_empty() {
+        let resp = ArchivedListResponse {
+            success: true,
+            total: 0,
+            page: 1,
+            limit: 100,
+            documents: vec![],
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"success\":true"));
+        assert!(json.contains("\"total\":0"));
+        assert!(json.contains("\"documents\":[]"));
+    }
+
+    #[test]
+    fn test_archived_list_response_with_docs() {
+        let now = Utc::now();
+        let doc = ArchivedDocRow {
+            id: uuid::Uuid::nil(),
+            title: "Archived".to_string(),
+            category_id: None,
+            user_id: 7,
+            created_at: now,
+            archived_at: Some(now),
+            content_hash: Some("hash1".to_string()),
+        };
+        let resp = ArchivedListResponse {
+            success: true,
+            total: 1,
+            page: 1,
+            limit: 100,
+            documents: vec![doc],
+        };
+        assert_eq!(resp.total, 1);
+        assert_eq!(resp.documents.len(), 1);
+        assert_eq!(resp.documents[0].title, "Archived");
     }
 }
