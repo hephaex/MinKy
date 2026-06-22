@@ -91,15 +91,20 @@
 - 1914 tests pass / 0 fail, commits `22016320` → `1a73ad0c`
 - CT306 배포 완료, Demo Gate: `GET /api/documents/duplicates` HTTP 200 ✓, DB C2 fix 확인 ✓
 
-### 📋 Sprint D3 Roadmap (Remaining)
+### ✅ Sprint D3 P3: archived=false 필터 4개 서비스 + Opus MEDIUM 수정 완료 (2026-06-22)
+- `export_service.rs`: bulk export COUNT+query `AND archived=false` + category COUNT `user_id` 스코핑 (Opus MEDIUM)
+- `analytics_service.rs`: `get_top_documents`, `get_recent_documents` `WHERE archived=false`
+- `knowledge_graph_service.rs`: `load_document_topics` `WHERE archived=false`
+- `ml_service.rs`: `get_cluster_documents`, `detect_anomalies` `AND archived=false`
+- Opus 레드팀 2회: 2차 CLEAN (`[]`)
+- 1914 tests pass / 0 fail, commits `b4fb37f7` → `0c6eff2e`
+- CT306 배포 완료, healthy ✓
 
-**P3 (Next)**: 나머지 LOW deferred 처리
-- `export_service.rs`: owner-scoped bulk export에서 archived 제외
-- `analytics_service.rs` `get_top_documents`, `get_recent_documents`: archived 제외
-- `knowledge_graph_service.rs` `load_document_topics`: archived 제외
-- `ml_service.rs` `get_cluster_documents`, `detect_anomalies`: archived 제외
+### 📋 Sprint D3 완료 — 다음 스프린트 대기
 
-**현재 lab-minky CT306 상태**: 1914 tests, duplicate UI 활성, CT306 healthy
+**현재 lab-minky CT306 상태**: 1914 tests, archived 전 경로 필터 완료, CT306 healthy
+
+Sprint D3 완료 (P1+P2+P3). 다음 스프린트는 신규 사용자 요구사항 발생 시 시작.
 
 ---
 

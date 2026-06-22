@@ -5,7 +5,39 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D3 P2 완료
+## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D3 P3 완료 (Sprint D3 전체 완료)
+
+### Sprint D3 P3: archived=false 필터 4개 서비스 (2026-06-22)
+
+| 항목 | 상태 | 세부 |
+|------|------|------|
+| export_service COUNT+bulk | [IMPLEMENTED] | `AND archived=false` + category COUNT `user_id` 스코핑 수정 (Opus MEDIUM) |
+| analytics get_top_documents | [IMPLEMENTED] | `WHERE d.archived = false` |
+| analytics get_recent_documents | [IMPLEMENTED] | `WHERE d.archived = false` |
+| analytics get_overview comment | [IMPLEMENTED] | 의도적 포함 명시 (admin aggregates) |
+| knowledge_graph load_document_topics | [IMPLEMENTED] | `WHERE d.archived = false` |
+| ml get_cluster_documents | [IMPLEMENTED] | `AND d.archived = false` |
+| ml detect_anomalies | [IMPLEMENTED] | `AND d.archived = false` |
+| CT306 배포 | [IMPLEMENTED] | healthy, 1914 tests pass / 0 fail |
+
+커밋: `b4fb37f7` (4개 서비스 필터) → `0c6eff2e` (Opus MEDIUM — category COUNT user_id + comment)
+
+Demo Gate: CT306 `GET /api/health` → healthy ✓
+
+Opus 레드팀 2회:
+- 1차: MEDIUM(export category COUNT user_id 미스코핑) + LOW(analytics overview gap 명시 권고)
+- 2차: `[]` — CLEAN
+
+Opus verified:
+- Q2(SQL inject/archived bypass via document_ids): 아니오 — base WHERE AND d.id IN() 교집합, 안전
+- Q4(graph orphan): 아니오 — build_graph가 archived-filtered topics로 edge guard
+- Q5(anomaly 통계): pre-existing 범위 외
+
+리뷰 아카이브: `~/.claude/references/2026-06-22_sprint_d3_p3_archived_filter_services_review.md`
+
+---
+
+## 이전 진행 상황 (2026-06-22) — lab-minky Sprint D3 P2 완료
 
 ### Sprint D3 P2: 프론트엔드 duplicate 관리 UI (2026-06-22)
 
