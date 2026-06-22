@@ -304,7 +304,7 @@ impl EmbeddingService {
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (document_id, model)
             DO UPDATE SET embedding = $2, token_count = $4, updated_at = NOW()
-            RETURNING *
+            RETURNING id, document_id, embedding::float4[] as embedding, model, token_count, created_at, updated_at
             "#,
         )
         .bind(req.document_id)
@@ -347,7 +347,7 @@ impl EmbeddingService {
                     embedding = $6,
                     token_count = $8,
                     metadata = $9
-                RETURNING *
+                RETURNING id, document_id, chunk_index, chunk_text, chunk_start_offset, chunk_end_offset, embedding::float4[] as embedding, model, token_count, metadata, created_at
                 "#,
             )
             .bind(req.document_id)
