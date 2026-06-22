@@ -204,12 +204,16 @@ impl StorageStage {
             None
         };
 
+        // Compute content_hash once — used in both INSERT and UPDATE paths so the
+        // column always tracks the actual content (prevents stale hash after edits).
+        let content_hash = hex::encode(Sha256::digest(doc.original_content.as_bytes()));
+
         let document_id = if let Some((id,)) = existing_id {
-            // Update existing document, refreshing source_path in case it was previously NULL
+            // Update existing document; recompute content_hash to match new content
             sqlx::query(
                 r#"
                 UPDATE documents
-                SET content = $2, category_id = $3, is_public = $4, source_path = $5, sensitivity = $6, updated_at = NOW()
+                SET content = $2, category_id = $3, is_public = $4, source_path = $5, sensitivity = $6, content_hash = $7, updated_at = NOW()
                 WHERE id = $1
                 "#,
             )
@@ -219,13 +223,12 @@ impl StorageStage {
             .bind(is_public)
             .bind(source_path)
             .bind(&sensitivity)
+            .bind(&content_hash)
             .execute(&self.pool)
             .await?;
 
             id
         } else {
-            // Insert new document; compute content_hash for dedup
-            let content_hash = hex::encode(Sha256::digest(doc.original_content.as_bytes()));
             let (id,): (Uuid,) = sqlx::query_as(
                 r#"
                 INSERT INTO documents (title, content, category_id, user_id, is_public, source_path, sensitivity, content_hash)

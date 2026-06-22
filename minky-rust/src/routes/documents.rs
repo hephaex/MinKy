@@ -536,9 +536,25 @@ async fn create_document(
         ));
     }
 
+    // Compute content_hash for dedup; check before insert
+    let content_hash = hex::encode(sha2::Sha256::digest(payload.markdown_content.as_bytes()));
+    let dup_id: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 LIMIT 1"
+    )
+    .bind(user_id)
+    .bind(&content_hash)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(AppError::Database)?;
+    if let Some(existing_id) = dup_id {
+        return Err(AppError::Conflict(format!(
+            "Duplicate document: content already exists as {existing_id}"
+        )));
+    }
+
     let row: DocumentRow = sqlx::query_as(
-        r#"INSERT INTO documents (title, content, category_id, user_id, is_public, sensitivity)
-           VALUES ($1, $2, $3, $4, $5, $6)
+        r#"INSERT INTO documents (title, content, category_id, user_id, is_public, sensitivity, content_hash)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id, title, content, category_id, user_id, is_public, sensitivity, view_count, created_at, updated_at,
                      author, html_content, is_published, published_at"#
     )
@@ -548,6 +564,7 @@ async fn create_document(
     .bind(user_id)
     .bind(is_public)
     .bind(sensitivity)
+    .bind(&content_hash)
     .fetch_one(&state.db)
     .await?;
 
@@ -646,12 +663,17 @@ async fn update_document(
         ));
     }
 
-    // Build update query dynamically based on provided fields (only owner can update)
+    // When content changes, recompute content_hash to keep it consistent.
+    // Uses SQL-level expression so hash always tracks the stored content.
     let row: DocumentRow = sqlx::query_as(
         r#"UPDATE documents
            SET
                title = COALESCE($1, title),
                content = COALESCE($2, content),
+               content_hash = CASE
+                   WHEN $2 IS NOT NULL THEN encode(digest($2, 'sha256'), 'hex')
+                   ELSE content_hash
+               END,
                category_id = CASE WHEN $3::boolean THEN $4::integer ELSE category_id END,
                is_public = COALESCE($5, is_public),
                sensitivity = COALESCE($6, sensitivity),
@@ -1144,6 +1166,7 @@ async fn list_duplicates(
         GROUP BY user_id, content_hash
         HAVING COUNT(*) > 1
         ORDER BY COUNT(*) DESC
+        LIMIT 500
         "#,
     )
     .bind(auth_user.id)
