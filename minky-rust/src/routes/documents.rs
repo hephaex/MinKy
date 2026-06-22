@@ -546,10 +546,10 @@ async fn create_document(
     .fetch_optional(&state.db)
     .await
     .map_err(AppError::Database)?;
-    if let Some(existing_id) = dup_id {
-        return Err(AppError::Conflict(format!(
-            "Duplicate document: content already exists as {existing_id}"
-        )));
+    if dup_id.is_some() {
+        return Err(AppError::Conflict(
+            "Duplicate document: this content already exists".to_string()
+        ));
     }
 
     let row: DocumentRow = sqlx::query_as(
@@ -661,6 +661,27 @@ async fn update_document(
         return Err(AppError::Validation(
             "confidential 문서는 공개(is_public=true)로 설정할 수 없습니다".to_string(),
         ));
+    }
+
+    // Guard: if new content matches an existing doc (other than this one), reject with 409.
+    // Without this check, an edit can silently create two docs sharing the same content_hash,
+    // which would break the UNIQUE(user_id, content_hash) constraint added in Sprint D2.
+    if let Some(ref new_content) = payload.markdown_content {
+        let new_hash = hex::encode(Sha256::digest(new_content.as_bytes()));
+        let collision: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 AND id != $3 LIMIT 1"
+        )
+        .bind(user_id)
+        .bind(&new_hash)
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(AppError::Database)?;
+        if collision.is_some() {
+            return Err(AppError::Conflict(
+                "Duplicate document: this content already exists".to_string()
+            ));
+        }
     }
 
     // When content changes, recompute content_hash to keep it consistent.
@@ -827,11 +848,10 @@ async fn upload_document(
         .await
         .map_err(AppError::Database)?;
 
-        if let Some(existing_id) = existing {
-            return Err(AppError::Conflict(format!(
-                "Duplicate document: content already exists as {}",
-                existing_id
-            )));
+        if existing.is_some() {
+            return Err(AppError::Conflict(
+                "Duplicate document: this content was already uploaded".to_string()
+            ));
         }
 
         let upstage_key = std::env::var("UPSTAGE_API_KEY").unwrap_or_default();
