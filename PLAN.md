@@ -122,9 +122,14 @@
 
 ---
 
-### 📋 Sprint D3 완료 — 다음 스프린트 대기
+### ✅ D4 배포 핫픽스 완료 (2026-06-23)
+- `EMBEDDING_BASE_URL` `/v1` → `/v1/embeddings` (CT306 .env)
+- `RETURNING *` pgvector 타입 불일치 → `embedding::float4[] as embedding` 캐스트 (embedding_service.rs)
+- commit `3c2ebed4` / 842개 embedding queue drain 진행 중
 
-**현재 lab-minky CT306 상태**: 1920 tests, embedding queue 워커 활성, CT306 배포 완료
+### 📋 Sprint D4 배포 완료 — 다음 스프린트 대기
+
+**현재 lab-minky CT306 상태**: 1920 tests, embedding queue 워커 활성 + 정상 drain, CT306 배포 완료
 
 Sprint D3+D4 완료. 다음 스프린트는 신규 사용자 요구사항 발생 시 시작.
 

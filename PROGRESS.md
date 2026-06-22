@@ -5,7 +5,21 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D4 완료
+## 현재 진행 상황 (2026-06-23) — lab-minky D4 배포 핫픽스 완료
+
+### D4 배포 핫픽스: embedding queue 실동작 확인 중 발견된 2개 버그 (2026-06-23)
+
+| 항목 | 상태 | 세부 |
+|------|------|------|
+| `EMBEDDING_BASE_URL` `/v1` → `/v1/embeddings` | [IMPLEMENTED] | CT306 .env 수정. 기존: POST /v1 → llama.cpp 404 "File Not Found". 수정: POST /v1/embeddings |
+| `RETURNING *` pgvector 타입 불일치 | [IMPLEMENTED] | `Vec<f32>` (FLOAT4[]) ≠ pgvector `vector`. document_embeddings + chunk_embeddings INSERT RETURNING을 `embedding::float4[] as embedding` 명시 캐스트로 수정 |
+
+커밋: `3c2ebed4`
+Demo Gate: CT306 `embedding queue: complete` 로그 연속 확인, 842개 pending → drain 중
+
+---
+
+## 이전 진행 상황 (2026-06-22) — lab-minky Sprint D4 완료
 
 ### Sprint D4: embedding queue 백그라운드 워커 + 대용량 문서 truncation (2026-06-22)
 
