@@ -39,7 +39,8 @@ impl ExportService {
             ids.len() as i32
         } else if let Some(category_id) = request.category_id {
             let count: (i64,) =
-                sqlx::query_as("SELECT COUNT(*) FROM documents WHERE category_id = $1 AND archived = false")
+                sqlx::query_as("SELECT COUNT(*) FROM documents WHERE user_id = $1 AND category_id = $2 AND archived = false")
+                    .bind(user_id)
                     .bind(category_id)
                     .fetch_one(&self.db)
                     .await?;

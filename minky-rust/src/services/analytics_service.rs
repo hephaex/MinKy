@@ -23,6 +23,10 @@ impl AnalyticsService {
     }
 
     /// Get analytics overview
+    /// NOTE: aggregate counts here (total_documents, total_views, avg_length) are
+    /// system-wide and intentionally include archived documents — they reflect the
+    /// full corpus for admin reporting. Per-user listing paths (get_top_documents,
+    /// get_recent_documents) exclude archived per D3 P3.
     pub async fn get_overview(&self, days: i32) -> Result<AnalyticsOverview> {
         let cutoff = Utc::now() - Duration::days(days as i64);
 
