@@ -5,7 +5,35 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-17) — lab-minky Sprint 9 완료
+## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D1 완료
+
+### Sprint D1: content_hash 기반 중복 문서 감지 (2026-06-22)
+
+| 항목 | 상태 | 세부 |
+|------|------|------|
+| migration 020 | [IMPLEMENTED] | `content_hash TEXT`, backfill, `idx_documents_user_content_hash`, `v_duplicate_groups` view |
+| upload_document 중복 체크 | [IMPLEMENTED] | SHA-256 + 409 Conflict, UUID 미노출 |
+| create_document 중복 체크 | [IMPLEMENTED] | 동일 (H1 Opus 수정) |
+| update_document 충돌 체크 | [IMPLEMENTED] | 내용 변경 시 타 문서와 충돌 사전 차단 (HIGH Opus 수정) |
+| storage.rs hash 동기화 | [IMPLEMENTED] | INSERT/UPDATE 양 경로, hash 계산 순서 버그 수정 (C1 Opus 수정) |
+| GET /api/documents/duplicates | [IMPLEMENTED] | LIMIT 500, user-scoped 중복 그룹 반환 |
+| .dockerignore | [IMPLEMENTED] | `**/._*` — macOS resource fork 서브디렉토리 누출 방지 |
+| CT306 배포 | [IMPLEMENTED] | healthy, 1903 tests pass / 0 fail |
+
+커밋: `f9a99c07` → `705c02d2` → `a57b7596` → `229409d0`
+
+Demo Gate: `curl http://localhost:8001/api/health` → `{"status":"healthy",...}` ✓
+
+Opus 레드팀 2회 통과 (3차: `[]`):
+- 1차: C1(storage UPDATE hash stale) + H1(create_document hash 누락) + M3(LIMIT 없음) 수정
+- 2차: HIGH(update 409 체크 누락) + MEDIUM(UUID 노출) 수정
+- Known residuals: TOCTOU race (D2 UNIQUE로 해소 예정), per-group array_agg unbounded (LOW, D2 이후)
+
+리뷰 아카이브: `~/.claude/references/2026-06-22_sprint_d1_minky_content_hash_dedup_review.md`
+
+---
+
+## 이전 진행 상황 (2026-06-17) — lab-minky Sprint 9 완료
 
 ### Sprint 9: MCP 서버 + gyeol 메모리 동기화 + BYPASS_AUTH (2026-06-17)
 

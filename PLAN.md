@@ -54,10 +54,31 @@
 - WARN "no unique or exclusion constraint" 해소 확인 (업로드 후 로그 클린)
 - 1922 tests pass / 0 fail, commit `37882d42`
 
-### 📋 Next Sprint 9 Roadmap
+### ✅ Sprint D1: content_hash dedup 완료 (2026-06-22)
+- migration 020: `documents.content_hash TEXT` + backfill + index + `v_duplicate_groups` view
+- upload_document / create_document / update_document: SHA-256 + 409 충돌 체크
+- storage.rs: INSERT/UPDATE 양 경로 hash 기록 (순서 버그 수정)
+- `GET /api/documents/duplicates`: LIMIT 500, 중복 그룹 반환
+- Opus 레드팀 2회: HIGH(update 충돌 체크 누락) + MEDIUM(UUID 노출) 수정
+- `.dockerignore` `**/._*` 추가 (macOS resource fork → sqlx macro 실패 방지)
+- 1903 tests pass / 0 fail, commits `f9a99c07`→`705c02d2`→`a57b7596`→`229409d0`
+- CT306 배포 완료, `GET /api/health` healthy
 
-**P1 보류**: git push frontend/node_modules bloat 해결 (`git rm -r --cached frontend/node_modules` 선행)
-**현재 lab-minky CT306 상태**: 34 documents + embedding_queue 정상 작동
+### 📋 Sprint D2 Roadmap (Next)
+
+**P1**: UNIQUE constraint 추가
+- migration 021: 기존 중복 중 최신 제외 DELETE 후 `ALTER TABLE documents ADD CONSTRAINT uq_user_content_hash UNIQUE(user_id, content_hash)`
+- 또는: soft-dedup (최신 1개 외 `archived=true` flag 후 UNIQUE 추가)
+
+**P2**: Duplicate archive/merge API
+- `POST /api/documents/{id}/archive` — 문서를 archived 상태로 소프트 삭제
+- `POST /api/documents/duplicates/resolve` — 그룹 내 가장 오래된 문서만 유지, 나머지 archive
+
+**P3**: Frontend duplicate 표시
+- 업로드 시 409 → 사용자에게 기존 문서 링크 제공
+- `/duplicates` 페이지에서 그룹 목록 + "keep oldest / keep newest / keep all" UI
+
+**현재 lab-minky CT306 상태**: 1903 tests, content_hash dedup 활성, CT306 healthy
 
 ---
 
