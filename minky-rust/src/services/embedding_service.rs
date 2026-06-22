@@ -625,19 +625,56 @@ impl EmbeddingService {
         chunk_text_with_config(text, self.config.chunk_size, self.config.chunk_overlap)
     }
 
+    /// Reset entries stuck in 'processing' back to 'pending'.
+    ///
+    /// Called at worker startup and periodically to recover from crashes or panics
+    /// that left rows in 'processing' with no corresponding worker.
+    pub async fn requeue_stale_processing(&self, stale_secs: u64) -> Result<u64> {
+        let result = sqlx::query(
+            r#"
+            UPDATE embedding_queue
+            SET status = 'pending', error_message = 'requeued: stale processing'
+            WHERE status = 'processing'
+              AND started_at < NOW() - ($1::bigint * interval '1 second')
+            "#,
+        )
+        .bind(stale_secs as i64)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
     /// Background loop that drains the embedding_queue.
     ///
-    /// Intended to be spawned once at startup with `tokio::spawn`.  Runs forever;
-    /// callers should use a `JoinHandle` or structured shutdown if clean exit is needed.
+    /// Intended to be spawned under a supervisor loop (see `create_app`).
+    /// Runs until a panic or unrecoverable error; the supervisor restarts it.
+    ///
+    /// On startup, stale 'processing' rows older than `stale_secs` are requeued
+    /// to recover from the previous crash. The reaper also runs every
+    /// `REAPER_PERIOD` idle cycles so long-lived workers self-heal.
     ///
     /// When the queue is empty the loop sleeps `idle_interval_secs` before polling
-    /// again.  Successful and failed items are processed without sleeping so the
+    /// again. Successful and failed items are processed without sleeping so the
     /// queue drains as fast as the embedder allows.
     pub async fn run_queue_worker(self: Arc<Self>, idle_interval_secs: u64) {
+        // Stale entries are those in 'processing' longer than 5 × idle or 60 s min.
+        let stale_secs = (idle_interval_secs * 5).max(60);
+        // Reaper runs every this many idle cycles (≈ 1 min at 10 s idle).
+        const REAPER_PERIOD: u32 = 6;
         let idle = tokio::time::Duration::from_secs(idle_interval_secs);
+        let mut idle_count: u32 = 0;
+
+        // Recovery pass on startup.
+        match self.requeue_stale_processing(stale_secs).await {
+            Ok(n) if n > 0 => tracing::warn!(count = n, "embedding queue: requeued stale processing entries on startup"),
+            Ok(_) => {}
+            Err(e) => tracing::error!(error = %e, "embedding queue: startup stale-requeue failed"),
+        }
+
         loop {
             match self.get_next_from_queue().await {
                 Ok(Some(entry)) => {
+                    idle_count = 0;
                     let doc_id = entry.document_id;
                     let entry_id = entry.id;
                     tracing::debug!(document_id = %doc_id, "embedding queue: processing");
@@ -661,6 +698,14 @@ impl EmbeddingService {
                     }
                 }
                 Ok(None) => {
+                    idle_count = idle_count.wrapping_add(1);
+                    if idle_count % REAPER_PERIOD == 0 {
+                        match self.requeue_stale_processing(stale_secs).await {
+                            Ok(n) if n > 0 => tracing::warn!(count = n, "embedding queue: requeued stale processing entries"),
+                            Ok(_) => {}
+                            Err(e) => tracing::error!(error = %e, "embedding queue: periodic stale-requeue failed"),
+                        }
+                    }
                     tokio::time::sleep(idle).await;
                 }
                 Err(e) => {

@@ -128,20 +128,34 @@ pub async fn create_app(config: Config) -> Result<Router> {
 
     // Start the embedding queue background worker unless explicitly disabled.
     // EMBEDDING_QUEUE_ENABLED=false disables it; EMBEDDING_QUEUE_INTERVAL_SECS sets the
-    // idle sleep between polls when the queue is empty (default 10 s).
+    // idle sleep between polls when the queue is empty (default 10 s, minimum 1 s).
     let queue_enabled = std::env::var("EMBEDDING_QUEUE_ENABLED")
         .map(|v| v.to_lowercase() != "false")
         .unwrap_or(true);
     if queue_enabled {
         let idle_secs: u64 = std::env::var("EMBEDDING_QUEUE_INTERVAL_SECS")
             .ok()
-            .and_then(|s| s.parse().ok())
+            .and_then(|s| {
+                s.parse::<u64>().map_err(|e| {
+                    tracing::warn!(value = %s, error = %e, "EMBEDDING_QUEUE_INTERVAL_SECS invalid, using default 10 s");
+                }).ok()
+            })
+            .map(|v| v.max(1))  // prevent busy-spin at 0
             .unwrap_or(10);
         let worker = Arc::clone(&embedding_service);
+        // Supervisor: restart the worker on panic so queue processing survives crashes.
         tokio::spawn(async move {
-            worker.run_queue_worker(idle_secs).await;
+            loop {
+                let w = Arc::clone(&worker);
+                let handle = tokio::spawn(async move { w.run_queue_worker(idle_secs).await });
+                match handle.await {
+                    Ok(_) => tracing::warn!("Embedding queue worker exited unexpectedly, restarting in 5 s"),
+                    Err(e) => tracing::error!(error = %e, "Embedding queue worker panicked, restarting in 5 s"),
+                }
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            }
         });
-        tracing::info!(idle_interval_secs = idle_secs, "Embedding queue worker started");
+        tracing::info!(idle_interval_secs = idle_secs, "Embedding queue worker (supervised) started");
     }
 
     let redis_client = std::env::var("REDIS_URL")
