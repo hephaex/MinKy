@@ -640,7 +640,7 @@ impl EmbeddingService {
             SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
                 error_message = 'requeued: stale processing (crash recovery)'
             WHERE status = 'processing'
-              AND started_at < NOW() - ($1::bigint * interval '1 second')
+              AND (started_at IS NULL OR started_at < NOW() - ($1::bigint * interval '1 second'))
             "#,
         )
         .bind(stale_secs as i64)
@@ -651,12 +651,15 @@ impl EmbeddingService {
 
     /// Background loop that drains the embedding_queue.
     ///
-    /// Intended to be spawned under a supervisor loop (see `create_app`).
-    /// Runs until a panic or unrecoverable error; the supervisor restarts it.
+    /// Spawned once at startup via `tokio::spawn` in `create_app`. Runs forever.
+    /// The release binary uses `panic = "abort"`, so a panic aborts the whole
+    /// process; crash recovery relies on the process-level restarter (Docker /
+    /// systemd `Restart=always`) and the startup stale-requeue below.
     ///
-    /// On startup, stale 'processing' rows older than `stale_secs` are requeued
-    /// to recover from the previous crash. The reaper also runs every
-    /// `REAPER_PERIOD` idle cycles so long-lived workers self-heal.
+    /// On startup, stale 'processing' rows older than `stale_secs` are moved to
+    /// 'pending' (or 'failed' when `attempts >= max_attempts`) to recover from
+    /// the previous crash. The reaper also runs every `REAPER_PERIOD` idle cycles
+    /// so long-lived workers self-heal after transient outages.
     ///
     /// When the queue is empty the loop sleeps `idle_interval_secs` before polling
     /// again. Successful and failed items are processed without sleeping so the
