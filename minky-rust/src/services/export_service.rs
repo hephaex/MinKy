@@ -39,14 +39,14 @@ impl ExportService {
             ids.len() as i32
         } else if let Some(category_id) = request.category_id {
             let count: (i64,) =
-                sqlx::query_as("SELECT COUNT(*) FROM documents WHERE category_id = $1")
+                sqlx::query_as("SELECT COUNT(*) FROM documents WHERE category_id = $1 AND archived = false")
                     .bind(category_id)
                     .fetch_one(&self.db)
                     .await?;
             count.0 as i32
         } else {
             let count: (i64,) =
-                sqlx::query_as("SELECT COUNT(*) FROM documents WHERE user_id = $1")
+                sqlx::query_as("SELECT COUNT(*) FROM documents WHERE user_id = $1 AND archived = false")
                     .bind(user_id)
                     .fetch_one(&self.db)
                     .await?;
@@ -97,6 +97,7 @@ impl ExportService {
             LEFT JOIN document_tags dt ON d.id = dt.document_id
             LEFT JOIN tags t ON dt.tag_id = t.id
             WHERE d.user_id = $1
+              AND d.archived = false
             "#,
         );
 

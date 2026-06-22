@@ -100,6 +100,7 @@ impl AnalyticsService {
                 d.updated_at as last_viewed,
                 d.updated_at as last_edited
             FROM documents d
+            WHERE d.archived = false
             ORDER BY d.view_count DESC
             LIMIT $1
             "#
@@ -299,6 +300,7 @@ impl AnalyticsService {
                 d.updated_at,
                 d.updated_at
             FROM documents d
+            WHERE d.archived = false
             ORDER BY d.created_at DESC
             LIMIT $1
             "#

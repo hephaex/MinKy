@@ -90,6 +90,7 @@ impl MlService {
             JOIN document_cluster_assignments dc ON d.id = dc.document_id
             JOIN document_clusters c ON dc.cluster_id = c.id
             WHERE dc.cluster_id = $1
+              AND d.archived = false
             ORDER BY dc.similarity_score DESC
             "#,
         )
@@ -284,6 +285,7 @@ impl MlService {
             SELECT d.id, d.title, LENGTH(d.content) as content_length
             FROM documents d
             WHERE ($1::int IS NULL OR d.category_id = $1)
+              AND d.archived = false
             ORDER BY content_length DESC
             LIMIT 10
             "#,

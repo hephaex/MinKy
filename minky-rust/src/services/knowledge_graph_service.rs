@@ -136,6 +136,7 @@ impl KnowledgeGraphService {
                 d.created_at   AS created_at
             FROM documents d
             LEFT JOIN document_understanding du ON du.document_id = d.id
+            WHERE d.archived = false
             ORDER BY d.created_at DESC
             LIMIT $1
             "#,
