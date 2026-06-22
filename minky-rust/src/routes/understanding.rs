@@ -55,7 +55,7 @@ async fn analyze_document(
 ) -> AppResult<Json<UnderstandingApiResponse>> {
     // Verify user has access to this document
     let has_access: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true) AND archived = false)",
     )
     .bind(document_id)
     .bind(auth_user.id)
@@ -99,7 +99,7 @@ async fn get_understanding(
 ) -> Result<Json<CachedUnderstandingResponse>, (StatusCode, Json<serde_json::Value>)> {
     // Verify user has access to this document
     let has_access: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true) AND archived = false)",
     )
     .bind(document_id)
     .bind(auth_user.id)
@@ -157,12 +157,20 @@ async fn get_understanding(
 
 /// Build an [`EmbeddingConfig`] from application state
 fn build_embedding_config(state: &AppState) -> EmbeddingConfig {
+    let upstage_key = std::env::var("UPSTAGE_API_KEY").ok();
+    let default_model = if upstage_key.is_some() {
+        crate::models::EmbeddingModel::UpstaageSolarPassage
+    } else {
+        crate::models::EmbeddingModel::OpenaiTextEmbedding3Small
+    };
     EmbeddingConfig {
         openai_api_key: state
             .config
             .openai_api_key
             .as_ref()
             .map(|k| k.expose_secret().to_string()),
+        upstage_api_key: upstage_key,
+        default_model,
         ..EmbeddingConfig::default()
     }
 }

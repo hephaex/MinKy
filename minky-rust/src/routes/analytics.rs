@@ -110,7 +110,7 @@ async fn analyze_document_content(
 ) -> AppResult<Json<ContentAnalysisResponse>> {
     // Fetch document content — scoped to documents the caller can read
     let content: (String,) = sqlx::query_as(
-        "SELECT content FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true)",
+        "SELECT content FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true) AND archived = false",
     )
     .bind(id)
     .bind(auth_user.id)

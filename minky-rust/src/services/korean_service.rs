@@ -97,7 +97,8 @@ impl KoreanService {
             r#"
             SELECT d.id, d.title, LEFT(d.content, 200), d.created_at
             FROM documents d
-            WHERE ($1::int IS NULL OR d.category_id = $1)
+            WHERE d.archived = false
+              AND ($1::int IS NULL OR d.category_id = $1)
               AND (d.title ILIKE '%' || $2 || '%' OR d.content ILIKE '%' || $2 || '%')
             ORDER BY d.updated_at DESC
             LIMIT $3
@@ -144,7 +145,7 @@ impl KoreanService {
                 r#"
                 SELECT DISTINCT title, COUNT(*) OVER () as freq
                 FROM documents
-                WHERE chosung_index LIKE $1 || '%'
+                WHERE archived = false AND chosung_index LIKE $1 || '%'
                 ORDER BY freq DESC
                 LIMIT $2
                 "#,
@@ -158,7 +159,7 @@ impl KoreanService {
                 r#"
                 SELECT DISTINCT title, COUNT(*) OVER () as freq
                 FROM documents
-                WHERE title ILIKE $1 || '%'
+                WHERE archived = false AND title ILIKE $1 || '%'
                 ORDER BY freq DESC
                 LIMIT $2
                 "#,

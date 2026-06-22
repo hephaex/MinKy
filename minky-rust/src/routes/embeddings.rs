@@ -65,7 +65,7 @@ async fn create_document_embedding(
 ) -> Result<Json<ApiResponse<DocumentEmbedding>>, (StatusCode, Json<serde_json::Value>)> {
     // Verify user has access to this document
     let has_access: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true) AND archived = false)",
     )
     .bind(document_id)
     .bind(auth_user.id)
@@ -103,7 +103,7 @@ async fn create_chunk_embeddings(
 ) -> Result<Json<ApiResponse<Vec<ChunkEmbedding>>>, (StatusCode, Json<serde_json::Value>)> {
     // Verify user has access to this document
     let has_access: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true) AND archived = false)",
     )
     .bind(document_id)
     .bind(auth_user.id)
@@ -138,7 +138,7 @@ async fn get_document_embedding(
 ) -> Result<Json<ApiResponse<DocumentEmbedding>>, (StatusCode, Json<serde_json::Value>)> {
     // Verify user has access to this document
     let has_access: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true) AND archived = false)",
     )
     .bind(document_id)
     .bind(auth_user.id)
@@ -208,7 +208,7 @@ async fn find_similar_documents(
 ) -> Result<Json<ApiResponse<Vec<SemanticSearchResult>>>, (StatusCode, Json<serde_json::Value>)> {
     // Verify user has access to this document
     let has_access: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true) AND archived = false)",
     )
     .bind(document_id)
     .bind(auth_user.id)
@@ -259,7 +259,7 @@ async fn queue_document(
 ) -> Result<Json<ApiResponse<EmbeddingQueueEntry>>, (StatusCode, Json<serde_json::Value>)> {
     // Verify user has access to this document
     let has_access: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true))",
+        "SELECT EXISTS(SELECT 1 FROM documents WHERE id = $1 AND (user_id = $2 OR is_public = true) AND archived = false)",
     )
     .bind(document_id)
     .bind(auth_user.id)
