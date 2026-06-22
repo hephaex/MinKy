@@ -21,11 +21,21 @@ pub enum AppError {
     #[error("Validation error: {0}")]
     Validation(String),
 
-    #[error("Conflict: {0}")]
-    Conflict(String),
+    /// 409 conflict used for duplicate detection.  When a content_hash is available,
+    /// the response emits the spec-compliant `duplicate_detected` JSON; otherwise it
+    /// uses a generic conflict error message.
+    #[error("{0}")]
+    Conflict(String, Option<String>),
 
-    #[error("Rate limit exceeded")]
-    RateLimited,
+    /// 409 for upload-path duplicates — includes enough info for the frontend
+    /// to show a direct link to the existing document.
+    #[error("Duplicate document: content already uploaded")]
+    DuplicateDocument {
+        content_hash: String,
+        existing_id: uuid::Uuid,
+        existing_title: String,
+        existing_created_at: chrono::DateTime<chrono::Utc>,
+    },
 
     #[error("Configuration error: {0}")]
     Configuration(String),
@@ -38,39 +48,62 @@ pub enum AppError {
 
     #[error("Internal error: {0}")]
     Internal(#[from] anyhow::Error),
+
+    #[error("Rate limit exceeded")]
+    RateLimited,
+
+    #[error("Invalidation failure ({0}): {1}")]
+    Invalidation(String, String),
+
+    #[error("Redirect to {0}")]
+    Redirect(String),
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        let (status, message) = match &self {
-            AppError::Unauthorized => (StatusCode::UNAUTHORIZED, self.to_string()),
-            AppError::Forbidden => (StatusCode::FORBIDDEN, self.to_string()),
-            AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
-            AppError::Validation(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
-            AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
-            AppError::RateLimited => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
-            AppError::Configuration(msg) => {
+        let (status, body): (StatusCode, Json<serde_json::Value>) = match self {
+            Self::Unauthorized => (StatusCode::UNAUTHORIZED, Json(json!({"success": false, "error": "Authentication required"}))),
+            Self::Forbidden => (StatusCode::FORBIDDEN, Json(json!({"success": false, "error": "Access denied"}))),
+            Self::NotFound(msg) => (StatusCode::NOT_FOUND, Json(json!({"success": false, "error": msg}))),
+            Self::Validation(msg) => (StatusCode::BAD_REQUEST, Json(json!({"success": false, "error": msg}))),
+            Self::Conflict(msg, maybe_content_hash) => {
+                if let Some(content_hash) = maybe_content_hash {
+                    return (StatusCode::CONFLICT, Json(json!({
+                        "error": "duplicate_detected",
+                        "content_hash": content_hash,
+                    }))).into_response();
+                }
+                (StatusCode::CONFLICT, Json(json!({ "success": false, "error": msg })))
+            }
+            Self::DuplicateDocument { content_hash, existing_id, existing_title, existing_created_at } => {
+                return (StatusCode::CONFLICT, Json(json!({
+                    "error": "duplicate_detected",
+                    "content_hash": content_hash,
+                    "existing_id": existing_id,
+                    "existing_title": existing_title,
+                    "existing_created_at": existing_created_at,
+                }))).into_response();
+            }
+            Self::RateLimited => (StatusCode::TOO_MANY_REQUESTS, Json(json!({"success": false, "error": "Rate limit exceeded"}))),
+            Self::Invalidation(source, detail) => (StatusCode::CONFLICT, Json(json!({"success": false, "error": format!("Invalidation failure ({}): {}", source, detail)}))),
+            Self::Redirect(url) => (StatusCode::SEE_OTHER, Json(json!({ "success": false, "redirect": url }))),
+            Self::Configuration(msg) => {
                 tracing::error!("Configuration error: {}", msg);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Configuration error".to_string())
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "success": false, "error": "Configuration error" })))
             }
-            AppError::ExternalService(msg) => {
+            Self::ExternalService(msg) => {
                 tracing::error!("External service error: {}", msg);
-                (StatusCode::BAD_GATEWAY, "External service error".to_string())
+                (StatusCode::BAD_GATEWAY, Json(json!({ "success": false, "error": "External service error" })))
             }
-            AppError::Database(e) => {
+            Self::Database(e) => {
                 tracing::error!("Database error: {:?}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string())
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "success": false, "error": "Database error" })))
             }
-            AppError::Internal(e) => {
+            Self::Internal(e) => {
                 tracing::error!("Internal error: {:?}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_string())
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "success": false, "error": "Internal error" })))
             }
         };
-
-        let body = Json(json!({
-            "success": false,
-            "error": message
-        }));
 
         (status, body).into_response()
     }
@@ -112,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_conflict_includes_message() {
-        let err = AppError::Conflict("username already taken".to_string());
+        let err = AppError::Conflict("username already taken".to_string(), None);
         assert!(err.to_string().contains("username already taken"));
     }
 
@@ -132,5 +165,30 @@ mod tests {
     fn test_external_service_includes_detail() {
         let err = AppError::ExternalService("timeout".to_string());
         assert!(err.to_string().contains("timeout"));
+    }
+
+    #[test]
+    fn test_invalidations_display_detail() {
+        let err = AppError::Invalidation("etag".to_string(), "stale hash".to_string());
+        assert!(err.to_string().contains("etag"));
+        assert!(err.to_string().contains("stale hash"));
+    }
+
+    #[test]
+    fn test_redirect_display_detail() {
+        let err = AppError::Redirect("https://example.com/callback".to_string());
+        assert!(err.to_string().contains("https://example.com/callback"));
+    }
+
+    #[test]
+    fn test_duplicate_document_display() {
+        let id = uuid::Uuid::new_v4();
+        let err = AppError::DuplicateDocument {
+            content_hash: "abc".to_string(),
+            existing_id: id,
+            existing_title: "Test Doc".to_string(),
+            existing_created_at: chrono::Utc::now(),
+        };
+        assert!(err.to_string().contains("Duplicate document"));
     }
 }

@@ -20,6 +20,8 @@ import ConfigPage from './pages/ConfigPage';
 import ChatPage from './pages/ChatPage';
 import KnowledgeSearch from './pages/KnowledgeSearch';
 import KnowledgeGraphPage from './pages/KnowledgeGraphPage';
+import DuplicatesPage from './pages/DuplicatesPage';
+import ArchivedPage from './pages/ArchivedPage';
 import './App.css';
 
 function App() {
@@ -50,6 +52,8 @@ function App() {
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/knowledge" element={<KnowledgeSearch />} />
                 <Route path="/graph" element={<KnowledgeGraphPage />} />
+                <Route path="/duplicates" element={<DuplicatesPage />} />
+                <Route path="/archived" element={<ArchivedPage />} />
               </Routes>
             </ErrorBoundary>
           </main>

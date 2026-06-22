@@ -4,7 +4,7 @@ import { documentService } from '../services/api';
 import { logError } from '../utils/logger';
 import './FileUpload.css';
 
-const FileUpload = ({ onUploadSuccess = null, onUploadError = null }) => {
+const FileUpload = ({ onUploadSuccess = null, onUploadError = null, onDuplicate = null }) => {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
@@ -38,6 +38,19 @@ const FileUpload = ({ onUploadSuccess = null, onUploadError = null }) => {
       if (error.response?.status === 201 && error.response?.data?.document) {
         onUploadSuccess?.(error.response.data);
         return true;
+      }
+
+      // 409 duplicate: call onDuplicate if available, else fall through to error
+      if (error.response?.status === 409 && error.response?.data?.error === 'duplicate_detected') {
+        const data = error.response.data;
+        onDuplicate?.({
+          filename: file.name,
+          existingId: data.existing_id,
+          existingTitle: data.existing_title,
+          existingCreatedAt: data.existing_created_at,
+          contentHash: data.content_hash,
+        });
+        return false;
       }
 
       logError('FileUpload', error, {
@@ -182,6 +195,7 @@ const FileUpload = ({ onUploadSuccess = null, onUploadError = null }) => {
 FileUpload.propTypes = {
   onUploadSuccess: PropTypes.func,
   onUploadError: PropTypes.func,
+  onDuplicate: PropTypes.func,
 };
 
 export default FileUpload;

@@ -246,4 +246,23 @@ export const searchService = {
   },
 };
 
+export const archiveService = {
+  archiveDocument: async (id) => {
+    const response = await api.post(`/documents/${id}/archive`);
+    return response.data;
+  },
+  restoreDocument: async (id) => {
+    const response = await api.post(`/documents/${id}/restore`);
+    return response.data;
+  },
+  getDuplicates: async () => {
+    const response = await api.get('/documents/duplicates');
+    return response.data;
+  },
+  getArchivedDocuments: async (page = 1, limit = 50) => {
+    const response = await api.get('/documents/archived', { params: { page, limit } });
+    return response.data;
+  },
+};
+
 export default api;

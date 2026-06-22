@@ -31,12 +31,15 @@ pub fn into_error_response(err: AppError) -> (StatusCode, Json<serde_json::Value
         AppError::Validation(_) => StatusCode::BAD_REQUEST,
         AppError::Unauthorized => StatusCode::UNAUTHORIZED,
         AppError::Forbidden => StatusCode::FORBIDDEN,
-        AppError::Conflict(_) => StatusCode::CONFLICT,
+        AppError::Conflict(..) => StatusCode::CONFLICT,
         AppError::RateLimited => StatusCode::TOO_MANY_REQUESTS,
         AppError::Configuration(_) => StatusCode::INTERNAL_SERVER_ERROR,
         AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         AppError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         AppError::ExternalService(_) => StatusCode::BAD_GATEWAY,
+        AppError::Invalidation(..) => StatusCode::CONFLICT,
+        AppError::Redirect(_) => StatusCode::SEE_OTHER,
+        AppError::DuplicateDocument { .. } => StatusCode::CONFLICT,
     };
 
     let body = Json(serde_json::json!({

@@ -192,7 +192,27 @@ pub fn openapi_spec() -> Value {
                     },
                     "responses": {
                         "201": { "description": "Document created" },
-                        "400": { "description": "Validation error" }
+                        "400": { "description": "Validation error" },
+                        "409": {
+                            "description": "Duplicate document content detected",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "error": {
+                                                "type": "string",
+                                                "example": "duplicate_detected"
+                                            },
+                                            "content_hash": {
+                                                "type": "string",
+                                                "example": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             },
@@ -228,7 +248,20 @@ pub fn openapi_spec() -> Value {
                     },
                     "responses": {
                         "200": { "description": "Updated document" },
-                        "404": { "description": "Not found" }
+                        "404": { "description": "Not found" },
+                        "409": {
+                            "description": "Duplicate document content detected",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object",
+                                        "properties": {
+                                            "error":            { "type": "string", "example": "duplicate_detected" },
+                                            "content_hash":     { "type": "string", "example": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" },
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 },
                 "delete": {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import OCRUpload from '../components/OCRUpload';
 import DocumentImport from '../components/DocumentImport';
 import FileUpload from '../components/FileUpload';
@@ -10,6 +10,7 @@ const ImportPage = () => {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('upload-md');
   const [uploadStatus, setUploadStatus] = useState(null);
+  const [duplicateNotices, setDuplicateNotices] = useState([]);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -75,6 +76,10 @@ const ImportPage = () => {
     setUploadStatus(null);
   };
 
+  const handleDuplicate = (info) => {
+    setDuplicateNotices((prev) => [...prev, info]);
+  };
+
   return (
     <div className="import-page">
       <div className="page-header">
@@ -98,6 +103,33 @@ const ImportPage = () => {
             <button className="close-btn" onClick={clearUploadStatus}>
               ×
             </button>
+          </div>
+        )}
+
+        {/* Duplicate Notices */}
+        {duplicateNotices.length > 0 && (
+          <div className="duplicate-notices">
+            <h4>이미 업로드된 파일:</h4>
+            <ul>
+              {duplicateNotices.map((info, i) => (
+                <li key={i}>
+                  <span className="dup-filename">{info.filename}</span>
+                  {' → '}
+                  {info.existingId ? (
+                    <Link to={`/documents/${info.existingId}`} className="dup-link">
+                      {info.existingTitle || '기존 문서'}
+                      {info.existingCreatedAt && (
+                        <span className="dup-date">
+                          {' '}({new Date(info.existingCreatedAt).toLocaleDateString('ko-KR')})
+                        </span>
+                      )}
+                    </Link>
+                  ) : (
+                    <span>중복 콘텐츠 (content_hash: {info.contentHash?.slice(0, 8)}…)</span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -142,6 +174,7 @@ const ImportPage = () => {
                 <FileUpload
                   onUploadSuccess={handleUploadSuccess}
                   onUploadError={handleUploadError}
+                  onDuplicate={handleDuplicate}
                 />
               </div>
             )}

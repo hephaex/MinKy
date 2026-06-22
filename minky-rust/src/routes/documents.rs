@@ -691,7 +691,7 @@ async fn update_document(
         if collision.is_some() {
             return Err(AppError::Conflict(
                 "Duplicate document: this content already exists".to_string(),
-                None,
+                Some(new_hash.clone()),
             ));
         }
     }
@@ -851,8 +851,8 @@ async fn upload_document(
 
         // Duplicate check: only block on active (non-archived) duplicates
         let content_hash = hex::encode(Sha256::digest(content.as_bytes()));
-        let existing: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 AND archived = false LIMIT 1"
+        let existing: Option<(Uuid, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+            "SELECT id, title, created_at FROM documents WHERE user_id = $1 AND content_hash = $2 AND archived = false LIMIT 1"
         )
         .bind(auth_user.id)
         .bind(&content_hash)
@@ -860,11 +860,13 @@ async fn upload_document(
         .await
         .map_err(AppError::Database)?;
 
-        if existing.is_some() {
-            return Err(AppError::Conflict(
-                "Duplicate document: this content was already uploaded".to_string(),
-                Some(content_hash.clone()),
-            ));
+        if let Some((existing_id, existing_title, existing_created_at)) = existing {
+            return Err(AppError::DuplicateDocument {
+                content_hash,
+                existing_id,
+                existing_title,
+                existing_created_at,
+            });
         }
 
         let upstage_key = std::env::var("UPSTAGE_API_KEY").unwrap_or_default();
