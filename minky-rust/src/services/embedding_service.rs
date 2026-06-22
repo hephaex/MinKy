@@ -672,10 +672,18 @@ impl EmbeddingService {
         // After this many consecutive embedding failures, sleep failure_backoff before next item.
         // Prevents hot-spinning when the embedding service (e.g. Strix) is down.
         const FAILURE_CIRCUIT_THRESHOLD: u32 = 3;
-        let failure_backoff_secs = std::env::var("EMBEDDING_QUEUE_FAILURE_BACKOFF_SECS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(30);
+        let failure_backoff_secs = {
+            let raw = std::env::var("EMBEDDING_QUEUE_FAILURE_BACKOFF_SECS")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .unwrap_or(30);
+            if raw == 0 {
+                tracing::warn!("EMBEDDING_QUEUE_FAILURE_BACKOFF_SECS=0 disables backoff; using 1s floor");
+                1
+            } else {
+                raw
+            }
+        };
         let failure_backoff = tokio::time::Duration::from_secs(failure_backoff_secs);
         let idle = tokio::time::Duration::from_secs(idle_interval_secs);
         let mut idle_count: u32 = 0;
