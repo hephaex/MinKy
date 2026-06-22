@@ -1309,41 +1309,29 @@ async fn resolve_duplicates(
     State(state): State<AppState>,
     auth_user: AuthUser,
 ) -> AppResult<Json<ResolveResult>> {
-    // Archive all but the oldest ACTIVE document per (user_id, content_hash) group.
-    // Keeper subquery only considers active (non-archived) rows so that a previously
-    // archived oldest copy does not cause the remaining active copy to be archived too.
-    let result = sqlx::query(
+    // CTE-based UPDATE: archives duplicates and counts affected rows + distinct groups
+    // in a single atomic statement. Keeper subquery restricts to active rows only,
+    // so a previously-archived oldest copy cannot cause the last active copy to be archived.
+    let counts: (i64, i64) = sqlx::query_as(
         r#"
-        UPDATE documents
-        SET archived = true, archived_at = NOW()
-        WHERE user_id = $1
-          AND archived = false
-          AND content_hash IS NOT NULL
-          AND id NOT IN (
-              SELECT DISTINCT ON (user_id, content_hash) id
-              FROM documents
-              WHERE user_id = $1 AND content_hash IS NOT NULL AND archived = false
-              ORDER BY user_id, content_hash, created_at ASC, id ASC
-          )
+        WITH archived_rows AS (
+            UPDATE documents
+            SET archived = true, archived_at = NOW()
+            WHERE user_id = $1
+              AND archived = false
+              AND content_hash IS NOT NULL
+              AND id NOT IN (
+                  SELECT DISTINCT ON (user_id, content_hash) id
+                  FROM documents
+                  WHERE user_id = $1 AND content_hash IS NOT NULL AND archived = false
+                  ORDER BY user_id, content_hash, created_at ASC, id ASC
+              )
+            RETURNING content_hash
+        )
+        SELECT COUNT(*) as archived_count,
+               COUNT(DISTINCT content_hash) as groups_resolved
+        FROM archived_rows
         "#
-    )
-    .bind(auth_user.id)
-    .execute(&state.db)
-    .await
-    .map_err(AppError::Database)?;
-
-    let archived_count = result.rows_affected();
-
-    // Count distinct hashes affected by this specific call (not historical total).
-    // We re-query to count how many hashes now have exactly 1 active doc (i.e. were resolved).
-    let groups_resolved: i64 = sqlx::query_scalar(
-        r#"SELECT COUNT(*) FROM (
-               SELECT content_hash
-               FROM documents
-               WHERE user_id = $1 AND content_hash IS NOT NULL AND archived = false
-               GROUP BY content_hash
-               HAVING COUNT(*) = 1
-           ) resolved"#
     )
     .bind(auth_user.id)
     .fetch_one(&state.db)
@@ -1352,8 +1340,8 @@ async fn resolve_duplicates(
 
     Ok(Json(ResolveResult {
         success: true,
-        archived_count,
-        groups_resolved: groups_resolved as usize,
+        archived_count: counts.0 as u64,
+        groups_resolved: counts.1 as usize,
     }))
 }
 

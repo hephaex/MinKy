@@ -166,6 +166,7 @@ async fn reindex_all(
             d.sensitivity,
             d.is_public
         FROM documents d
+        WHERE d.archived = false
         "#
     )
     .fetch_all(&state.db)

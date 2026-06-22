@@ -138,6 +138,7 @@ impl MlService {
             FROM documents d
             JOIN document_embeddings de ON d.id = de.document_id
             WHERE d.id != $2
+              AND d.archived = false
               AND 1 - (de.embedding <=> $1::vector) >= $3
             ORDER BY similarity DESC
             LIMIT $4

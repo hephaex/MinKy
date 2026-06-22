@@ -513,6 +513,7 @@ impl HybridSearchService {
             FROM documents d
             LEFT JOIN collection_contexts c ON c.document_id = d.id
             WHERE d.search_vector @@ plainto_tsquery('english', $1)
+            AND d.archived = false
             AND ($2::uuid IS NULL OR d.collection_id = $2)
             ORDER BY score DESC
             LIMIT $3
@@ -561,7 +562,8 @@ impl HybridSearchService {
             FROM document_embeddings e
             JOIN documents d ON d.id = e.document_id
             LEFT JOIN collection_contexts c ON c.document_id = d.id
-            WHERE ($2::uuid IS NULL OR d.collection_id = $2)
+            WHERE d.archived = false
+            AND ($2::uuid IS NULL OR d.collection_id = $2)
             ORDER BY e.embedding <=> $1::vector
             LIMIT $3
             "#
