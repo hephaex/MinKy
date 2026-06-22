@@ -259,6 +259,10 @@ export const archiveService = {
     const response = await api.get('/documents/duplicates');
     return response.data;
   },
+  resolveDuplicates: async () => {
+    const response = await api.post('/documents/duplicates/resolve');
+    return response.data;
+  },
   getArchivedDocuments: async (page = 1, limit = 50) => {
     const response = await api.get('/documents/archived', { params: { page, limit } });
     return response.data;

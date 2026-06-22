@@ -1276,6 +1276,7 @@ async fn list_duplicates(
             array_agg(title ORDER BY created_at)  AS titles
         FROM documents
         WHERE user_id = $1
+          AND archived = false
           AND content_hash IS NOT NULL
         GROUP BY user_id, content_hash
         HAVING COUNT(*) > 1

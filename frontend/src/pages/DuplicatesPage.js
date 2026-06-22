@@ -5,7 +5,9 @@ import './DuplicatesPage.css';
 
 export default function DuplicatesPage() {
   const [groups, setGroups] = useState([]);
+  const [totalRemovable, setTotalRemovable] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [resolving, setResolving] = useState(false);
   const [error, setError] = useState(null);
   const [actionMsg, setActionMsg] = useState(null);
 
@@ -14,7 +16,19 @@ export default function DuplicatesPage() {
     setError(null);
     try {
       const data = await archiveService.getDuplicates();
-      setGroups(data.groups || []);
+      // Backend sends document_ids + titles as parallel arrays (both ordered by created_at ASC).
+      // Zip them into objects so the template can iterate naturally. All docs are active
+      // (archived = false) because list_duplicates filters archived = false server-side.
+      const normalized = (data.groups || []).map((g) => ({
+        ...g,
+        documents: (g.document_ids || []).map((id, i) => ({
+          id,
+          title: g.titles[i] ?? '(제목 없음)',
+          archived: false,
+        })),
+      }));
+      setGroups(normalized);
+      setTotalRemovable(data.total_removable ?? 0);
     } catch (e) {
       setError(e.response?.data?.error || e.message || '로딩 실패');
     } finally {
@@ -36,13 +50,18 @@ export default function DuplicatesPage() {
     }
   };
 
-  const handleRestore = async (id, title) => {
+  const handleResolveAll = async () => {
+    if (!window.confirm(`${totalRemovable}건을 아카이브하겠습니까? (각 그룹에서 가장 오래된 버전만 남깁니다)`)) return;
+    setResolving(true);
+    setActionMsg(null);
     try {
-      await archiveService.restoreDocument(id);
-      setActionMsg(`"${title}" 복원 완료`);
+      const result = await archiveService.resolveDuplicates();
+      setActionMsg(`완료: ${result.archived_count}건 아카이브, ${result.groups_resolved}그룹 처리`);
       await load();
     } catch (e) {
       setActionMsg(`오류: ${e.response?.data?.error || e.message}`);
+    } finally {
+      setResolving(false);
     }
   };
 
@@ -50,9 +69,20 @@ export default function DuplicatesPage() {
     <div className="duplicates-page">
       <div className="page-header">
         <h1>중복 문서 관리</h1>
-        <Link to="/archived" className="archived-link">
-          아카이브 목록 →
-        </Link>
+        <div className="header-actions">
+          {groups.length > 0 && (
+            <button
+              className="btn-resolve-all"
+              onClick={handleResolveAll}
+              disabled={resolving}
+            >
+              {resolving ? '처리 중...' : `전체 정리 (${totalRemovable}건 아카이브)`}
+            </button>
+          )}
+          <Link to="/archived" className="archived-link">
+            아카이브 목록 →
+          </Link>
+        </div>
       </div>
 
       {actionMsg && (
@@ -76,32 +106,19 @@ export default function DuplicatesPage() {
           </div>
           <ul className="doc-list">
             {group.documents.map((doc) => (
-              <li key={doc.id} className={`doc-item ${doc.archived ? 'archived' : ''}`}>
+              <li key={doc.id} className="doc-item">
                 <div className="doc-info">
                   <Link to={`/documents/${doc.id}`} className="doc-title">
                     {doc.title}
                   </Link>
-                  <span className="doc-date">
-                    {new Date(doc.created_at).toLocaleDateString('ko-KR')}
-                  </span>
-                  {doc.archived && <span className="badge-archived">아카이브됨</span>}
                 </div>
                 <div className="doc-actions">
-                  {!doc.archived ? (
-                    <button
-                      className="btn-archive"
-                      onClick={() => handleArchive(doc.id, doc.title)}
-                    >
-                      아카이브
-                    </button>
-                  ) : (
-                    <button
-                      className="btn-restore"
-                      onClick={() => handleRestore(doc.id, doc.title)}
-                    >
-                      복원
-                    </button>
-                  )}
+                  <button
+                    className="btn-archive"
+                    onClick={() => handleArchive(doc.id, doc.title)}
+                  >
+                    아카이브
+                  </button>
                 </div>
               </li>
             ))}

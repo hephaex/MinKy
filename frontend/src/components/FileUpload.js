@@ -40,17 +40,22 @@ const FileUpload = ({ onUploadSuccess = null, onUploadError = null, onDuplicate 
         return true;
       }
 
-      // 409 duplicate: call onDuplicate if available, else fall through to error
+      // 409 duplicate: call onDuplicate if available, otherwise surface as error
       if (error.response?.status === 409 && error.response?.data?.error === 'duplicate_detected') {
         const data = error.response.data;
-        onDuplicate?.({
-          filename: file.name,
-          existingId: data.existing_id,
-          existingTitle: data.existing_title,
-          existingCreatedAt: data.existing_created_at,
-          contentHash: data.content_hash,
-        });
-        return false;
+        if (onDuplicate) {
+          onDuplicate({
+            filename: file.name,
+            existingId: data.existing_id,
+            existingTitle: data.existing_title,
+            existingCreatedAt: data.existing_created_at,
+            contentHash: data.content_hash,
+          });
+        } else {
+          const hint = data.existing_title ? ` (기존: "${data.existing_title}")` : '';
+          onUploadError?.(`${file.name}: 동일한 내용의 문서가 이미 존재합니다${hint}`);
+        }
+        return 'duplicate';
       }
 
       logError('FileUpload', error, {
@@ -85,13 +90,16 @@ const FileUpload = ({ onUploadSuccess = null, onUploadError = null, onDuplicate 
 
     let successCount = 0;
     let failCount = 0;
+    let duplicateCount = 0;
 
     for (let i = 0; i < mdFiles.length; i++) {
       setUploadProgress({ current: i + 1, total: mdFiles.length });
 
-      const success = await handleFileUpload(mdFiles[i]);
-      if (success) {
+      const result = await handleFileUpload(mdFiles[i]);
+      if (result === true) {
         successCount++;
+      } else if (result === 'duplicate') {
+        duplicateCount++;
       } else {
         failCount++;
       }
@@ -105,9 +113,13 @@ const FileUpload = ({ onUploadSuccess = null, onUploadError = null, onDuplicate 
     setUploading(false);
     setUploadProgress({ current: 0, total: 0 });
 
-    if (successCount > 0) {
+    if (successCount > 0 || duplicateCount > 0) {
+      const parts = [];
+      if (successCount > 0) parts.push(`${successCount}개 업로드 완료`);
+      if (duplicateCount > 0) parts.push(`${duplicateCount}개 중복`);
+      if (failCount > 0) parts.push(`${failCount}개 실패`);
       onUploadSuccess?.({
-        message: `Successfully uploaded ${successCount} files${failCount > 0 ? `, ${failCount} failed` : ''}`,
+        message: parts.join(', '),
         count: successCount,
       });
     }
