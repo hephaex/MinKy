@@ -81,19 +81,25 @@
 - 1913 tests pass / 0 fail, commits `f45c4ccb`, `c4d403ea`
 - CT306 배포 완료, Demo Gate: HTTP 200 ✓, overflow probe page=100001→100000 ✓
 
+### ✅ Sprint D3 P2: 프론트엔드 duplicate 관리 UI 완료 (2026-06-22)
+- C1: DuplicatesPage — 백엔드 parallel array(document_ids/titles) → 클라이언트 zip (frontend crash fix)
+- C2: `list_duplicates` — `AND archived = false` 누락 추가 (아카이브된 복사본이 활성 중복으로 오집계되던 버그)
+- H1: `resolveDuplicates` API 추가 (api.js) + DuplicatesPage "전체 정리" 버튼 + confirm 다이얼로그
+- M1: FileUpload.js 409에 `onDuplicate` 핸들러 없으면 `onUploadError` 호출 (무음 실패 제거)
+- M2: `duplicateCount` 별도 추적 — 성공/중복/실패 메시지 정확도 개선
+- Opus 레드팀 2회: 2차 APPROVE (잔여 없음)
+- 1914 tests pass / 0 fail, commits `22016320` → `1a73ad0c`
+- CT306 배포 완료, Demo Gate: `GET /api/documents/duplicates` HTTP 200 ✓, DB C2 fix 확인 ✓
+
 ### 📋 Sprint D3 Roadmap (Remaining)
 
-**P2**: 프론트엔드 duplicate 관리 UI
-- 업로드 시 409 → 기존 문서 링크 제공 (title + created_at)
-- `/duplicates` 페이지: 그룹 목록 + archive/restore 버튼
-
-**P3**: 나머지 LOW deferred 처리
+**P3 (Next)**: 나머지 LOW deferred 처리
 - `export_service.rs`: owner-scoped bulk export에서 archived 제외
 - `analytics_service.rs` `get_top_documents`, `get_recent_documents`: archived 제외
 - `knowledge_graph_service.rs` `load_document_topics`: archived 제외
 - `ml_service.rs` `get_cluster_documents`, `detect_anomalies`: archived 제외
 
-**현재 lab-minky CT306 상태**: 1913 tests, archived listing 활성, CT306 healthy
+**현재 lab-minky CT306 상태**: 1914 tests, duplicate UI 활성, CT306 healthy
 
 ---
 

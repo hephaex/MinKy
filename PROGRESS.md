@@ -5,7 +5,36 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D3 P1 완료
+## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D3 P2 완료
+
+### Sprint D3 P2: 프론트엔드 duplicate 관리 UI (2026-06-22)
+
+| 항목 | 상태 | 세부 |
+|------|------|------|
+| DuplicatesPage parallel array zip | [IMPLEMENTED] | document_ids+titles → documents 객체 배열 (C1 frontend crash fix) |
+| list_duplicates archived filter | [IMPLEMENTED] | `AND archived = false` 추가 — 아카이브된 복사본 오집계 차단 (C2) |
+| resolveDuplicates API + 전체 정리 버튼 | [IMPLEMENTED] | api.js + DuplicatesPage confirm 다이얼로그 (H1) |
+| FileUpload.js 409 fallback | [IMPLEMENTED] | onDuplicate 없으면 onUploadError 호출 (M1 무음 실패 제거) |
+| duplicateCount 별도 추적 | [IMPLEMENTED] | 성공/중복/실패 메시지 정확 분리 (M2) |
+| CT306 배포 | [IMPLEMENTED] | backend 40,712,408 bytes (08:41 UTC), frontend main.221ac9b0.js |
+
+커밋: `22016320` (restore_document fix) → `1a73ad0c` (C1+C2+H1+M1+M2 all fixes)
+
+Demo Gate:
+- `GET /api/documents/duplicates` → HTTP 200 `{"success":true,"total_groups":0,...}` ✓
+- DB 확인: user_id=1 total=2, active=1 → C2 fix 적용 — 활성<2인 그룹 올바르게 제외 ✓
+
+Opus 레드팀 2회:
+- 1차: C1(frontend crash) + C2(archived filter) + H1(resolveDuplicates 누락) + M1(무음 409) + M2(중복 카운트 오류) 수정
+- 2차: APPROVE — 잔여 없음
+
+1914 tests pass / 0 fail
+
+리뷰 아카이브: `~/.claude/references/2026-06-22_sprint_d3_p2_duplicate_ui_review.md`
+
+---
+
+## 이전 진행 상황 (2026-06-22) — lab-minky Sprint D3 P1 완료
 
 ### Sprint D3 P1: GET /api/documents/archived (2026-06-22)
 
