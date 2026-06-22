@@ -5,7 +5,36 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D2 완료
+## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D3 P1 완료
+
+### Sprint D3 P1: GET /api/documents/archived (2026-06-22)
+
+| 항목 | 상태 | 세부 |
+|------|------|------|
+| GET /api/documents/archived | [IMPLEMENTED] | user-scoped 페이지네이션, page clamp(1,100_000), limit clamp(1,200) |
+| migration 022 | [IMPLEMENTED] | `idx_documents_archived_listing ON (user_id, archived_at DESC) WHERE archived=true` |
+| C1 offset overflow fix | [IMPLEMENTED] | i64 연산 + page upper clamp → overflow 불가 |
+| H2 transaction | [IMPLEMENTED] | COUNT+SELECT READ COMMITTED 단일 트랜잭션 |
+| H3 overflow tests | [IMPLEMENTED] | `test_archived_offset_no_overflow`, clamp upper-bound 테스트 |
+| CT306 배포 | [IMPLEMENTED] | healthy, migration 022 적용, 1913 tests pass / 0 fail |
+
+커밋: `f45c4ccb` (endpoint) → `c4d403ea` (C1/H1/H2/H3 fix)
+
+Demo Gate:
+- `GET /api/documents/archived?page=1&limit=10` → HTTP 200 `{"success":true,"total":0,...}` ✓
+- overflow probe `page=100001` → `page:100000` HTTP 200 ✓
+
+Opus 레드팀 2회:
+- 1차: CRITICAL(i32 overflow) + HIGH×3(index/tx/tests) 수정
+- 2차: CLEAN — no remaining CRITICAL/HIGH
+
+LOW 비고(불필요 sprint화 금지): created_at tiebreaker in index, keyset pagination for large archived sets
+
+리뷰 아카이브: `~/.claude/references/2026-06-22_sprint_d3_p1_archived_listing_review.md`
+
+---
+
+## 이전 진행 상황 (2026-06-22) — lab-minky Sprint D2 완료
 
 ### Sprint D2: soft-archive + partial UNIQUE index (2026-06-22)
 

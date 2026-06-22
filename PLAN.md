@@ -73,11 +73,15 @@
 - Opus 레드팀 4회: `[]` (4차 — 잔여 없음)
 - 1903 tests pass / 0 fail, commits `d4cc198c`→`369daa8e`→`2cf7c6a1`→`1b819cd5`
 
-### 📋 Sprint D3 Roadmap (Next)
+### ✅ Sprint D3 P1: GET /api/documents/archived 완료 (2026-06-22)
+- `GET /api/documents/archived` — user-scoped 페이지네이션 (page/limit, clamp(1,100_000)/(1,200))
+- migration 022: `idx_documents_archived_listing ON documents(user_id, archived_at DESC) WHERE archived=true`
+- C1(i32 offset overflow→i64+upper clamp), H2(COUNT/SELECT transaction), H3(overflow test) 수정
+- Opus 레드팀 2회: 2차 CLEAN
+- 1913 tests pass / 0 fail, commits `f45c4ccb`, `c4d403ea`
+- CT306 배포 완료, Demo Gate: HTTP 200 ✓, overflow probe page=100001→100000 ✓
 
-**P1**: `GET /api/documents/archived` 목록 엔드포인트
-- archived 문서 페이지네이션 조회 (user-scoped, 100/page)
-- 없으면 restore endpoint가 사실상 사용 불능 (1,466개 auto-archived 발견 불가)
+### 📋 Sprint D3 Roadmap (Remaining)
 
 **P2**: 프론트엔드 duplicate 관리 UI
 - 업로드 시 409 → 기존 문서 링크 제공 (title + created_at)
@@ -89,7 +93,7 @@
 - `knowledge_graph_service.rs` `load_document_topics`: archived 제외
 - `ml_service.rs` `get_cluster_documents`, `detect_anomalies`: archived 제외
 
-**현재 lab-minky CT306 상태**: 1903 tests, soft-archive dedup 활성, CT306 healthy, 1,466 docs archived
+**현재 lab-minky CT306 상태**: 1913 tests, archived listing 활성, CT306 healthy
 
 ---
 
