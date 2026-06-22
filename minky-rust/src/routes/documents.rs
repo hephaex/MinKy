@@ -1369,7 +1369,6 @@ async fn restore_document(
     .execute(&state.db)
     .await
     .map_err(|e| {
-        // Unique constraint violation (23505) means a concurrent restore beat us to it.
         if let sqlx::Error::Database(ref db_err) = e {
             if db_err.code().as_deref() == Some("23505") {
                 return AppError::Conflict(
