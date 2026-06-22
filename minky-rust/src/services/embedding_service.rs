@@ -669,8 +669,17 @@ impl EmbeddingService {
         let stale_secs = idle_interval_secs.saturating_mul(5).max(60);
         // Reaper runs every this many idle cycles (≈ 1 min at 10 s idle).
         const REAPER_PERIOD: u32 = 6;
+        // After this many consecutive embedding failures, sleep failure_backoff before next item.
+        // Prevents hot-spinning when the embedding service (e.g. Strix) is down.
+        const FAILURE_CIRCUIT_THRESHOLD: u32 = 3;
+        let failure_backoff_secs = std::env::var("EMBEDDING_QUEUE_FAILURE_BACKOFF_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(30);
+        let failure_backoff = tokio::time::Duration::from_secs(failure_backoff_secs);
         let idle = tokio::time::Duration::from_secs(idle_interval_secs);
         let mut idle_count: u32 = 0;
+        let mut consecutive_failures: u32 = 0;
 
         // Recovery pass on startup.
         match self.requeue_stale_processing(stale_secs).await {
@@ -692,22 +701,32 @@ impl EmbeddingService {
                     };
                     match self.create_document_embedding(req).await {
                         Ok(_) => {
+                            consecutive_failures = 0;
                             tracing::info!(document_id = %doc_id, "embedding queue: complete");
                             if let Err(e) = self.complete_queue_entry(entry_id).await {
                                 tracing::error!(entry_id = %entry_id, error = %e, "embedding queue: complete_queue_entry failed");
                             }
                         }
                         Err(e) => {
+                            consecutive_failures = consecutive_failures.saturating_add(1);
                             tracing::warn!(document_id = %doc_id, error = %e, "embedding queue: embedding failed");
                             if let Err(fe) = self.fail_queue_entry(entry_id, &e.to_string()).await {
                                 tracing::error!(entry_id = %entry_id, error = %fe, "embedding queue: fail_queue_entry failed");
+                            }
+                            if should_circuit_break(consecutive_failures, FAILURE_CIRCUIT_THRESHOLD) {
+                                tracing::warn!(
+                                    consecutive = consecutive_failures,
+                                    backoff_secs = failure_backoff_secs,
+                                    "embedding queue: consecutive failures, backing off"
+                                );
+                                tokio::time::sleep(failure_backoff).await;
                             }
                         }
                     }
                 }
                 Ok(None) => {
                     idle_count = idle_count.wrapping_add(1);
-                    if idle_count % REAPER_PERIOD == 0 {
+                    if idle_count.is_multiple_of(REAPER_PERIOD) {
                         match self.requeue_stale_processing(stale_secs).await {
                             Ok(n) if n > 0 => tracing::warn!(count = n, "embedding queue: requeued stale processing entries"),
                             Ok(_) => {}
@@ -723,6 +742,16 @@ impl EmbeddingService {
             }
         }
     }
+}
+
+/// Returns `true` when the embedding worker should pause before processing the next item.
+///
+/// The worker tracks `consecutive_failures` (reset to 0 on any success). When the count
+/// reaches `threshold`, sleeping `EMBEDDING_QUEUE_FAILURE_BACKOFF_SECS` before the next
+/// dequeue prevents hot-spinning against a down embedding service (e.g. Strix :8091).
+#[inline]
+pub fn should_circuit_break(consecutive_failures: u32, threshold: u32) -> bool {
+    consecutive_failures >= threshold
 }
 
 /// Truncate `s` to at most `max_bytes` bytes at a valid UTF-8 character boundary.
@@ -1076,5 +1105,44 @@ mod tests {
     fn embedding_max_bytes_constant_is_sensible() {
         // Guard against accidental mutation of the constant.
         assert_eq!(EMBEDDING_MAX_BYTES, 50_000);
+    }
+
+    // ── should_circuit_break ─────────────────────────────────────────────────
+
+    #[test]
+    fn circuit_break_below_threshold_is_false() {
+        assert!(!should_circuit_break(0, 3));
+        assert!(!should_circuit_break(1, 3));
+        assert!(!should_circuit_break(2, 3));
+    }
+
+    #[test]
+    fn circuit_break_at_threshold_is_true() {
+        assert!(should_circuit_break(3, 3));
+    }
+
+    #[test]
+    fn circuit_break_above_threshold_is_true() {
+        assert!(should_circuit_break(100, 3));
+        assert!(should_circuit_break(u32::MAX, 3));
+    }
+
+    #[test]
+    fn circuit_break_threshold_zero_always_breaks() {
+        // threshold=0 means every failure triggers backoff
+        assert!(should_circuit_break(0, 0));
+    }
+
+    #[test]
+    fn circuit_break_resets_on_success() {
+        // Simulate: 5 failures → break → success → counter reset → no break
+        let mut consecutive: u32 = 0;
+        for _ in 0..5 {
+            consecutive = consecutive.saturating_add(1);
+        }
+        assert!(should_circuit_break(consecutive, 3), "should break after 5 failures");
+        // success
+        consecutive = 0;
+        assert!(!should_circuit_break(consecutive, 3), "should not break after reset");
     }
 }
