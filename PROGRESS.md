@@ -5,7 +5,31 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-23) — lab-minky D4 배포 핫픽스 완료
+## 현재 진행 상황 (2026-06-23) — lab-minky Sprint D5 완료
+
+### Sprint D5: circuit breaker backoff (2026-06-23)
+
+| 항목 | 상태 | 세부 |
+|------|------|------|
+| `should_circuit_break(consecutive_failures, threshold) -> bool` | [IMPLEMENTED] | pure 함수, 단위 테스트 5개 |
+| `FAILURE_CIRCUIT_THRESHOLD = 3` | [IMPLEMENTED] | 3회 연속 실패 시 backoff |
+| `EMBEDDING_QUEUE_FAILURE_BACKOFF_SECS` env | [IMPLEMENTED] | 기본 30s, 0→1s floor clamp |
+| 성공 시 counter 리셋 | [IMPLEMENTED] | Strix 복구 자동 감지 |
+| clippy: `is_multiple_of()` | [IMPLEMENTED] | pre-existing MEDIUM 수정 |
+| CT306 배포 | [IMPLEMENTED] | docker commit 방식 (Strix disk 100%) |
+
+커밋: `df7578ba` → `4c933416`
+
+Demo Gate: CT306 실시간 로그 `consecutive failures, backing off consecutive=3 backoff_secs=30` 확인 (2026-06-23T17:34:11Z)
+
+Opus 레드팀 2회:
+- R1: MEDIUM(backoff_secs=0 floor 미처리) → fix → R2: APPROVE
+
+리뷰 아카이브: `~/.claude/references/2026-06-23_sprint_d5_circuit_breaker_review.md`
+
+운영 런북: Strix :8091 복구 시 `UPDATE embedding_queue SET status='pending', attempts=0, error_message=NULL WHERE status='failed';` (464개)
+
+---
 
 ### D4 배포 핫픽스: embedding queue 실동작 확인 중 발견된 2개 버그 (2026-06-23)
 

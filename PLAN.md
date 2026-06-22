@@ -127,11 +127,42 @@
 - `RETURNING *` pgvector 타입 불일치 → `embedding::float4[] as embedding` 캐스트 (embedding_service.rs)
 - commit `3c2ebed4` / 842개 embedding queue drain 진행 중
 
-### 📋 Sprint D4 배포 완료 — 다음 스프린트 대기
+### ✅ Sprint D5: embedding queue circuit breaker 완료 (2026-06-23)
 
-**현재 lab-minky CT306 상태**: 1920 tests, embedding queue 워커 활성 + 정상 drain, CT306 배포 완료
+**구현 항목**:
+- `should_circuit_break(consecutive_failures, threshold) -> bool` — pure 함수로 단위 테스트 가능
+- `FAILURE_CIRCUIT_THRESHOLD = 3` — 3회 연속 실패 시 backoff 발동
+- `EMBEDDING_QUEUE_FAILURE_BACKOFF_SECS` 환경변수 (기본 30s, 0 → 1s floor)
+- 성공 시 `consecutive_failures = 0` 리셋 (Strix 복구 자동 감지)
+- 5개 unit test: `below_threshold`, `at_threshold`, `above_threshold`, `threshold_zero`, `resets_on_success`
+- clippy fix: `idle_count % REAPER_PERIOD == 0` → `idle_count.is_multiple_of(REAPER_PERIOD)`
 
-Sprint D3+D4 완료. 다음 스프린트는 신규 사용자 요구사항 발생 시 시작.
+**Opus 레드팀 2회**:
+- R1: MEDIUM(`EMBEDDING_QUEUE_FAILURE_BACKOFF_SECS=0` → sleep(0) hot-spin 재발) → floor 1s clamp + warn 로그로 수정
+- R2: APPROVE (잔여 LOW 6건 — non-blocking)
+
+**테스트**: 1925 tests pass / 0 fail, commits `df7578ba` → `4c933416`
+
+**Demo Gate**: CT306 실시간 로그 확인 (2026-06-23T17:34:11Z)
+```
+embedding queue: embedding failed error=OpenAI API error: error sending request...
+embedding queue: consecutive failures, backing off consecutive=3 backoff_secs=30
+```
+→ D5 전: 수 ms 폭주 / D5 후: 30초 backoff 정상 작동
+
+**운영 런북 (Strix 복구 시)**:
+```sql
+UPDATE embedding_queue SET status='pending', attempts=0, error_message=NULL WHERE status='failed';
+-- 464개 리셋 → 자동 drain (circuit breaker가 연결 복구 즉시 resets)
+```
+
+---
+
+### 📋 Sprint D5 완료 — 다음 스프린트 대기
+
+**현재 lab-minky CT306 상태**: 1925 tests, embedding queue circuit breaker 활성, CT306 배포 완료
+
+Sprint D1~D5 완료. Strix :8091 복구 후 464개 failed 항목 SQL 리셋 필요. 다음 스프린트는 신규 사용자 요구사항 발생 시 시작.
 
 ---
 
