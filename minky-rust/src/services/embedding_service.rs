@@ -24,6 +24,7 @@ use uuid::Uuid;
 pub struct EmbeddingConfig {
     pub openai_api_key: Option<String>,
     pub voyage_api_key: Option<String>,
+    pub upstage_api_key: Option<String>,
     pub default_model: EmbeddingModel,
     pub chunk_size: usize,
     pub chunk_overlap: usize,
@@ -38,6 +39,7 @@ impl Default for EmbeddingConfig {
         Self {
             openai_api_key: None,
             voyage_api_key: None,
+            upstage_api_key: None,
             default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
             chunk_size: 512,
             chunk_overlap: 50,
@@ -124,11 +126,16 @@ impl EmbeddingService {
             return self.generate_local_embedding(text).await;
         }
 
-        let api_key = self
-            .config
-            .openai_api_key
-            .as_ref()
-            .ok_or_else(|| AppError::Configuration("OpenAI API key not configured".into()))?;
+        let api_key = if model.is_upstage() {
+            self.config.upstage_api_key.as_ref()
+                .ok_or_else(|| AppError::Configuration("Upstage API key not configured".into()))?
+        } else {
+            self.config.openai_api_key.as_ref()
+                .ok_or_else(|| AppError::Configuration("OpenAI API key not configured".into()))?
+        };
+
+        let url = std::env::var("EMBEDDING_BASE_URL")
+            .unwrap_or_else(|_| model.api_base_url().to_string());
 
         let request = OpenAIEmbeddingRequest {
             input: text.to_string(),
@@ -137,7 +144,7 @@ impl EmbeddingService {
 
         let response = self
             .http_client
-            .post("https://api.openai.com/v1/embeddings")
+            .post(&url)
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&request)
@@ -363,10 +370,20 @@ impl EmbeddingService {
         &self,
         req: SemanticSearchRequest,
     ) -> Result<Vec<SemanticSearchResult>> {
-        let model = req.model.unwrap_or(self.config.default_model);
+        let requested_model = req.model.unwrap_or(self.config.default_model);
+        let query_model = if requested_model == EmbeddingModel::UpstaageSolarPassage {
+            EmbeddingModel::UpstaageSolarQuery
+        } else {
+            requested_model
+        };
+        let storage_model = if query_model == EmbeddingModel::UpstaageSolarQuery {
+            EmbeddingModel::UpstaageSolarPassage
+        } else {
+            query_model
+        };
 
         // Generate query embedding
-        let query_embedding = self.generate_embedding(&req.query, model).await?;
+        let query_embedding = self.generate_embedding(&req.query, query_model).await?;
         let threshold = req.threshold.unwrap_or(0.7);
 
         // Search in chunk embeddings with cosine similarity
@@ -382,6 +399,7 @@ impl EmbeddingService {
             JOIN documents d ON d.id = ce.document_id
             WHERE ce.model = $2
               AND ce.embedding IS NOT NULL
+              AND d.archived = false
               AND ($4::integer IS NULL OR d.user_id = $4)
               AND 1 - (ce.embedding <=> $1) >= $3
             ORDER BY ce.embedding <=> $1
@@ -389,7 +407,7 @@ impl EmbeddingService {
             "#,
         )
         .bind(Vector::from(query_embedding))
-        .bind(model)
+        .bind(storage_model)
         .bind(threshold)
         .bind(req.user_id)
         .bind(req.limit)
@@ -431,6 +449,7 @@ impl EmbeddingService {
             WHERE de.document_id != $1
               AND de.model = se.model
               AND de.embedding IS NOT NULL
+              AND d.archived = false
             ORDER BY de.embedding <=> se.embedding
             LIMIT $2
             "#,
@@ -843,6 +862,7 @@ mod tests {
         let config = EmbeddingConfig {
             openai_api_key: None,
             voyage_api_key: None,
+            upstage_api_key: None,
             default_model: EmbeddingModel::NomicEmbedTextV15,
             chunk_size: 512,
             chunk_overlap: 50,

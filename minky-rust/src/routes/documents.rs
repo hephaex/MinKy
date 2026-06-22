@@ -588,12 +588,12 @@ async fn get_document(
     // Unauthenticated: sentinel -1 → only is_public=true docs accessible
     let user_id = auth_user.0.map(|u| u.id).unwrap_or(-1);
 
-    // Only allow access to own documents or public documents
+    // Only allow access to own documents or public documents; archived docs are hidden
     let row: Option<DocumentRow> = sqlx::query_as(
         r#"SELECT id, title, content, category_id, user_id, is_public, sensitivity, view_count, created_at, updated_at,
-                  author, html_content, is_published, published_at
+                  author, html_content, is_published, published_at, archived, archived_at
            FROM documents
-           WHERE id = $1 AND (user_id = $2 OR is_public = true)"#
+           WHERE id = $1 AND (user_id = $2 OR is_public = true) AND archived = false"#
     )
     .bind(id)
     .bind(user_id)
@@ -1282,7 +1282,17 @@ async fn restore_document(
     .bind(auth_user.id)
     .execute(&state.db)
     .await
-    .map_err(AppError::Database)?;
+    .map_err(|e| {
+        // Unique constraint violation (23505) means a concurrent restore beat us to it.
+        if let sqlx::Error::Database(ref db_err) = e {
+            if db_err.code().as_deref() == Some("23505") {
+                return AppError::Conflict(
+                    "Cannot restore: an active document with the same content already exists".to_string()
+                );
+            }
+        }
+        AppError::Database(e)
+    })?;
 
     Ok(Json(serde_json::json!({ "success": true, "archived": false })))
 }
@@ -1299,7 +1309,9 @@ async fn resolve_duplicates(
     State(state): State<AppState>,
     auth_user: AuthUser,
 ) -> AppResult<Json<ResolveResult>> {
-    // Archive all but the oldest document per (user_id, content_hash) group for this user.
+    // Archive all but the oldest ACTIVE document per (user_id, content_hash) group.
+    // Keeper subquery only considers active (non-archived) rows so that a previously
+    // archived oldest copy does not cause the remaining active copy to be archived too.
     let result = sqlx::query(
         r#"
         UPDATE documents
@@ -1310,7 +1322,7 @@ async fn resolve_duplicates(
           AND id NOT IN (
               SELECT DISTINCT ON (user_id, content_hash) id
               FROM documents
-              WHERE user_id = $1 AND content_hash IS NOT NULL
+              WHERE user_id = $1 AND content_hash IS NOT NULL AND archived = false
               ORDER BY user_id, content_hash, created_at ASC, id ASC
           )
         "#
@@ -1322,9 +1334,16 @@ async fn resolve_duplicates(
 
     let archived_count = result.rows_affected();
 
-    // Count resolved groups (those that had duplicates and now have only one active)
+    // Count distinct hashes affected by this specific call (not historical total).
+    // We re-query to count how many hashes now have exactly 1 active doc (i.e. were resolved).
     let groups_resolved: i64 = sqlx::query_scalar(
-        "SELECT COUNT(DISTINCT content_hash) FROM documents WHERE user_id = $1 AND archived = true AND content_hash IS NOT NULL"
+        r#"SELECT COUNT(*) FROM (
+               SELECT content_hash
+               FROM documents
+               WHERE user_id = $1 AND content_hash IS NOT NULL AND archived = false
+               GROUP BY content_hash
+               HAVING COUNT(*) = 1
+           ) resolved"#
     )
     .bind(auth_user.id)
     .fetch_one(&state.db)
