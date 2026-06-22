@@ -16,6 +16,19 @@ pub struct Document {
     pub view_count: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub content_hash: Option<String>,
+}
+
+/// A group of documents with identical content (same user + same content_hash).
+#[derive(Debug, Serialize, FromRow)]
+pub struct DuplicateGroup {
+    pub user_id: i32,
+    pub content_hash: String,
+    pub doc_count: i64,
+    pub oldest_at: DateTime<Utc>,
+    pub newest_at: DateTime<Utc>,
+    pub document_ids: Vec<Uuid>,
+    pub titles: Vec<String>,
 }
 
 impl Document {
@@ -130,6 +143,7 @@ mod tests {
             view_count: 0,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            content_hash: None,
         }
     }
 

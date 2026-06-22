@@ -4,12 +4,14 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use validator::Validate;
 
 use secrecy::ExposeSecret;
 
 use crate::{error::{AppError, AppResult}, middleware::{AuthUser, OptionalAuthUser}, AppState};
+use crate::models::DuplicateGroup;
 use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
 use crate::services::{EmbeddingConfig, EmbeddingService};
 
@@ -34,6 +36,7 @@ pub fn routes() -> Router<AppState> {
         .route("/", get(list_documents).post(create_document))
         .route("/upload", post(upload_document).layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE)))
         .route("/upload/srt", post(upload_srt).layer(DefaultBodyLimit::max(MAX_SRT_SIZE)))
+        .route("/duplicates", get(list_duplicates))
         .route("/tree", get(get_document_tree))
         .route("/{id}", get(get_document).put(update_document).delete(delete_document))
         .route("/{id}/status", get(get_document_status))
@@ -791,14 +794,37 @@ async fn upload_document(
             .to_string();
         let title = title_from_filename(&original_filename);
 
-        let pipeline = DocumentPipelineBuilder::new()
+        // Duplicate check: compute SHA-256 and look for an existing document
+        let content_hash = hex::encode(Sha256::digest(content.as_bytes()));
+        let existing: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 LIMIT 1"
+        )
+        .bind(auth_user.id)
+        .bind(&content_hash)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(AppError::Database)?;
+
+        if let Some(existing_id) = existing {
+            return Err(AppError::Conflict(format!(
+                "Duplicate document: content already exists as {}",
+                existing_id
+            )));
+        }
+
+        let upstage_key = std::env::var("UPSTAGE_API_KEY").unwrap_or_default();
+        let mut builder = DocumentPipelineBuilder::new()
             .pool(state.db.clone())
             .app_config(state.config.clone())
             .semantic_chunking(512)
             .user_id(auth_user.id)
-            .skip_embedding()
-            .skip_analysis()
-            .build();
+            .anthropic_api_key(upstage_key.clone());
+        if upstage_key.is_empty() {
+            builder = builder.skip_embedding();
+        } else {
+            builder = builder.upstage_embedding(upstage_key);
+        }
+        let pipeline = builder.build();
         let input = IngestionInput::from_text(title.clone(), content);
 
         let output = pipeline.process(input).await.map_err(|e| {
@@ -1045,14 +1071,19 @@ async fn upload_srt(
         let md_content = format!("# {title}\n\n{}", narratives.join("\n\n"));
 
         // 기존 파이프라인으로 문서 저장
-        let pipeline = DocumentPipelineBuilder::new()
+        let upstage_key = std::env::var("UPSTAGE_API_KEY").unwrap_or_default();
+        let mut builder = DocumentPipelineBuilder::new()
             .pool(state.db.clone())
             .app_config(state.config.clone())
             .semantic_chunking(512)
             .user_id(auth_user.id)
-            .skip_embedding()
-            .skip_analysis()
-            .build();
+            .anthropic_api_key(upstage_key.clone());
+        if upstage_key.is_empty() {
+            builder = builder.skip_embedding();
+        } else {
+            builder = builder.upstage_embedding(upstage_key);
+        }
+        let pipeline = builder.build();
         let input = IngestionInput::from_text(title.clone(), md_content);
 
         let output = pipeline.process(input).await.map_err(|e| {
@@ -1079,9 +1110,68 @@ async fn upload_srt(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// List duplicate document groups for the authenticated user.
+///
+/// `GET /api/documents/duplicates`
+///
+/// Returns groups of documents with identical content (same SHA-256 hash).
+/// Each group contains the IDs and titles of duplicate documents.
+#[derive(Debug, Serialize)]
+struct DuplicatesResponse {
+    success: bool,
+    total_groups: usize,
+    total_removable: usize,
+    groups: Vec<DuplicateGroup>,
+}
+
+async fn list_duplicates(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+) -> AppResult<Json<DuplicatesResponse>> {
+    let groups: Vec<DuplicateGroup> = sqlx::query_as(
+        r#"
+        SELECT
+            user_id,
+            content_hash,
+            COUNT(*)::bigint          AS doc_count,
+            MIN(created_at)           AS oldest_at,
+            MAX(created_at)           AS newest_at,
+            array_agg(id ORDER BY created_at)     AS document_ids,
+            array_agg(title ORDER BY created_at)  AS titles
+        FROM documents
+        WHERE user_id = $1
+          AND content_hash IS NOT NULL
+        GROUP BY user_id, content_hash
+        HAVING COUNT(*) > 1
+        ORDER BY COUNT(*) DESC
+        "#,
+    )
+    .bind(auth_user.id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(AppError::Database)?;
+
+    let total_removable = groups.iter().map(|g| (g.doc_count - 1) as usize).sum();
+
+    Ok(Json(DuplicatesResponse {
+        success: true,
+        total_groups: groups.len(),
+        total_removable,
+        groups,
+    }))
+}
+
 fn embedding_service_from_state(state: &AppState) -> EmbeddingService {
+    let upstage_key = std::env::var("UPSTAGE_API_KEY").ok();
+    let default_model = if upstage_key.is_some() {
+        crate::models::EmbeddingModel::UpstaageSolarPassage
+    } else {
+        crate::models::EmbeddingModel::OpenaiTextEmbedding3Small
+    };
     let config = EmbeddingConfig {
         openai_api_key: state.config.openai_api_key.as_ref().map(|s| s.expose_secret().to_string()),
+        upstage_api_key: upstage_key,
+        default_model,
         ..EmbeddingConfig::default()
     };
     EmbeddingService::new(state.db.clone(), config)

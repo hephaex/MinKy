@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use pgvector::Vector;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -223,11 +224,12 @@ impl StorageStage {
 
             id
         } else {
-            // Insert new document
+            // Insert new document; compute content_hash for dedup
+            let content_hash = hex::encode(Sha256::digest(doc.original_content.as_bytes()));
             let (id,): (Uuid,) = sqlx::query_as(
                 r#"
-                INSERT INTO documents (title, content, category_id, user_id, is_public, source_path, sensitivity)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                INSERT INTO documents (title, content, category_id, user_id, is_public, source_path, sensitivity, content_hash)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
                 "#,
             )
@@ -238,6 +240,7 @@ impl StorageStage {
             .bind(is_public)
             .bind(source_path)
             .bind(&sensitivity)
+            .bind(&content_hash)
             .fetch_one(&self.pool)
             .await?;
 
@@ -379,6 +382,50 @@ impl StorageStage {
 
         Ok(())
     }
+
+    /// Store auto-generated tags from AI analysis
+    async fn store_auto_tags(
+        &self,
+        document_id: Uuid,
+        tags: &[String],
+        user_id: i32,
+    ) -> PipelineResult<usize> {
+        if tags.is_empty() {
+            return Ok(0);
+        }
+
+        let mut count = 0;
+        for tag_name in tags {
+            let trimmed = tag_name.trim().to_lowercase();
+            if trimmed.is_empty() || trimmed.len() > 100 {
+                continue;
+            }
+
+            let (tag_id,): (i32,) = sqlx::query_as(
+                "INSERT INTO tags (name, user_id) VALUES ($1, $2)
+                 ON CONFLICT (name, user_id) DO UPDATE SET name = EXCLUDED.name
+                 RETURNING id",
+            )
+            .bind(&trimmed)
+            .bind(user_id)
+            .fetch_one(&self.pool)
+            .await?;
+
+            sqlx::query(
+                "INSERT INTO document_tags (document_id, tag_id)
+                 VALUES ($1, $2)
+                 ON CONFLICT DO NOTHING",
+            )
+            .bind(document_id)
+            .bind(tag_id)
+            .execute(&self.pool)
+            .await?;
+
+            count += 1;
+        }
+
+        Ok(count)
+    }
 }
 
 #[async_trait]
@@ -431,6 +478,11 @@ impl PipelineStage<AnalyzedDocument, StoredDocument> for StorageStage {
             self.store_analysis(document_id, analysis).await.map_err(|e| {
                 PipelineError::stage_failure("storage", format!("Failed to store analysis: {}", e))
             })?;
+            // Store auto-generated tags
+            let user_id = context.user_id.or(self.config.user_id).unwrap_or(1);
+            if let Err(e) = self.store_auto_tags(document_id, &analysis.tags, user_id).await {
+                tracing::warn!("Failed to store auto tags: {}", e);
+            }
             true
         } else {
             false
