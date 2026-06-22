@@ -143,19 +143,12 @@ pub async fn create_app(config: Config) -> Result<Router> {
             .map(|v| v.max(1))  // prevent busy-spin at 0
             .unwrap_or(10);
         let worker = Arc::clone(&embedding_service);
-        // Supervisor: restart the worker on panic so queue processing survives crashes.
-        tokio::spawn(async move {
-            loop {
-                let w = Arc::clone(&worker);
-                let handle = tokio::spawn(async move { w.run_queue_worker(idle_secs).await });
-                match handle.await {
-                    Ok(_) => tracing::warn!("Embedding queue worker exited unexpectedly, restarting in 5 s"),
-                    Err(e) => tracing::error!(error = %e, "Embedding queue worker panicked, restarting in 5 s"),
-                }
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-            }
-        });
-        tracing::info!(idle_interval_secs = idle_secs, "Embedding queue worker (supervised) started");
+        // Note: release profile uses panic = "abort", so a worker panic aborts the whole
+        // process. Crash recovery depends on the process-level restarter (Docker restart
+        // policy / systemd Restart=always) combined with the startup stale-requeue in
+        // run_queue_worker which recovers 'processing' rows on the next boot.
+        tokio::spawn(async move { worker.run_queue_worker(idle_secs).await });
+        tracing::info!(idle_interval_secs = idle_secs, "Embedding queue worker started");
     }
 
     let redis_client = std::env::var("REDIS_URL")

@@ -625,15 +625,20 @@ impl EmbeddingService {
         chunk_text_with_config(text, self.config.chunk_size, self.config.chunk_overlap)
     }
 
-    /// Reset entries stuck in 'processing' back to 'pending'.
+    /// Reset entries stuck in 'processing' back to an appropriate terminal state.
     ///
-    /// Called at worker startup and periodically to recover from crashes or panics
-    /// that left rows in 'processing' with no corresponding worker.
+    /// Entries whose `attempts >= max_attempts` are marked 'failed' so they are
+    /// not silently stuck as 'pending' forever. Remaining entries become 'pending'
+    /// for retry.
+    ///
+    /// Called at worker startup and periodically to recover from crashes that
+    /// left rows in 'processing' with no corresponding worker.
     pub async fn requeue_stale_processing(&self, stale_secs: u64) -> Result<u64> {
         let result = sqlx::query(
             r#"
             UPDATE embedding_queue
-            SET status = 'pending', error_message = 'requeued: stale processing'
+            SET status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'pending' END,
+                error_message = 'requeued: stale processing (crash recovery)'
             WHERE status = 'processing'
               AND started_at < NOW() - ($1::bigint * interval '1 second')
             "#,
@@ -658,7 +663,7 @@ impl EmbeddingService {
     /// queue drains as fast as the embedder allows.
     pub async fn run_queue_worker(self: Arc<Self>, idle_interval_secs: u64) {
         // Stale entries are those in 'processing' longer than 5 × idle or 60 s min.
-        let stale_secs = (idle_interval_secs * 5).max(60);
+        let stale_secs = idle_interval_secs.saturating_mul(5).max(60);
         // Reaper runs every this many idle cycles (≈ 1 min at 10 s idle).
         const REAPER_PERIOD: u32 = 6;
         let idle = tokio::time::Duration::from_secs(idle_interval_secs);
