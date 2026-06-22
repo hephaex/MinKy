@@ -35,8 +35,8 @@ impl Default for AIAnalysisConfig {
     fn default() -> Self {
         Self {
             api_key: None,
-            model: "claude-3-5-haiku-20241022".to_string(),
-            max_tokens: 1024,
+            model: "solar-open2-260528".to_string(),
+            max_tokens: 8192,
             skip: false,
         }
     }
@@ -107,6 +107,9 @@ pub struct DocumentAnalysis {
     /// Who this document is relevant for
     pub relevant_for: Vec<String>,
 
+    /// Auto-generated tags (5-9)
+    pub tags: Vec<String>,
+
     /// Model used for analysis
     pub analyzer_model: String,
 }
@@ -157,18 +160,17 @@ impl AIAnalysisStage {
         let body = AnthropicRequest {
             model: self.config.model.clone(),
             max_tokens: self.config.max_tokens,
-            system: Some(system_prompt),
-            messages: vec![AnthropicMessage {
-                role: "user".to_string(),
-                content: user_prompt,
-            }],
+            system: None,
+            messages: vec![
+                AnthropicMessage { role: "system".to_string(), content: system_prompt },
+                AnthropicMessage { role: "user".to_string(), content: user_prompt },
+            ],
         };
 
         let response = self
             .http_client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", api_key)
-            .header("anthropic-version", "2023-06-01")
+            .post("https://api.upstage.ai/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", api_key))
             .header("content-type", "application/json")
             .json(&body)
             .send()
@@ -186,12 +188,12 @@ impl AIAnalysisStage {
         let anthropic_response: AnthropicResponse = response
             .json()
             .await
-            .map_err(|e| PipelineError::ExternalService(format!("Failed to parse Claude response: {}", e)))?;
+            .map_err(|e| PipelineError::ExternalService(format!("Failed to parse analysis response: {}", e)))?;
 
         let raw_text = anthropic_response
-            .content
+            .choices
             .first()
-            .map(|c| c.text.as_str())
+            .map(|c| c.message.content.as_str())
             .unwrap_or("");
 
         self.parse_response(raw_text)
@@ -207,7 +209,8 @@ Analyze the provided document and respond ONLY with a valid JSON object in this 
   "problem_solved": "The specific problem this document addresses, or null if not applicable.",
   "insights": ["insight1", "insight2", "insight3"],
   "technologies": ["tech1", "tech2"],
-  "relevant_for": ["role1", "role2"]
+  "relevant_for": ["role1", "role2"],
+  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
 }
 
 Rules:
@@ -217,6 +220,7 @@ Rules:
 - insights: 2-5 actionable or important insights
 - technologies: tools, frameworks, languages mentioned or used
 - relevant_for: job roles or personas who benefit (e.g. "backend engineer", "team lead")
+- tags: 5-9 lowercase keyword tags for categorization and search (e.g. "rust", "async", "database", "performance")
 - All values must be in the same language as the document
 - Respond ONLY with the JSON object, no markdown fences, no explanation"#.to_string()
     }
@@ -225,7 +229,9 @@ Rules:
         // Truncate content if too long
         let max_content_len = 8000;
         let truncated_content = if content.len() > max_content_len {
-            format!("{}...[truncated]", &content[..max_content_len])
+            let mut end = max_content_len;
+            while end > 0 && !content.is_char_boundary(end) { end -= 1; }
+            format!("{}...[truncated]", &content[..end])
         } else {
             content.to_string()
         };
@@ -256,6 +262,7 @@ Rules:
             insights: parsed.insights,
             technologies: parsed.technologies,
             relevant_for: parsed.relevant_for,
+            tags: parsed.tags.unwrap_or_default(),
             analyzer_model: self.config.model.clone(),
         })
     }
@@ -320,6 +327,7 @@ impl PipelineStage<EmbeddedDocument, AnalyzedDocument> for AIAnalysisStage {
 struct AnthropicRequest {
     model: String,
     max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
     system: Option<String>,
     messages: Vec<AnthropicMessage>,
 }
@@ -332,12 +340,17 @@ struct AnthropicMessage {
 
 #[derive(Deserialize)]
 struct AnthropicResponse {
-    content: Vec<AnthropicContent>,
+    choices: Vec<OpenAIChoice>,
 }
 
 #[derive(Deserialize)]
-struct AnthropicContent {
-    text: String,
+struct OpenAIChoice {
+    message: OpenAIMessage,
+}
+
+#[derive(Deserialize)]
+struct OpenAIMessage {
+    content: String,
 }
 
 #[derive(Deserialize)]
@@ -348,6 +361,7 @@ struct RawAnalysisJson {
     insights: Vec<String>,
     technologies: Vec<String>,
     relevant_for: Vec<String>,
+    tags: Option<Vec<String>>,
 }
 
 #[cfg(test)]

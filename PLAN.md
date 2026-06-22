@@ -100,11 +100,33 @@
 - 1914 tests pass / 0 fail, commits `b4fb37f7` → `0c6eff2e`
 - CT306 배포 완료, healthy ✓
 
+### ✅ Sprint D4: embedding queue 백그라운드 워커 + 대용량 문서 truncation 완료 (2026-06-22)
+
+**구현 항목**:
+- `embedding_queue` 백그라운드 워커 (`run_queue_worker`) — `FOR UPDATE SKIP LOCKED` 폴링
+- `requeue_stale_processing(stale_secs)` — 'processing' 상태 스테일 행 복구 (CASE WHEN attempts >= max_attempts THEN 'failed')
+- 시작 시 stale requeue + 매 REAPER_PERIOD=6 idle 사이클마다 주기 실행
+- `EMBEDDING_QUEUE_ENABLED` / `EMBEDDING_QUEUE_INTERVAL_SECS` 환경변수 제어
+- `truncate_to_char_boundary(s, 50_000)` — Strix llama-qwen3-embed ctx-size 32768 대응
+- `EMBEDDING_MAX_BYTES: usize = 50_000` 상수 공개
+- panic = "abort" + Docker restart policy로 프로세스 레벨 크래시 복구
+- CT306 배포: rag_service.rs upstage_api_key 동기화 픽스 포함
+
+**Opus 레드팀 3회**:
+- R1: HIGH(stale reaper 부재) + HIGH(naked tokio::spawn)
+- R2: CRITICAL(panic=abort로 supervisor dead code) + HIGH(reaper max_attempts 무시) + LOW(overflow)
+- R3: LOW(doc comment) + LOW(started_at IS NULL guard)
+- 3차: `[]` CLEAN
+
+**테스트**: 1920 tests pass / 0 fail, commits `7e91a239`→`d5e7bf4d`→`b816e203`→`04e7b03c`
+
+---
+
 ### 📋 Sprint D3 완료 — 다음 스프린트 대기
 
-**현재 lab-minky CT306 상태**: 1914 tests, archived 전 경로 필터 완료, CT306 healthy
+**현재 lab-minky CT306 상태**: 1920 tests, embedding queue 워커 활성, CT306 배포 완료
 
-Sprint D3 완료 (P1+P2+P3). 다음 스프린트는 신규 사용자 요구사항 발생 시 시작.
+Sprint D3+D4 완료. 다음 스프린트는 신규 사용자 요구사항 발생 시 시작.
 
 ---
 

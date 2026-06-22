@@ -194,7 +194,7 @@ async fn register(
         .await?;
 
     if existing.is_some() {
-        return Err(AppError::Conflict("Email already registered".to_string()));
+        return Err(AppError::Conflict("Email already registered".to_string(), None));
     }
 
     // Check if username already exists (prevents login ambiguity via username=email collision)
@@ -203,7 +203,7 @@ async fn register(
         .await?;
 
     if existing_username.is_some() {
-        return Err(AppError::Conflict("Username already taken".to_string()));
+        return Err(AppError::Conflict("Username already taken".to_string(), None));
     }
 
     let password_hash = auth_service

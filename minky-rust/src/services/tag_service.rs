@@ -102,7 +102,7 @@ impl TagService {
         .await?;
 
         if existing.is_some() {
-            return Err(AppError::Conflict("Tag already exists".to_string()));
+            return Err(AppError::Conflict("Tag already exists".to_string(), None));
         }
 
         let tag = sqlx::query_as::<_, Tag>(
@@ -137,7 +137,7 @@ impl TagService {
         .await?;
 
         if duplicate.is_some() {
-            return Err(AppError::Conflict("Tag name already exists".to_string()));
+            return Err(AppError::Conflict("Tag name already exists".to_string(), None));
         }
 
         let tag = sqlx::query_as::<_, Tag>(

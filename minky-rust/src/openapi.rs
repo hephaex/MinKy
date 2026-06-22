@@ -278,6 +278,37 @@ pub fn openapi_spec() -> Value {
                     }
                 }
             },
+                "/documents/{id}/restore": {
+                    "post": {
+                        "tags": ["documents"],
+                        "summary": "Restore archived document",
+                        "operationId": "restoreDocument",
+                        "security": [{ "bearerAuth": [] }],
+                        "parameters": [
+                            { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+                        ],
+                        "responses": {
+                            "200": { "description": "Restored" },
+                            "404": { "description": "Not found" },
+                            "409": {
+                                "description": "Duplicate active document detected",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {
+                                                "error": { "type": "string" },
+                                                "content_hash": { "type": "string" }
+                                            },
+                                            "required": ["error", "content_hash"]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+
             "/documents/{id}/understand": {
                 "post": {
                     "tags": ["understanding"],

@@ -157,6 +157,7 @@ impl CategoryService {
         if doc_count.0 > 0 {
             return Err(AppError::Conflict(
                 "Cannot delete category with documents".to_string(),
+                None,
             ));
         }
 

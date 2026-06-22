@@ -57,6 +57,7 @@ impl WorkflowService {
         if existing.is_some() {
             return Err(AppError::Conflict(
                 "Workflow already exists for this document".to_string(),
+                None,
             ));
         }
 

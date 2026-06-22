@@ -55,10 +55,17 @@ impl RagService {
             .as_ref()
             .map(|s| s.expose_secret().to_string());
 
+        let upstage_key = std::env::var("UPSTAGE_API_KEY").ok();
+        let default_model = if upstage_key.is_some() {
+            EmbeddingModel::UpstaageSolarPassage
+        } else {
+            EmbeddingModel::OpenaiTextEmbedding3Small
+        };
         let embedding_config = EmbeddingConfig {
             openai_api_key: openai_key,
             voyage_api_key: None,
-            default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
+            upstage_api_key: upstage_key,
+            default_model,
             chunk_size: 512,
             chunk_overlap: 50,
             local_embedding_enabled: config.local_embedding_enabled,

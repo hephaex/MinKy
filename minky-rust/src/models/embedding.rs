@@ -32,6 +32,14 @@ pub enum EmbeddingModel {
     #[serde(rename = "nomic_embed_text_v1_5")]
     #[sqlx(rename = "nomic_embed_text_v1_5")]
     NomicEmbedTextV15,
+    /// Upstage Solar embedding for document indexing (passage), 4096 dimensions.
+    #[serde(rename = "upstage_solar_passage")]
+    #[sqlx(rename = "upstage_solar_passage")]
+    UpstaageSolarPassage,
+    /// Upstage Solar embedding for search queries, 4096 dimensions.
+    #[serde(rename = "upstage_solar_query")]
+    #[sqlx(rename = "upstage_solar_query")]
+    UpstaageSolarQuery,
 }
 
 
@@ -44,6 +52,7 @@ impl EmbeddingModel {
             Self::VoyageLarge2 => 1536,
             Self::VoyageCode2 => 1536,
             Self::NomicEmbedTextV15 => 768,
+            Self::UpstaageSolarPassage | Self::UpstaageSolarQuery => 4096,
         }
     }
 
@@ -55,12 +64,30 @@ impl EmbeddingModel {
             Self::VoyageLarge2 => "voyage-large-2",
             Self::VoyageCode2 => "voyage-code-2",
             Self::NomicEmbedTextV15 => "nomic-embed-text-v1.5",
+            Self::UpstaageSolarPassage => "embedding-passage",
+            Self::UpstaageSolarQuery => "embedding-query",
+        }
+    }
+
+    /// Get the API base URL for this model's provider
+    pub fn api_base_url(&self) -> &'static str {
+        match self {
+            Self::UpstaageSolarPassage | Self::UpstaageSolarQuery => {
+                "https://api.upstage.ai/v1/solar/embeddings"
+            }
+            Self::NomicEmbedTextV15 => "",
+            _ => "https://api.openai.com/v1/embeddings",
         }
     }
 
     /// True when the embedding is computed locally (no outbound API call).
     pub fn is_local(&self) -> bool {
         matches!(self, Self::NomicEmbedTextV15)
+    }
+
+    /// True when this model uses the Upstage API.
+    pub fn is_upstage(&self) -> bool {
+        matches!(self, Self::UpstaageSolarPassage | Self::UpstaageSolarQuery)
     }
 }
 
@@ -241,6 +268,8 @@ mod tests {
         assert_eq!(EmbeddingModel::OpenaiTextEmbedding3Large.dimension(), 3072);
         assert_eq!(EmbeddingModel::VoyageLarge2.dimension(), 1536);
         assert_eq!(EmbeddingModel::VoyageCode2.dimension(), 1536);
+        assert_eq!(EmbeddingModel::UpstaageSolarPassage.dimension(), 4096);
+        assert_eq!(EmbeddingModel::UpstaageSolarQuery.dimension(), 4096);
     }
 
     #[test]

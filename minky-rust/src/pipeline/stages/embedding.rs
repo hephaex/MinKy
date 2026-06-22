@@ -27,7 +27,13 @@ pub enum EmbeddingProvider {
         api_key: Option<String>,
     },
 
-    /// Skip embedding generation (for testing)
+    /// Upstage Solar embeddings (OpenAI-compatible, 4096 dims)
+    Upstage {
+        model: EmbeddingModel,
+        api_key: Option<String>,
+    },
+
+    /// Skip embedding generation — passes chunks through without vectors.
     None,
 }
 
@@ -128,6 +134,14 @@ impl EmbeddingStage {
         })
     }
 
+    /// Create with Upstage Solar provider
+    pub fn upstage(api_key: impl Into<String>) -> Self {
+        Self::new(EmbeddingProvider::Upstage {
+            model: EmbeddingModel::UpstaageSolarPassage,
+            api_key: Some(api_key.into()),
+        })
+    }
+
     /// Create a no-op stage for testing
     pub fn none() -> Self {
         Self::new(EmbeddingProvider::None)
@@ -146,20 +160,21 @@ impl EmbeddingStage {
             model: model.api_model_id().to_string(),
         };
 
+        let url = model.api_base_url();
         let response = self
             .http_client
-            .post("https://api.openai.com/v1/embeddings")
+            .post(url)
             .header("Authorization", format!("Bearer {}", api_key))
             .header("Content-Type", "application/json")
             .json(&request)
             .send()
             .await
-            .map_err(|e| PipelineError::ExternalService(format!("OpenAI API error: {}", e)))?;
+            .map_err(|e| PipelineError::ExternalService(format!("Embedding API error: {}", e)))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(PipelineError::ExternalService(format!(
-                "OpenAI API error: {}",
+                "Embedding API error: {}",
                 error_text
             )));
         }
@@ -184,8 +199,8 @@ impl EmbeddingStage {
         api_key: &str,
     ) -> PipelineResult<Vec<Vec<f32>>> {
         let mut all_embeddings = Vec::with_capacity(texts.len());
+        let url = model.api_base_url();
 
-        // Process in batches
         for chunk in texts.chunks(self.batch_size) {
             let request = OpenAIBatchEmbeddingRequest {
                 input: chunk.to_vec(),
@@ -194,18 +209,18 @@ impl EmbeddingStage {
 
             let response = self
                 .http_client
-                .post("https://api.openai.com/v1/embeddings")
+                .post(url)
                 .header("Authorization", format!("Bearer {}", api_key))
                 .header("Content-Type", "application/json")
                 .json(&request)
                 .send()
                 .await
-                .map_err(|e| PipelineError::ExternalService(format!("OpenAI API error: {}", e)))?;
+                .map_err(|e| PipelineError::ExternalService(format!("Embedding API error: {}", e)))?;
 
             if !response.status().is_success() {
                 let error_text = response.text().await.unwrap_or_default();
                 return Err(PipelineError::ExternalService(format!(
-                    "OpenAI API error: {}",
+                    "Embedding API error: {}",
                     error_text
                 )));
             }
@@ -214,7 +229,6 @@ impl EmbeddingStage {
                 PipelineError::ExternalService(format!("Failed to parse response: {}", e))
             })?;
 
-            // Sort by index to ensure order matches input
             let mut sorted_data = response.data;
             sorted_data.sort_by_key(|d| d.index);
 
@@ -224,11 +238,6 @@ impl EmbeddingStage {
         }
 
         Ok(all_embeddings)
-    }
-
-    /// Generate a fake embedding for testing
-    fn generate_fake_embedding(&self, _text: &str, model: EmbeddingModel) -> Vec<f32> {
-        vec![0.0; model.dimension()]
     }
 
     /// Compute document embedding as average of chunk embeddings
@@ -281,37 +290,22 @@ impl PipelineStage<ChunkedDocument, EmbeddedDocument> for EmbeddingStage {
                     .ok_or_else(|| PipelineError::Configuration("Voyage API key not configured".into()))?;
                 (*model, key)
             }
+            EmbeddingProvider::Upstage { model, api_key } => {
+                let key = api_key
+                    .clone()
+                    .ok_or_else(|| PipelineError::Configuration("Upstage API key not configured".into()))?;
+                (*model, key)
+            }
             EmbeddingProvider::None => {
-                // Generate fake embeddings for testing
-                let model = EmbeddingModel::OpenaiTextEmbedding3Small;
-                let embedded_chunks: Vec<EmbeddedChunk> = input
-                    .chunks
-                    .into_iter()
-                    .map(|chunk| {
-                        let embedding = self.generate_fake_embedding(&chunk.text, model);
-                        EmbeddedChunk {
-                            chunk,
-                            embedding,
-                            model,
-                        }
-                    })
-                    .collect();
-
-                let all_embeddings: Vec<Vec<f32>> =
-                    embedded_chunks.iter().map(|c| c.embedding.clone()).collect();
-                let document_embedding = self.compute_document_embedding(&all_embeddings);
-
-                context.metrics.add_embeddings(embedded_chunks.len() as u32);
-
                 return Ok(EmbeddedDocument {
                     title: input.title,
                     plain_text: input.plain_text,
                     original_content: input.original_content,
                     mime_type: input.mime_type,
                     metadata: input.metadata,
-                    embedded_chunks,
-                    document_embedding,
-                    embedding_model: model,
+                    embedded_chunks: Vec::new(),
+                    document_embedding: None,
+                    embedding_model: EmbeddingModel::OpenaiTextEmbedding3Small,
                     headings: input.headings,
                     links: input.links,
                     code_blocks: input.code_blocks,
@@ -455,12 +449,8 @@ mod tests {
         let doc = make_chunked_doc(chunks);
         let result = stage.process(doc, &mut context).await.unwrap();
 
-        assert_eq!(result.embedded_chunks.len(), 2);
-        assert_eq!(
-            result.embedded_chunks[0].embedding.len(),
-            EmbeddingModel::OpenaiTextEmbedding3Small.dimension()
-        );
-        assert!(result.document_embedding.is_some());
+        assert!(result.embedded_chunks.is_empty());
+        assert!(result.document_embedding.is_none());
     }
 
     #[tokio::test]

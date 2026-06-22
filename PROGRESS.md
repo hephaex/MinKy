@@ -5,7 +5,37 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D3 P3 완료 (Sprint D3 전체 완료)
+## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D4 완료
+
+### Sprint D4: embedding queue 백그라운드 워커 + 대용량 문서 truncation (2026-06-22)
+
+| 항목 | 상태 | 세부 |
+|------|------|------|
+| `run_queue_worker()` 폴링 루프 | [IMPLEMENTED] | `FOR UPDATE SKIP LOCKED`, idle 폴링 10s 기본 |
+| `requeue_stale_processing()` reaper | [IMPLEMENTED] | 시작 시 + REAPER_PERIOD=6 idle마다 실행, CASE max_attempts → 'failed' |
+| `started_at IS NULL` guard | [IMPLEMENTED] | NULL 행도 reaper로 복구 |
+| `saturating_mul(5)` overflow 방지 | [IMPLEMENTED] | stale_secs 계산 |
+| `EMBEDDING_QUEUE_ENABLED` / `INTERVAL_SECS` env | [IMPLEMENTED] | 비활성화 + 폴링 간격 제어 |
+| `truncate_to_char_boundary(s, 50_000)` | [IMPLEMENTED] | char boundary 안전, Strix ctx-size 32768 대응 |
+| `EMBEDDING_MAX_BYTES: usize = 50_000` | [IMPLEMENTED] | 공개 상수 |
+| panic = "abort" 주석 | [IMPLEMENTED] | 프로세스 레벨 크래시 복구 패턴 명시 |
+| CT306 배포 | [IMPLEMENTED] | rag_service.rs upstage_api_key 동기화 픽스 포함 |
+
+커밋: `7e91a239` → `d5e7bf4d` → `b816e203` → `04e7b03c`
+
+Demo Gate: CT306 embedding queue worker 시작 로그 + `GET /api/health` healthy
+
+Opus 레드팀 3회:
+- R1: HIGH(stale reaper 부재), HIGH(naked tokio::spawn panic 미복구)
+- R2: CRITICAL(panic=abort → supervisor dead code), HIGH(reaper max_attempts 무시), LOW(overflow)
+- R3: LOW(doc comment), LOW(started_at IS NULL 누락)
+- 3차: `[]` CLEAN
+
+리뷰 아카이브: `~/.claude/references/2026-06-22_sprint_d4_embedding_queue_worker_review.md`
+
+---
+
+## 이전 진행 상황 (2026-06-22) — lab-minky Sprint D3 P3 완료 (Sprint D3 전체 완료)
 
 ### Sprint D3 P3: archived=false 필터 4개 서비스 (2026-06-22)
 
