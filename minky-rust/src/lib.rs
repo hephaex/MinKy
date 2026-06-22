@@ -76,10 +76,17 @@ pub async fn create_app(config: Config) -> Result<Router> {
     // Initialize embedding service once at startup. When local_embedding_enabled
     // is true this downloads ~270 MB (nomic-embed-text-v1.5) on first run.
     use secrecy::ExposeSecret;
+    let upstage_key = std::env::var("UPSTAGE_API_KEY").ok();
+    let default_model = if upstage_key.is_some() {
+        EmbeddingModel::UpstaageSolarPassage
+    } else {
+        EmbeddingModel::OpenaiTextEmbedding3Small
+    };
     let embedding_config = EmbeddingConfig {
         openai_api_key: config.openai_api_key.as_ref().map(|k| k.expose_secret().to_owned()),
         voyage_api_key: None,
-        default_model: EmbeddingModel::OpenaiTextEmbedding3Small,
+        upstage_api_key: upstage_key,
+        default_model,
         chunk_size: 512,
         chunk_overlap: 50,
         local_embedding_enabled: config.local_embedding_enabled,
@@ -118,6 +125,24 @@ pub async fn create_app(config: Config) -> Result<Router> {
     } else {
         Arc::new(tokio::sync::Mutex::new(None))
     };
+
+    // Start the embedding queue background worker unless explicitly disabled.
+    // EMBEDDING_QUEUE_ENABLED=false disables it; EMBEDDING_QUEUE_INTERVAL_SECS sets the
+    // idle sleep between polls when the queue is empty (default 10 s).
+    let queue_enabled = std::env::var("EMBEDDING_QUEUE_ENABLED")
+        .map(|v| v.to_lowercase() != "false")
+        .unwrap_or(true);
+    if queue_enabled {
+        let idle_secs: u64 = std::env::var("EMBEDDING_QUEUE_INTERVAL_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(10);
+        let worker = Arc::clone(&embedding_service);
+        tokio::spawn(async move {
+            worker.run_queue_worker(idle_secs).await;
+        });
+        tracing::info!(idle_interval_secs = idle_secs, "Embedding queue worker started");
+    }
 
     let redis_client = std::env::var("REDIS_URL")
         .ok()

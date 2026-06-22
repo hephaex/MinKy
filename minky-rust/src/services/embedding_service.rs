@@ -288,10 +288,13 @@ impl EmbeddingService {
         .await
         .map_err(|_| AppError::NotFound("Document not found".into()))?;
 
-        let text = format!("{}\n\n{}", document.0, document.1);
+        let full_text = format!("{}\n\n{}", document.0, document.1);
+        // Truncate to prevent embedder OOM on very large documents (Strix --ctx-size 32768).
+        // 50,000 bytes ≈ 12,500–25,000 tokens depending on language.
+        let text = truncate_to_char_boundary(&full_text, EMBEDDING_MAX_BYTES);
 
         // Generate embedding
-        let embedding = self.generate_embedding(&text, model).await?;
+        let embedding = self.generate_embedding(text, model).await?;
         let token_count = text.split_whitespace().count() as i32; // Approximate
 
         // Insert or update
@@ -621,7 +624,70 @@ impl EmbeddingService {
     pub fn chunk_text(&self, text: &str) -> Vec<ChunkData> {
         chunk_text_with_config(text, self.config.chunk_size, self.config.chunk_overlap)
     }
+
+    /// Background loop that drains the embedding_queue.
+    ///
+    /// Intended to be spawned once at startup with `tokio::spawn`.  Runs forever;
+    /// callers should use a `JoinHandle` or structured shutdown if clean exit is needed.
+    ///
+    /// When the queue is empty the loop sleeps `idle_interval_secs` before polling
+    /// again.  Successful and failed items are processed without sleeping so the
+    /// queue drains as fast as the embedder allows.
+    pub async fn run_queue_worker(self: Arc<Self>, idle_interval_secs: u64) {
+        let idle = tokio::time::Duration::from_secs(idle_interval_secs);
+        loop {
+            match self.get_next_from_queue().await {
+                Ok(Some(entry)) => {
+                    let doc_id = entry.document_id;
+                    let entry_id = entry.id;
+                    tracing::debug!(document_id = %doc_id, "embedding queue: processing");
+                    let req = CreateDocumentEmbeddingRequest {
+                        document_id: doc_id,
+                        model: None,
+                    };
+                    match self.create_document_embedding(req).await {
+                        Ok(_) => {
+                            tracing::info!(document_id = %doc_id, "embedding queue: complete");
+                            if let Err(e) = self.complete_queue_entry(entry_id).await {
+                                tracing::error!(entry_id = %entry_id, error = %e, "embedding queue: complete_queue_entry failed");
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!(document_id = %doc_id, error = %e, "embedding queue: embedding failed");
+                            if let Err(fe) = self.fail_queue_entry(entry_id, &e.to_string()).await {
+                                tracing::error!(entry_id = %entry_id, error = %fe, "embedding queue: fail_queue_entry failed");
+                            }
+                        }
+                    }
+                }
+                Ok(None) => {
+                    tokio::time::sleep(idle).await;
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "embedding queue: get_next_from_queue error");
+                    tokio::time::sleep(idle).await;
+                }
+            }
+        }
+    }
 }
+
+/// Truncate `s` to at most `max_bytes` bytes at a valid UTF-8 character boundary.
+pub fn truncate_to_char_boundary(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut idx = max_bytes;
+    while !s.is_char_boundary(idx) {
+        idx -= 1;
+    }
+    &s[..idx]
+}
+
+/// Maximum byte length fed to the embedder per document.
+/// Conservative limit for Strix `llama-qwen3-embed` with `--ctx-size 32768`:
+/// 50,000 bytes ≈ 12,500–25,000 tokens (language-dependent).
+pub const EMBEDDING_MAX_BYTES: usize = 50_000;
 
 /// Split text into overlapping word chunks.
 /// Pure function with no external dependencies, extracting it enables unit testing.
@@ -910,5 +976,52 @@ mod tests {
             !EmbeddingModel::VoyageLarge2.is_local(),
             "Voyage model should not be local"
         );
+    }
+
+    // ── truncate_to_char_boundary ────────────────────────────────────────────
+
+    #[test]
+    fn truncate_short_string_unchanged() {
+        let s = "hello";
+        assert_eq!(truncate_to_char_boundary(s, 100), s);
+    }
+
+    #[test]
+    fn truncate_at_exact_limit_unchanged() {
+        let s = "abc";
+        assert_eq!(truncate_to_char_boundary(s, 3), "abc");
+    }
+
+    #[test]
+    fn truncate_cuts_ascii_at_byte_limit() {
+        let s = "abcde";
+        assert_eq!(truncate_to_char_boundary(s, 3), "abc");
+    }
+
+    #[test]
+    fn truncate_respects_multibyte_char_boundary() {
+        // "a안b": 'a'(1 byte) + '안'(3 bytes) + 'b'(1 byte) = 5 bytes total.
+        // Offset 4 IS a valid char boundary (end of '안'), so max_bytes=4 yields "a안".
+        // Offsets 2 and 3 are mid-'안', so max_bytes=2 and max_bytes=3 both yield "a".
+        let s = "a안b";
+        let result4 = truncate_to_char_boundary(s, 4);
+        assert_eq!(result4, "a안", "4 bytes = end of '안', full codepoint retained");
+
+        let result3 = truncate_to_char_boundary(s, 3);
+        assert_eq!(result3, "a", "3 bytes falls mid-'안', must back up to 'a'");
+
+        let result2 = truncate_to_char_boundary(s, 2);
+        assert_eq!(result2, "a", "2 bytes falls mid-'안', must back up to 'a'");
+    }
+
+    #[test]
+    fn truncate_empty_string() {
+        assert_eq!(truncate_to_char_boundary("", 10), "");
+    }
+
+    #[test]
+    fn embedding_max_bytes_constant_is_sensible() {
+        // Guard against accidental mutation of the constant.
+        assert_eq!(EMBEDDING_MAX_BYTES, 50_000);
     }
 }
