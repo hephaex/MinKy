@@ -37,8 +37,11 @@ pub fn routes() -> Router<AppState> {
         .route("/upload", post(upload_document).layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE)))
         .route("/upload/srt", post(upload_srt).layer(DefaultBodyLimit::max(MAX_SRT_SIZE)))
         .route("/duplicates", get(list_duplicates))
+        .route("/duplicates/resolve", post(resolve_duplicates))
         .route("/tree", get(get_document_tree))
         .route("/{id}", get(get_document).put(update_document).delete(delete_document))
+        .route("/{id}/archive", post(archive_document))
+        .route("/{id}/restore", post(restore_document))
         .route("/{id}/status", get(get_document_status))
         .route("/{id}/reprocess", post(reprocess_document))
 }
@@ -101,7 +104,7 @@ async fn build_tree_by_tag(state: &AppState, user_id: i32) -> AppResult<Vec<Tree
         FROM documents d
         LEFT JOIN document_tags dt ON dt.document_id = d.id
         LEFT JOIN tags t ON t.id = dt.tag_id
-        WHERE d.user_id = $1 OR d.is_public = true
+        WHERE (d.user_id = $1 OR d.is_public = true) AND d.archived = false
         ORDER BY t.name NULLS LAST, d.title
         "#,
     )
@@ -163,7 +166,7 @@ async fn build_tree_by_date(state: &AppState, user_id: i32) -> AppResult<Vec<Tre
             EXTRACT(MONTH FROM created_at)::int,
             id, title
         FROM documents
-        WHERE user_id = $1 OR is_public = true
+        WHERE (user_id = $1 OR is_public = true) AND archived = false
         ORDER BY created_at DESC
         "#,
     )
@@ -328,6 +331,8 @@ struct DocumentRow {
     pub html_content: Option<String>,
     pub is_published: Option<bool>,
     pub published_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub archived: bool,
+    pub archived_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Flask-compatible single document (field `markdown_content`, no `{success, data}` wrapper)
@@ -348,6 +353,8 @@ pub struct FlaskDocumentItem {
     pub is_published: bool,
     pub published_at: Option<chrono::DateTime<chrono::Utc>>,
     pub tag_names: Vec<String>,
+    pub archived: bool,
+    pub archived_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl From<DocumentRow> for FlaskDocumentItem {
@@ -368,6 +375,8 @@ impl From<DocumentRow> for FlaskDocumentItem {
             is_published: row.is_published.unwrap_or(false),
             published_at: row.published_at,
             tag_names: vec![],
+            archived: row.archived,
+            archived_at: row.archived_at,
         }
     }
 }
@@ -399,10 +408,10 @@ async fn list_documents(
     // Unauthenticated: sentinel -1 → only is_public=true docs match (personal KB, no token sent)
     let user_id = auth_user.0.map(|u| u.id).unwrap_or(-1);
 
-    // Only return user's own documents or public documents
+    // Only return user's own documents or public documents; archived docs are hidden by default
     let total: (i64,) = if let Some(ref search) = query.search {
         sqlx::query_as(
-            "SELECT COUNT(*) FROM documents WHERE (user_id = $1 OR is_public = true) AND title ILIKE '%' || $2 || '%'"
+            "SELECT COUNT(*) FROM documents WHERE (user_id = $1 OR is_public = true) AND archived = false AND title ILIKE '%' || $2 || '%'"
         )
         .bind(user_id)
         .bind(search)
@@ -410,14 +419,14 @@ async fn list_documents(
         .await?
     } else if let Some(cat_id) = query.category_id {
         sqlx::query_as(
-            "SELECT COUNT(*) FROM documents WHERE (user_id = $1 OR is_public = true) AND category_id = $2"
+            "SELECT COUNT(*) FROM documents WHERE (user_id = $1 OR is_public = true) AND archived = false AND category_id = $2"
         )
         .bind(user_id)
         .bind(cat_id)
         .fetch_one(&state.db)
         .await?
     } else {
-        sqlx::query_as("SELECT COUNT(*) FROM documents WHERE user_id = $1 OR is_public = true")
+        sqlx::query_as("SELECT COUNT(*) FROM documents WHERE (user_id = $1 OR is_public = true) AND archived = false")
             .bind(user_id)
             .fetch_one(&state.db)
             .await?
@@ -433,7 +442,7 @@ async fn list_documents(
                FROM documents d
                LEFT JOIN document_tags dt ON dt.document_id = d.id
                LEFT JOIN tags t ON t.id = dt.tag_id
-               WHERE (d.user_id = $1 OR d.is_public = true) AND d.title ILIKE '%' || $2 || '%'
+               WHERE (d.user_id = $1 OR d.is_public = true) AND d.archived = false AND d.title ILIKE '%' || $2 || '%'
                GROUP BY d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
                         d.is_public, d.sensitivity, d.is_published, d.published_at
                ORDER BY d.created_at DESC
@@ -453,7 +462,7 @@ async fn list_documents(
                FROM documents d
                LEFT JOIN document_tags dt ON dt.document_id = d.id
                LEFT JOIN tags t ON t.id = dt.tag_id
-               WHERE (d.user_id = $1 OR d.is_public = true) AND d.category_id = $2
+               WHERE (d.user_id = $1 OR d.is_public = true) AND d.archived = false AND d.category_id = $2
                GROUP BY d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
                         d.is_public, d.sensitivity, d.is_published, d.published_at
                ORDER BY d.created_at DESC
@@ -473,7 +482,7 @@ async fn list_documents(
                FROM documents d
                LEFT JOIN document_tags dt ON dt.document_id = d.id
                LEFT JOIN tags t ON t.id = dt.tag_id
-               WHERE d.user_id = $1 OR d.is_public = true
+               WHERE (d.user_id = $1 OR d.is_public = true) AND d.archived = false
                GROUP BY d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
                         d.is_public, d.sensitivity, d.is_published, d.published_at
                ORDER BY d.created_at DESC
@@ -536,10 +545,10 @@ async fn create_document(
         ));
     }
 
-    // Compute content_hash for dedup; check before insert
+    // Compute content_hash for dedup; check before insert (archived docs don't block re-upload)
     let content_hash = hex::encode(sha2::Sha256::digest(payload.markdown_content.as_bytes()));
     let dup_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 LIMIT 1"
+        "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 AND archived = false LIMIT 1"
     )
     .bind(user_id)
     .bind(&content_hash)
@@ -556,7 +565,7 @@ async fn create_document(
         r#"INSERT INTO documents (title, content, category_id, user_id, is_public, sensitivity, content_hash)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            RETURNING id, title, content, category_id, user_id, is_public, sensitivity, view_count, created_at, updated_at,
-                     author, html_content, is_published, published_at"#
+                     author, html_content, is_published, published_at, archived, archived_at"#
     )
     .bind(&payload.title)
     .bind(&payload.markdown_content)
@@ -669,7 +678,7 @@ async fn update_document(
     if let Some(ref new_content) = payload.markdown_content {
         let new_hash = hex::encode(Sha256::digest(new_content.as_bytes()));
         let collision: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 AND id != $3 LIMIT 1"
+            "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 AND id != $3 AND archived = false LIMIT 1"
         )
         .bind(user_id)
         .bind(&new_hash)
@@ -701,7 +710,7 @@ async fn update_document(
                updated_at = NOW()
            WHERE id = $7 AND user_id = $8
            RETURNING id, title, content, category_id, user_id, is_public, sensitivity, view_count, created_at, updated_at,
-                     author, html_content, is_published, published_at"#
+                     author, html_content, is_published, published_at, archived, archived_at"#
     )
     .bind(payload.title.as_deref())
     .bind(payload.markdown_content.as_deref())
@@ -837,10 +846,10 @@ async fn upload_document(
             .to_string();
         let title = title_from_filename(&original_filename);
 
-        // Duplicate check: compute SHA-256 and look for an existing document
+        // Duplicate check: only block on active (non-archived) duplicates
         let content_hash = hex::encode(Sha256::digest(content.as_bytes()));
         let existing: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 LIMIT 1"
+            "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 AND archived = false LIMIT 1"
         )
         .bind(auth_user.id)
         .bind(&content_hash)
@@ -1201,6 +1210,131 @@ async fn list_duplicates(
         total_groups: groups.len(),
         total_removable,
         groups,
+    }))
+}
+
+/// POST /api/documents/{id}/archive — soft-archive a document (owner only)
+async fn archive_document(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    auth_user: AuthUser,
+) -> AppResult<Json<serde_json::Value>> {
+    let rows_affected = sqlx::query(
+        "UPDATE documents SET archived = true, archived_at = NOW() WHERE id = $1 AND user_id = $2 AND archived = false"
+    )
+    .bind(id)
+    .bind(auth_user.id)
+    .execute(&state.db)
+    .await
+    .map_err(AppError::Database)?
+    .rows_affected();
+
+    if rows_affected == 0 {
+        return Err(AppError::NotFound(format!("Document {} not found, already archived, or access denied", id)));
+    }
+    Ok(Json(serde_json::json!({ "success": true, "archived": true })))
+}
+
+/// POST /api/documents/{id}/restore — restore a soft-archived document (owner only)
+async fn restore_document(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    auth_user: AuthUser,
+) -> AppResult<Json<serde_json::Value>> {
+    // Check for hash collision with currently active docs before restoring
+    let target: Option<(bool, Option<String>)> = sqlx::query_as(
+        "SELECT archived, content_hash FROM documents WHERE id = $1 AND user_id = $2"
+    )
+    .bind(id)
+    .bind(auth_user.id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(AppError::Database)?;
+
+    let (is_archived, hash) = target
+        .ok_or_else(|| AppError::NotFound(format!("Document {} not found or access denied", id)))?;
+
+    if !is_archived {
+        return Ok(Json(serde_json::json!({ "success": true, "archived": false, "note": "already active" })));
+    }
+
+    if let Some(ref h) = hash {
+        let collision: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM documents WHERE user_id = $1 AND content_hash = $2 AND archived = false AND id != $3 LIMIT 1"
+        )
+        .bind(auth_user.id)
+        .bind(h)
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(AppError::Database)?;
+        if collision.is_some() {
+            return Err(AppError::Conflict(
+                "Cannot restore: an active document with the same content already exists".to_string()
+            ));
+        }
+    }
+
+    sqlx::query(
+        "UPDATE documents SET archived = false, archived_at = NULL WHERE id = $1 AND user_id = $2"
+    )
+    .bind(id)
+    .bind(auth_user.id)
+    .execute(&state.db)
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(Json(serde_json::json!({ "success": true, "archived": false })))
+}
+
+#[derive(Debug, Serialize)]
+struct ResolveResult {
+    success: bool,
+    archived_count: u64,
+    groups_resolved: usize,
+}
+
+/// POST /api/documents/duplicates/resolve — batch soft-archive duplicates, keeping oldest
+async fn resolve_duplicates(
+    State(state): State<AppState>,
+    auth_user: AuthUser,
+) -> AppResult<Json<ResolveResult>> {
+    // Archive all but the oldest document per (user_id, content_hash) group for this user.
+    let result = sqlx::query(
+        r#"
+        UPDATE documents
+        SET archived = true, archived_at = NOW()
+        WHERE user_id = $1
+          AND archived = false
+          AND content_hash IS NOT NULL
+          AND id NOT IN (
+              SELECT DISTINCT ON (user_id, content_hash) id
+              FROM documents
+              WHERE user_id = $1 AND content_hash IS NOT NULL
+              ORDER BY user_id, content_hash, created_at ASC, id ASC
+          )
+        "#
+    )
+    .bind(auth_user.id)
+    .execute(&state.db)
+    .await
+    .map_err(AppError::Database)?;
+
+    let archived_count = result.rows_affected();
+
+    // Count resolved groups (those that had duplicates and now have only one active)
+    let groups_resolved: i64 = sqlx::query_scalar(
+        "SELECT COUNT(DISTINCT content_hash) FROM documents WHERE user_id = $1 AND archived = true AND content_hash IS NOT NULL"
+    )
+    .bind(auth_user.id)
+    .fetch_one(&state.db)
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(Json(ResolveResult {
+        success: true,
+        archived_count,
+        groups_resolved: groups_resolved as usize,
     }))
 }
 
@@ -2142,6 +2276,8 @@ mod tests {
             is_published: false,
             published_at: None,
             tag_names: vec![],
+            archived: false,
+            archived_at: None,
         }
     }
 

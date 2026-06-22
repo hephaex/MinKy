@@ -17,6 +17,8 @@ pub struct Document {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub content_hash: Option<String>,
+    pub archived: bool,
+    pub archived_at: Option<DateTime<Utc>>,
 }
 
 /// A group of documents with identical content (same user + same content_hash).
@@ -144,6 +146,8 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
             content_hash: None,
+            archived: false,
+            archived_at: None,
         }
     }
 
