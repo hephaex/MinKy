@@ -558,7 +558,8 @@ async fn create_document(
     .map_err(AppError::Database)?;
     if dup_id.is_some() {
         return Err(AppError::Conflict(
-            "Duplicate document: this content already exists".to_string()
+            "Duplicate document: this content already exists".to_string(),
+            Some(content_hash.clone()),
         ));
     }
 
@@ -689,7 +690,8 @@ async fn update_document(
         .map_err(AppError::Database)?;
         if collision.is_some() {
             return Err(AppError::Conflict(
-                "Duplicate document: this content already exists".to_string()
+                "Duplicate document: this content already exists".to_string(),
+                None,
             ));
         }
     }
@@ -860,7 +862,8 @@ async fn upload_document(
 
         if existing.is_some() {
             return Err(AppError::Conflict(
-                "Duplicate document: this content was already uploaded".to_string()
+                "Duplicate document: this content was already uploaded".to_string(),
+                Some(content_hash.clone()),
             ));
         }
 
@@ -1201,15 +1204,19 @@ async fn list_archived(
     auth_user: AuthUser,
     Query(query): Query<ArchivedQuery>,
 ) -> AppResult<Json<ArchivedListResponse>> {
-    let page = query.page.unwrap_or(1).max(1);
+    let page = query.page.unwrap_or(1).clamp(1, 100_000);
     let limit = query.limit.unwrap_or(100).clamp(1, 200);
-    let offset = (page - 1) * limit;
+    // Compute in i64 to prevent i32 overflow on large page values.
+    let offset: i64 = (page as i64 - 1) * limit as i64;
+    let limit_i64 = limit as i64;
+
+    let mut tx = state.db.begin().await.map_err(AppError::Database)?;
 
     let total: (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM documents WHERE user_id = $1 AND archived = true",
     )
     .bind(auth_user.id)
-    .fetch_one(&state.db)
+    .fetch_one(&mut *tx)
     .await
     .map_err(AppError::Database)?;
 
@@ -1221,11 +1228,13 @@ async fn list_archived(
            LIMIT $2 OFFSET $3"#,
     )
     .bind(auth_user.id)
-    .bind(limit)
+    .bind(limit_i64)
     .bind(offset)
-    .fetch_all(&state.db)
+    .fetch_all(&mut *tx)
     .await
     .map_err(AppError::Database)?;
+
+    tx.commit().await.map_err(AppError::Database)?;
 
     Ok(Json(ArchivedListResponse {
         success: true,
@@ -1344,7 +1353,8 @@ async fn restore_document(
         .map_err(AppError::Database)?;
         if collision.is_some() {
             return Err(AppError::Conflict(
-                "Cannot restore: an active document with the same content already exists".to_string()
+                "Cannot restore: an active document with the same content already exists".to_string(),
+                Some(h.clone()),
             ));
         }
     }
@@ -1361,7 +1371,8 @@ async fn restore_document(
         if let sqlx::Error::Database(ref db_err) = e {
             if db_err.code().as_deref() == Some("23505") {
                 return AppError::Conflict(
-                    "Cannot restore: an active document with the same content already exists".to_string()
+                    "Cannot restore: an active document with the same content already exists".to_string(),
+                    None,
                 );
             }
         }
@@ -2645,19 +2656,37 @@ mod tests {
 
     #[test]
     fn test_archived_query_pagination_clamping() {
-        // page < 1 → clamped to 1 (simulate handler logic)
-        fn clamp_page(p: Option<i32>) -> i32 { p.unwrap_or(1).max(1) }
+        // Mirrors handler: page.clamp(1, 100_000), limit.clamp(1, 200)
+        fn clamp_page(p: Option<i32>) -> i32 { p.unwrap_or(1).clamp(1, 100_000) }
         assert_eq!(clamp_page(Some(0)), 1);
         assert_eq!(clamp_page(Some(-5)), 1);
         assert_eq!(clamp_page(None), 1);
         assert_eq!(clamp_page(Some(3)), 3);
+        assert_eq!(clamp_page(Some(100_001)), 100_000);
 
-        // limit: default 100, clamped 1..=200
         fn clamp_limit(l: Option<i32>) -> i32 { l.unwrap_or(100).clamp(1, 200) }
         assert_eq!(clamp_limit(None), 100);
         assert_eq!(clamp_limit(Some(300)), 200);
         assert_eq!(clamp_limit(Some(0)), 1);
         assert_eq!(clamp_limit(Some(50)), 50);
+    }
+
+    #[test]
+    fn test_archived_offset_no_overflow() {
+        // With i64 arithmetic, max page * max limit must not overflow.
+        // page clamped to 100_000, limit to 200 → offset max = (100_000-1)*200 = 19_999_800
+        let max_page: i64 = 100_000;
+        let max_limit: i64 = 200;
+        let offset = (max_page - 1) * max_limit;
+        assert_eq!(offset, 19_999_800_i64);
+        assert!(offset < i64::MAX);
+
+        // Verify the old i32 path would have overflowed with page=11_000_000
+        let bad_page: i32 = 11_000_000;
+        let bad_limit: i32 = 200;
+        // This overflows i32; with i64 it is fine (but page is clamped to 100_000 so this path is unreachable).
+        let safe = (bad_page as i64 - 1) * bad_limit as i64;
+        assert!(safe > i32::MAX as i64, "i64 arithmetic avoids i32 wrap");
     }
 
     // -------------------------------------------------------------------------
