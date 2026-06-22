@@ -64,21 +64,32 @@
 - 1903 tests pass / 0 fail, commits `f9a99c07`→`705c02d2`→`a57b7596`→`229409d0`
 - CT306 배포 완료, `GET /api/health` healthy
 
-### 📋 Sprint D2 Roadmap (Next)
+### ✅ Sprint D2: soft-archive + partial UNIQUE 완료 (2026-06-22)
+- migration 021: `archived BOOLEAN`, `archived_at TIMESTAMPTZ` + 1,466 중복 소프트 아카이브
+- `uq_user_content_hash_active` 부분 UNIQUE 인덱스 (`WHERE archived = false AND content_hash IS NOT NULL`)
+- `POST /api/documents/{id}/archive`, `POST /api/documents/{id}/restore`, `POST /api/documents/duplicates/resolve`
+- `GET /api/documents/duplicates` + 모든 read path에 `AND archived = false` 필터 (9개 파일)
+- restore TOCTOU → 23505 SQLSTATE 매핑 → 409 Conflict
+- Opus 레드팀 4회: `[]` (4차 — 잔여 없음)
+- 1903 tests pass / 0 fail, commits `d4cc198c`→`369daa8e`→`2cf7c6a1`→`1b819cd5`
 
-**P1**: UNIQUE constraint 추가
-- migration 021: 기존 중복 중 최신 제외 DELETE 후 `ALTER TABLE documents ADD CONSTRAINT uq_user_content_hash UNIQUE(user_id, content_hash)`
-- 또는: soft-dedup (최신 1개 외 `archived=true` flag 후 UNIQUE 추가)
+### 📋 Sprint D3 Roadmap (Next)
 
-**P2**: Duplicate archive/merge API
-- `POST /api/documents/{id}/archive` — 문서를 archived 상태로 소프트 삭제
-- `POST /api/documents/duplicates/resolve` — 그룹 내 가장 오래된 문서만 유지, 나머지 archive
+**P1**: `GET /api/documents/archived` 목록 엔드포인트
+- archived 문서 페이지네이션 조회 (user-scoped, 100/page)
+- 없으면 restore endpoint가 사실상 사용 불능 (1,466개 auto-archived 발견 불가)
 
-**P3**: Frontend duplicate 표시
-- 업로드 시 409 → 사용자에게 기존 문서 링크 제공
-- `/duplicates` 페이지에서 그룹 목록 + "keep oldest / keep newest / keep all" UI
+**P2**: 프론트엔드 duplicate 관리 UI
+- 업로드 시 409 → 기존 문서 링크 제공 (title + created_at)
+- `/duplicates` 페이지: 그룹 목록 + archive/restore 버튼
 
-**현재 lab-minky CT306 상태**: 1903 tests, content_hash dedup 활성, CT306 healthy
+**P3**: 나머지 LOW deferred 처리
+- `export_service.rs`: owner-scoped bulk export에서 archived 제외
+- `analytics_service.rs` `get_top_documents`, `get_recent_documents`: archived 제외
+- `knowledge_graph_service.rs` `load_document_topics`: archived 제외
+- `ml_service.rs` `get_cluster_documents`, `detect_anomalies`: archived 제외
+
+**현재 lab-minky CT306 상태**: 1903 tests, soft-archive dedup 활성, CT306 healthy, 1,466 docs archived
 
 ---
 

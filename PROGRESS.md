@@ -5,7 +5,41 @@
 
 ---
 
-## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D1 완료
+## 현재 진행 상황 (2026-06-22) — lab-minky Sprint D2 완료
+
+### Sprint D2: soft-archive + partial UNIQUE index (2026-06-22)
+
+| 항목 | 상태 | 세부 |
+|------|------|------|
+| migration 021 | [IMPLEMENTED] | `archived BOOLEAN DEFAULT false`, `archived_at TIMESTAMPTZ`, 1,466 기존 중복 소프트 아카이브 |
+| uq_user_content_hash_active | [IMPLEMENTED] | PARTIAL UNIQUE idx `WHERE archived=false AND content_hash IS NOT NULL` |
+| POST /api/documents/{id}/archive | [IMPLEMENTED] | 소유자 전용, archived=true + archived_at=NOW() |
+| POST /api/documents/{id}/restore | [IMPLEMENTED] | archived=false + 23505→409 TOCTOU 처리 |
+| POST /api/documents/duplicates/resolve | [IMPLEMENTED] | CTE `UPDATE ... RETURNING` atomic — archived_count + groups_resolved |
+| `archived=false` cross-cutting filter | [IMPLEMENTED] | 9개 파일: documents/search/embeddings/understanding/analytics/embedding_service/ml_service/hybrid_search/korean_service |
+| CT306 배포 | [IMPLEMENTED] | healthy, 1903 tests pass / 0 fail |
+
+커밋: `d4cc198c` → `369daa8e` → `2cf7c6a1` → `1b819cd5`
+
+Demo Gate: CT306 `GET /api/health` healthy + migration 021 version 적용 확인 ✓
+
+Opus 레드팀 4회 통과:
+- 1차: CRITICAL(keeper 서브쿼리 archived 미필터→활성 문서 아카이브 위험) + HIGH×4 + MEDIUM×2 수정
+- 2차: CRITICAL(ml_service/hybrid_search/search/korean_service archived 누락) + HIGH×2 수정
+- 3차: CRITICAL(analytics/understanding/embeddings×5 archived 누락) 수정
+- 4차: `[]` — 잔여 없음
+
+Known deferred (LOW, intentional):
+- `export_service.rs` bulk export — owner-scoped, archived 노출 (D3 P3)
+- `analytics_service.rs` get_top_documents, get_recent_documents (D3 P3)
+- `knowledge_graph_service.rs` load_document_topics (D3 P3)
+- `ml_service.rs` get_cluster_documents, detect_anomalies — ML analytics widget (D3 P3)
+
+리뷰 아카이브: `~/.claude/references/2026-06-22_sprint_d2_minky_soft_archive_dedup_review.md`
+
+---
+
+## 이전 진행 상황 (2026-06-22) — lab-minky Sprint D1 완료
 
 ### Sprint D1: content_hash 기반 중복 문서 감지 (2026-06-22)
 
