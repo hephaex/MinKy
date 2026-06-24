@@ -41,7 +41,11 @@ use super::error::PipelineResult;
 /// }
 /// ```
 #[async_trait]
-pub trait PipelineStage<I, O>: Send + Sync {
+pub trait PipelineStage<I, O>: Send + Sync + 'static
+where
+    I: 'static,
+    O: 'static,
+{
     /// Returns the name of this stage for logging and metrics
     fn name(&self) -> &'static str;
 
@@ -84,7 +88,8 @@ impl StageExecutor {
     ) -> PipelineResult<O>
     where
         S: PipelineStage<I, O>,
-        I: Send,
+        I: Send + 'static,
+        O: Send + 'static,
     {
         let stage_name = stage.name();
         let start = std::time::Instant::now();

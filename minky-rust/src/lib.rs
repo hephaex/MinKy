@@ -8,7 +8,11 @@ pub mod routes;
 pub mod services;
 pub mod utils;
 
+pub mod nitl_config;
+pub mod nitl_service;
+
 use anyhow::Result;
+
 use axum::{middleware as axum_middleware, Router};
 use axum::http::{header, Method};
 use sqlx::postgres::PgPoolOptions;

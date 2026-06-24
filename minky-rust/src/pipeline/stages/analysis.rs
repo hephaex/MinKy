@@ -146,6 +146,12 @@ impl AIAnalysisStage {
         })
     }
 
+    /// Analyze a document and return structured results.
+    /// Exposed for background processing outside the pipeline.
+    pub async fn analyze_document(&self, title: &str, content: &str) -> PipelineResult<DocumentAnalysis> {
+        self.analyze(title, content).await
+    }
+
     /// Analyze document using Claude
     async fn analyze(&self, title: &str, content: &str) -> PipelineResult<DocumentAnalysis> {
         let api_key = self

@@ -45,7 +45,10 @@ pub mod error;
 pub mod stage;
 pub mod stages;
 
+pub mod content;
+
 pub use builder::{DocumentPipeline, DocumentPipelineBuilder};
+pub use content::{CasterSyncMessage, FallbackPipeline, FallbackPipelineAcceptor, MinjyContentSyncResult, NamedPipeStrategy};
 pub use context::{PipelineContext, PipelineMetrics};
 pub use error::{PipelineError, PipelineResult};
 pub use stage::PipelineStage;

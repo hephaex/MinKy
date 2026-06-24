@@ -875,26 +875,35 @@ async fn upload_document(
             .app_config(state.config.clone())
             .semantic_chunking(512)
             .user_id(auth_user.id)
-            .anthropic_api_key(upstage_key.clone());
+            .skip_analysis(); // always skip; analysis runs as a background task
         if upstage_key.is_empty() {
             builder = builder.skip_embedding();
         } else {
-            builder = builder.upstage_embedding(upstage_key);
+            builder = builder.upstage_embedding(upstage_key.clone());
         }
         let pipeline = builder.build();
-        let input = IngestionInput::from_text(title.clone(), content);
+        let input = IngestionInput::from_text(title.clone(), content.clone());
 
         let output = pipeline.process(input).await.map_err(|e| {
             tracing::error!("Upload pipeline failed: {}", e);
             AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", e))
         })?;
 
-        let processing_status = if output.analyzed {
-            ProcessingStatus::Completed
-        } else {
-            enqueue_for_embedding(&state, output.document_id).await;
-            ProcessingStatus::Pending
-        };
+        enqueue_for_embedding(&state, output.document_id).await;
+
+        // Spawn AI analysis as a non-blocking background task so the upload
+        // response is returned immediately without waiting for the LLM call.
+        if !upstage_key.is_empty() {
+            let bg_db = state.db.clone();
+            let bg_doc_id = output.document_id;
+            let bg_user_id = auth_user.id;
+            let bg_api_key = upstage_key;
+            let bg_title = output.title.clone();
+            let bg_content = content;
+            tokio::spawn(async move {
+                run_background_analysis(bg_db, bg_doc_id, bg_user_id, bg_api_key, bg_title, bg_content).await;
+            });
+        }
 
         return Ok(Json(UploadResponse {
             success: true,
@@ -902,12 +911,102 @@ async fn upload_document(
                 id: output.document_id,
                 title: output.title,
                 chunks_count: output.chunks_count,
-                processing_status,
+                processing_status: ProcessingStatus::Pending,
             },
         }));
     }
 
     Err(AppError::Validation("No file field found in upload".to_string()))
+}
+
+/// Runs AI analysis for a stored document in the background.
+///
+/// Called via tokio::spawn from the upload handler so that the HTTP response
+/// is returned immediately without waiting for the remote LLM call.
+async fn run_background_analysis(
+    db: sqlx::PgPool,
+    document_id: Uuid,
+    user_id: i32,
+    api_key: String,
+    title: String,
+    content: String,
+) {
+    use crate::pipeline::stages::analysis::AIAnalysisStage;
+
+    let stage = AIAnalysisStage::with_api_key(&api_key);
+    match stage.analyze_document(&title, &content).await {
+        Ok(analysis) => {
+            // Persist analysis into document_understanding
+            let res = sqlx::query(
+                r#"
+                INSERT INTO document_understanding
+                (document_id, topics, summary, problem_solved, insights, technologies, relevant_for, analyzer_model)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (document_id)
+                DO UPDATE SET
+                    topics = $2, summary = $3, problem_solved = $4, insights = $5,
+                    technologies = $6, relevant_for = $7, analyzer_model = $8, analyzed_at = NOW()
+                "#,
+            )
+            .bind(document_id)
+            .bind(&analysis.topics)
+            .bind(&analysis.summary)
+            .bind(&analysis.problem_solved)
+            .bind(&analysis.insights)
+            .bind(&analysis.technologies)
+            .bind(&analysis.relevant_for)
+            .bind(&analysis.analyzer_model)
+            .execute(&db)
+            .await;
+
+            if let Err(e) = res {
+                tracing::warn!(doc_id = %document_id, "Background analysis: failed to store understanding: {}", e);
+                return;
+            }
+
+            // Persist auto-generated tags
+            for tag_name in &analysis.tags {
+                let trimmed = tag_name.trim().to_lowercase();
+                if trimmed.is_empty() || trimmed.len() > 100 {
+                    continue;
+                }
+                let tag_res = sqlx::query_as::<_, (i32,)>(
+                    "INSERT INTO tags (name, user_id) VALUES ($1, $2)
+                     ON CONFLICT (name, user_id) DO UPDATE SET name = EXCLUDED.name
+                     RETURNING id",
+                )
+                .bind(&trimmed)
+                .bind(user_id)
+                .fetch_one(&db)
+                .await;
+
+                match tag_res {
+                    Ok((tag_id,)) => {
+                        let _ = sqlx::query(
+                            "INSERT INTO document_tags (document_id, tag_id) VALUES ($1, $2)
+                             ON CONFLICT DO NOTHING",
+                        )
+                        .bind(document_id)
+                        .bind(tag_id)
+                        .execute(&db)
+                        .await;
+                    }
+                    Err(e) => {
+                        tracing::debug!(doc_id = %document_id, tag = %trimmed, "Background analysis: tag upsert failed: {}", e);
+                    }
+                }
+            }
+
+            tracing::info!(
+                doc_id = %document_id,
+                tags = analysis.tags.len(),
+                "Background analysis complete"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(doc_id = %document_id, "Background analysis failed: {}", e);
+        }
+    }
 }
 
 // ── SRT 자막 업로드 ──────────────────────────────────────────────────────────
