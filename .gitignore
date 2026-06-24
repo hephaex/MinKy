@@ -91,3 +91,6 @@ Claude_*
 
 # PostgreSQL Data
 postgresdata/
+# Untracked scripts
+check-env.sh
+
