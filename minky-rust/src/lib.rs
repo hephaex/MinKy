@@ -8,8 +8,6 @@ pub mod routes;
 pub mod services;
 pub mod utils;
 
-pub mod nitl_config;
-pub mod nitl_service;
 
 use anyhow::Result;
 
