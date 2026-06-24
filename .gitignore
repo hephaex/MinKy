@@ -94,3 +94,5 @@ postgresdata/
 # Untracked scripts
 check-env.sh
 
+# GJC session runtime state
+.gjc/
