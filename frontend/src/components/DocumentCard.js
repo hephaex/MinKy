@@ -93,6 +93,18 @@ const DocumentCard = ({
               </span>
             </>
           )}
+          {document.seoInfo && (
+            <>
+              <span className="meta-separator">•</span>
+              <span className="seo-score" aria-label="SEO score">
+                SEO {document.seoInfo.seoScore}
+              </span>
+              <span className="meta-separator">•</span>
+              <span className="seo-readability" aria-label="Readability">
+                {document.seoInfo.readability}
+              </span>
+            </>
+          )}
         </div>
 
         {/* Tags display with overflow indicator */}
@@ -146,6 +158,10 @@ DocumentCard.propTypes = {
     updated_at: PropTypes.string,
     markdown_content: PropTypes.string,
     processing_status: PropTypes.oneOf(['pending', 'completed', 'failed']),
+    seoInfo: PropTypes.shape({
+      seoScore: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
+      readability: PropTypes.string,
+    }),
   }).isRequired,
   searchQuery: PropTypes.string,
   showPreview: PropTypes.bool,

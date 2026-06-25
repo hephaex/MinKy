@@ -4,13 +4,12 @@ services:
     ports:
       - "5001:5000"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-minky_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-minky_db}
-      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
-      - FLASK_ENV=production
       # CORS Configuration
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
       # Caching Configuration
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-minky_user}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-minky_db}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY is required}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
       - CACHE_TYPE=${CACHE_TYPE:-RedisCache}
       - CACHE_DEFAULT_TIMEOUT=${CACHE_DEFAULT_TIMEOUT:-300}
       - REDIS_URL=redis://redis:6379/0
