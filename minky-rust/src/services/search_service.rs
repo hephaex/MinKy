@@ -1,12 +1,11 @@
 use anyhow::Result;
 use opensearch::{
     http::{
-        request::JsonBody,
         response::Response,
         transport::{SingleNodeConnectionPool, TransportBuilder},
     },
-    indices::{IndicesCreateParts, IndicesExistsParts},
-    BulkParts, DeleteParts, IndexParts, OpenSearch, SearchParts,
+    indices::{IndicesCreateParts},
+    DeleteParts, IndexParts, OpenSearch, SearchParts,
 };
 use serde_json::{json, Value};
 use std::time::Instant;
@@ -25,6 +24,9 @@ const INDEX_NAME: &str = "minky_documents";
 /// OpenSearch service for document search
 pub struct SearchService {
     client: OpenSearch,
+    /// Raw OpenSearch URL for direct HTTP operations (bypasses opensearch-rs for bulk)
+    opensearch_url: String,
+    http: reqwest::Client,
 }
 
 impl SearchService {
@@ -34,31 +36,32 @@ impl SearchService {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("OpenSearch URL not configured"))?;
 
-        let url = opensearch::http::Url::parse(url)?;
-        let pool = SingleNodeConnectionPool::new(url);
+        let os_url = opensearch::http::Url::parse(url)?;
+        let pool = SingleNodeConnectionPool::new(os_url);
         let transport = TransportBuilder::new(pool).build()?;
         let client = OpenSearch::new(transport);
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            opensearch_url: url.trim_end_matches('/').to_string(),
+            http: reqwest::Client::new(),
+        })
     }
 
     /// Create search index with mappings
+    /// Create search index with mappings if it does not already exist.
+    ///
+    /// Uses PUT (create) which returns 400 `resource_already_exists_exception`
+    /// when the index exists — that error is silently swallowed.  We avoid
+    /// HEAD `indices.exists()` because opensearch-rs 2.3 attempts to decode
+    /// the empty HEAD response body and panics with an EOF parse error against
+    /// OpenSearch 3.x.
     pub async fn create_index(&self) -> Result<()> {
-        let exists = self
-            .client
-            .indices()
-            .exists(IndicesExistsParts::Index(&[INDEX_NAME]))
-            .send()
-            .await?;
-
-        if exists.status_code().is_success() {
-            return Ok(());
-        }
-
         let mapping = json!({
             "settings": {
                 "number_of_shards": 1,
                 "number_of_replicas": 0,
+                "index.knn": true,
                 "analysis": {
                     "analyzer": {
                         "korean": {
@@ -100,22 +103,45 @@ impl SearchService {
                         "method": {
                             "name": "hnsw",
                             "space_type": "cosinesimil",
-                        "engine": "faiss"
+                            "engine": "faiss"
                         }
                     }
                 }
             }
         });
 
-        self.client
+        let response = self
+            .client
             .indices()
             .create(IndicesCreateParts::Index(INDEX_NAME))
             .body(mapping)
             .send()
             .await?;
 
-        Ok(())
+        let status = response.status_code();
+        if status.is_success() {
+            return Ok(());
+        }
+
+        // 400 resource_already_exists_exception = index exists, silently ignore
+        if status == 400 {
+            let body: Value = response.json().await.unwrap_or_default();
+            let reason = body
+                .pointer("/error/type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if reason == "resource_already_exists_exception" {
+                return Ok(());
+            }
+            return Err(anyhow::anyhow!("Index creation failed: {}", body));
+        }
+
+        Err(anyhow::anyhow!(
+            "Index creation returned unexpected status: {}",
+            status
+        ))
     }
+
 
     /// Index a document
     pub async fn index_document(&self, doc: SearchDocument) -> Result<()> {
@@ -139,26 +165,55 @@ impl SearchService {
         Ok(())
     }
 
-    /// Bulk index documents
+    /// Bulk index documents using raw reqwest to work around opensearch-rs 2.3
+    /// response-body decode incompatibility with OpenSearch 3.x.
+    /// Sends in batches of 200 documents to keep individual requests small.
     pub async fn bulk_index(&self, documents: Vec<SearchDocument>) -> Result<usize> {
-        let mut body: Vec<JsonBody<Value>> = Vec::new();
-
-        for doc in &documents {
-            body.push(json!({ "index": { "_index": INDEX_NAME, "_id": &doc.id } }).into());
-            body.push(serde_json::to_value(doc)?.into());
+        if documents.is_empty() {
+            return Ok(0);
         }
 
-        let response: Response = self.client.bulk(BulkParts::None).body(body).send().await?;
+        const BATCH_SIZE: usize = 200;
+        let url = format!("{}/_bulk", self.opensearch_url);
+        let mut total = 0usize;
 
-        let result: Value = response.json().await?;
-        let errors = result["errors"].as_bool().unwrap_or(false);
+        for chunk in documents.chunks(BATCH_SIZE) {
+            let mut ndjson = String::new();
+            for doc in chunk {
+                let action = json!({ "index": { "_index": INDEX_NAME, "_id": &doc.id } });
+                ndjson.push_str(&action.to_string());
+                ndjson.push('\n');
+                ndjson.push_str(&serde_json::to_string(doc)?);
+                ndjson.push('\n');
+            }
 
-        if errors {
-            tracing::warn!("Bulk indexing had some errors");
+            let resp = self
+                .http
+                .post(&url)
+                .header("Content-Type", "application/x-ndjson")
+                .body(ndjson)
+                .send()
+                .await
+                .map_err(|e| anyhow::anyhow!("Bulk HTTP request failed: {}", e))?;
+
+            let text = resp.text().await.unwrap_or_default();
+            let errors = serde_json::from_str::<Value>(&text)
+                .unwrap_or_default()
+                .get("errors")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            if errors {
+                tracing::warn!("Bulk batch had errors: {}", &text[..text.len().min(300)]);
+            }
+            total += chunk.len();
         }
 
-        Ok(documents.len())
+        tracing::debug!("Bulk complete: {} docs indexed", total);
+        Ok(total)
     }
+
+
 
     /// Search documents.
     ///
@@ -287,9 +342,14 @@ impl SearchService {
             .await
             .map_err(|e| AppError::Internal(anyhow::anyhow!("Search failed: {}", e)))?;
 
-        let result: Value = response.json().await.map_err(|e| {
-            AppError::Internal(anyhow::anyhow!("Failed to parse search response: {}", e))
-        })?;
+        let result: Value = {
+            let text = response.text().await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("Failed to read search response: {}", e))
+            })?;
+            serde_json::from_str(&text).map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("Failed to parse search response: {}", e))
+            })?
+        };
 
         let total = result["hits"]["total"]["value"].as_i64().unwrap_or(0);
 
@@ -500,7 +560,10 @@ impl SearchService {
             .send()
             .await?;
 
-        let result: Value = response.json().await?;
+        let result: Value = {
+            let text = response.text().await.unwrap_or_default();
+            serde_json::from_str(&text).unwrap_or_default()
+        };
 
         let suggestions: Vec<AutocompleteSuggestion> = result["suggest"]["title-suggest"]
             .as_array()
