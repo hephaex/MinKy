@@ -29,7 +29,9 @@ pub struct SearchService {
 
 impl SearchService {
     pub async fn new(config: &Config) -> Result<Self> {
-        let url = config.opensearch_url.as_ref()
+        let url = config
+            .opensearch_url
+            .as_ref()
             .ok_or_else(|| anyhow::anyhow!("OpenSearch URL not configured"))?;
 
         let url = opensearch::http::Url::parse(url)?;
@@ -42,7 +44,8 @@ impl SearchService {
 
     /// Create search index with mappings
     pub async fn create_index(&self) -> Result<()> {
-        let exists = self.client
+        let exists = self
+            .client
             .indices()
             .exists(IndicesExistsParts::Index(&[INDEX_NAME]))
             .send()
@@ -97,7 +100,7 @@ impl SearchService {
                         "method": {
                             "name": "hnsw",
                             "space_type": "cosinesimil",
-                            "engine": "nmslib"
+                        "engine": "faiss"
                         }
                     }
                 }
@@ -145,11 +148,7 @@ impl SearchService {
             body.push(serde_json::to_value(doc)?.into());
         }
 
-        let response: Response = self.client
-            .bulk(BulkParts::None)
-            .body(body)
-            .send()
-            .await?;
+        let response: Response = self.client.bulk(BulkParts::None).body(body).send().await?;
 
         let result: Value = response.json().await?;
         let errors = result["errors"].as_bool().unwrap_or(false);
@@ -164,7 +163,11 @@ impl SearchService {
     /// Search documents.
     ///
     /// `user_id`: `None` means unauthenticated — confidential documents are excluded.
-    pub async fn search(&self, query: SearchQuery, user_id: Option<i32>) -> AppResult<SearchResponse> {
+    pub async fn search(
+        &self,
+        query: SearchQuery,
+        user_id: Option<i32>,
+    ) -> AppResult<SearchResponse> {
         let start = Instant::now();
 
         let page = query.page.unwrap_or(1).clamp(1, 10_000);
@@ -172,16 +175,14 @@ impl SearchService {
         let from = (page - 1).saturating_mul(limit);
 
         // Build query
-        let mut must_clauses = vec![
-            json!({
-                "multi_match": {
-                    "query": query.q,
-                    "fields": ["title^3", "content", "tags^2"],
-                    "type": "best_fields",
-                    "fuzziness": "AUTO"
-                }
-            })
-        ];
+        let mut must_clauses = vec![json!({
+            "multi_match": {
+                "query": query.q,
+                "fields": ["title^3", "content", "tags^2"],
+                "type": "best_fields",
+                "fuzziness": "AUTO"
+            }
+        })];
 
         // Add filters
         if let Some(category_id) = query.category_id {
@@ -278,15 +279,17 @@ impl SearchService {
             }
         });
 
-        let response = self.client
+        let response = self
+            .client
             .search(SearchParts::Index(&[INDEX_NAME]))
             .body(search_body)
             .send()
             .await
             .map_err(|e| AppError::Internal(anyhow::anyhow!("Search failed: {}", e)))?;
 
-        let result: Value = response.json().await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to parse search response: {}", e)))?;
+        let result: Value = response.json().await.map_err(|e| {
+            AppError::Internal(anyhow::anyhow!("Failed to parse search response: {}", e))
+        })?;
 
         let total = result["hits"]["total"]["value"].as_i64().unwrap_or(0);
 
@@ -306,7 +309,8 @@ impl SearchService {
                     .collect();
 
                 SearchHit {
-                    id: uuid::Uuid::parse_str(source["id"].as_str().unwrap_or("")).unwrap_or_default(),
+                    id: uuid::Uuid::parse_str(source["id"].as_str().unwrap_or(""))
+                        .unwrap_or_default(),
                     title: source["title"].as_str().unwrap_or("").to_string(),
                     content_snippet: highlights.first().cloned().unwrap_or_default(),
                     highlights,
@@ -319,11 +323,15 @@ impl SearchService {
                         .filter_map(|t| t.as_str().map(String::from))
                         .collect(),
                     created_at: chrono::DateTime::parse_from_rfc3339(
-                        source["created_at"].as_str().unwrap_or("")
-                    ).map(|dt| dt.with_timezone(&chrono::Utc)).unwrap_or_default(),
+                        source["created_at"].as_str().unwrap_or(""),
+                    )
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_default(),
                     updated_at: chrono::DateTime::parse_from_rfc3339(
-                        source["updated_at"].as_str().unwrap_or("")
-                    ).map(|dt| dt.with_timezone(&chrono::Utc)).unwrap_or_default(),
+                        source["updated_at"].as_str().unwrap_or(""),
+                    )
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_default(),
                 }
             })
             .collect();
@@ -369,7 +377,12 @@ impl SearchService {
     ///
     /// `user_id`: `None` means unauthenticated — confidential documents are excluded
     /// via a `post_filter` on the `sensitivity` field.
-    pub async fn semantic_search(&self, embedding: Vec<f32>, limit: i32, user_id: Option<i32>) -> AppResult<Vec<SearchHit>> {
+    pub async fn semantic_search(
+        &self,
+        embedding: Vec<f32>,
+        limit: i32,
+        user_id: Option<i32>,
+    ) -> AppResult<Vec<SearchHit>> {
         let mut search_body = json!({
             "size": limit,
             "query": {
@@ -392,14 +405,17 @@ impl SearchService {
             });
         }
 
-        let response = self.client
+        let response = self
+            .client
             .search(SearchParts::Index(&[INDEX_NAME]))
             .body(search_body)
             .send()
             .await
             .map_err(|e| AppError::Internal(anyhow::anyhow!("Semantic search failed: {}", e)))?;
 
-        let result: Value = response.json().await
+        let result: Value = response
+            .json()
+            .await
             .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to parse response: {}", e)))?;
 
         let hits: Vec<SearchHit> = result["hits"]["hits"]
@@ -409,9 +425,15 @@ impl SearchService {
             .map(|hit| {
                 let source = &hit["_source"];
                 SearchHit {
-                    id: uuid::Uuid::parse_str(source["id"].as_str().unwrap_or("")).unwrap_or_default(),
+                    id: uuid::Uuid::parse_str(source["id"].as_str().unwrap_or(""))
+                        .unwrap_or_default(),
                     title: source["title"].as_str().unwrap_or("").to_string(),
-                    content_snippet: source["content"].as_str().unwrap_or("").chars().take(200).collect(),
+                    content_snippet: source["content"]
+                        .as_str()
+                        .unwrap_or("")
+                        .chars()
+                        .take(200)
+                        .collect(),
                     highlights: vec![],
                     score: hit["_score"].as_f64().unwrap_or(0.0) as f32,
                     category_name: source["category_name"].as_str().map(String::from),
@@ -422,11 +444,15 @@ impl SearchService {
                         .filter_map(|t| t.as_str().map(String::from))
                         .collect(),
                     created_at: chrono::DateTime::parse_from_rfc3339(
-                        source["created_at"].as_str().unwrap_or("")
-                    ).map(|dt| dt.with_timezone(&chrono::Utc)).unwrap_or_default(),
+                        source["created_at"].as_str().unwrap_or(""),
+                    )
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_default(),
                     updated_at: chrono::DateTime::parse_from_rfc3339(
-                        source["updated_at"].as_str().unwrap_or("")
-                    ).map(|dt| dt.with_timezone(&chrono::Utc)).unwrap_or_default(),
+                        source["updated_at"].as_str().unwrap_or(""),
+                    )
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_default(),
                 }
             })
             .collect();
@@ -438,7 +464,12 @@ impl SearchService {
     ///
     /// `user_id`: `None` means unauthenticated — a `post_filter` restricts results
     /// so that confidential document titles are never surfaced.
-    pub async fn autocomplete(&self, prefix: &str, limit: i32, user_id: Option<i32>) -> Result<Vec<AutocompleteSuggestion>> {
+    pub async fn autocomplete(
+        &self,
+        prefix: &str,
+        limit: i32,
+        user_id: Option<i32>,
+    ) -> Result<Vec<AutocompleteSuggestion>> {
         let mut search_body = json!({
             "suggest": {
                 "title-suggest": {
@@ -462,7 +493,8 @@ impl SearchService {
             });
         }
 
-        let response = self.client
+        let response = self
+            .client
             .search(SearchParts::Index(&[INDEX_NAME]))
             .body(search_body)
             .send()
