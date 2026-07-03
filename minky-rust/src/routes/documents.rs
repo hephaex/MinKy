@@ -10,7 +10,8 @@ use validator::Validate;
 
 use secrecy::ExposeSecret;
 
-use crate::{error::{AppError, AppResult}, middleware::{AuthUser, OptionalAuthUser}, AppState};
+use crate::{error::{AppError, AppResult}, middleware::{AuthPrincipal, AuthUser, OptionalAuthUser}, AppState};
+
 use crate::models::DuplicateGroup;
 use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
 use crate::services::{EmbeddingConfig, EmbeddingService};
@@ -639,13 +640,13 @@ pub struct UpdateDocumentRequest {
 
 async fn update_document(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    principal: AuthPrincipal,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateDocumentRequest>,
 ) -> AppResult<Json<FlaskDocumentItem>> {
     payload.validate().map_err(|e| AppError::Validation(e.to_string()))?;
 
-    let user_id = auth_user.id;
+    let user_id = principal.effective_user_id();
 
     // Check document exists AND user owns it; also read current is_public + sensitivity
     // so we can validate the merged state before applying the update.
@@ -817,7 +818,7 @@ fn validate_upload_data(data: &[u8]) -> Result<(), String> {
 
 async fn upload_document(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    principal: AuthPrincipal,
     mut multipart: Multipart,
 ) -> Result<Json<UploadResponse>, AppError> {
     while let Some(field) = multipart.next_field().await.map_err(|e| {
@@ -854,7 +855,7 @@ async fn upload_document(
         let existing: Option<(Uuid, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
             "SELECT id, title, created_at FROM documents WHERE user_id = $1 AND content_hash = $2 AND archived = false LIMIT 1"
         )
-        .bind(auth_user.id)
+        .bind(principal.effective_user_id())
         .bind(&content_hash)
         .fetch_optional(&state.db)
         .await
@@ -874,7 +875,7 @@ async fn upload_document(
             .pool(state.db.clone())
             .app_config(state.config.clone())
             .semantic_chunking(512)
-            .user_id(auth_user.id)
+            .user_id(principal.effective_user_id())
             .skip_analysis(); // always skip; analysis runs as a background task
         if upstage_key.is_empty() {
             builder = builder.skip_embedding();
@@ -896,7 +897,7 @@ async fn upload_document(
         if !upstage_key.is_empty() {
             let bg_db = state.db.clone();
             let bg_doc_id = output.document_id;
-            let bg_user_id = auth_user.id;
+            let bg_user_id = principal.effective_user_id();
             let bg_api_key = upstage_key;
             let bg_title = output.title.clone();
             let bg_content = content;

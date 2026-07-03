@@ -389,6 +389,8 @@ async function hybridSearch(query) {
     fetch(`/api/search?q=${query}`),
     fetch('/api/search/semantic', {
       method: 'POST',
+      // Authentication is required (Bearer JWT or X-API-Key).
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
       body: JSON.stringify({ query })
     })
   ]);
@@ -444,7 +446,8 @@ function SearchComponent() {
   const handleSemanticSearch = async () => {
     const res = await fetch('/api/search/semantic', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // Authentication is required (Bearer JWT or X-API-Key).
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
       body: JSON.stringify({ query, limit: 20 })
     });
     const data = await res.json();

@@ -24,7 +24,7 @@ use tokio_stream::StreamExt;
 
 use crate::{
     error::AppResult,
-    middleware::OptionalAuthUser,
+    middleware::{AuthPrincipal, OptionalAuthUser},
     models::{
         RagAskRequest, RagAskResponse, RagSemanticSearchRequest,
         RagSemanticSearchResponse, RagSource, SearchHistoryEntry, SearchHistoryQuery,
@@ -156,7 +156,9 @@ async fn ask(
 /// ```
 async fn semantic_search(
     State(state): State<AppState>,
-    _auth_user: OptionalAuthUser,
+    // Authentication is required for semantic search. Single-tenant deployment:
+    // the principal is verified but results are NOT filtered by user_id.
+    _principal: AuthPrincipal,
     Json(payload): Json<RagSemanticSearchRequest>,
 ) -> AppResult<Json<SemanticResponseBody>> {
     if payload.query.trim().is_empty() {

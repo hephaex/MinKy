@@ -59,6 +59,17 @@ type SessionInfoRow = (
     chrono::DateTime<chrono::Utc>,
 );
 
+/// Identity resolved from a validated API key.
+///
+/// Returned by [`SecurityService::validate_api_key`] when a raw key matches an
+/// active, unexpired row in `api_keys`.
+#[derive(Debug, Clone)]
+pub struct ApiKeyIdentity {
+    pub key_id: i64,
+    pub user_id: i32,
+    pub name: String,
+}
+
 /// Security service
 pub struct SecurityService {
     db: PgPool,
@@ -335,6 +346,51 @@ impl SecurityService {
             .await?;
 
         Ok(())
+    }
+
+    /// Validate a raw API key and resolve its owning identity.
+    ///
+    /// Hashes `raw_key` with SHA256 (same scheme as [`hash_api_key`]) and looks
+    /// up a matching row that is active and not expired:
+    /// `is_active = true AND (expires_at IS NULL OR expires_at > NOW())`.
+    ///
+    /// On a match, `last_used_at` is refreshed in a fire-and-forget task so key
+    /// validation latency is unaffected and a failed bookkeeping update never
+    /// fails authentication. Returns `Ok(None)` when no active key matches.
+    pub async fn validate_api_key(&self, raw_key: &str) -> Result<Option<ApiKeyIdentity>> {
+        let key_hash = hash_api_key(raw_key);
+
+        let row: Option<(i64, i32, String)> = sqlx::query_as(
+            r#"
+            SELECT id, user_id, name
+            FROM api_keys
+            WHERE key_hash = $1
+              AND is_active = true
+              AND (expires_at IS NULL OR expires_at > NOW())
+            "#,
+        )
+        .bind(&key_hash)
+        .fetch_optional(&self.db)
+        .await?;
+
+        let Some((key_id, user_id, name)) = row else {
+            return Ok(None);
+        };
+
+        // Non-blocking last_used_at refresh: bookkeeping only, ignore result.
+        let db = self.db.clone();
+        tokio::spawn(async move {
+            let _ = sqlx::query("UPDATE api_keys SET last_used_at = NOW() WHERE id = $1")
+                .bind(key_id)
+                .execute(&db)
+                .await;
+        });
+
+        Ok(Some(ApiKeyIdentity {
+            key_id,
+            user_id,
+            name,
+        }))
     }
 
     /// Get user sessions
