@@ -368,25 +368,31 @@ impl EmbeddingService {
         Ok(results)
     }
 
+    /// Resolve the query/storage model split and generate a query embedding.
+    ///
+    /// Upstage Solar uses asymmetric embeddings: queries are embedded with
+    /// `UpstaageSolarQuery` but stored/compared against rows embedded with
+    /// `UpstaageSolarPassage`. Other models use the same model for both
+    /// sides. Returns `(query_embedding, storage_model)` so callers can bind
+    /// `storage_model` as a `WHERE model = $N` filter and avoid comparing
+    /// embeddings across incompatible vector spaces.
+    pub async fn embed_query(
+        &self,
+        query: &str,
+        requested_model: Option<EmbeddingModel>,
+    ) -> Result<(Vec<f32>, EmbeddingModel)> {
+        let (query_model, storage_model) =
+            resolve_query_storage_models(requested_model.unwrap_or(self.config.default_model));
+        let query_embedding = self.generate_embedding(query, query_model).await?;
+        Ok((query_embedding, storage_model))
+    }
+
     /// Semantic search using vector similarity
     pub async fn semantic_search(
         &self,
         req: SemanticSearchRequest,
     ) -> Result<Vec<SemanticSearchResult>> {
-        let requested_model = req.model.unwrap_or(self.config.default_model);
-        let query_model = if requested_model == EmbeddingModel::UpstaageSolarPassage {
-            EmbeddingModel::UpstaageSolarQuery
-        } else {
-            requested_model
-        };
-        let storage_model = if query_model == EmbeddingModel::UpstaageSolarQuery {
-            EmbeddingModel::UpstaageSolarPassage
-        } else {
-            query_model
-        };
-
-        // Generate query embedding
-        let query_embedding = self.generate_embedding(&req.query, query_model).await?;
+        let (query_embedding, storage_model) = self.embed_query(&req.query, req.model).await?;
         let threshold = req.threshold.unwrap_or(0.7);
 
         // Search in chunk embeddings with cosine similarity
@@ -396,7 +402,7 @@ impl EmbeddingService {
                 ce.document_id,
                 ce.id as chunk_id,
                 ce.chunk_text,
-                1 - (ce.embedding <=> $1) as similarity,
+                (1 - (ce.embedding <=> $1))::float4 as similarity,
                 d.title as document_title
             FROM chunk_embeddings ce
             JOIN documents d ON d.id = ce.document_id
@@ -444,7 +450,7 @@ impl EmbeddingService {
                 de.document_id,
                 NULL::uuid as chunk_id,
                 NULL as chunk_text,
-                1 - (de.embedding <=> se.embedding) as similarity,
+                (1 - (de.embedding <=> se.embedding))::float4 as similarity,
                 d.title as document_title
             FROM document_embeddings de
             CROSS JOIN source_embedding se
@@ -750,6 +756,31 @@ impl EmbeddingService {
             }
         }
     }
+}
+
+/// Resolve the query-time embedding model and the storage model to filter
+/// against, given a requested (or default) model.
+///
+/// Upstage Solar uses asymmetric embeddings: a caller requesting
+/// `UpstaageSolarPassage` (the storage/indexing model) must actually embed
+/// their *query* text with `UpstaageSolarQuery`, then filter stored rows by
+/// `UpstaageSolarPassage`. Every other model uses the same model for both
+/// query and storage. Returns `(query_model, storage_model)`.
+#[inline]
+pub fn resolve_query_storage_models(
+    requested_model: EmbeddingModel,
+) -> (EmbeddingModel, EmbeddingModel) {
+    let query_model = if requested_model == EmbeddingModel::UpstaageSolarPassage {
+        EmbeddingModel::UpstaageSolarQuery
+    } else {
+        requested_model
+    };
+    let storage_model = if query_model == EmbeddingModel::UpstaageSolarQuery {
+        EmbeddingModel::UpstaageSolarPassage
+    } else {
+        query_model
+    };
+    (query_model, storage_model)
 }
 
 /// Returns `true` when the embedding worker should pause before processing the next item.
@@ -1152,5 +1183,197 @@ mod tests {
         // success
         consecutive = 0;
         assert!(!should_circuit_break(consecutive, 3), "should not break after reset");
+    }
+
+    #[test]
+    fn resolve_models_solar_passage_splits_into_query_and_passage() {
+        let (query_model, storage_model) =
+            resolve_query_storage_models(EmbeddingModel::UpstaageSolarPassage);
+        assert_eq!(query_model, EmbeddingModel::UpstaageSolarQuery);
+        assert_eq!(storage_model, EmbeddingModel::UpstaageSolarPassage);
+    }
+
+    #[test]
+    fn resolve_models_solar_query_resolves_storage_to_passage() {
+        let (query_model, storage_model) =
+            resolve_query_storage_models(EmbeddingModel::UpstaageSolarQuery);
+        assert_eq!(query_model, EmbeddingModel::UpstaageSolarQuery);
+        assert_eq!(storage_model, EmbeddingModel::UpstaageSolarPassage);
+    }
+
+    #[test]
+    fn resolve_models_symmetric_model_uses_same_model_both_sides() {
+        let (query_model, storage_model) =
+            resolve_query_storage_models(EmbeddingModel::OpenaiTextEmbedding3Small);
+        assert_eq!(query_model, EmbeddingModel::OpenaiTextEmbedding3Small);
+        assert_eq!(storage_model, EmbeddingModel::OpenaiTextEmbedding3Small);
+    }
+
+    #[test]
+    fn resolve_models_never_returns_incompatible_query_storage_pair() {
+        let all_models = [
+            EmbeddingModel::OpenaiTextEmbedding3Small,
+            EmbeddingModel::OpenaiTextEmbedding3Large,
+            EmbeddingModel::VoyageLarge2,
+            EmbeddingModel::VoyageCode2,
+            EmbeddingModel::NomicEmbedTextV15,
+            EmbeddingModel::UpstaageSolarPassage,
+            EmbeddingModel::UpstaageSolarQuery,
+        ];
+        for requested in all_models {
+            let (query_model, storage_model) = resolve_query_storage_models(requested);
+            // The storage model must never itself be the query-only variant.
+            assert_ne!(
+                storage_model,
+                EmbeddingModel::UpstaageSolarQuery,
+                "storage model resolved from {:?} must not be the query-only variant",
+                requested
+            );
+            // Re-resolving the storage model must be a no-op (idempotent / stable fixed point).
+            let (_, storage_again) = resolve_query_storage_models(storage_model);
+            assert_eq!(
+                storage_again, storage_model,
+                "resolving storage_model={:?} again must be stable",
+                storage_model
+            );
+            let _ = query_model;
+        }
+    }
+
+    /// Regression test for the float8-vs-f32 sqlx decode mismatch: pgvector's
+    /// `1 - (a <=> b)` distance expression returns `FLOAT8`/`double precision`,
+    /// but `SemanticSearchRow.similarity` is `f32`. Without an explicit
+    /// `::float4` cast in the SQL, `sqlx::query_as` fails at runtime with a
+    /// `ColumnDecode` error the moment a row is actually returned (this never
+    /// surfaced before because these paths were never exercised against real
+    /// data). Requires a live Postgres; skipped in CI. Run with:
+    ///   MINKY_DATABASE_URL=... UPSTAGE_API_KEY=... cargo test -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn semantic_search_and_find_similar_documents_decode_similarity_without_error() {
+        use sqlx::postgres::PgPoolOptions;
+
+        let upstage_api_key = match std::env::var("UPSTAGE_API_KEY") {
+            Ok(key) if !key.is_empty() => key,
+            _ => {
+                eprintln!("skipping: UPSTAGE_API_KEY not set");
+                return;
+            }
+        };
+
+        let database_url = std::env::var("MINKY_DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://minky:minky@localhost/minky".to_string());
+
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&database_url)
+            .await
+            .expect("Failed to connect to test database");
+
+        let config = EmbeddingConfig {
+            openai_api_key: None,
+            voyage_api_key: None,
+            upstage_api_key: Some(upstage_api_key),
+            default_model: EmbeddingModel::UpstaageSolarPassage,
+            chunk_size: 512,
+            chunk_overlap: 50,
+            local_embedding_enabled: false,
+        };
+        let service = EmbeddingService::new(pool.clone(), config);
+
+        // Seed a document with a chunk embedding and a document-level embedding,
+        // both on the storage model resolved from the default config.
+        let user_id: i32 = sqlx::query_scalar(
+            "INSERT INTO users (email, username, password_hash) \
+             VALUES ($1, $2, 'x') \
+             ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email \
+             RETURNING id",
+        )
+        .bind("float4-decode-test@minky.local")
+        .bind("float4_decode_test")
+        .fetch_one(&pool)
+        .await
+        .expect("seed user");
+
+        let document_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO documents (title, content, user_id) VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind("float4 decode fixture")
+        .bind("The quick brown fox jumps over the lazy dog.")
+        .bind(user_id)
+        .fetch_one(&pool)
+        .await
+        .expect("seed document");
+
+        let dummy_vec = vec![0.001_f32; 4096];
+
+        sqlx::query(
+            "INSERT INTO document_embeddings (document_id, embedding, model) VALUES ($1, $2, $3)",
+        )
+        .bind(document_id)
+        .bind(Vector::from(dummy_vec.clone()))
+        .bind(EmbeddingModel::UpstaageSolarPassage)
+        .execute(&pool)
+        .await
+        .expect("seed document embedding");
+
+        sqlx::query(
+            "INSERT INTO chunk_embeddings (document_id, chunk_index, chunk_text, chunk_start_offset, chunk_end_offset, embedding, model, token_count) \
+             VALUES ($1, 0, 'quick brown fox', 0, 15, $2, $3, 3)",
+        )
+        .bind(document_id)
+        .bind(Vector::from(dummy_vec))
+        .bind(EmbeddingModel::UpstaageSolarPassage)
+        .execute(&pool)
+        .await
+        .expect("seed chunk embedding");
+
+        let semantic_result = service
+            .semantic_search(SemanticSearchRequest {
+                query: "quick brown fox".to_string(),
+                model: None,
+                threshold: Some(-1.0),
+                user_id: None,
+                limit: 10,
+            })
+            .await;
+
+        let similar_result = service.find_similar_documents(document_id, 10).await;
+
+        // Cleanup before asserting, so a failed assertion doesn't leave fixtures behind.
+        sqlx::query("DELETE FROM chunk_embeddings WHERE document_id = $1")
+            .bind(document_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM document_embeddings WHERE document_id = $1")
+            .bind(document_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM documents WHERE id = $1")
+            .bind(document_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+
+        let semantic_results =
+            semantic_result.expect("semantic_search must decode rows without a ColumnDecode error");
+        assert!(
+            !semantic_results.is_empty(),
+            "expected at least one chunk match for the seeded document"
+        );
+
+        let similar_results =
+            similar_result.expect("find_similar_documents must decode rows without a ColumnDecode error");
+        // find_similar_documents excludes the source document itself and there is
+        // no other document seeded, so an empty result here is expected and still
+        // proves the query executed and decoded successfully (no panic/error).
+        let _ = similar_results;
     }
 }

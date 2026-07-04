@@ -47,8 +47,14 @@ async fn search(
     auth_user: OptionalAuthUser,
     Query(query): Query<SearchQuery>,
 ) -> AppResult<Json<SearchResponseBody>> {
-    let search_service = SearchService::new(&state.config).await
-        .map_err(AppError::Internal)?;
+    // Query text must be tokenized the same way as indexed documents (see
+    // SearchService::create_index's whitespace "korean" analyzer applied to
+    // title_tokenized/content_tokenized), or un-segmented Korean queries
+    // never match the segmented morpheme index.
+    let search_service =
+        SearchService::with_korean_tokenizer(&state.config, state.korean_tokenizer.clone())
+            .await
+            .map_err(AppError::Internal)?;
 
     let user_id = auth_user.0.map(|u| u.id);
     let response = search_service.search(query, user_id).await?;
@@ -142,10 +148,26 @@ async fn reindex_all(
     _admin: AdminUser,
 ) -> AppResult<Json<ReindexResponse>> {
 
-    let search_service = SearchService::new(&state.config).await
+    let search_service = SearchService::with_korean_tokenizer(&state.config, state.korean_tokenizer.clone())
+        .await
         .map_err(AppError::Internal)?;
 
-    // Create index if not exists
+    // Full reindex is a bounded destructive cutover: delete the existing
+    // index (if any) before recreating it, so a mapping change (e.g. the
+    // mecab-ko whitespace analyzer replacing nori, or the removed
+    // knn_vector field) actually takes effect. `create_index` alone
+    // silently no-ops via the 400 resource_already_exists_exception path
+    // when the index already exists with a stale mapping — correct for the
+    // common "index already correct" case, but reindex_all is specifically
+    // the operator-triggered rebuild path, so it must force a real rebuild.
+    // OpenSearch is a rebuildable lexical projection of Postgres (Postgres
+    // is the source of truth), so this delete+recreate is safe: worst case
+    // is a brief search-unavailability window until bulk_index below
+    // repopulates it.
+    search_service
+        .delete_index()
+        .await
+        .map_err(AppError::Internal)?;
     search_service.create_index().await
         .map_err(AppError::Internal)?;
 
@@ -172,24 +194,53 @@ async fn reindex_all(
     .fetch_all(&state.db)
     .await?;
 
-    let search_documents: Vec<crate::models::SearchDocument> = documents.into_iter()
-        .map(|d| crate::models::SearchDocument {
-            id: d.0,
-            title: d.1,
-            content: d.2,
-            category_id: d.3,
-            category_name: None,
-            tags: vec![],
-            user_id: d.4,
-            author_name: String::new(),
-            created_at: d.5,
-            updated_at: d.6,
-            view_count: d.7,
-            embedding: None,
-            sensitivity: d.8,
-            is_public: d.9,
-        })
-        .collect();
+    // Pre-tokenize title/content with the shared mecab-ko tokenizer (falls
+    // back to whitespace splitting when no dictionary is configured) into
+    // separate *_tokenized fields analyzed by the whitespace "korean"
+    // OpenSearch analyzer (see SearchService::create_index). "title"/
+    // "content" themselves keep the original readable text unmodified so
+    // _source retrieval never returns tokenized/corrupted display text —
+    // only the *_tokenized copies are used for lexical matching. This is
+    // the same tokenizer used for /api/korean/analyze (mechanism B2: one
+    // shared pipeline for lexical indexing and, per the embedding
+    // preprocessing step, pgvector embeddings).
+    //
+    // Tokenization is CPU-bound (mecab-ko Viterbi search over the whole
+    // corpus), so it runs inside spawn_blocking rather than on the async
+    // worker thread, matching the fastembed/EmbeddingService::local_model
+    // discipline used elsewhere in this codebase.
+    let korean_tokenizer = state.korean_tokenizer.clone();
+    let search_documents: Vec<crate::models::SearchDocument> = tokio::task::spawn_blocking(move || {
+        documents
+            .into_iter()
+            .map(|d| {
+                let title_tokenized =
+                    crate::services::tokenize_for_lexical_index_with(korean_tokenizer.as_ref(), &d.1);
+                let content_tokenized =
+                    crate::services::tokenize_for_lexical_index_with(korean_tokenizer.as_ref(), &d.2);
+                crate::models::SearchDocument {
+                    id: d.0,
+                    title: d.1,
+                    content: d.2,
+                    title_tokenized,
+                    content_tokenized,
+                    category_id: d.3,
+                    category_name: None,
+                    tags: vec![],
+                    user_id: d.4,
+                    author_name: String::new(),
+                    created_at: d.5,
+                    updated_at: d.6,
+                    view_count: d.7,
+                    embedding: None,
+                    sensitivity: d.8,
+                    is_public: d.9,
+                }
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| AppError::Internal(anyhow::anyhow!("reindex tokenization task panicked: {}", e)))?;
 
     let count = search_service.bulk_index(search_documents).await
         .map_err(AppError::Internal)?;

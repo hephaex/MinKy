@@ -55,7 +55,7 @@ async fn hybrid_search(
     State(state): State<AppState>,
     Json(req): Json<HybridSearchRequest>,
 ) -> AppResult<Json<HybridSearchResponse>> {
-    let service = HybridSearchService::new(state.db.clone());
+    let service = HybridSearchService::new(state.db.clone(), state.embedding_service.clone());
     let response = service.search(req).await?;
     Ok(Json(response))
 }
@@ -65,7 +65,7 @@ async fn keyword_search(
     State(state): State<AppState>,
     Json(req): Json<SimpleSearchRequest>,
 ) -> AppResult<Json<HybridSearchResponse>> {
-    let service = HybridSearchService::new(state.db.clone());
+    let service = HybridSearchService::new(state.db.clone(), state.embedding_service.clone());
     let response = service.search(HybridSearchRequest {
         query: req.query,
         mode: SearchMode::Keyword,
@@ -84,7 +84,7 @@ async fn vector_search(
     State(state): State<AppState>,
     Json(req): Json<SimpleSearchRequest>,
 ) -> AppResult<Json<HybridSearchResponse>> {
-    let service = HybridSearchService::new(state.db.clone());
+    let service = HybridSearchService::new(state.db.clone(), state.embedding_service.clone());
     let response = service.search(HybridSearchRequest {
         query: req.query,
         mode: SearchMode::Vector,
@@ -103,7 +103,7 @@ async fn deep_search(
     State(state): State<AppState>,
     Json(req): Json<SimpleSearchRequest>,
 ) -> AppResult<Json<HybridSearchResponse>> {
-    let service = HybridSearchService::new(state.db.clone());
+    let service = HybridSearchService::new(state.db.clone(), state.embedding_service.clone());
     let response = service.search(HybridSearchRequest {
         query: req.query,
         mode: SearchMode::Deep,
