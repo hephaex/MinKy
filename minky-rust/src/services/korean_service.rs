@@ -1,6 +1,7 @@
 use anyhow::Result;
 use sqlx::PgPool;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use crate::models::{
     AnalysisOptions, AnalyzeTextRequest, AutocompleteRequest, CreateSynonymGroup,
@@ -10,10 +11,82 @@ use crate::models::{
     SpellCorrection, StopwordList, SynonymGroup,
 };
 
+/// Shared handle to a real mecab-ko morphological tokenizer.
+///
+/// `mecab_ko::Tokenizer::tokenize` requires `&mut self` (it reuses an
+/// internal Lattice buffer for performance), so the tokenizer is wrapped in
+/// a blocking [`std::sync::Mutex`] shared across requests via [`Arc`],
+/// mirroring the `fastembed`/`EmbeddingService::local_model` pattern used
+/// elsewhere in this codebase. `None` means no dictionary was configured or
+/// loading it failed at startup; callers fall back to the lightweight
+/// whitespace heuristic rather than failing the request outright.
+pub type SharedKoreanTokenizer = Arc<Mutex<mecab_ko::Tokenizer>>;
+
+/// Load the mecab-ko tokenizer from `MECAB_KO_DICDIR` (a directory produced
+/// by `mecab-ko-dict-builder`, e.g. `sys.dic.zst` + `matrix.bin.zst` +
+/// `entries.bin`). Returns `None` when the env var is unset or loading
+/// fails; callers must fall back gracefully rather than erroring, since
+/// morphological analysis is a quality-of-search enhancement, not a
+/// hard dependency.
+pub fn load_shared_korean_tokenizer() -> Option<SharedKoreanTokenizer> {
+    let dicdir = std::env::var("MECAB_KO_DICDIR").ok()?;
+    match mecab_ko::Tokenizer::with_dict(&dicdir) {
+        Ok(tokenizer) => {
+            tracing::info!(dicdir = %dicdir, "mecab-ko tokenizer loaded");
+            Some(Arc::new(Mutex::new(tokenizer)))
+        }
+        Err(e) => {
+            tracing::error!(dicdir = %dicdir, error = %e, "failed to load mecab-ko dictionary; falling back to whitespace tokenization");
+            None
+        }
+    }
+}
+
+/// Tokenize `text` into `(surface, pos)` pairs using `tokenizer` when
+/// present, otherwise the whitespace+heuristic-POS fallback. Free function
+/// (no `KoreanService`/DB dependency) so callers that only need
+/// tokenization — e.g. `SearchService`'s query-side pre-tokenization — do
+/// not need to construct a full `KoreanService`.
+pub fn tokenize_with(tokenizer: Option<&SharedKoreanTokenizer>, text: &str) -> Vec<(String, String)> {
+    if let Some(tokenizer) = tokenizer {
+        match tokenizer.lock() {
+            Ok(mut guard) => {
+                return guard
+                    .tokenize(text)
+                    .into_iter()
+                    .map(|t| (t.surface, t.pos))
+                    .collect();
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "mecab-ko tokenizer mutex poisoned; falling back to whitespace tokenization");
+            }
+        }
+    }
+    text.split_whitespace()
+        .map(|token| (token.to_string(), guess_pos(token)))
+        .collect()
+}
+
+/// Pre-tokenize `text` for OpenSearch lexical indexing/querying: joins
+/// mecab-ko morpheme surfaces (or the whitespace-heuristic fallback) with
+/// single spaces. Free function counterpart of
+/// [`KoreanService::tokenize_for_lexical_index`] — used directly by
+/// `SearchService` so both the document-indexing side and the query side
+/// stay symmetric against the whitespace-only OpenSearch analyzer without
+/// requiring a `KoreanService`/DB handle.
+pub fn tokenize_for_lexical_index_with(tokenizer: Option<&SharedKoreanTokenizer>, text: &str) -> String {
+    tokenize_with(tokenizer, text)
+        .into_iter()
+        .map(|(surface, _pos)| surface)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Korean language service
 pub struct KoreanService {
     db: PgPool,
     stopwords: Vec<String>,
+    tokenizer: Option<SharedKoreanTokenizer>,
 }
 
 impl KoreanService {
@@ -21,7 +94,36 @@ impl KoreanService {
         Self {
             db,
             stopwords: default_korean_stopwords(),
+            tokenizer: None,
         }
+    }
+
+    /// Create a service that uses a shared real mecab-ko tokenizer for
+    /// morphological analysis, falling back to the whitespace heuristic
+    /// when `tokenizer` is `None`.
+    pub fn with_tokenizer(db: PgPool, tokenizer: Option<SharedKoreanTokenizer>) -> Self {
+        Self {
+            db,
+            stopwords: default_korean_stopwords(),
+            tokenizer,
+        }
+    }
+
+    /// Tokenize `text` into `(surface, pos)` pairs using the real mecab-ko
+    /// tokenizer when available, otherwise the whitespace+heuristic fallback.
+    fn tokenize(&self, text: &str) -> Vec<(String, String)> {
+        tokenize_with(self.tokenizer.as_ref(), text)
+    }
+
+    /// Pre-tokenize `text` for OpenSearch lexical indexing: joins mecab-ko
+    /// morpheme surfaces (or the whitespace-heuristic fallback) with single
+    /// spaces, so a plain whitespace analyzer on the OpenSearch side can
+    /// index real Korean morphemes without needing an OpenSearch-side
+    /// Korean analysis plugin (mechanism B2 — see C2 plan: one shared
+    /// tokenizer pipeline for both lexical indexing and, at the
+    /// embedding-preprocessing step, pgvector embedding generation).
+    pub fn tokenize_for_lexical_index(&self, text: &str) -> String {
+        tokenize_for_lexical_index_with(self.tokenizer.as_ref(), text)
     }
 
     /// Analyze Korean text morphemes
@@ -29,24 +131,26 @@ impl KoreanService {
         let text = &request.text;
         let options = request.options.unwrap_or_default();
 
-        // Simple tokenization (for production, use actual Korean NLP library)
-        let tokens: Vec<&str> = text.split_whitespace().collect();
+        // Real mecab-ko morphological tokenization when a dictionary is
+        // configured (MECAB_KO_DICDIR); falls back to whitespace splitting
+        // with a heuristic POS guess otherwise.
+        let tokens = self.tokenize(text);
 
         let morphemes: Vec<Morpheme> = tokens
             .iter()
-            .map(|token| {
-                let start = text.find(token).unwrap_or(0) as i32;
+            .map(|(surface, pos)| {
+                let start = text.find(surface.as_str()).unwrap_or(0) as i32;
                 Morpheme {
-                    surface: token.to_string(),
-                    pos: guess_pos(token),
+                    surface: surface.clone(),
+                    pos: pos.clone(),
                     pos_detail: vec![],
                     reading: if options.include_reading.unwrap_or(false) {
-                        Some(token.to_string())
+                        Some(surface.clone())
                     } else {
                         None
                     },
                     start_offset: start,
-                    end_offset: start + token.len() as i32,
+                    end_offset: start + surface.len() as i32,
                 }
             })
             .collect();
@@ -200,30 +304,41 @@ impl KoreanService {
         })
     }
 
-    /// Extract keywords from Korean text
+    /// Extract keywords from Korean text.
+    ///
+    /// Uses real mecab-ko tokenization (surface + POS) when a dictionary is
+    /// configured, so `pos` reflects the tokenizer's actual tag rather than
+    /// a hardcoded "NNG" guess; falls back to whitespace splitting with the
+    /// existing heuristic POS guess otherwise.
     pub fn extract_keywords(&self, text: &str, limit: i32) -> Result<KeywordExtraction> {
-        let words: Vec<&str> = text.split_whitespace().collect();
+        let tokens = self.tokenize(text);
+        let total = tokens.len().max(1);
         let mut freq: HashMap<String, i32> = HashMap::new();
+        let mut pos_by_word: HashMap<String, String> = HashMap::new();
 
-        for word in &words {
+        for (surface, pos) in &tokens {
             // Skip stopwords
-            if self.stopwords.contains(&word.to_lowercase()) {
+            if self.stopwords.contains(&surface.to_lowercase()) {
                 continue;
             }
             // Skip short words
-            if word.chars().count() < 2 {
+            if surface.chars().count() < 2 {
                 continue;
             }
-            *freq.entry(word.to_string()).or_insert(0) += 1;
+            *freq.entry(surface.clone()).or_insert(0) += 1;
+            pos_by_word.entry(surface.clone()).or_insert_with(|| pos.clone());
         }
 
         let mut keywords: Vec<ExtractedKeyword> = freq
             .into_iter()
-            .map(|(word, count)| ExtractedKeyword {
-                keyword: word,
-                score: count as f32 / words.len() as f32,
-                frequency: count,
-                pos: "NNG".to_string(), // Assume common noun
+            .map(|(word, count)| {
+                let pos = pos_by_word.remove(&word).unwrap_or_else(|| "NNG".to_string());
+                ExtractedKeyword {
+                    keyword: word,
+                    score: count as f32 / total as f32,
+                    frequency: count,
+                    pos,
+                }
             })
             .collect();
 
@@ -519,5 +634,80 @@ mod tests {
         let svc = make_service();
         let result = svc.normalize_text("a  b").unwrap();
         assert!(!result.changes.is_empty(), "A change should be recorded when spaces are collapsed");
+    }
+
+    #[tokio::test]
+    async fn tokenize_without_tokenizer_falls_back_to_whitespace_heuristic() {
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        let svc = KoreanService::with_tokenizer(pool, None);
+        let tokens = svc.tokenize("먹다 학생이 기술");
+        assert_eq!(
+            tokens,
+            vec![
+                ("먹다".to_string(), "VV".to_string()),
+                ("학생이".to_string(), "JKS".to_string()),
+                ("기술".to_string(), "NNG".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn load_shared_korean_tokenizer_returns_none_when_env_var_unset() {
+        // SAFETY: test-only env var manipulation, no other test reads MECAB_KO_DICDIR.
+        unsafe {
+            std::env::remove_var("MECAB_KO_DICDIR");
+        }
+        assert!(load_shared_korean_tokenizer().is_none());
+    }
+
+    /// Regression test for the real mecab-ko dictionary integration.
+    ///
+    /// Requires a dictionary built by `mecab-ko-dict-builder` from the
+    /// classic eunjeon mecab-ko-dic 2.1.1 CSV source (NOT the Homebrew
+    /// `mecab-ko-dic` binary package, which uses an incompatible on-disk
+    /// format despite matching filenames — confirmed by direct testing).
+    /// Skipped in CI; run with:
+    ///   MECAB_KO_DICDIR=/path/to/dict-output cargo test -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn tokenize_with_real_dictionary_produces_correct_pos_tags() {
+        let dicdir = std::env::var("MECAB_KO_DICDIR")
+            .expect("MECAB_KO_DICDIR must be set to run this ignored test");
+        let tokenizer = mecab_ko::Tokenizer::with_dict(&dicdir)
+            .expect("failed to load mecab-ko dictionary from MECAB_KO_DICDIR");
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        let svc = KoreanService::with_tokenizer(pool, Some(Arc::new(Mutex::new(tokenizer))));
+
+        let tokens = svc.tokenize("한국어 형태소 분석기입니다");
+        let surfaces: Vec<&str> = tokens.iter().map(|(s, _)| s.as_str()).collect();
+        assert_eq!(surfaces, vec!["한국어", "형태소", "분석기", "입니다"]);
+        assert_eq!(tokens[0].1, "NNG", "한국어 should tag as common noun");
+        assert_eq!(tokens[1].1, "NNG", "형태소 should tag as common noun");
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn extract_keywords_with_real_dictionary_uses_actual_pos_tags() {
+        let dicdir = std::env::var("MECAB_KO_DICDIR")
+            .expect("MECAB_KO_DICDIR must be set to run this ignored test");
+        let tokenizer = mecab_ko::Tokenizer::with_dict(&dicdir)
+            .expect("failed to load mecab-ko dictionary from MECAB_KO_DICDIR");
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
+        let svc = KoreanService::with_tokenizer(pool, Some(Arc::new(Mutex::new(tokenizer))));
+
+        let result = svc
+            .extract_keywords("오늘 날씨가 정말 좋습니다 기술 발전이 빠릅니다", 10)
+            .unwrap();
+        let nng_keywords: Vec<&str> = result
+            .keywords
+            .iter()
+            .filter(|k| k.pos == "NNG")
+            .map(|k| k.keyword.as_str())
+            .collect();
+        assert!(
+            nng_keywords.contains(&"기술") || nng_keywords.contains(&"날씨"),
+            "expected at least one real NNG-tagged noun among {:?}",
+            result.keywords
+        );
     }
 }

@@ -21,7 +21,7 @@ async fn analyze_text(
     _auth_user: AuthUser,
     Json(request): Json<AnalyzeTextRequest>,
 ) -> Result<Json<MorphemeAnalysis>, (StatusCode, String)> {
-    let service = KoreanService::new(state.db.clone());
+    let service = KoreanService::with_tokenizer(state.db.clone(), state.korean_tokenizer.clone());
 
     service
         .analyze_text(request)
@@ -35,7 +35,7 @@ async fn search(
     _auth_user: AuthUser,
     Query(query): Query<KoreanSearchQuery>,
 ) -> Result<Json<Vec<KoreanSearchHit>>, (StatusCode, String)> {
-    let service = KoreanService::new(state.db.clone());
+    let service = KoreanService::with_tokenizer(state.db.clone(), state.korean_tokenizer.clone());
 
     service
         .search(query)
@@ -50,7 +50,7 @@ async fn autocomplete(
     _auth_user: AuthUser,
     Query(request): Query<AutocompleteRequest>,
 ) -> Result<Json<Vec<KoreanSuggestion>>, (StatusCode, String)> {
-    let service = KoreanService::new(state.db.clone());
+    let service = KoreanService::with_tokenizer(state.db.clone(), state.korean_tokenizer.clone());
 
     service
         .autocomplete(request)
@@ -65,7 +65,7 @@ async fn spell_check(
     _auth_user: AuthUser,
     Json(request): Json<SpellCheckRequest>,
 ) -> Result<Json<SpellCheckResult>, (StatusCode, String)> {
-    let service = KoreanService::new(state.db.clone());
+    let service = KoreanService::with_tokenizer(state.db.clone(), state.korean_tokenizer.clone());
 
     service
         .spell_check(&request.text)
@@ -79,7 +79,7 @@ async fn extract_keywords(
     _auth_user: AuthUser,
     Json(request): Json<ExtractKeywordsRequest>,
 ) -> Result<Json<KeywordExtraction>, (StatusCode, String)> {
-    let service = KoreanService::new(state.db.clone());
+    let service = KoreanService::with_tokenizer(state.db.clone(), state.korean_tokenizer.clone());
     let limit = request.limit.unwrap_or(10);
 
     service
@@ -94,7 +94,7 @@ async fn normalize_text(
     _auth_user: AuthUser,
     Json(request): Json<NormalizeRequest>,
 ) -> Result<Json<NormalizationResult>, (StatusCode, String)> {
-    let service = KoreanService::new(state.db.clone());
+    let service = KoreanService::with_tokenizer(state.db.clone(), state.korean_tokenizer.clone());
 
     service
         .normalize_text(&request.text)
@@ -107,7 +107,7 @@ async fn get_synonyms(
     State(state): State<AppState>,
     _auth_user: AuthUser,
 ) -> Result<Json<Vec<SynonymGroup>>, (StatusCode, String)> {
-    let service = KoreanService::new(state.db.clone());
+    let service = KoreanService::with_tokenizer(state.db.clone(), state.korean_tokenizer.clone());
 
     service
         .get_synonyms()
@@ -122,7 +122,7 @@ async fn create_synonym_group(
     _auth_user: AuthUser,
     Json(create): Json<CreateSynonymGroup>,
 ) -> Result<Json<SynonymGroup>, (StatusCode, String)> {
-    let service = KoreanService::new(state.db.clone());
+    let service = KoreanService::with_tokenizer(state.db.clone(), state.korean_tokenizer.clone());
 
     service
         .create_synonym_group(create)
@@ -136,7 +136,7 @@ async fn get_stopwords(
     State(state): State<AppState>,
     _auth_user: AuthUser,
 ) -> Result<Json<StopwordList>, (StatusCode, String)> {
-    let service = KoreanService::new(state.db.clone());
+    let service = KoreanService::with_tokenizer(state.db.clone(), state.korean_tokenizer.clone());
     Ok(Json(service.get_stopwords()))
 }
 

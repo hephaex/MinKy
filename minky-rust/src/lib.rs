@@ -44,6 +44,10 @@ pub struct AppState {
     pub redis_client: Option<redis::Client>,
     /// Shared HTTP client for external API calls (Solar, etc.). Created once at startup.
     pub http_client: reqwest::Client,
+    /// Shared mecab-ko morphological tokenizer, loaded once at startup from
+    /// `MECAB_KO_DICDIR` if set. `None` when unset or loading failed;
+    /// `KoreanService` falls back to whitespace tokenization in that case.
+    pub korean_tokenizer: Option<crate::services::SharedKoreanTokenizer>,
 }
 
 /// Create the application with all routes and middleware
@@ -162,6 +166,19 @@ pub async fn create_app(config: Config) -> Result<Router> {
         .build()
         .expect("failed to build shared HTTP client");
 
+    // Load the mecab-ko morphological tokenizer once at startup. This is a
+    // synchronous, potentially-blocking disk load (mmap + zstd decompress of
+    // the dictionary produced by mecab-ko-dict-builder), offloaded to
+    // spawn_blocking so it doesn't stall the async runtime during startup.
+    let korean_tokenizer = tokio::task::spawn_blocking(
+        crate::services::load_shared_korean_tokenizer,
+    )
+    .await
+    .unwrap_or_else(|e| {
+        tracing::error!(error = %e, "mecab-ko tokenizer load task panicked; falling back to whitespace tokenization");
+        None
+    });
+
     let state = AppState {
         db,
         config: config.clone(),
@@ -170,6 +187,7 @@ pub async fn create_app(config: Config) -> Result<Router> {
         vault_watcher,
         redis_client,
         http_client,
+        korean_tokenizer,
     };
 
     // Parse CORS allowed origins from config
