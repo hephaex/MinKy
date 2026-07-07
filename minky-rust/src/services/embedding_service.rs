@@ -114,6 +114,15 @@ impl EmbeddingService {
         })
     }
 
+    /// The configured default embedding model (Solar when `UPSTAGE_API_KEY` is
+    /// set at startup, OpenAI otherwise — see `lib.rs`). Callers that need a
+    /// single ad-hoc embedding without document/chunk semantics (e.g. a plain
+    /// `/api/ai/embedding` passthrough) should use this instead of assuming a
+    /// hardcoded provider.
+    pub fn default_model(&self) -> EmbeddingModel {
+        self.config.default_model
+    }
+
     /// Generate embedding for text. Dispatches to the local fastembed model
     /// for [`EmbeddingModel::NomicEmbedTextV15`], otherwise calls the
     /// configured remote provider (OpenAI today).

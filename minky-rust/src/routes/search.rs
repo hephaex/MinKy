@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::{AppError, AppResult},
     middleware::{AdminUser, OptionalAuthUser},
-    models::{AutocompleteSuggestion, SearchHit, SearchQuery, SearchResponse},
-    services::{AIService, SearchService},
+    models::{AutocompleteSuggestion, SearchQuery, SearchResponse},
+    services::SearchService,
     AppState,
 };
 
@@ -62,46 +62,6 @@ async fn search(
     Ok(Json(SearchResponseBody {
         success: true,
         data: response,
-    }))
-}
-
-/// Semantic search request (future feature: OpenSearch integration)
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-pub struct SemanticSearchRequest {
-    pub query: String,
-    pub limit: Option<i32>,
-}
-
-/// Semantic search response (future feature: OpenSearch integration)
-#[allow(dead_code)]
-#[derive(Debug, Serialize)]
-pub struct SemanticSearchResponse {
-    pub success: bool,
-    pub data: Vec<SearchHit>,
-}
-
-#[allow(dead_code)]
-async fn semantic_search(
-    State(state): State<AppState>,
-    Json(payload): Json<SemanticSearchRequest>,
-) -> AppResult<Json<SemanticSearchResponse>> {
-    let ai_service = AIService::new(state.config.clone());
-    let search_service = SearchService::new(&state.config).await
-        .map_err(AppError::Internal)?;
-
-    // Generate embedding for query
-    let embedding_response = ai_service.generate_embedding(&payload.query).await?;
-
-    // Search using embedding.
-    // This handler is currently dead code; when wired up it should extract
-    // OptionalAuthUser and pass the real user_id instead of None.
-    let limit = payload.limit.unwrap_or(10).min(50);
-    let hits = search_service.semantic_search(embedding_response.embedding, limit, None).await?;
-
-    Ok(Json(SemanticSearchResponse {
-        success: true,
-        data: hits,
     }))
 }
 
@@ -320,41 +280,6 @@ mod tests {
         assert!(json.contains("\"total\":1"));
         assert!(json.contains("\"score\":0.95"));
         assert!(json.contains("\"title\":\"Test Document\""));
-    }
-
-    // -------------------------------------------------------------------------
-    // SemanticSearchRequest tests
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn test_semantic_search_request_deserialization() {
-        let json = r#"{"query": "find rust tutorials", "limit": 20}"#;
-        let request: SemanticSearchRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(request.query, "find rust tutorials");
-        assert_eq!(request.limit, Some(20));
-    }
-
-    #[test]
-    fn test_semantic_search_request_without_limit() {
-        let json = r#"{"query": "kubernetes basics"}"#;
-        let request: SemanticSearchRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(request.query, "kubernetes basics");
-        assert_eq!(request.limit, None);
-    }
-
-    // -------------------------------------------------------------------------
-    // SemanticSearchResponse tests
-    // -------------------------------------------------------------------------
-
-    #[test]
-    fn test_semantic_search_response_empty() {
-        let response = SemanticSearchResponse {
-            success: true,
-            data: vec![],
-        };
-        let json = serde_json::to_string(&response).unwrap();
-        assert!(json.contains("\"success\":true"));
-        assert!(json.contains("\"data\":[]"));
     }
 
     // -------------------------------------------------------------------------

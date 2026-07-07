@@ -184,13 +184,22 @@ async fn generate_embedding(
     _auth_user: OptionalAuthUser,
     Json(payload): Json<EmbeddingRequest>,
 ) -> AppResult<Json<EmbeddingResponseBody>> {
-    let service = AIService::new(state.config.clone());
-
-    let response = service.generate_embedding(&payload.text).await?;
+    // Use the shared embedding service (Solar/OpenAI/local, provider-selected
+    // at startup via `default_model()`) instead of a separate AIService
+    // instance that only ever supported a hardcoded OpenAI key.
+    let model = state.embedding_service.default_model();
+    let embedding = state
+        .embedding_service
+        .generate_embedding(&payload.text, model)
+        .await?;
 
     Ok(Json(EmbeddingResponseBody {
         success: true,
-        data: response,
+        data: EmbeddingResponse {
+            dimensions: embedding.len(),
+            embedding,
+            model: model.api_model_id().to_string(),
+        },
     }))
 }
 
