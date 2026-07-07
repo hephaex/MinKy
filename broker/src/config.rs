@@ -48,11 +48,18 @@ impl Default for VerdictConfig {
     }
 }
 
-/// Long-term memory backend (minky on CT306 or a local instance).
+/// Long-term memory backend (minky-rust API on `ct-minky`, CAS internal
+/// network `172.20.0.0/14`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 pub struct MinkyConfig {
-    /// Base URL, e.g. `http://192.168.29.22:8001`.
+    /// Base URL, e.g. `http://172.20.0.110:8000` (ct-minky on the CAS
+    /// Proxmox internal network). The previously used `192.168.29.22:8001`
+    /// is unreachable from the CAS network (`172.20.0.0/14`) and from a
+    /// developer machine outside it — confirmed by direct route/connect
+    /// testing (2026-07-07 redteam). Callers outside the CAS network must
+    /// tunnel/VPN in and override this value; it is never hardcoded to an
+    /// address only reachable from one specific host.
     pub base_url: String,
     /// File containing the long-lived M2M API key (never inline in TOML).
     pub api_key_file: PathBuf,
@@ -63,7 +70,7 @@ pub struct MinkyConfig {
 impl Default for MinkyConfig {
     fn default() -> Self {
         Self {
-            base_url: "http://192.168.29.22:8001".to_string(),
+            base_url: "http://172.20.0.110:8000".to_string(),
             api_key_file: default_config_dir().join(".minky-broker-key"),
             timeout_secs: 5,
         }
