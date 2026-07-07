@@ -89,7 +89,8 @@ pub async fn run(
 ) -> Result<CascadeOutcome, CascadeError> {
     // ---- Stage 1: working set ------------------------------------------------
     let snapshot: WorkingSetSnapshot = {
-        let mut ws = WorkingSet::new(&config.working_set, storage);
+        let mut ws = WorkingSet::new(&config.working_set, storage)
+            .with_exclude_dir(Some(config.wiki.output_dir.clone()));
         ws.evaluate(now)?
     };
 

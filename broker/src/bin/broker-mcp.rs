@@ -9,6 +9,9 @@
 //! - `load_working_set` — no args; returns the current working-set snapshot.
 //! - `retrieve` — `{ query }`; runs the retrieval cascade.
 //! - `record_access` — `{ rel_path, source }`; records a recall access.
+//! - `generate_wiki` — `{ query, topic }`; synthesizes an on-demand wiki page
+//!   from cascade evidence via a configurable OpenAI-compatible endpoint
+//!   (disabled by default; `[synthesis].enable = true` in `broker.toml`).
 //!
 //! Adopted path: **rmcp** (official Rust MCP SDK) with the `#[tool]` macro
 //! system and the built-in stdio transport. The transport-neutral handler
@@ -17,10 +20,12 @@
 
 use broker::config::{default_config_path, BrokerConfig};
 use broker::mcp_server::{
-    load_working_set_tool, now_epoch, open_storage, record_access_tool, retrieve_tool,
-    CascadeOutcomeDto, RecordAccessResult, WorkingSetSnapshotDto,
+    generate_wiki_tool, load_working_set_tool, now_epoch, open_storage, record_access_tool,
+    retrieve_tool, CascadeOutcomeDto, GenerateWikiResult, RecordAccessResult,
+    WorkingSetSnapshotDto,
 };
 use broker::minky_client::MinkyClient;
+use broker::synth_client::SynthClient;
 
 use rmcp::handler::server::{router::tool::ToolRouter, wrapper::Parameters};
 use rmcp::model::{ServerCapabilities, ServerInfo};
@@ -42,6 +47,15 @@ struct RecordAccessRequest {
     rel_path: String,
     /// Access-source tag written to the audit log (e.g. `recall`, `edit`).
     source: String,
+}
+
+/// Arguments for the `generate_wiki` tool.
+#[derive(Debug, Deserialize, JsonSchema)]
+struct GenerateWikiRequest {
+    /// Natural-language query used to collect evidence via the retrieval cascade.
+    query: String,
+    /// Topic label for the generated wiki page (also used to derive the filename).
+    topic: String,
 }
 
 /// The MCP server. Holds only the loaded config; storage/minky are opened
@@ -107,6 +121,31 @@ impl BrokerMcp {
         .map_err(|e| e.to_string())?;
         Ok(Json(res))
     }
+
+    #[tool(
+        name = "generate_wiki",
+        description = "Synthesize an on-demand wiki page for a topic from retrieval-cascade evidence via a configurable OpenAI-compatible endpoint. Disabled by default; writes nothing (and hard-refuses) unless synthesis is enabled, minky and the synthesis endpoint are both reachable, evidence was collected, and the rendered document passes the source-citation + unverified-banner verification gate."
+    )]
+    async fn generate_wiki(
+        &self,
+        Parameters(req): Parameters<GenerateWikiRequest>,
+    ) -> Result<Json<GenerateWikiResult>, String> {
+        let mut storage = open_storage(&self.config).map_err(|e| e.to_string())?;
+        let minky = MinkyClient::new(&self.config.minky).map_err(|e| e.to_string())?;
+        let synth = SynthClient::new(&self.config.synthesis);
+        let res = generate_wiki_tool(
+            &self.config,
+            &mut storage,
+            &minky,
+            &synth,
+            &req.query,
+            &req.topic,
+            now_epoch(),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(Json(res))
+    }
 }
 
 #[tool_handler(router = self.tool_router)]
@@ -114,7 +153,7 @@ impl ServerHandler for BrokerMcp {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
             "Local memory broker: short-term working set + long-term minky retrieval cascade. \
-             Tools: load_working_set, retrieve, record_access.",
+             Tools: load_working_set, retrieve, record_access, generate_wiki.",
         )
     }
 }

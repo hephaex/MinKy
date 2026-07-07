@@ -52,11 +52,25 @@ pub struct WorkingSetSnapshot {
 pub struct WorkingSet<'a> {
     config: &'a WorkingSetConfig,
     storage: &'a mut Storage,
+    exclude_dir: Option<PathBuf>,
 }
 
 impl<'a> WorkingSet<'a> {
     pub fn new(config: &'a WorkingSetConfig, storage: &'a mut Storage) -> Self {
-        Self { config, storage }
+        Self {
+            config,
+            storage,
+            exclude_dir: None,
+        }
+    }
+
+    /// Exclude a directory (canonicalized at scan time) from the working-set
+    /// scan — used to keep `generate_wiki` output out of its own evidence
+    /// (self-reference guard, spec Fact#9). Fail-open: if a scan candidate
+    /// cannot be canonicalized, it is scanned normally (no false positives).
+    pub fn with_exclude_dir(mut self, exclude_dir: Option<PathBuf>) -> Self {
+        self.exclude_dir = exclude_dir;
+        self
     }
 
     /// Evaluate the working set at time `now` (epoch seconds).
@@ -74,7 +88,7 @@ impl<'a> WorkingSet<'a> {
         let mut members = Vec::new();
         let mut demoted = Vec::new();
 
-        for rel_path in collect_markdown_files(root)? {
+        for rel_path in collect_markdown_files(root, self.exclude_dir.as_deref())? {
             let pinned = self
                 .config
                 .always_include
@@ -145,7 +159,18 @@ impl<'a> WorkingSet<'a> {
 
 /// Recursively collect `*.md` files under `root`, returning `/`-separated
 /// relative paths. Hidden directories (e.g. `.git`) are skipped.
-fn collect_markdown_files(root: &Path) -> Result<Vec<String>, std::io::Error> {
+///
+/// `exclude_dir`, when given, is canonicalized once up front; any candidate
+/// path that canonicalizes to a location inside it is skipped (self-reference
+/// guard for `generate_wiki` output, spec Fact#9). Fail-open: if either the
+/// exclude dir or a candidate cannot be canonicalized, no exclusion is
+/// applied to that candidate — this only ever widens the scan, never hides a
+/// legitimate result the pre-existing behavior would have returned.
+fn collect_markdown_files(
+    root: &Path,
+    exclude_dir: Option<&Path>,
+) -> Result<Vec<String>, std::io::Error> {
+    let canonical_exclude = exclude_dir.and_then(|d| d.canonicalize().ok());
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -156,6 +181,13 @@ fn collect_markdown_files(root: &Path) -> Result<Vec<String>, std::io::Error> {
             let name = name.to_string_lossy();
             if name.starts_with('.') {
                 continue;
+            }
+            if let Some(exclude) = &canonical_exclude {
+                if let Ok(canonical_path) = path.canonicalize() {
+                    if canonical_path.starts_with(exclude) {
+                        continue;
+                    }
+                }
             }
             if path.is_dir() {
                 stack.push(path);
@@ -363,5 +395,51 @@ mod tests {
                 "non-pinned members sorted by recency desc"
             );
         }
+    }
+
+    // -- output_dir canonical-skip guard (G002, self-reference defense) --
+
+    #[test]
+    fn exclude_dir_skips_files_scanned_via_symlink() {
+        let (_dir, config, mut storage) = fixture(NOW);
+
+        // Real wiki output dir lives outside memory_root...
+        let outside = tempfile::tempdir().unwrap();
+        let wiki_dir = outside.path().join("wiki");
+        std::fs::create_dir_all(&wiki_dir).unwrap();
+        std::fs::write(wiki_dir.join("generated.md"), "# generated").unwrap();
+
+        // ...but a symlink inside memory_root points at it (self-reference
+        // attack vector: sync/scan following the link back into evidence).
+        #[cfg(unix)]
+        {
+            let linked = config.memory_root.join("wiki-link");
+            std::os::unix::fs::symlink(&wiki_dir, &linked).unwrap();
+
+            let mut ws = WorkingSet::new(&config, &mut storage)
+                .with_exclude_dir(Some(wiki_dir.clone()));
+            let snap = ws.evaluate(NOW).unwrap();
+
+            let all_paths: Vec<_> = snap
+                .members
+                .iter()
+                .chain(snap.demoted.iter())
+                .map(|i| i.rel_path.as_str())
+                .collect();
+            assert!(
+                !all_paths.iter().any(|p| p.contains("generated.md")),
+                "wiki output reached via a symlinked path must be excluded from scan: {all_paths:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn no_exclude_dir_preserves_prior_scan_behavior() {
+        // Fail-open / backward-compat: omitting the exclude leaves scan
+        // results identical to the pre-G002 behavior.
+        let (_dir, config, mut storage) = fixture(NOW);
+        let mut ws = WorkingSet::new(&config, &mut storage);
+        let snap = ws.evaluate(NOW).unwrap();
+        assert!(!snap.members.is_empty());
     }
 }

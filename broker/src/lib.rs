@@ -12,6 +12,8 @@ pub mod config;
 pub mod mcp_server;
 pub mod minky_client;
 pub mod storage;
+pub mod synth_client;
+pub mod wiki;
 pub mod working_set;
 
 pub use cascade::{run, CascadeError, CascadeOutcome, Evidence, Verdict};

@@ -1,4 +1,4 @@
-//! MCP tool logic — the three broker tools as plain, testable functions plus
+//! MCP tool logic — the four broker tools as plain, testable functions plus
 //! their serializable result DTOs.
 //!
 //! The transport layer (rmcp stdio server in `bin/broker-mcp.rs`) is a thin
@@ -8,12 +8,14 @@
 //! unit-tested without spawning a server.
 
 use serde::Serialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::cascade::{self, CascadeError, CascadeOutcome, Evidence, Verdict};
 use crate::config::{BrokerConfig, ConfigError};
 use crate::minky_client::{MinkyClient, MinkyError};
 use crate::storage::{Storage, StorageError};
+use crate::synth_client::SynthClient;
+use crate::wiki::{self, WikiError};
 use crate::working_set::{WorkingSet, WorkingSetError, WorkingSetItem, WorkingSetSnapshot};
 
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +30,8 @@ pub enum ToolError {
     Cascade(#[from] CascadeError),
     #[error("minky error: {0}")]
     Minky(#[from] MinkyError),
+    #[error("wiki error: {0}")]
+    Wiki(#[from] WikiError),
 }
 
 /// One evaluated memory item (serializable projection of [`WorkingSetItem`]).
@@ -161,7 +165,8 @@ pub fn load_working_set_tool(
     now: i64,
 ) -> Result<WorkingSetSnapshotDto, ToolError> {
     let snapshot = {
-        let mut ws = WorkingSet::new(&config.working_set, storage);
+        let mut ws = WorkingSet::new(&config.working_set, storage)
+            .with_exclude_dir(Some(config.wiki.output_dir.clone()));
         ws.evaluate(now)?
     };
     Ok(WorkingSetSnapshotDto::from(&snapshot))
@@ -203,6 +208,34 @@ pub fn record_access_tool(
         recorded: true,
         in_working_set,
         pinned,
+    })
+}
+
+/// Result of a `generate_wiki` tool call.
+#[derive(Debug, Clone, PartialEq, Serialize, schemars::JsonSchema)]
+pub struct GenerateWikiResult {
+    /// Absolute path to the generated markdown document.
+    pub file_path: String,
+}
+
+/// `generate_wiki` tool: synthesize an on-demand wiki page for `topic` from
+/// the evidence the retrieval cascade collects for `query`. Hard-refuses
+/// (writes nothing) if synthesis is disabled, minky or the synthesis
+/// endpoint is unreachable, no evidence was collected, the resolved output
+/// directory is unsafe (self-reference risk), or the rendered document fails
+/// the mandatory verification gate (source footnotes + unverified banner).
+pub async fn generate_wiki_tool(
+    config: &BrokerConfig,
+    storage: &mut Storage,
+    minky: &MinkyClient,
+    synth: &SynthClient,
+    query: &str,
+    topic: &str,
+    now: i64,
+) -> Result<GenerateWikiResult, ToolError> {
+    let path: PathBuf = wiki::generate(query, topic, config, storage, minky, synth, now).await?;
+    Ok(GenerateWikiResult {
+        file_path: path.to_string_lossy().into_owned(),
     })
 }
 

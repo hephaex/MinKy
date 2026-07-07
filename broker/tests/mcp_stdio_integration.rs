@@ -2,7 +2,7 @@
 //!
 //! Spawns the real binary as a child process, speaks newline-delimited
 //! JSON-RPC 2.0 over its stdin/stdout (the MCP stdio framing), performs the
-//! `initialize` handshake, and asserts that `tools/list` enumerates the three
+//! `initialize` handshake, and asserts that `tools/list` enumerates the four
 //! broker tools. Transport-agnostic on purpose: it exercises the wire protocol,
 //! not the rmcp client API.
 
@@ -62,7 +62,7 @@ fn recv_response(rx: &mpsc::Receiver<String>, id: i64) -> serde_json::Value {
 }
 
 #[test]
-fn stdio_server_lists_three_tools() {
+fn stdio_server_lists_four_tools() {
     let exe = env!("CARGO_BIN_EXE_broker-mcp");
 
     let mut child = Command::new(exe)
@@ -106,13 +106,13 @@ fn stdio_server_lists_three_tools() {
         .filter_map(|t| t.get("name").and_then(|n| n.as_str()).map(String::from))
         .collect();
 
-    for expected in ["load_working_set", "retrieve", "record_access"] {
+    for expected in ["load_working_set", "retrieve", "record_access", "generate_wiki"] {
         assert!(
             names.iter().any(|n| n == expected),
             "tools/list should include `{expected}`; got {names:?}"
         );
     }
-    assert_eq!(names.len(), 3, "exactly three tools expected; got {names:?}");
+    assert_eq!(names.len(), 4, "exactly four tools expected; got {names:?}");
 
     // Closing stdin (EOF) triggers natural, daemon-free shutdown.
     drop(stdin);

@@ -19,6 +19,8 @@ pub enum ConfigError {
     Parse(#[from] toml::de::Error),
     #[error("invalid config: {0}")]
     Invalid(String),
+    #[error("wiki output_dir {0} resolves inside memory_root or the sync-shared config tree; refused")]
+    UnsafeOutputDir(PathBuf),
 }
 
 /// Verdict thresholds for the retrieval cascade (approved plan decision (a)).
@@ -102,6 +104,63 @@ pub struct BrokerConfig {
     pub working_set: WorkingSetConfig,
     /// Location of the broker state database.
     pub state_db: StateDbConfig,
+    /// Synthesis endpoint for on-demand wiki generation (`generate_wiki`).
+    pub synthesis: SynthesisConfig,
+    /// Wiki generation output policy (`generate_wiki`).
+    pub wiki: WikiConfig,
+}
+
+/// Synthesis endpoint for on-demand wiki generation (`generate_wiki`).
+///
+/// Disabled by default (`enable = false`) to preserve the broker's default
+/// no-synthesis, observation-only posture. This is an explicit, scoped
+/// exception to the system-wide vendor-neutral principle: when enabled, the
+/// broker calls a user-configured OpenAI-compatible endpoint directly.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct SynthesisConfig {
+    pub enable: bool,
+    pub base_url: String,
+    /// File containing the API key (never inline in TOML). May be absent for
+    /// unauthenticated local endpoints (e.g. Ollama).
+    pub api_key_file: PathBuf,
+    pub model: String,
+    pub timeout_secs: u64,
+}
+
+impl Default for SynthesisConfig {
+    fn default() -> Self {
+        Self {
+            enable: false,
+            base_url: "http://localhost:11434/v1".to_string(),
+            api_key_file: default_config_dir().join(".synth-key"),
+            model: "gpt-4o-mini".to_string(),
+            timeout_secs: 60,
+        }
+    }
+}
+
+/// Wiki generation output policy (`generate_wiki`).
+///
+/// `output_dir` MUST resolve outside `working_set.memory_root` and outside
+/// the sync-shared config tree, or generated wiki pages could be re-ingested
+/// as their own evidence (self-reference feedback loop). Default lives under
+/// `~/.local/state`, deliberately outside `~/.config/gyeol` (shared with
+/// `sync-memory-to-minky.sh`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+pub struct WikiConfig {
+    pub output_dir: PathBuf,
+    pub max_topic_slug_len: usize,
+}
+
+impl Default for WikiConfig {
+    fn default() -> Self {
+        Self {
+            output_dir: home_dir().join(".local/state/gyeol-wiki"),
+            max_topic_slug_len: 64,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -194,8 +253,81 @@ impl BrokerConfig {
                 "minky.base_url must not be empty".to_string(),
             ));
         }
+        if self.synthesis.enable && self.synthesis.base_url.is_empty() {
+            return Err(ConfigError::Invalid(
+                "synthesis.base_url must not be empty when synthesis.enable is true".to_string(),
+            ));
+        }
+        if self.synthesis.timeout_secs == 0 {
+            return Err(ConfigError::Invalid(
+                "synthesis.timeout_secs must be >= 1".to_string(),
+            ));
+        }
+        if self.wiki.max_topic_slug_len == 0 {
+            return Err(ConfigError::Invalid(
+                "wiki.max_topic_slug_len must be >= 1".to_string(),
+            ));
+        }
         Ok(())
     }
+}
+/// Self-reference guard for `generate_wiki` output (spec Fact#9 / ADR-01).
+///
+/// Deliberately separate from [`BrokerConfig::validate`], which MUST stay
+/// pure and I/O-free: this function performs filesystem `canonicalize`
+/// calls, so injecting it into `validate()` would make first-run/default
+/// config loading depend on filesystem state and could regress the existing
+/// pure config unit tests.
+///
+/// Guard semantics (approved plan, N2 revision):
+/// - **fail-open**: if `output_dir` cannot be canonicalized (e.g. it does not
+///   exist yet), the path is treated as known-safe and accepted. A
+///   not-yet-existing path cannot already be a symlink swapped into
+///   `memory_root`/the sync-shared tree; the write-time guard in `wiki.rs`
+///   and the scan-time guard in `working_set.rs` provide the real defense in
+///   depth, so fail-open here is safe.
+/// - **ancestor fallback**: if `output_dir` itself does not exist, walk up to
+///   the nearest existing ancestor and canonicalize that instead, so a
+///   symlinked *parent* directory is still caught before the first write. If
+///   no ancestor exists either, fail-open.
+/// - Both `memory_root` and `config_dir` are canonicalized for comparison;
+///   if either fails to canonicalize, that boundary is skipped (fail-open
+///   for that boundary only).
+pub fn resolve_safe_output_dir(
+    output_dir: &Path,
+    memory_root: &Path,
+    config_dir: &Path,
+) -> Result<PathBuf, ConfigError> {
+    let canonical_or_ancestor = |path: &Path| -> Option<PathBuf> {
+        if let Ok(canonical) = path.canonicalize() {
+            return Some(canonical);
+        }
+        let mut ancestor = path.parent();
+        while let Some(dir) = ancestor {
+            if let Ok(canonical) = dir.canonicalize() {
+                return Some(canonical);
+            }
+            ancestor = dir.parent();
+        }
+        None
+    };
+
+    let Some(canonical_output) = canonical_or_ancestor(output_dir) else {
+        // Neither output_dir nor any ancestor exists yet: fail-open.
+        return Ok(output_dir.to_path_buf());
+    };
+
+    for boundary in [memory_root, config_dir] {
+        if let Ok(canonical_boundary) = boundary.canonicalize() {
+            if canonical_output.starts_with(&canonical_boundary) {
+                return Err(ConfigError::UnsafeOutputDir(output_dir.to_path_buf()));
+            }
+        }
+        // Boundary does not exist / cannot be canonicalized: fail-open for
+        // that boundary (nothing to compare against yet).
+    }
+
+    Ok(output_dir.to_path_buf())
 }
 
 #[cfg(test)]
@@ -280,5 +412,125 @@ base_url = "http://localhost:8000"
         std::fs::write(&path, "[verdict]\ntop_k = 12\n").unwrap();
         let cfg = BrokerConfig::load(&path).unwrap();
         assert_eq!(cfg.verdict.top_k, 12);
+    }
+
+    #[test]
+    fn synthesis_disabled_by_default() {
+        let cfg = BrokerConfig::default();
+        assert!(!cfg.synthesis.enable);
+        assert_eq!(cfg.synthesis.base_url, "http://localhost:11434/v1");
+        assert_eq!(cfg.synthesis.model, "gpt-4o-mini");
+        assert_eq!(cfg.synthesis.timeout_secs, 60);
+    }
+
+    #[test]
+    fn wiki_output_dir_defaults_outside_sync_shared_config_dir() {
+        let cfg = BrokerConfig::default();
+        assert_eq!(cfg.wiki.max_topic_slug_len, 64);
+        assert!(
+            !cfg.wiki.output_dir.starts_with(default_config_dir()),
+            "wiki.output_dir must default outside the sync-shared config dir (self-reference guard)"
+        );
+    }
+
+    #[test]
+    fn synthesis_enabled_with_empty_base_url_is_rejected() {
+        let err = BrokerConfig::from_toml_str("[synthesis]\nenable = true\nbase_url = \"\"\n")
+            .unwrap_err();
+        assert!(matches!(err, ConfigError::Invalid(_)));
+    }
+
+    #[test]
+    fn zero_synthesis_timeout_is_rejected() {
+        let err =
+            BrokerConfig::from_toml_str("[synthesis]\ntimeout_secs = 0\n").unwrap_err();
+        assert!(matches!(err, ConfigError::Invalid(_)));
+    }
+
+    #[test]
+    fn zero_max_topic_slug_len_is_rejected() {
+        let err = BrokerConfig::from_toml_str("[wiki]\nmax_topic_slug_len = 0\n").unwrap_err();
+        assert!(matches!(err, ConfigError::Invalid(_)));
+    }
+
+    // -- resolve_safe_output_dir (G002, self-reference guard) --
+
+    #[test]
+    fn output_dir_under_memory_root_is_rejected() {
+        let base = tempfile::tempdir().unwrap();
+        let memory_root = base.path().join("memory");
+        let config_dir = base.path().join("config");
+        std::fs::create_dir_all(&memory_root).unwrap();
+        std::fs::create_dir_all(&config_dir).unwrap();
+        let output_dir = memory_root.join("wiki");
+        std::fs::create_dir_all(&output_dir).unwrap();
+
+        let err = resolve_safe_output_dir(&output_dir, &memory_root, &config_dir).unwrap_err();
+        assert!(matches!(err, ConfigError::UnsafeOutputDir(_)));
+    }
+
+    #[test]
+    fn output_dir_under_sync_shared_config_dir_is_rejected() {
+        let base = tempfile::tempdir().unwrap();
+        let memory_root = base.path().join("memory");
+        let config_dir = base.path().join("config");
+        std::fs::create_dir_all(&memory_root).unwrap();
+        std::fs::create_dir_all(&config_dir).unwrap();
+        let output_dir = config_dir.join("wiki");
+        std::fs::create_dir_all(&output_dir).unwrap();
+
+        let err = resolve_safe_output_dir(&output_dir, &memory_root, &config_dir).unwrap_err();
+        assert!(matches!(err, ConfigError::UnsafeOutputDir(_)));
+    }
+
+    #[test]
+    fn nonexistent_output_dir_fails_open() {
+        let base = tempfile::tempdir().unwrap();
+        let memory_root = base.path().join("memory");
+        let config_dir = base.path().join("config");
+        std::fs::create_dir_all(&memory_root).unwrap();
+        std::fs::create_dir_all(&config_dir).unwrap();
+        // output_dir and every ancestor up to base are absent.
+        let output_dir = base.path().join("does/not/exist/wiki");
+
+        let resolved = resolve_safe_output_dir(&output_dir, &memory_root, &config_dir).unwrap();
+        assert_eq!(resolved, output_dir);
+    }
+
+    #[test]
+    fn ancestor_fallback_catches_symlinked_parent() {
+        let base = tempfile::tempdir().unwrap();
+        let memory_root = base.path().join("memory");
+        std::fs::create_dir_all(&memory_root).unwrap();
+        let config_dir = base.path().join("config");
+        std::fs::create_dir_all(&config_dir).unwrap();
+
+        // `linked` is a symlink into memory_root; output_dir itself does not
+        // exist yet, but its parent (the symlink) does.
+        let linked = base.path().join("linked");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&memory_root, &linked).unwrap();
+        let output_dir = linked.join("wiki");
+
+        #[cfg(unix)]
+        {
+            let err =
+                resolve_safe_output_dir(&output_dir, &memory_root, &config_dir).unwrap_err();
+            assert!(matches!(err, ConfigError::UnsafeOutputDir(_)));
+        }
+    }
+
+    #[test]
+    fn safe_output_dir_outside_both_boundaries_is_accepted() {
+        let base = tempfile::tempdir().unwrap();
+        let memory_root = base.path().join("memory");
+        let config_dir = base.path().join("config");
+        let output_dir = base.path().join("state/gyeol-wiki");
+        std::fs::create_dir_all(&memory_root).unwrap();
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::create_dir_all(&output_dir).unwrap();
+
+        let resolved = resolve_safe_output_dir(&output_dir, &memory_root, &config_dir).unwrap();
+        assert_eq!(resolved, output_dir);
     }
 }

@@ -250,7 +250,7 @@ fn malformed_input_and_unknown_methods_do_not_crash() {
         .pointer("/result/tools")
         .and_then(|v| v.as_array())
         .unwrap_or_else(|| panic!("tools/list must still work after garbage: {list}"));
-    assert_eq!(tools.len(), 3, "three tools expected after abuse: {list}");
+    assert_eq!(tools.len(), 4, "four tools expected after abuse: {list}");
     assert!(srv.is_alive(), "server must remain alive after malformed input");
 }
 
