@@ -51,7 +51,12 @@ export default function DuplicatesPage() {
   };
 
   const handleResolveAll = async () => {
-    if (!window.confirm(`${totalRemovable}건을 아카이브하겠습니까? (각 그룹에서 가장 오래된 버전만 남깁니다)`)) return;
+    if (
+      !window.confirm(
+        `${totalRemovable}건을 아카이브하겠습니까? (각 그룹에서 가장 오래된 버전만 남깁니다)`
+      )
+    )
+      return;
     setResolving(true);
     setActionMsg(null);
     try {
@@ -71,11 +76,7 @@ export default function DuplicatesPage() {
         <h1>중복 문서 관리</h1>
         <div className="header-actions">
           {groups.length > 0 && (
-            <button
-              className="btn-resolve-all"
-              onClick={handleResolveAll}
-              disabled={resolving}
-            >
+            <button className="btn-resolve-all" onClick={handleResolveAll} disabled={resolving}>
               {resolving ? '처리 중...' : `전체 정리 (${totalRemovable}건 아카이브)`}
             </button>
           )}
@@ -86,7 +87,19 @@ export default function DuplicatesPage() {
       </div>
 
       {actionMsg && (
-        <div className="action-msg" onClick={() => setActionMsg(null)}>
+        <div
+          className="action-msg"
+          onClick={() => setActionMsg(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+              e.preventDefault();
+              setActionMsg(null);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="알림 닫기"
+        >
           {actionMsg}
         </div>
       )}
@@ -113,10 +126,7 @@ export default function DuplicatesPage() {
                   </Link>
                 </div>
                 <div className="doc-actions">
-                  <button
-                    className="btn-archive"
-                    onClick={() => handleArchive(doc.id, doc.title)}
-                  >
+                  <button className="btn-archive" onClick={() => handleArchive(doc.id, doc.title)}>
                     아카이브
                   </button>
                 </div>

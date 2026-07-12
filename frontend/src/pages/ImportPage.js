@@ -120,7 +120,8 @@ const ImportPage = () => {
                       {info.existingTitle || '기존 문서'}
                       {info.existingCreatedAt && (
                         <span className="dup-date">
-                          {' '}({new Date(info.existingCreatedAt).toLocaleDateString('ko-KR')})
+                          {' '}
+                          ({new Date(info.existingCreatedAt).toLocaleDateString('ko-KR')})
                         </span>
                       )}
                     </Link>
