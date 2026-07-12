@@ -1,5 +1,5 @@
 .document-view {
-  max-width: 900px;
+  max-width: 1160px;
   margin: 0 auto;
 }
 
@@ -123,11 +123,25 @@
   background-color: #c82333;
 }
 
+.document-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
 .document-content {
+  flex: 1;
+  min-width: 0;
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .document-body {
+    flex-direction: column;
+  }
 }
 
 .markdown-rendered {
@@ -373,6 +387,7 @@
   .ai-tags-applied,
   .processing-badge,
   .frontmatter-display,
+  .document-toc,
   .no-print {
     display: none !important;
   }
