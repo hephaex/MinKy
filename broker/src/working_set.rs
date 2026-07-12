@@ -14,6 +14,7 @@
 
 use crate::config::WorkingSetConfig;
 use crate::storage::{Storage, StorageError};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -87,6 +88,7 @@ impl<'a> WorkingSet<'a> {
 
         let mut members = Vec::new();
         let mut demoted = Vec::new();
+        let mut seen_pins: HashSet<String> = HashSet::new();
 
         for rel_path in collect_markdown_files(root, self.exclude_dir.as_deref())? {
             let pinned = self
@@ -94,6 +96,9 @@ impl<'a> WorkingSet<'a> {
                 .always_include
                 .iter()
                 .any(|p| p == &rel_path);
+            if pinned {
+                seen_pins.insert(rel_path.clone());
+            }
 
             let mtime = file_mtime_epoch(&root.join(&rel_path)).unwrap_or(0);
             let recorded = self
@@ -119,6 +124,18 @@ impl<'a> WorkingSet<'a> {
                 members.push(item);
             } else {
                 demoted.push(item);
+            }
+        }
+
+        // Configured `always_include` pins that never appeared on disk are
+        // silently excluded from both `members` and `demoted` (there is no
+        // file to load) — the most common cause is a fresh deployment before
+        // the first `sync-memory-to-minky.sh` run. Surface a diagnostic so
+        // that case is visible instead of a quietly-empty working set (M3
+        // fix, 2026-07-11 Fable Redteam review).
+        for pin in &self.config.always_include {
+            if !seen_pins.contains(pin) {
+                log_missing_pin(pin);
             }
         }
 
@@ -166,6 +183,22 @@ impl<'a> WorkingSet<'a> {
 /// exclude dir or a candidate cannot be canonicalized, no exclusion is
 /// applied to that candidate — this only ever widens the scan, never hides a
 /// legitimate result the pre-existing behavior would have returned.
+/// Explicit directory-cycle guard for [`collect_markdown_files`]: canonicalize
+/// `path` and record it in `visited`, returning `true` the first time a given
+/// canonical directory is seen and `false` on every repeat (a symlink cycle).
+/// Fail-open when canonicalization fails (e.g. a broken symlink) — this only
+/// ever widens the scan, matching the pre-existing exclude-dir fail-open
+/// convention; it never hides a legitimate directory the old PATH_MAX-bound
+/// behavior would have reached (M2 fix, 2026-07-11 Fable Redteam review —
+/// previously cycle termination depended on `read_dir` eventually returning
+/// `ENAMETOOLONG` once the accumulated path exceeded PATH_MAX).
+fn is_new_directory(path: &Path, visited: &mut HashSet<PathBuf>) -> bool {
+    match path.canonicalize() {
+        Ok(canonical) => visited.insert(canonical),
+        Err(_) => true,
+    }
+}
+
 fn collect_markdown_files(
     root: &Path,
     exclude_dir: Option<&Path>,
@@ -173,6 +206,10 @@ fn collect_markdown_files(
     let canonical_exclude = exclude_dir.and_then(|d| d.canonicalize().ok());
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
+    let mut visited: HashSet<PathBuf> = HashSet::new();
+    if let Ok(canonical_root) = root.canonicalize() {
+        visited.insert(canonical_root);
+    }
     while let Some(dir) = stack.pop() {
         for entry in std::fs::read_dir(&dir)? {
             let entry = entry?;
@@ -190,6 +227,9 @@ fn collect_markdown_files(
                 }
             }
             if path.is_dir() {
+                if !is_new_directory(&path, &mut visited) {
+                    continue;
+                }
                 stack.push(path);
             } else if path.extension().is_some_and(|e| e == "md") {
                 if let Ok(rel) = path.strip_prefix(root) {
@@ -207,6 +247,13 @@ fn file_mtime_epoch(path: &Path) -> Option<i64> {
     let mtime = meta.modified().ok()?;
     let secs = mtime.duration_since(UNIX_EPOCH).ok()?.as_secs();
     i64::try_from(secs).ok()
+}
+/// Dependency-free stderr diagnostic (same style as `wiki::log_to_stderr`:
+/// a single grep/parse-friendly `key=value` line, no `tracing`/`log` crate;
+/// stdout stays reserved for the stdio MCP JSON-RPC transport) for a
+/// configured `always_include` pin that is absent from `memory_root` on disk.
+fn log_missing_pin(rel_path: &str) {
+    eprintln!("event=missing_pin rel_path={rel_path:?}");
 }
 
 #[cfg(test)]

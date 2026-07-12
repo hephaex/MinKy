@@ -32,6 +32,7 @@ policy, state DB path).
 | `load_working_set` | *(none)* | Current `WorkingSetSnapshot` (members + soft-demoted items) |
 | `retrieve` | `{ "query": string }` | `CascadeOutcome` — runs the 3-stage retrieval cascade (working set → minky evidence → ask-user), including `verdict`, `reason`, `scores`, `evidence` |
 | `record_access` | `{ "rel_path": string, "source": string }` | Recall confirmation: whether the item is now in the working set and whether it is pinned |
+| `generate_wiki` | `{ "query": string, "topic": string }` | On-demand wiki synthesis via a configurable OpenAI-compatible endpoint (disabled by default; `[synthesis].enable = true` in `broker.toml`). Hard-refuses (writes nothing) unless synthesis is enabled, minky and the synthesis endpoint are both reachable, evidence was collected, and the rendered document passes the source-citation + unverified-banner gate. Returns the generated file path or an error. |
 
 Implementation: the official [rmcp](https://crates.io/crates/rmcp) SDK
 (`server`, `transport-io`, `macros`, `schemars` features) over stdio.
@@ -102,7 +103,11 @@ send({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"
 print(recv())
 send({"jsonrpc":"2.0","method":"notifications/initialized"})
 send({"jsonrpc":"2.0","id":2,"method":"tools/list"})
-print(json.loads(recv())["result"]["tools"] and "3 tools present")
+tools = json.loads(recv())["result"]["tools"]
+names = sorted(t["name"] for t in tools)
+expected = ["generate_wiki", "load_working_set", "record_access", "retrieve"]
+print(f"{len(tools)} tools present: {names}")
+assert names == expected, f"tool set mismatch: expected {expected}, got {names}"
 p.stdin.close()
 p.wait(timeout=10)
 print("exit code:", p.returncode, "(0 = clean EOF-triggered shutdown, no signal sent)")

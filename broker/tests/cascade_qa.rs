@@ -181,17 +181,21 @@ async fn m03_overflowing_similarity_does_not_panic() {
     let mut h = harness(&server.uri(), &[]);
     let minky = client(&h.config);
 
-    // Must return Ok with *some* verdict, never panic. +inf >= sufficient_top1
-    // so the deterministic outcome is Sufficient, but the key guarantee is
-    // "no panic / clean result".
+    // Must return Ok, never panic. +inf >= sufficient_top1 with hit_count=2 >=
+    // min_results is deterministically Sufficient — pin the exact verdict
+    // (L2 fix, 2026-07-11 Fable Redteam review) instead of accepting any of
+    // the three variants, which could not detect a threshold sign-error
+    // regression.
     let out = run(Q, &h.config, &mut h.storage, &minky, now_ts())
         .await
         .unwrap();
     assert_eq!(out.hit_count, 2);
-    assert!(matches!(
+    assert_eq!(
         out.verdict,
-        Verdict::Sufficient | Verdict::Insufficient | Verdict::AskUser
-    ));
+        Verdict::Sufficient,
+        "+inf top1 with 2 hits >= min_results must be Sufficient, got {:?}",
+        out.verdict
+    );
     assert!(out.scores.iter().all(|s| s.is_infinite()));
 }
 
