@@ -772,6 +772,10 @@ pub enum ProcessingStatus {
 pub struct UploadResponse {
     pub success: bool,
     pub document: UploadedDocument,
+    /// S1: set when this upload's `source_path` matched an active document
+    /// that was archived to make way for this new version. `None` when no
+    /// `source_path` was given, or none was active at that path.
+    pub replaced_document_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -821,103 +825,151 @@ async fn upload_document(
     principal: AuthPrincipal,
     mut multipart: Multipart,
 ) -> Result<Json<UploadResponse>, AppError> {
+    // Collect every field first (file bytes + optional source_path text) since
+    // a multipart client may send them in either order; the old
+    // per-field-inline-return shape could only ever see fields that arrived
+    // before "file".
+    let mut file_field: Option<(String, axum::body::Bytes)> = None;
+    let mut source_path: Option<String> = None;
+
     while let Some(field) = multipart.next_field().await.map_err(|e| {
         AppError::Validation(format!("Failed to read multipart field: {}", e))
     })? {
         let name = field.name().unwrap_or("").to_string();
-        if name != "file" {
-            continue;
+        match name.as_str() {
+            "file" if file_field.is_none() => {
+                // First "file" field wins, matching the previous inline
+                // per-field-return behavior (a second "file" field was never
+                // reachable there since the first one returned immediately).
+                let original_filename = field
+                    .file_name()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "untitled.md".to_string());
+                let data = field.bytes().await.map_err(|e| {
+                    AppError::Validation(format!("Failed to read file data: {}", e))
+                })?;
+                file_field = Some((original_filename, data));
+            }
+            "source_path" => {
+                let text = field.text().await.map_err(|e| {
+                    AppError::Validation(format!("Failed to read source_path field: {}", e))
+                })?;
+                let trimmed = text.trim();
+                if !trimmed.is_empty() {
+                    source_path = Some(trimmed.to_string());
+                }
+            }
+            _ => {}
         }
+    }
 
-        let original_filename = field
-            .file_name()
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "untitled.md".to_string());
+    let (original_filename, data) = file_field
+        .ok_or_else(|| AppError::Validation("No file field found in upload".to_string()))?;
 
-        validate_upload_filename(&original_filename)
-            .map_err(AppError::Validation)?;
+    validate_upload_filename(&original_filename)
+        .map_err(AppError::Validation)?;
 
-        let data = field.bytes().await.map_err(|e| {
-            AppError::Validation(format!("Failed to read file data: {}", e))
-        })?;
+    validate_upload_data(&data)
+        .map_err(AppError::Validation)?;
 
-        validate_upload_data(&data)
-            .map_err(AppError::Validation)?;
+    // Safe: validate_upload_data already verified UTF-8
+    let content = std::str::from_utf8(&data)
+        .expect("BUG: validate_upload_data already verified UTF-8")
+        .to_string();
+    let title = title_from_filename(&original_filename);
 
-        // Safe: validate_upload_data already verified UTF-8
-        let content = std::str::from_utf8(&data)
-            .expect("BUG: validate_upload_data already verified UTF-8")
-            .to_string();
-        let title = title_from_filename(&original_filename);
+    // Duplicate check: only block on active (non-archived) duplicates.
+    // Global (not source_path-scoped) by design: identical content already
+    // active anywhere for this user is still a 409, regardless of the
+    // source_path given on this request.
+    let content_hash = hex::encode(Sha256::digest(content.as_bytes()));
+    let existing: Option<(Uuid, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+        "SELECT id, title, created_at FROM documents WHERE user_id = $1 AND content_hash = $2 AND archived = false LIMIT 1"
+    )
+    .bind(principal.effective_user_id())
+    .bind(&content_hash)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(AppError::Database)?;
 
-        // Duplicate check: only block on active (non-archived) duplicates
-        let content_hash = hex::encode(Sha256::digest(content.as_bytes()));
-        let existing: Option<(Uuid, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
-            "SELECT id, title, created_at FROM documents WHERE user_id = $1 AND content_hash = $2 AND archived = false LIMIT 1"
+    if let Some((existing_id, existing_title, existing_created_at)) = existing {
+        return Err(AppError::DuplicateDocument {
+            content_hash,
+            existing_id,
+            existing_title,
+            existing_created_at,
+        });
+    }
+
+    // S1: source_path-based upsert. The content_hash check above already
+    // ruled out an identical-content match, so if an active document already
+    // occupies this source_path its content must differ — archive it in a
+    // single atomic UPDATE ... RETURNING so the new upload becomes the active
+    // version at this path instead of piling up as a separate document.
+    let mut replaced_document_id: Option<Uuid> = None;
+    if let Some(sp) = source_path.as_deref() {
+        let archived: Option<(Uuid,)> = sqlx::query_as(
+            "UPDATE documents SET archived = true, archived_at = NOW() \
+             WHERE user_id = $1 AND source_path = $2 AND archived = false \
+             RETURNING id",
         )
         .bind(principal.effective_user_id())
-        .bind(&content_hash)
+        .bind(sp)
         .fetch_optional(&state.db)
         .await
         .map_err(AppError::Database)?;
-
-        if let Some((existing_id, existing_title, existing_created_at)) = existing {
-            return Err(AppError::DuplicateDocument {
-                content_hash,
-                existing_id,
-                existing_title,
-                existing_created_at,
-            });
-        }
-
-        let upstage_key = std::env::var("UPSTAGE_API_KEY").unwrap_or_default();
-        let mut builder = DocumentPipelineBuilder::new()
-            .pool(state.db.clone())
-            .app_config(state.config.clone())
-            .semantic_chunking(512)
-            .user_id(principal.effective_user_id())
-            .skip_analysis(); // always skip; analysis runs as a background task
-        if upstage_key.is_empty() {
-            builder = builder.skip_embedding();
-        } else {
-            builder = builder.upstage_embedding(upstage_key.clone());
-        }
-        let pipeline = builder.build();
-        let input = IngestionInput::from_text(title.clone(), content.clone());
-
-        let output = pipeline.process(input).await.map_err(|e| {
-            tracing::error!("Upload pipeline failed: {}", e);
-            AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", e))
-        })?;
-
-        enqueue_for_embedding(&state, output.document_id).await;
-
-        // Spawn AI analysis as a non-blocking background task so the upload
-        // response is returned immediately without waiting for the LLM call.
-        if !upstage_key.is_empty() {
-            let bg_db = state.db.clone();
-            let bg_doc_id = output.document_id;
-            let bg_user_id = principal.effective_user_id();
-            let bg_api_key = upstage_key;
-            let bg_title = output.title.clone();
-            let bg_content = content;
-            tokio::spawn(async move {
-                run_background_analysis(bg_db, bg_doc_id, bg_user_id, bg_api_key, bg_title, bg_content).await;
-            });
-        }
-
-        return Ok(Json(UploadResponse {
-            success: true,
-            document: UploadedDocument {
-                id: output.document_id,
-                title: output.title,
-                chunks_count: output.chunks_count,
-                processing_status: ProcessingStatus::Pending,
-            },
-        }));
+        replaced_document_id = archived.map(|(id,)| id);
     }
 
-    Err(AppError::Validation("No file field found in upload".to_string()))
+    let upstage_key = std::env::var("UPSTAGE_API_KEY").unwrap_or_default();
+    let mut builder = DocumentPipelineBuilder::new()
+        .pool(state.db.clone())
+        .app_config(state.config.clone())
+        .semantic_chunking(512)
+        .user_id(principal.effective_user_id())
+        .skip_analysis(); // always skip; analysis runs as a background task
+    if upstage_key.is_empty() {
+        builder = builder.skip_embedding();
+    } else {
+        builder = builder.upstage_embedding(upstage_key.clone());
+    }
+    let pipeline = builder.build();
+    let input = match source_path {
+        Some(sp) => IngestionInput::from_text_with_source_path(title.clone(), content.clone(), sp),
+        None => IngestionInput::from_text(title.clone(), content.clone()),
+    };
+
+    let output = pipeline.process(input).await.map_err(|e| {
+        tracing::error!("Upload pipeline failed: {}", e);
+        AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", e))
+    })?;
+
+    enqueue_for_embedding(&state, output.document_id).await;
+
+    // Spawn AI analysis as a non-blocking background task so the upload
+    // response is returned immediately without waiting for the LLM call.
+    if !upstage_key.is_empty() {
+        let bg_db = state.db.clone();
+        let bg_doc_id = output.document_id;
+        let bg_user_id = principal.effective_user_id();
+        let bg_api_key = upstage_key;
+        let bg_title = output.title.clone();
+        let bg_content = content;
+        tokio::spawn(async move {
+            run_background_analysis(bg_db, bg_doc_id, bg_user_id, bg_api_key, bg_title, bg_content).await;
+        });
+    }
+
+    Ok(Json(UploadResponse {
+        success: true,
+        document: UploadedDocument {
+            id: output.document_id,
+            title: output.title,
+            chunks_count: output.chunks_count,
+            processing_status: ProcessingStatus::Pending,
+        },
+        replaced_document_id,
+    }))
 }
 
 /// Runs AI analysis for a stored document in the background.
@@ -1259,6 +1311,7 @@ async fn upload_srt(
                 chunks_count: output.chunks_count,
                 processing_status: ProcessingStatus::Pending,
             },
+            replaced_document_id: None,
         }));
     }
 
@@ -2126,6 +2179,7 @@ mod tests {
                 chunks_count: 5,
                 processing_status: ProcessingStatus::Completed,
             },
+            replaced_document_id: None,
         };
         let json = serde_json::to_value(&resp).unwrap();
         assert!(json.get("document").is_some());
@@ -2145,6 +2199,7 @@ mod tests {
                 chunks_count: 0,
                 processing_status: ProcessingStatus::Pending,
             },
+            replaced_document_id: None,
         };
         let json = serde_json::to_value(&resp).unwrap();
         assert_eq!(json["document"]["id"], id.to_string());
@@ -2160,6 +2215,7 @@ mod tests {
                 chunks_count: 1,
                 processing_status: ProcessingStatus::Pending,
             },
+            replaced_document_id: None,
         };
         let json = serde_json::to_value(&resp).unwrap();
         assert_eq!(json["document"]["processing_status"], "pending");

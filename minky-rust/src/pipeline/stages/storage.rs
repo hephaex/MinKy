@@ -180,8 +180,14 @@ impl StorageStage {
         // Fall back to (user_id, title) for plain-text / URL ingests.
         let existing_id: Option<(Uuid,)> = if self.config.upsert {
             if let Some(sp) = source_path {
+                // archived=false: an upsert must never resurrect an archived
+                // row (S1's upload replace-on-conflict archives the old
+                // version before re-ingesting, and repeated re-uploads to the
+                // same source_path accumulate multiple archived rows sharing
+                // that path — this lookup must only ever match the single
+                // active one, never fall back to an arbitrary archived row).
                 sqlx::query_as(
-                    "SELECT id FROM documents WHERE user_id = $1 AND source_path = $2",
+                    "SELECT id FROM documents WHERE user_id = $1 AND source_path = $2 AND archived = false",
                 )
                 .bind(user_id)
                 .bind(sp)
