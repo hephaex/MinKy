@@ -13,7 +13,7 @@ use secrecy::ExposeSecret;
 use crate::{error::{AppError, AppResult}, middleware::{AuthPrincipal, AuthUser, OptionalAuthUser}, AppState};
 
 use crate::models::DuplicateGroup;
-use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
+use crate::pipeline::{DocumentPipelineBuilder, IngestionInput, PipelineError};
 use crate::services::{EmbeddingConfig, EmbeddingService};
 
 const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10MB
@@ -939,10 +939,50 @@ async fn upload_document(
         None => IngestionInput::from_text(title.clone(), content.clone()),
     };
 
-    let output = pipeline.process(input).await.map_err(|e| {
-        tracing::error!("Upload pipeline failed: {}", e);
-        AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", e))
-    })?;
+    let output = match pipeline.process(input).await {
+        Ok(output) => output,
+        Err(e) => {
+            tracing::error!("Upload pipeline failed: {}", e);
+            // The archive UPDATE above already committed (pool autocommit), so a
+            // pipeline failure would otherwise leave this source_path with zero
+            // active documents — the previously good version silently gone.
+            // Best-effort restore, guarded so it never resurrects the old row
+            // when a newer active document (e.g. a concurrent upload) exists.
+            if let Some(prev_id) = replaced_document_id {
+                let restored = sqlx::query(
+                    "UPDATE documents SET archived = false, archived_at = NULL \
+                     WHERE id = $1 AND archived = true \
+                       AND NOT EXISTS (SELECT 1 FROM documents d2 \
+                            WHERE d2.user_id = documents.user_id \
+                              AND d2.source_path = documents.source_path \
+                              AND d2.archived = false)",
+                )
+                .bind(prev_id)
+                .execute(&state.db)
+                .await;
+                match restored {
+                    Ok(r) if r.rows_affected() == 1 => tracing::warn!(
+                        "restored archived predecessor {prev_id} after pipeline failure"
+                    ),
+                    Ok(_) => tracing::warn!(
+                        "predecessor {prev_id} not restored (a newer active document exists)"
+                    ),
+                    Err(db_e) => tracing::error!(
+                        "failed to restore archived predecessor {prev_id}: {db_e}"
+                    ),
+                }
+            }
+            return Err(match e {
+                PipelineError::SourcePathConflict { source_path } => AppError::Conflict(
+                    format!(
+                        "An active document already exists for source_path '{source_path}' (concurrent upload)"
+                    ),
+                    None,
+                ),
+                other => AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", other)),
+            });
+        }
+    };
 
     enqueue_for_embedding(&state, output.document_id).await;
 

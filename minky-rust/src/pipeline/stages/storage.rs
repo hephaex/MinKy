@@ -251,7 +251,22 @@ impl StorageStage {
             .bind(&sensitivity)
             .bind(&content_hash)
             .fetch_one(&self.pool)
-            .await?;
+            .await
+            .map_err(|e| {
+                // Losing the (user_id, source_path) active-unique race
+                // (idx_documents_user_source_active, migration 024) is a
+                // conflict with a concurrent upload, not an internal error.
+                if let sqlx::Error::Database(db) = &e {
+                    if db.code().as_deref() == Some("23505")
+                        && db.constraint() == Some("idx_documents_user_source_active")
+                    {
+                        return PipelineError::SourcePathConflict {
+                            source_path: source_path.unwrap_or_default().to_string(),
+                        };
+                    }
+                }
+                PipelineError::from(e)
+            })?;
 
             id
         };
@@ -449,8 +464,12 @@ impl PipelineStage<AnalyzedDocument, StoredDocument> for StorageStage {
         context: &mut PipelineContext,
     ) -> PipelineResult<StoredDocument> {
         // Store document record
-        let document_id = self.store_document(&input, context).await.map_err(|e| {
-            PipelineError::stage_failure("storage", format!("Failed to store document: {}", e))
+        let document_id = self.store_document(&input, context).await.map_err(|e| match e {
+            // Must survive the generic stage_failure re-wrap so routes can map it to 409.
+            PipelineError::SourcePathConflict { .. } => e,
+            other => {
+                PipelineError::stage_failure("storage", format!("Failed to store document: {}", other))
+            }
         })?;
 
         // Update context with document ID

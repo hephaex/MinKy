@@ -501,8 +501,11 @@ impl EmbeddingService {
         let mut by_document: HashMap<Uuid, SemanticSearchRow> =
             HashMap::with_capacity(chunk_hits.len() + document_hits.len());
 
+        // chunk_hits arrive sorted best-first (ORDER BY distance ASC), so the
+        // first row per document is its best chunk — later (worse) chunks of
+        // the same document must not overwrite it.
         for row in chunk_hits {
-            by_document.insert(row.document_id, row);
+            by_document.entry(row.document_id).or_insert(row);
         }
         for row in document_hits {
             by_document.entry(row.document_id).or_insert(row);
@@ -1521,6 +1524,26 @@ mod tests {
             "chunk hit must win over document hit for the same document"
         );
         assert_eq!(merged[0].similarity, 0.9, "the winning row's own similarity must be kept");
+    }
+
+    #[test]
+    fn merge_search_hits_keeps_best_chunk_when_document_has_multiple_chunks() {
+        // Regression (2026-07-17 review H1): chunk_hits arrive best-first; a
+        // later, worse chunk of the same document must not overwrite the best
+        // one — the document would otherwise be ranked/snippeted by its worst
+        // qualifying chunk.
+        let doc_id = Uuid::new_v4();
+        let best = sample_row(doc_id, Some(Uuid::new_v4()), 0.92);
+        let mid = sample_row(doc_id, Some(Uuid::new_v4()), 0.71);
+        let worst = sample_row(doc_id, Some(Uuid::new_v4()), 0.56);
+
+        let merged = EmbeddingService::merge_search_hits(vec![best, mid, worst], vec![], 10);
+
+        assert_eq!(merged.len(), 1, "must dedup to one row per document");
+        assert_eq!(
+            merged[0].similarity, 0.92,
+            "the best chunk (first in the DESC-sorted input) must survive the merge"
+        );
     }
 
     #[test]
