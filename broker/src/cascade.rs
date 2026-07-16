@@ -12,7 +12,9 @@
 //!      externalized thresholds in [`crate::config::VerdictConfig`]. Any hit
 //!      that corresponds to a local memory file is recalled.
 //!   3. **degradation** — a connection failure/timeout ([`MinkyError::Unreachable`])
-//!      maps to `Verdict::Offline`; real HTTP errors propagate as `Err`.
+//!      or a 5xx server error ([`MinkyError::Http`] with `status >= 500`) maps
+//!      to `Verdict::Offline`; 4xx errors (auth/config problems) and decode
+//!      errors still propagate as `Err`.
 //!
 //! Verdict rules (thresholds are config-driven; nothing is hard-coded):
 //!   - `sufficient`   = `hits >= min_results` AND `top1 >= sufficient_top1`
@@ -74,7 +76,8 @@ pub enum CascadeError {
     WorkingSet(#[from] WorkingSetError),
     #[error("storage error: {0}")]
     Storage(#[from] StorageError),
-    /// Only real HTTP errors reach here; `Unreachable` is handled as `Offline`.
+    /// Only 4xx/decode errors reach here; `Unreachable` and 5xx are handled
+    /// as `Offline`.
     #[error("minky error: {0}")]
     Minky(#[from] MinkyError),
 }
@@ -148,6 +151,25 @@ pub async fn run(
                 reason: format!(
                     "long-term memory unreachable ({detail}); proceeding on the \
                      working set alone — long-term memory may be unanswered"
+                ),
+                scores: Vec::new(),
+                hit_count: 0,
+                evidence: Vec::new(),
+                working_set_matches: Vec::new(),
+                offline: true,
+            });
+        }
+        // ---- Stage 3a (cont.): 5xx server errors degrade the same way -------
+        // A 5xx means the backend itself is broken (crash, dependency outage,
+        // overload) rather than a client-side mistake — the broker should not
+        // go hard-down over it. 4xx (auth/config errors) still propagate below
+        // so they stay loud.
+        Err(MinkyError::Http(status)) if status >= 500 => {
+            return Ok(CascadeOutcome {
+                verdict: Verdict::Offline,
+                reason: format!(
+                    "minky HTTP {status} — long-term memory degraded, \
+                     proceeding with working set only"
                 ),
                 scores: Vec::new(),
                 hit_count: 0,
@@ -600,7 +622,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn http_error_propagates() {
+    async fn http_500_degrades_to_offline() {
+        // A 5xx means the backend itself is broken — the cascade must not go
+        // hard-down; it degrades exactly like an unreachable endpoint.
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/api/search/semantic"))
@@ -610,9 +634,51 @@ mod tests {
         let mut h = harness(&server.uri(), &[]);
         let minky = client(&h.config);
 
+        let out = run("kubernetes deploy", &h.config, &mut h.storage, &minky, now_ts())
+            .await
+            .unwrap();
+
+        assert_eq!(out.verdict, Verdict::Offline);
+        assert!(out.offline);
+        assert!(out.reason.contains("500"));
+    }
+
+    #[tokio::test]
+    async fn http_502_degrades_to_offline() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/search/semantic"))
+            .respond_with(ResponseTemplate::new(502))
+            .mount(&server)
+            .await;
+        let mut h = harness(&server.uri(), &[]);
+        let minky = client(&h.config);
+
+        let out = run("kubernetes deploy", &h.config, &mut h.storage, &minky, now_ts())
+            .await
+            .unwrap();
+
+        assert_eq!(out.verdict, Verdict::Offline);
+        assert!(out.offline);
+        assert!(out.reason.contains("502"));
+    }
+
+    #[tokio::test]
+    async fn http_401_stays_hard_error() {
+        // 4xx (auth/config problems) must not be swallowed into a quiet
+        // degraded verdict — they should surface loudly.
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/search/semantic"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        let mut h = harness(&server.uri(), &[]);
+        let minky = client(&h.config);
+
         let err = run("kubernetes deploy", &h.config, &mut h.storage, &minky, now_ts())
             .await
             .unwrap_err();
-        assert!(matches!(err, CascadeError::Minky(MinkyError::Http(500))));
+        assert!(matches!(err, CascadeError::Minky(MinkyError::Http(401))));
     }
 }

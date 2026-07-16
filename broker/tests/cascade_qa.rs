@@ -262,7 +262,7 @@ async fn v04_high_top1_single_hit_is_insufficient() {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Degradation — Unreachable -> Offline
+// 3. Degradation — Unreachable / 5xx -> Offline; 4xx still a hard Err
 // ---------------------------------------------------------------------------
 
 /// D-01: a guaranteed-closed port (bind then drop) -> connection refused ->
@@ -310,14 +310,58 @@ async fn d02_response_delay_past_timeout_maps_to_offline() {
     assert!(out.offline);
 }
 
-/// D-03: a genuine non-2xx status is a *real* error and must propagate as Err,
-/// not be swallowed into Offline.
+/// D-03: a 5xx status means the backend itself is broken (crash, dependency
+/// outage, overload) — it degrades to Offline exactly like Unreachable,
+/// rather than taking the whole cascade down with a hard Err.
 #[tokio::test]
-async fn d03_http_500_propagates_as_error() {
+async fn d03_http_500_degrades_to_offline() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/api/search/semantic"))
         .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+    let mut h = harness(&server.uri(), &[]);
+    let minky = client(&h.config);
+
+    let out = run(Q, &h.config, &mut h.storage, &minky, now_ts())
+        .await
+        .unwrap();
+    assert_eq!(out.verdict, Verdict::Offline);
+    assert!(out.offline);
+    assert!(out.reason.contains("500"));
+}
+
+/// D-03b: a 502 (bad gateway) is also a server-side failure and degrades the
+/// same way as 500.
+#[tokio::test]
+async fn d03b_http_502_degrades_to_offline() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/search/semantic"))
+        .respond_with(ResponseTemplate::new(502))
+        .mount(&server)
+        .await;
+    let mut h = harness(&server.uri(), &[]);
+    let minky = client(&h.config);
+
+    let out = run(Q, &h.config, &mut h.storage, &minky, now_ts())
+        .await
+        .unwrap();
+    assert_eq!(out.verdict, Verdict::Offline);
+    assert!(out.offline);
+    assert!(out.reason.contains("502"));
+}
+
+/// D-03c: a 4xx status (e.g. bad/expired API key) is a genuine client-side
+/// error and must still propagate as Err — it must not be swallowed into a
+/// quiet Offline verdict, since that would hide auth/config misconfiguration.
+#[tokio::test]
+async fn d03c_http_401_still_propagates_as_error() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/search/semantic"))
+        .respond_with(ResponseTemplate::new(401))
         .mount(&server)
         .await;
     let mut h = harness(&server.uri(), &[]);
@@ -328,7 +372,7 @@ async fn d03_http_500_propagates_as_error() {
         .unwrap_err();
     assert!(matches!(
         err,
-        CascadeError::Minky(MinkyError::Http(500))
+        CascadeError::Minky(MinkyError::Http(401))
     ));
 }
 
