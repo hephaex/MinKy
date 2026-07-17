@@ -68,7 +68,12 @@
     "user_management": "사용자 관리",
     "system_overview": "시스템 개요",
     "maintenance": "유지보수",
-    "sync_git": "Git으로 동기화"
+    "sync_git": "Git으로 동기화",
+    "knowledge": "지식 검색",
+    "graph": "그래프",
+    "chat": "채팅",
+    "import": "가져오기",
+    "date": "날짜"
   },
   "document": {
     "title": "제목",
@@ -103,7 +108,8 @@
     "duplicate_document": "문서 복제",
     "preview": "미리보기",
     "markdown_content": "마크다운 내용",
-    "rendered_content": "렌더링된 내용"
+    "rendered_content": "렌더링된 내용",
+    "all_categories": "전체 카테고리"
   },
   "editor": {
     "toolbar": {
@@ -400,5 +406,13 @@
     "mark_all_read": "모두 읽음으로 표시",
     "no_notifications": "알림 없음",
     "notification_settings": "알림 설정"
+  },
+  "sort": {
+    "updated_desc": "최근 수정순",
+    "updated_asc": "오래된 수정순",
+    "created_desc": "최근 생성순",
+    "created_asc": "오래된 생성순",
+    "title_asc": "제목 (A-Z)",
+    "title_desc": "제목 (Z-A)"
   }
 }

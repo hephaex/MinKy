@@ -17,13 +17,13 @@ const Header = () => {
             {t('navigation.documents')}
           </Link>
           <Link to="/knowledge" className="nav-link">
-            Knowledge
+            {t('navigation.knowledge')}
           </Link>
           <Link to="/graph" className="nav-link">
-            Graph
+            {t('navigation.graph')}
           </Link>
           <Link to="/chat" className="nav-link">
-            Chat
+            {t('navigation.chat')}
           </Link>
           <Link to="/analytics" className="nav-link">
             {t('navigation.explore')}

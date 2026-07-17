@@ -23,6 +23,9 @@
   margin: 0;
   font-size: 1.8rem;
   font-weight: bold;
+  /* Explicit color: page-level CSS (e.g. *.css with generic .header-content
+     rules) is bundled globally and must not repaint the app logo */
+  color: white;
 }
 
 .logo span {

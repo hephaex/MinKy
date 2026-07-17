@@ -58,7 +58,12 @@
     "explore": "探索",
     "analytics": "分析",
     "admin": "管理",
-    "settings": "设置"
+    "settings": "设置",
+    "knowledge": "知识",
+    "graph": "图谱",
+    "chat": "聊天",
+    "import": "导入",
+    "date": "日期"
   },
   "document": {
     "title": "标题",
@@ -93,7 +98,8 @@
     "duplicate_document": "复制文档",
     "preview": "预览",
     "markdown_content": "Markdown内容",
-    "rendered_content": "渲染内容"
+    "rendered_content": "渲染内容",
+    "all_categories": "全部分类"
   },
   "editor": {
     "toolbar": {
@@ -245,5 +251,13 @@
     "file_required": "需要文件",
     "title_required": "需要标题",
     "content_required": "需要内容"
+  },
+  "sort": {
+    "updated_desc": "最近更新",
+    "updated_asc": "最早更新",
+    "created_desc": "最近创建",
+    "created_asc": "最早创建",
+    "title_asc": "标题 (A-Z)",
+    "title_desc": "标题 (Z-A)"
   }
 }

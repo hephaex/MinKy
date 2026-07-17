@@ -68,7 +68,12 @@
     "user_management": "User Management",
     "system_overview": "System Overview",
     "maintenance": "Maintenance",
-    "sync_git": "Sync using Git"
+    "sync_git": "Sync using Git",
+    "knowledge": "Knowledge",
+    "graph": "Graph",
+    "chat": "Chat",
+    "import": "Import",
+    "date": "Date"
   },
   "document": {
     "title": "Title",
@@ -103,7 +108,8 @@
     "duplicate_document": "Duplicate Document",
     "preview": "Preview",
     "markdown_content": "Markdown Content",
-    "rendered_content": "Rendered Content"
+    "rendered_content": "Rendered Content",
+    "all_categories": "All Categories"
   },
   "editor": {
     "toolbar": {
@@ -400,5 +406,13 @@
     "mark_all_read": "Mark all as read",
     "no_notifications": "No notifications",
     "notification_settings": "Notification Settings"
+  },
+  "sort": {
+    "updated_desc": "Recently Updated",
+    "updated_asc": "Oldest Updated",
+    "created_desc": "Recently Created",
+    "created_asc": "Oldest Created",
+    "title_asc": "Title (A-Z)",
+    "title_desc": "Title (Z-A)"
   }
 }

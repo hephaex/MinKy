@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import TreeSidebar from '../components/TreeSidebar';
 import DocumentList from './DocumentList';
+import { useI18n } from '../i18n/i18n';
 import './DocumentsPage.css';
 
 const MOBILE_BREAKPOINT = 768;
 
 const DocumentsPage = () => {
+  const { t } = useI18n();
   // On mobile the sidebar overlays the list, so start it hidden there and let
   // the user open it via the toggle; on desktop it stays open alongside the list.
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= MOBILE_BREAKPOINT);
@@ -49,7 +51,7 @@ const DocumentsPage = () => {
               </svg>
             </button>
           )}
-          <h1>Documents</h1>
+          <h1>{t('navigation.documents')}</h1>
         </div>
 
         <div className="documents-content">

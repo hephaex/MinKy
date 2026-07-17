@@ -28,7 +28,8 @@ const useCategories = (options = {}) => {
       if (includeInactive) {
         params.append('include_inactive', 'true');
       }
-      const response = await api.get(`/categories/?${params.toString()}`);
+      // No trailing slash: the Rust backend (axum) matches /categories, not /categories/
+      const response = await api.get(`/categories?${params.toString()}`);
       const fetchedCategories = response.data.data?.categories || [];
       setCategories(fetchedCategories);
       return fetchedCategories;

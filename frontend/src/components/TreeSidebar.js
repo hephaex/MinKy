@@ -3,15 +3,17 @@ import PropTypes from 'prop-types';
 import { Link, useNavigate } from 'react-router-dom';
 import { documentService } from '../services/api';
 import TreeView from './TreeView';
+import { useI18n } from '../i18n/i18n';
 import './TreeView.css';
 import './DocumentsSidebar.css';
 
 const MODES = [
-  { key: 'by-tag', label: '태그' },
-  { key: 'by-date', label: '날짜' },
+  { key: 'by-tag', labelKey: 'navigation.tags' },
+  { key: 'by-date', labelKey: 'navigation.date' },
 ];
 
 const TreeSidebar = ({ isVisible = true, onToggle = () => {} }) => {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [mode, setMode] = useState('by-tag');
   const [treeData, setTreeData] = useState([]);
@@ -118,7 +120,7 @@ const TreeSidebar = ({ isVisible = true, onToggle = () => {} }) => {
             <path d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
           </svg>
         </button>
-        <h2>Documents</h2>
+        <h2>{t('navigation.documents')}</h2>
       </div>
 
       <div className="sidebar-content">
@@ -126,7 +128,7 @@ const TreeSidebar = ({ isVisible = true, onToggle = () => {} }) => {
         <div className="sidebar-section">
           <button className="new-document-btn" onClick={handleNewDocument}>
             <div className="btn-icon">+</div>
-            <span>새 문서</span>
+            <span>{t('navigation.new_document')}</span>
           </button>
         </div>
 
@@ -135,7 +137,7 @@ const TreeSidebar = ({ isVisible = true, onToggle = () => {} }) => {
           <div className="section-item">
             <div className="item-icon">📥</div>
             <Link to="/import" className="item-link">
-              Import
+              {t('navigation.import')}
             </Link>
           </div>
         </div>
@@ -149,7 +151,7 @@ const TreeSidebar = ({ isVisible = true, onToggle = () => {} }) => {
                 className={`tree-mode-tab ${mode === m.key ? 'active' : ''}`}
                 onClick={() => handleModeChange(m.key)}
               >
-                {m.label}
+                {t(m.labelKey)}
               </button>
             ))}
           </div>
@@ -160,7 +162,8 @@ const TreeSidebar = ({ isVisible = true, onToggle = () => {} }) => {
           <input
             type="text"
             className="tree-search-input"
-            placeholder="문서 검색..."
+            name="tree-search"
+            placeholder={t('document.search_documents')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Search documents in tree"

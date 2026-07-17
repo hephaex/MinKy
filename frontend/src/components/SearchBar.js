@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import PropTypes from 'prop-types';
+import { useI18n } from '../i18n/i18n';
 import './SearchBar.css';
 
 const SearchBar = ({ onSearch, initialValue = '' }) => {
+  const { t } = useI18n();
   const [query, setQuery] = useState(initialValue);
 
   const handleSubmit = (e) => {
@@ -21,7 +23,8 @@ const SearchBar = ({ onSearch, initialValue = '' }) => {
         <input
           type="text"
           className="search-input"
-          placeholder="Search documents..."
+          name="document-search"
+          placeholder={t('document.search_documents')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Search documents"

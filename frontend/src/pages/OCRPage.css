@@ -14,7 +14,9 @@
   border-bottom: 1px solid #dee2e6;
 }
 
-.header-content {
+.ocr-page .header-content {
+  /* Override the app header's global .header-content { display: flex } */
+  display: block;
   flex: 1;
 }
 

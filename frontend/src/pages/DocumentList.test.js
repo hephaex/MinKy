@@ -89,11 +89,13 @@ describe('DocumentList', () => {
       expect(screen.getByText('Test Document 2')).toBeInTheDocument();
     });
 
-    it('renders page title', async () => {
+    it('renders search input in the list header', async () => {
+      // The page title now lives in DocumentsPage; DocumentList renders the
+      // toolbar (search/filter/actions) without its own heading.
       render(<DocumentList />);
 
       await waitFor(() => {
-        expect(screen.getByRole('heading', { name: 'Documents' })).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Search documents...')).toBeInTheDocument();
       });
     });
 

@@ -58,7 +58,12 @@
     "explore": "探索",
     "analytics": "分析",
     "admin": "管理",
-    "settings": "設定"
+    "settings": "設定",
+    "knowledge": "ナレッジ",
+    "graph": "グラフ",
+    "chat": "チャット",
+    "import": "インポート",
+    "date": "日付"
   },
   "document": {
     "title": "タイトル",
@@ -93,7 +98,8 @@
     "duplicate_document": "文書を複製",
     "preview": "プレビュー",
     "markdown_content": "マークダウン内容",
-    "rendered_content": "レンダリング内容"
+    "rendered_content": "レンダリング内容",
+    "all_categories": "すべてのカテゴリ"
   },
   "editor": {
     "toolbar": {
@@ -245,5 +251,13 @@
     "file_required": "ファイルが必要です",
     "title_required": "タイトルが必要です",
     "content_required": "内容が必要です"
+  },
+  "sort": {
+    "updated_desc": "更新が新しい順",
+    "updated_asc": "更新が古い順",
+    "created_desc": "作成が新しい順",
+    "created_asc": "作成が古い順",
+    "title_asc": "タイトル (A-Z)",
+    "title_desc": "タイトル (Z-A)"
   }
 }

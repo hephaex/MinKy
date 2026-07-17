@@ -141,7 +141,8 @@ const TreeNode = ({
 const nodeShape = {
   id: PropTypes.string.isRequired,
   label: PropTypes.string.isRequired,
-  type: PropTypes.oneOf(['document', 'folder']),
+  // Matches the node_type vocabulary emitted by the Rust tree API
+  type: PropTypes.oneOf(['document', 'folder', 'tag', 'year', 'month']),
   color: PropTypes.string,
   count: PropTypes.number,
 };

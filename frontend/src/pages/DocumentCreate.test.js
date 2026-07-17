@@ -305,7 +305,7 @@ describe('DocumentCreate', () => {
       render(<DocumentCreate />);
 
       await waitFor(() => {
-        expect(api.get).toHaveBeenCalledWith('/categories/?format=flat');
+        expect(api.get).toHaveBeenCalledWith('/categories?format=flat');
       });
     });
 

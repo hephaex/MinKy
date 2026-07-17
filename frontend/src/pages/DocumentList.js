@@ -12,16 +12,17 @@ import useTags from '../hooks/useTags';
 import { logError, logWarning } from '../utils/logger';
 import { formatDate } from '../utils/dateUtils';
 import { loadListState, saveListState } from '../utils/listStatePersistence';
+import { useI18n } from '../i18n/i18n';
 import './DocumentList.css';
 
-// Sort options configuration
+// Sort options configuration (labels resolved via i18n at render time)
 const SORT_OPTIONS = [
-  { value: 'updated_desc', label: 'Recently Updated' },
-  { value: 'updated_asc', label: 'Oldest Updated' },
-  { value: 'created_desc', label: 'Recently Created' },
-  { value: 'created_asc', label: 'Oldest Created' },
-  { value: 'title_asc', label: 'Title (A-Z)' },
-  { value: 'title_desc', label: 'Title (Z-A)' },
+  { value: 'updated_desc', labelKey: 'sort.updated_desc' },
+  { value: 'updated_asc', labelKey: 'sort.updated_asc' },
+  { value: 'created_desc', labelKey: 'sort.created_desc' },
+  { value: 'created_asc', labelKey: 'sort.created_asc' },
+  { value: 'title_asc', labelKey: 'sort.title_asc' },
+  { value: 'title_desc', labelKey: 'sort.title_desc' },
 ];
 
 // View mode options
@@ -35,6 +36,7 @@ const VIEW_MODES = {
 const LIST_STATE_KEY = 'documentListState';
 
 const DocumentList = () => {
+  const { t } = useI18n();
   // Restore the previous list view (page/filters) once on mount.
   const [restoredState] = useState(() => loadListState(LIST_STATE_KEY));
   const [documents, setDocuments] = useState([]);
@@ -323,15 +325,16 @@ const DocumentList = () => {
   return (
     <div className="document-list" ref={listRef}>
       <div className="document-list-header">
-        <h2>Documents</h2>
         <div className="header-actions">
           <SearchBar onSearch={handleSearch} initialValue={searchQuery} />
           <select
             className="category-filter"
+            name="category-filter"
+            aria-label="Filter by category"
             value={selectedCategory}
             onChange={(e) => handleCategoryChange(e.target.value)}
           >
-            <option value="">All Categories</option>
+            <option value="">{t('document.all_categories')}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.path}
@@ -340,13 +343,14 @@ const DocumentList = () => {
           </select>
           <select
             className="sort-filter"
+            name="sort-filter"
             value={sortBy}
             onChange={(e) => handleSortChange(e.target.value)}
             aria-label="Sort documents"
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {t(option.labelKey)}
               </option>
             ))}
           </select>
@@ -379,13 +383,13 @@ const DocumentList = () => {
           </div>
           <div className="action-buttons">
             <Link to="/documents/new" className="btn btn-primary">
-              + New Document
+              + {t('navigation.new_document')}
             </Link>
             <button className="btn btn-secondary" onClick={() => setShowUpload(!showUpload)}>
-              📁 Upload *.md
+              📁 {t('navigation.upload_md')}
             </button>
             <Link to="/import" className="btn btn-secondary">
-              📥 Import
+              📥 {t('navigation.import')}
             </Link>
           </div>
         </div>
