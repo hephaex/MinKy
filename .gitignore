@@ -96,3 +96,4 @@ check-env.sh
 
 # GJC session runtime state
 .gjc/
+/backups/

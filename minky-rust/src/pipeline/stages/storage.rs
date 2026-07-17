@@ -174,6 +174,31 @@ impl StorageStage {
             self.config.sensitivity.clone()
         };
 
+        // Compute content_hash once — used in both INSERT and UPDATE paths so the
+        // column always tracks the actual content (prevents stale hash after edits).
+        let content_hash = hex::encode(Sha256::digest(doc.original_content.as_bytes()));
+
+        // R4 (2026-07-17): the SELECT-then-UPDATE/INSERT below is a classic
+        // check-then-act race — two concurrent store_document calls for the
+        // same (user_id, source_path-or-title) can both miss each other's
+        // SELECT and both INSERT, producing duplicate active rows on the
+        // title branch (no unique index there — production already has
+        // pre-existing duplicate titles, so adding one is a separate,
+        // data-affecting change, not done here). A transaction-scoped
+        // advisory lock serializes callers on that key without requiring a
+        // new index or touching existing rows: same key -> only one caller
+        // proceeds past the lock at a time; released automatically on
+        // commit/rollback even if this function returns early via `?`.
+        let lock_key = match source_path {
+            Some(sp) => format!("mkydoc:sp:{user_id}:{sp}"),
+            None => format!("mkydoc:ti:{user_id}:{}", doc.title),
+        };
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(&lock_key)
+            .execute(&mut *tx)
+            .await?;
+
         // Check if document exists.
         // Prefer matching by (user_id, source_path) when source_path is present so
         // that vault re-ingests update the same row instead of creating duplicates.
@@ -191,7 +216,7 @@ impl StorageStage {
                 )
                 .bind(user_id)
                 .bind(sp)
-                .fetch_optional(&self.pool)
+                .fetch_optional(&mut *tx)
                 .await?
             } else {
                 // F.2 fix: scope the title lookup to rows that also have
@@ -203,16 +228,12 @@ impl StorageStage {
                 )
                 .bind(&doc.title)
                 .bind(user_id)
-                .fetch_optional(&self.pool)
+                .fetch_optional(&mut *tx)
                 .await?
             }
         } else {
             None
         };
-
-        // Compute content_hash once — used in both INSERT and UPDATE paths so the
-        // column always tracks the actual content (prevents stale hash after edits).
-        let content_hash = hex::encode(Sha256::digest(doc.original_content.as_bytes()));
 
         let document_id = if let Some((id,)) = existing_id {
             // Update existing document; recompute content_hash to match new content
@@ -230,12 +251,12 @@ impl StorageStage {
             .bind(source_path)
             .bind(&sensitivity)
             .bind(&content_hash)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
             id
         } else {
-            let (id,): (Uuid,) = sqlx::query_as(
+            let inserted: Result<(Uuid,), sqlx::Error> = sqlx::query_as(
                 r#"
                 INSERT INTO documents (title, content, category_id, user_id, is_public, source_path, sensitivity, content_hash)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -250,27 +271,48 @@ impl StorageStage {
             .bind(source_path)
             .bind(&sensitivity)
             .bind(&content_hash)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| {
-                // Losing the (user_id, source_path) active-unique race
-                // (idx_documents_user_source_active, migration 024) is a
-                // conflict with a concurrent upload, not an internal error.
-                if let sqlx::Error::Database(db) = &e {
-                    if db.code().as_deref() == Some("23505")
-                        && db.constraint() == Some("idx_documents_user_source_active")
-                    {
-                        return PipelineError::SourcePathConflict {
-                            source_path: source_path.unwrap_or_default().to_string(),
-                        };
-                    }
-                }
-                PipelineError::from(e)
-            })?;
+            .fetch_one(&mut *tx)
+            .await;
 
-            id
+            match inserted {
+                Ok((id,)) => id,
+                Err(e) => {
+                    // Losing the (user_id, source_path) active-unique race
+                    // (idx_documents_user_source_active, migration 024) against
+                    // a writer outside this lock's scope — e.g. the HTTP
+                    // upload route archives the predecessor on its own
+                    // connection before calling into this pipeline — is a
+                    // conflict with a concurrent upload, not an internal
+                    // error. The failed INSERT poisons `tx`, so the winning
+                    // row is looked up on a fresh pool connection after
+                    // rollback (R3, 2026-07-17): give the caller a usable
+                    // existing_id instead of an empty conflict.
+                    let is_source_path_race = matches!(&e, sqlx::Error::Database(db)
+                        if db.code().as_deref() == Some("23505")
+                            && db.constraint() == Some("idx_documents_user_source_active"));
+                    tx.rollback().await.ok();
+                    if is_source_path_race {
+                        let sp = source_path.unwrap_or_default().to_string();
+                        let existing_id: Option<(Uuid,)> = sqlx::query_as(
+                            "SELECT id FROM documents WHERE user_id = $1 AND source_path = $2 AND archived = false",
+                        )
+                        .bind(user_id)
+                        .bind(&sp)
+                        .fetch_optional(&self.pool)
+                        .await
+                        .ok()
+                        .flatten();
+                        return Err(PipelineError::SourcePathConflict {
+                            source_path: sp,
+                            existing_id: existing_id.map(|(id,)| id),
+                        });
+                    }
+                    return Err(PipelineError::from(e));
+                }
+            }
         };
 
+        tx.commit().await?;
         Ok(document_id)
     }
 

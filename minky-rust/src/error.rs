@@ -37,6 +37,17 @@ pub enum AppError {
         existing_created_at: chrono::DateTime<chrono::Utc>,
     },
 
+    /// 409 for losing the (user_id, source_path) active-unique race to a
+    /// concurrent upload. `existing_id` is the winning document (looked up
+    /// right after the race is detected) so callers can treat this the same
+    /// way as `DuplicateDocument` — top-level `existing_id`, same field name
+    /// the sync client already reads (2026-07-17 R3).
+    #[error("Active document already exists for source_path '{source_path}'")]
+    SourcePathConflict {
+        source_path: String,
+        existing_id: Option<uuid::Uuid>,
+    },
+
     #[error("Configuration error: {0}")]
     Configuration(String),
 
@@ -82,6 +93,13 @@ impl IntoResponse for AppError {
                     "existing_id": existing_id,
                     "existing_title": existing_title,
                     "existing_created_at": existing_created_at,
+                }))).into_response();
+            }
+            Self::SourcePathConflict { source_path, existing_id } => {
+                return (StatusCode::CONFLICT, Json(json!({
+                    "error": "source_path_conflict",
+                    "source_path": source_path,
+                    "existing_id": existing_id,
                 }))).into_response();
             }
             Self::RateLimited => (StatusCode::TOO_MANY_REQUESTS, Json(json!({"success": false, "error": "Rate limit exceeded"}))),

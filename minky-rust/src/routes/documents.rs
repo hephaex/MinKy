@@ -973,12 +973,9 @@ async fn upload_document(
                 }
             }
             return Err(match e {
-                PipelineError::SourcePathConflict { source_path } => AppError::Conflict(
-                    format!(
-                        "An active document already exists for source_path '{source_path}' (concurrent upload)"
-                    ),
-                    None,
-                ),
+                PipelineError::SourcePathConflict { source_path, existing_id } => {
+                    AppError::SourcePathConflict { source_path, existing_id }
+                }
                 other => AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", other)),
             });
         }

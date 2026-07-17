@@ -40,6 +40,7 @@ pub fn into_error_response(err: AppError) -> (StatusCode, Json<serde_json::Value
         AppError::Invalidation(..) => StatusCode::CONFLICT,
         AppError::Redirect(_) => StatusCode::SEE_OTHER,
         AppError::DuplicateDocument { .. } => StatusCode::CONFLICT,
+        AppError::SourcePathConflict { .. } => StatusCode::CONFLICT,
     };
 
     let body = Json(serde_json::json!({
