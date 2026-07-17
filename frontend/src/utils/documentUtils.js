@@ -1,3 +1,27 @@
+/**
+ * Reduce a markdown fragment to plain text for card previews.
+ * Handles fragments cut mid-syntax (e.g. an unterminated code fence in a
+ * server-side excerpt).
+ */
+export const stripMarkdown = (text) => {
+  if (!text) return '';
+  return (
+    text
+      // fenced code blocks, including a trailing unterminated fence
+      .replace(/```[\s\S]*?(```|$)/g, ' ')
+      .replace(/`([^`]*)`/g, '$1')
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/^\s*[-*+]\s+/gm, '')
+      .replace(/^\s*\d+\.\s+/gm, '')
+      .replace(/(\*\*|__|~~)/g, '')
+      .replace(/^\s*>\s?/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+};
+
 export const formatAuthor = (rawAuthor) => {
   if (!rawAuthor) return '';
   if (typeof rawAuthor !== 'string' && !Array.isArray(rawAuthor)) return '';

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import KnowledgeGraph from '../components/KnowledgeGraph';
+import api from '../services/api';
 import './KnowledgeGraphPage.css';
 
 /**
@@ -181,18 +182,10 @@ function KnowledgeGraphPage() {
     const loadGraphData = async () => {
       setLoading(true);
       try {
-        const response = await fetch('/api/knowledge/graph', {
-          signal: AbortSignal.timeout(3000),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setGraphData(data);
-          setApiAvailable(true);
-        } else {
-          setGraphData(buildSampleGraph());
-          setApiAvailable(false);
-        }
+        const response = await api.get('/knowledge/graph', { timeout: 3000 });
+        // Backend wraps the payload in {success, data:{nodes, edges}}
+        setGraphData(response.data.data || response.data);
+        setApiAvailable(true);
       } catch {
         // API not available, use sample data
         setGraphData(buildSampleGraph());
@@ -281,16 +274,10 @@ function KnowledgeGraphPage() {
   const loadClusters = useCallback(async () => {
     setClusterLoading(true);
     try {
-      const response = await fetch('/api/knowledge/clusters?min_cluster_size=2', {
-        signal: AbortSignal.timeout(5000),
+      const response = await api.get('/knowledge/clusters?min_cluster_size=2', {
+        timeout: 5000,
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setClusterData(data.data || data);
-      } else {
-        setClusterData(null);
-      }
+      setClusterData(response.data.data || response.data);
     } catch {
       setClusterData(null);
     } finally {
@@ -402,21 +389,20 @@ function KnowledgeGraphPage() {
     try {
       if (apiAvailable) {
         // Use API export endpoint
-        const response = await fetch(`/api/knowledge/export?format=${format}`, {
-          signal: AbortSignal.timeout(10000),
+        const response = await api.get('/knowledge/export', {
+          params: { format },
+          responseType: 'blob',
+          timeout: 10000,
         });
 
-        if (response.ok) {
-          const blob = await response.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `knowledge-graph.${format}`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }
+        const url = URL.createObjectURL(response.data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `knowledge-graph.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       } else {
         // Export current demo data
         const exportData = {

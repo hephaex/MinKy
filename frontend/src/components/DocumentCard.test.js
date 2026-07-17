@@ -65,6 +65,38 @@ describe('DocumentCard', () => {
     expect(container.querySelector('.document-tags')).not.toBeInTheDocument();
   });
 
+  it('renders tags from Rust tag_names when tags is absent', () => {
+    const { container } = renderWithRouter(
+      <DocumentCard document={mockDoc({ tags: undefined, tag_names: ['rag', 'pgvector'] })} />
+    );
+    const tagEls = container.querySelectorAll('.document-tag');
+    expect(tagEls.length).toBe(2);
+    expect(tagEls[0]).toHaveTextContent('rag');
+    expect(tagEls[1]).toHaveTextContent('pgvector');
+  });
+
+  it('renders excerpt as plain-text preview without markdown syntax', () => {
+    const { container } = renderWithRouter(
+      <DocumentCard
+        document={mockDoc({
+          excerpt:
+            '# 샘플 문서\n\nUI 테스트용 문서입니다.\n\n- pgvector 임베딩\n\n```rust\nfn main() {}\n```',
+        })}
+      />
+    );
+    const preview = container.querySelector('.document-preview');
+    expect(preview).toBeInTheDocument();
+    expect(preview.textContent).toContain('샘플 문서');
+    expect(preview.textContent).toContain('UI 테스트용 문서입니다.');
+    expect(preview.textContent).not.toContain('#');
+    expect(preview.textContent).not.toContain('```');
+  });
+
+  it('does not render preview block when excerpt is absent and showPreview is false', () => {
+    const { container } = renderWithRouter(<DocumentCard document={mockDoc()} />);
+    expect(container.querySelector('.document-preview')).not.toBeInTheDocument();
+  });
+
   it('renders pending processing badge', () => {
     const { container } = renderWithRouter(
       <DocumentCard document={mockDoc({ processing_status: 'pending' })} />
@@ -161,9 +193,7 @@ describe('DocumentCard', () => {
 
   it('renders seo score and readability when seoInfo provided', () => {
     const { container } = renderWithRouter(
-      <DocumentCard
-        document={mockDoc({ seoInfo: { seoScore: 87, readability: 'Easy' } })}
-      />
+      <DocumentCard document={mockDoc({ seoInfo: { seoScore: 87, readability: 'Easy' } })} />
     );
     const score = container.querySelector('.seo-score');
     const readability = container.querySelector('.seo-readability');

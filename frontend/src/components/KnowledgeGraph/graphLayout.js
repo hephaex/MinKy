@@ -41,9 +41,17 @@ function runIteration(nodes, edges, width, height) {
   // Repulsion forces between all node pairs
   for (let i = 0; i < nodeCount; i++) {
     for (let j = i + 1; j < nodeCount; j++) {
-      const dx = nodes[i].x - nodes[j].x;
-      const dy = nodes[i].y - nodes[j].y;
-      const distSq = dx * dx + dy * dy;
+      let dx = nodes[i].x - nodes[j].x;
+      let dy = nodes[i].y - nodes[j].y;
+      let distSq = dx * dx + dy * dy;
+      // Coincident nodes (e.g. both clamped to the same boundary corner):
+      // REPULSION / 0 = Infinity and (0 / dist) * Infinity = NaN, which then
+      // poisons every position. Nudge them apart deterministically instead.
+      if (distSq === 0) {
+        dx = (i - j) * 0.1;
+        dy = 0.1;
+        distSq = dx * dx + dy * dy;
+      }
       const dist = Math.max(Math.sqrt(distSq), MIN_DISTANCE);
 
       const force = REPULSION / distSq;

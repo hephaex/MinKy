@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-
-// SECURITY: Helper to get auth token for API calls
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+import api from '../services/api';
 
 const NewSimpleDateSidebar = ({ onDocumentSelect = () => {}, selectedDateKey = null }) => {
   const [timeline, setTimeline] = useState({});
@@ -17,14 +12,8 @@ const NewSimpleDateSidebar = ({ onDocumentSelect = () => {}, selectedDateKey = n
     const loadTimeline = async () => {
       try {
         setLoading(true);
-        // SECURITY: Include auth headers for consistency
-        const response = await fetch('/api/documents/timeline?group_by=month', {
-          headers: getAuthHeaders(),
-        });
-        if (!response.ok) throw new Error('Failed to fetch timeline');
-
-        const data = await response.json();
-        setTimeline(data.timeline);
+        const response = await api.get('/documents/timeline?group_by=month');
+        setTimeline(response.data.timeline);
         setError(null);
       } catch (err) {
         setError(err.message);

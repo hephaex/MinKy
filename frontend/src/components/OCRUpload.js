@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { authService } from '../services/api';
+import api from '../services/api';
 import {
   OCRDropzone,
   OCRStatusLoading,
@@ -33,18 +33,12 @@ const OCRUpload = ({
   useEffect(() => {
     const loadOCRInfo = async () => {
       try {
-        // SECURITY: Include auth headers for consistency
-        const token = authService.getToken();
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const statusResponse = await api.get('/ocr/status');
+        setOcrStatus(statusResponse.data.status);
 
-        const statusResponse = await fetch('/api/ocr/status', { headers });
-        const statusData = await statusResponse.json();
-        setOcrStatus(statusData.status);
-
-        const langResponse = await fetch('/api/ocr/languages', { headers });
-        const langData = await langResponse.json();
-        if (langData.success) {
-          setSupportedLanguages(langData.languages);
+        const langResponse = await api.get('/ocr/languages');
+        if (langResponse.data.success) {
+          setSupportedLanguages(langResponse.data.languages);
         }
       } catch (err) {
         // OCR info loading failed silently
@@ -100,15 +94,6 @@ const OCRUpload = ({
     return allowedTypes.includes(file.type) || /\.(pdf|png|jpe?g|tiff?|bmp|gif)$/i.test(file.name);
   };
 
-  const getAuthHeaders = () => {
-    const token = authService.getToken();
-    const headers = {};
-    if (token && token !== 'null' && token !== 'undefined') {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    return headers;
-  };
-
   const extractText = async () => {
     if (!file) {
       setError('Please select a file first');
@@ -124,13 +109,8 @@ const OCRUpload = ({
       formDataObj.append('file', file);
       formDataObj.append('language', language);
 
-      const response = await fetch('/api/ocr/extract', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: formDataObj,
-      });
-
-      const data = await response.json();
+      const response = await api.post('/ocr/extract', formDataObj);
+      const data = response.data;
 
       if (data.success) {
         setResult(data);
@@ -141,7 +121,13 @@ const OCRUpload = ({
         handleOCRError(data.error);
       }
     } catch (err) {
-      handleNetworkError(err);
+      // axios throws on HTTP error statuses; surface the server's message when present
+      const serverError = err.response?.data?.error;
+      if (serverError) {
+        handleOCRError(serverError);
+      } else {
+        handleNetworkError(err);
+      }
     } finally {
       setProcessing(false);
     }
@@ -165,13 +151,8 @@ const OCRUpload = ({
       formDataObj.append('author', formData.author);
       formDataObj.append('is_public', formData.is_public.toString());
 
-      const response = await fetch('/api/ocr/extract-and-create', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: formDataObj,
-      });
-
-      const data = await response.json();
+      const response = await api.post('/ocr/extract-and-create', formDataObj);
+      const data = response.data;
 
       if (data.success) {
         setResult(data);
@@ -182,7 +163,7 @@ const OCRUpload = ({
         setError(data.error || 'Document creation failed');
       }
     } catch (err) {
-      setError('Error creating document: ' + err.message);
+      setError(err.response?.data?.error || 'Error creating document: ' + err.message);
     } finally {
       setProcessing(false);
     }

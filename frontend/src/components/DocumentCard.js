@@ -2,7 +2,7 @@ import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import { highlightTextReact, truncateWithHighlight } from '../utils/highlightText';
 import { formatDateTime } from '../utils/dateUtils';
-import { formatAuthor } from '../utils/documentUtils';
+import { formatAuthor, stripMarkdown } from '../utils/documentUtils';
 import './DocumentCard.css';
 
 const DocumentCard = ({
@@ -14,10 +14,18 @@ const DocumentCard = ({
 }) => {
   const dateFormatter = formatDate || formatDateTime;
 
-  // Show max 3 tags, with overflow indicator
+  // Show max 3 tags, with overflow indicator.
+  // Legacy API sends `tags`; the Rust list API sends `tag_names` (strings).
+  const tags = document.tags ?? document.tag_names;
   const maxVisibleTags = 3;
-  const visibleTags = document.tags ? document.tags.slice(0, maxVisibleTags) : [];
-  const remainingTagsCount = document.tags ? document.tags.length - maxVisibleTags : 0;
+  const visibleTags = tags ? tags.slice(0, maxVisibleTags) : [];
+  const remainingTagsCount = tags ? tags.length - maxVisibleTags : 0;
+
+  // Preview text: full markdown_content when explicitly requested via
+  // showPreview, otherwise the list API's excerpt (always shown when present).
+  const previewSource =
+    showPreview && document.markdown_content ? document.markdown_content : document.excerpt;
+  const previewText = previewSource ? stripMarkdown(previewSource) : '';
 
   return (
     <div className="document-card">
@@ -108,7 +116,7 @@ const DocumentCard = ({
         </div>
 
         {/* Tags display with overflow indicator */}
-        {document.tags && document.tags.length > 0 && (
+        {tags && tags.length > 0 && (
           <div className="document-tags">
             {visibleTags.map((tag, index) => (
               <span key={index} className="document-tag">
@@ -121,18 +129,15 @@ const DocumentCard = ({
           </div>
         )}
 
-        {/* Optional preview text */}
-        {showPreview && document.markdown_content && (
+        {/* Preview text (excerpt from list API, or full content with showPreview) */}
+        {previewText && (
           <div className="document-preview">
             {searchQuery ? (
-              highlightTextReact(
-                truncateWithHighlight(document.markdown_content, searchQuery, 150),
-                searchQuery
-              )
+              highlightTextReact(truncateWithHighlight(previewText, searchQuery, 150), searchQuery)
             ) : (
               <>
-                {document.markdown_content.substring(0, 150)}
-                {document.markdown_content.length > 150 && '...'}
+                {previewText.substring(0, 150)}
+                {previewText.length > 150 && '...'}
               </>
             )}
           </div>
@@ -144,7 +149,8 @@ const DocumentCard = ({
 
 DocumentCard.propTypes = {
   document: PropTypes.shape({
-    id: PropTypes.number.isRequired,
+    // Rust backend uses UUID strings; legacy Python backend used integers
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     title: PropTypes.string,
     author: PropTypes.oneOfType([PropTypes.string, PropTypes.array]),
     tags: PropTypes.arrayOf(
@@ -155,8 +161,10 @@ DocumentCard.propTypes = {
         }),
       ])
     ),
+    tag_names: PropTypes.arrayOf(PropTypes.string),
     updated_at: PropTypes.string,
     markdown_content: PropTypes.string,
+    excerpt: PropTypes.string,
     processing_status: PropTypes.oneOf(['pending', 'completed', 'failed']),
     seoInfo: PropTypes.shape({
       seoScore: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),

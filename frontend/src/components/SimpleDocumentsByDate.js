@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { logError } from '../utils/logger';
 import { formatDateTime } from '../utils/dateUtils';
+import { stripMarkdown } from '../utils/documentUtils';
 
 const SimpleDocumentsByDate = ({ dateKey = null, onDocumentClick = null }) => {
   const [documents, setDocuments] = useState([]);
@@ -223,136 +224,142 @@ const SimpleDocumentsByDate = ({ dateKey = null, onDocumentClick = null }) => {
             marginBottom: '32px',
           }}
         >
-          {documents.map((doc) => (
-            <div
-              key={doc.id}
-              style={{
-                background: 'white',
-                border: '1px solid #e0e0e0',
-                borderRadius: '12px',
-                padding: '24px',
-                transition: 'all 0.2s ease',
-                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
-                cursor: 'pointer',
-              }}
-              onClick={() => onDocumentClick?.(doc)}
-              onKeyDown={(e) => e.key === 'Enter' && onDocumentClick?.(doc)}
-              role="button"
-              tabIndex={0}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
-                e.currentTarget.style.borderColor = '#c0c0c0';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.05)';
-                e.currentTarget.style.borderColor = '#e0e0e0';
-              }}
-            >
-              <div style={{ marginBottom: '16px' }}>
-                <h3
-                  style={{
-                    margin: '0 0 8px 0',
-                    fontSize: '20px',
-                    fontWeight: '600',
-                    lineHeight: '1.3',
-                  }}
-                >
-                  <Link
-                    to={`/documents/${doc.id}`}
-                    style={{
-                      color: '#1a1a1a',
-                      textDecoration: 'none',
-                      transition: 'color 0.2s',
-                    }}
-                    onMouseEnter={(e) => (e.target.style.color = '#007bff')}
-                    onMouseLeave={(e) => (e.target.style.color = '#1a1a1a')}
-                  >
-                    {doc.title || '제목 없음'}
-                  </Link>
-                </h3>
-                <span
-                  style={{
-                    fontSize: '14px',
-                    color: '#999',
-                    fontWeight: 'normal',
-                  }}
-                >
-                  {formatDateTime(doc.created_at)}
-                </span>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <p
-                  style={{
-                    margin: '0',
-                    fontSize: '15px',
-                    lineHeight: '1.5',
-                    color: '#555',
-                  }}
-                >
-                  {truncateContent(doc.content || doc.markdown_content || '')}
-                </p>
-              </div>
-
+          {documents.map((doc) => {
+            // Rust by-date API sends tag_names + excerpt; legacy sent tags + content
+            const docTags = doc.tags ?? doc.tag_names;
+            return (
               <div
+                key={doc.id}
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                  paddingTop: '16px',
-                  borderTop: '1px solid #f0f0f0',
+                  background: 'white',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+                  cursor: 'pointer',
+                }}
+                onClick={() => onDocumentClick?.(doc)}
+                onKeyDown={(e) => e.key === 'Enter' && onDocumentClick?.(doc)}
+                role="button"
+                tabIndex={0}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 8px 16px rgba(0, 0, 0, 0.1)';
+                  e.currentTarget.style.borderColor = '#c0c0c0';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.05)';
+                  e.currentTarget.style.borderColor = '#e0e0e0';
                 }}
               >
-                {doc.author && (
-                  <span style={{ fontSize: '14px', color: '#666' }}>작성자: {doc.author}</span>
-                )}
-                {doc.tags && doc.tags.length > 0 && (
-                  <div
+                <div style={{ marginBottom: '16px' }}>
+                  <h3
                     style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '6px',
+                      margin: '0 0 8px 0',
+                      fontSize: '20px',
+                      fontWeight: '600',
+                      lineHeight: '1.3',
                     }}
                   >
-                    {doc.tags.slice(0, 3).map((tag, index) => (
-                      <span
-                        key={index}
-                        style={{
-                          display: 'inline-block',
-                          padding: '4px 8px',
-                          background: '#f8f9fa',
-                          border: '1px solid #e0e0e0',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          color: '#666',
-                          fontWeight: '500',
-                        }}
-                      >
-                        {tag.name || tag}
-                      </span>
-                    ))}
-                    {doc.tags.length > 3 && (
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '4px 8px',
-                          background: '#e9ecef',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          color: '#6c757d',
-                          fontWeight: '500',
-                        }}
-                      >
-                        +{doc.tags.length - 3}
-                      </span>
+                    <Link
+                      to={`/documents/${doc.id}`}
+                      style={{
+                        color: '#1a1a1a',
+                        textDecoration: 'none',
+                        transition: 'color 0.2s',
+                      }}
+                      onMouseEnter={(e) => (e.target.style.color = '#007bff')}
+                      onMouseLeave={(e) => (e.target.style.color = '#1a1a1a')}
+                    >
+                      {doc.title || '제목 없음'}
+                    </Link>
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: '14px',
+                      color: '#999',
+                      fontWeight: 'normal',
+                    }}
+                  >
+                    {formatDateTime(doc.created_at)}
+                  </span>
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <p
+                    style={{
+                      margin: '0',
+                      fontSize: '15px',
+                      lineHeight: '1.5',
+                      color: '#555',
+                    }}
+                  >
+                    {truncateContent(
+                      stripMarkdown(doc.excerpt || doc.content || doc.markdown_content || '')
                     )}
-                  </div>
-                )}
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    paddingTop: '16px',
+                    borderTop: '1px solid #f0f0f0',
+                  }}
+                >
+                  {doc.author && (
+                    <span style={{ fontSize: '14px', color: '#666' }}>작성자: {doc.author}</span>
+                  )}
+                  {docTags && docTags.length > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '6px',
+                      }}
+                    >
+                      {docTags.slice(0, 3).map((tag, index) => (
+                        <span
+                          key={index}
+                          style={{
+                            display: 'inline-block',
+                            padding: '4px 8px',
+                            background: '#f8f9fa',
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            color: '#666',
+                            fontWeight: '500',
+                          }}
+                        >
+                          {tag.name || tag}
+                        </span>
+                      ))}
+                      {docTags.length > 3 && (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '4px 8px',
+                            background: '#e9ecef',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            color: '#6c757d',
+                            fontWeight: '500',
+                          }}
+                        >
+                          +{docTags.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
