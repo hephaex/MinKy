@@ -41,6 +41,8 @@ pub fn routes() -> Router<AppState> {
         .route("/duplicates", get(list_duplicates))
         .route("/duplicates/resolve", post(resolve_duplicates))
         .route("/tree", get(get_document_tree))
+        .route("/timeline", get(get_document_timeline))
+        .route("/by-date", get(list_documents_by_date))
         .route("/{id}", get(get_document).put(update_document).delete(delete_document))
         .route("/{id}/archive", post(archive_document))
         .route("/{id}/restore", post(restore_document))
@@ -233,6 +235,206 @@ async fn build_tree_by_date(state: &AppState, user_id: i32) -> AppResult<Vec<Tre
     Ok(tree)
 }
 
+// ── Timeline (date sidebar) ──────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct TimelineQuery {
+    /// Accepted for Flask compat; only month granularity is produced
+    #[allow(dead_code)]
+    pub group_by: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TimelineEntry {
+    pub key: String,
+    pub label: String,
+    pub count: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<std::collections::BTreeMap<String, TimelineEntry>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TimelineResponse {
+    pub timeline: std::collections::BTreeMap<String, TimelineEntry>,
+}
+
+/// GET /documents/timeline?group_by=month — year→month counts for the date
+/// sidebar (NewSimpleDateSidebar reads {timeline: {"2026": {key,label,count,
+/// children: {"2026-07": {...}}}}}).
+async fn get_document_timeline(
+    State(state): State<AppState>,
+    auth_user: OptionalAuthUser,
+    Query(_query): Query<TimelineQuery>,
+) -> AppResult<Json<TimelineResponse>> {
+    let user_id = auth_user.0.map(|u| u.id).unwrap_or(-1);
+
+    let rows: Vec<(i32, i32, i64)> = sqlx::query_as(
+        r#"
+        SELECT EXTRACT(YEAR FROM created_at)::int,
+               EXTRACT(MONTH FROM created_at)::int,
+               COUNT(*)
+        FROM documents
+        WHERE (user_id = $1 OR is_public = true) AND archived = false
+        GROUP BY 1, 2
+        ORDER BY 1 DESC, 2 DESC
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(&state.db)
+    .await?;
+
+    const MONTHS_KO: [&str; 12] = [
+        "1월", "2월", "3월", "4월", "5월", "6월",
+        "7월", "8월", "9월", "10월", "11월", "12월",
+    ];
+
+    let mut timeline: std::collections::BTreeMap<String, TimelineEntry> =
+        std::collections::BTreeMap::new();
+    for (year, month, count) in rows {
+        let year_key = year.to_string();
+        let entry = timeline.entry(year_key.clone()).or_insert_with(|| TimelineEntry {
+            key: year_key.clone(),
+            label: year_key.clone(),
+            count: 0,
+            children: Some(std::collections::BTreeMap::new()),
+        });
+        entry.count += count;
+        let month_key = format!("{year}-{month:02}");
+        if let Some(children) = entry.children.as_mut() {
+            children.insert(
+                month_key.clone(),
+                TimelineEntry {
+                    key: month_key,
+                    label: MONTHS_KO[(month - 1) as usize].to_string(),
+                    count,
+                    children: None,
+                },
+            );
+        }
+    }
+
+    Ok(Json(TimelineResponse { timeline }))
+}
+
+// ── Documents by date key ────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ByDateQuery {
+    pub date_key: String,
+    pub page: Option<i32>,
+    pub per_page: Option<i32>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DateRange {
+    pub start: String,
+    pub end: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ByDateResponse {
+    pub documents: Vec<FlaskDocumentLite>,
+    pub pagination: FlaskPagination,
+    pub date_range: DateRange,
+}
+
+/// Resolve a sidebar date key (YYYY | YYYY-MM | YYYY-MM-DD) into a
+/// half-open [start, end) date range.
+fn parse_date_key_range(date_key: &str) -> Option<(chrono::NaiveDate, chrono::NaiveDate)> {
+    use chrono::NaiveDate;
+    match date_key.len() {
+        4 => {
+            let year: i32 = date_key.parse().ok()?;
+            let start = NaiveDate::from_ymd_opt(year, 1, 1)?;
+            let end = NaiveDate::from_ymd_opt(year + 1, 1, 1)?;
+            Some((start, end))
+        }
+        7 => {
+            let (y, m) = date_key.split_once('-')?;
+            let year: i32 = y.parse().ok()?;
+            let month: u32 = m.parse().ok()?;
+            let start = NaiveDate::from_ymd_opt(year, month, 1)?;
+            let end = if month == 12 {
+                NaiveDate::from_ymd_opt(year + 1, 1, 1)?
+            } else {
+                NaiveDate::from_ymd_opt(year, month + 1, 1)?
+            };
+            Some((start, end))
+        }
+        10 => {
+            let start = NaiveDate::parse_from_str(date_key, "%Y-%m-%d").ok()?;
+            Some((start, start.succ_opt()?))
+        }
+        _ => None,
+    }
+}
+
+/// GET /documents/by-date?date_key=YYYY[-MM[-DD]] — documents created in the
+/// given period (date sidebar drill-down).
+async fn list_documents_by_date(
+    State(state): State<AppState>,
+    auth_user: OptionalAuthUser,
+    Query(query): Query<ByDateQuery>,
+) -> AppResult<Json<ByDateResponse>> {
+    let (start, end) = parse_date_key_range(&query.date_key).ok_or_else(|| {
+        AppError::Validation(format!("invalid date_key: {}", query.date_key))
+    })?;
+
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.per_page.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * limit;
+    let user_id = auth_user.0.map(|u| u.id).unwrap_or(-1);
+
+    let total: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM documents WHERE (user_id = $1 OR is_public = true) AND archived = false AND created_at >= $2 AND created_at < $3"
+    )
+    .bind(user_id)
+    .bind(start.and_hms_opt(0, 0, 0).unwrap().and_utc())
+    .bind(end.and_hms_opt(0, 0, 0).unwrap().and_utc())
+    .fetch_one(&state.db)
+    .await?;
+
+    let rows: Vec<FlaskDocumentLiteRow> = sqlx::query_as(
+        r#"SELECT d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
+                  d.is_public, d.sensitivity, d.is_published, d.published_at,
+                  COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names,
+                  LEFT(d.content, 300) AS excerpt
+           FROM documents d
+           LEFT JOIN document_tags dt ON dt.document_id = d.id
+           LEFT JOIN tags t ON t.id = dt.tag_id
+           WHERE (d.user_id = $1 OR d.is_public = true) AND d.archived = false
+             AND d.created_at >= $2 AND d.created_at < $3
+           GROUP BY d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
+                    d.is_public, d.sensitivity, d.is_published, d.published_at
+           ORDER BY d.created_at DESC
+           LIMIT $4 OFFSET $5"#,
+    )
+    .bind(user_id)
+    .bind(start.and_hms_opt(0, 0, 0).unwrap().and_utc())
+    .bind(end.and_hms_opt(0, 0, 0).unwrap().and_utc())
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
+
+    let total_pages = ((total.0 as f64) / (limit as f64)).ceil() as i32;
+    Ok(Json(ByDateResponse {
+        documents: rows.into_iter().map(FlaskDocumentLite::from).collect(),
+        pagination: FlaskPagination {
+            page,
+            per_page: limit,
+            total: total.0,
+            pages: total_pages,
+            has_next: page < total_pages,
+            has_prev: page > 1,
+        },
+        date_range: DateRange {
+            start: start.to_string(),
+            end: end.pred_opt().map(|d| d.to_string()).unwrap_or_else(|| end.to_string()),
+        },
+    }))
+}
+
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
 pub struct DocumentResponse {
     pub id: Uuid,
@@ -279,6 +481,8 @@ struct FlaskDocumentLiteRow {
     pub is_published: Option<bool>,
     pub published_at: Option<chrono::DateTime<chrono::Utc>>,
     pub tag_names: Vec<String>,
+    /// First chars of content for card previews (LEFT(content, N) in SQL)
+    pub excerpt: Option<String>,
 }
 
 /// Flask-compatible list item matching to_dict_lite (no markdown_content; has tag_names)
@@ -296,6 +500,8 @@ pub struct FlaskDocumentLite {
     pub is_published: bool,
     pub published_at: Option<chrono::DateTime<chrono::Utc>>,
     pub tag_names: Vec<String>,
+    /// Content preview for document cards (not full markdown_content)
+    pub excerpt: Option<String>,
 }
 
 impl From<FlaskDocumentLiteRow> for FlaskDocumentLite {
@@ -313,6 +519,7 @@ impl From<FlaskDocumentLiteRow> for FlaskDocumentLite {
             is_published: row.is_published.unwrap_or(false),
             published_at: row.published_at,
             tag_names: row.tag_names,
+            excerpt: row.excerpt,
         }
     }
 }
@@ -441,7 +648,8 @@ async fn list_documents(
         sqlx::query_as(
             r#"SELECT d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
                       d.is_public, d.sensitivity, d.is_published, d.published_at,
-                      COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names
+                      COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names,
+                      LEFT(d.content, 300) AS excerpt
                FROM documents d
                LEFT JOIN document_tags dt ON dt.document_id = d.id
                LEFT JOIN tags t ON t.id = dt.tag_id
@@ -461,7 +669,8 @@ async fn list_documents(
         sqlx::query_as(
             r#"SELECT d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
                       d.is_public, d.sensitivity, d.is_published, d.published_at,
-                      COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names
+                      COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names,
+                      LEFT(d.content, 300) AS excerpt
                FROM documents d
                LEFT JOIN document_tags dt ON dt.document_id = d.id
                LEFT JOIN tags t ON t.id = dt.tag_id
@@ -481,7 +690,8 @@ async fn list_documents(
         sqlx::query_as(
             r#"SELECT d.id, d.title, d.author, d.created_at, d.updated_at, d.user_id, d.category_id,
                       d.is_public, d.sensitivity, d.is_published, d.published_at,
-                      COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names
+                      COALESCE(ARRAY_AGG(t.name ORDER BY t.name) FILTER (WHERE t.name IS NOT NULL), ARRAY[]::text[]) AS tag_names,
+                      LEFT(d.content, 300) AS excerpt
                FROM documents d
                LEFT JOIN document_tags dt ON dt.document_id = d.id
                LEFT JOIN tags t ON t.id = dt.tag_id
@@ -2653,6 +2863,7 @@ mod tests {
             is_published: false,
             published_at: None,
             tag_names: vec![],
+            excerpt: None,
         }
     }
 
@@ -2696,6 +2907,71 @@ mod tests {
     // ── FlaskDocumentLite consumer-contract (H1) ─────────────────────────────
     // These tests verify Rust output matches what Flask to_dict_lite actually returns
     // and what the frontend DocumentList.js actually reads.
+
+    // ── parse_date_key_range (timeline/by-date) ─────────────────────────────
+
+    #[test]
+    fn date_key_year_spans_full_year() {
+        let (start, end) = parse_date_key_range("2026").unwrap();
+        assert_eq!(start.to_string(), "2026-01-01");
+        assert_eq!(end.to_string(), "2027-01-01");
+    }
+
+    #[test]
+    fn date_key_month_spans_one_month() {
+        let (start, end) = parse_date_key_range("2026-07").unwrap();
+        assert_eq!(start.to_string(), "2026-07-01");
+        assert_eq!(end.to_string(), "2026-08-01");
+    }
+
+    #[test]
+    fn date_key_december_rolls_into_next_year() {
+        let (start, end) = parse_date_key_range("2026-12").unwrap();
+        assert_eq!(start.to_string(), "2026-12-01");
+        assert_eq!(end.to_string(), "2027-01-01");
+    }
+
+    #[test]
+    fn date_key_day_spans_one_day() {
+        let (start, end) = parse_date_key_range("2026-07-17").unwrap();
+        assert_eq!(start.to_string(), "2026-07-17");
+        assert_eq!(end.to_string(), "2026-07-18");
+    }
+
+    #[test]
+    fn date_key_invalid_forms_rejected() {
+        assert!(parse_date_key_range("2026-W29").is_none());
+        assert!(parse_date_key_range("garbage").is_none());
+        assert!(parse_date_key_range("2026-13").is_none());
+        assert!(parse_date_key_range("").is_none());
+    }
+
+    #[test]
+    fn timeline_entry_serializes_frontend_shape() {
+        // NewSimpleDateSidebar reads {key, label, count, children{...}}
+        let mut children = std::collections::BTreeMap::new();
+        children.insert(
+            "2026-07".to_string(),
+            TimelineEntry { key: "2026-07".into(), label: "7월".into(), count: 3, children: None },
+        );
+        let entry = TimelineEntry { key: "2026".into(), label: "2026".into(), count: 3, children: Some(children) };
+        let json = serde_json::to_value(&entry).unwrap();
+        assert_eq!(json["key"], "2026");
+        assert_eq!(json["count"], 3);
+        assert_eq!(json["children"]["2026-07"]["label"], "7월");
+        // leaf entries must omit children entirely (frontend checks item.children)
+        assert!(json["children"]["2026-07"].get("children").is_none());
+    }
+
+    #[test]
+    fn flask_lite_serializes_excerpt_for_card_preview() {
+        // DocumentCard renders a content preview from `excerpt` (first chars of
+        // content); it must serialize as a plain string when present.
+        let mut item = make_flask_lite();
+        item.excerpt = Some("첫 문단 미리보기".to_string());
+        let json = serde_json::to_value(&item).unwrap();
+        assert_eq!(json["excerpt"], "첫 문단 미리보기");
+    }
 
     #[test]
     fn flask_lite_no_markdown_content_key() {
