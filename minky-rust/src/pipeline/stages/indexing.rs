@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::pipeline::{PipelineContext, PipelineError, PipelineResult, PipelineStage};
+use crate::pipeline::{PipelineContext, PipelineResult, PipelineStage};
 
 use super::storage::StoredDocument;
 use super::PipelineOutput;
