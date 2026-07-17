@@ -149,11 +149,17 @@ fn hash_key(raw: &str) -> String {
 
 async fn make_user(pool: &PgPool) -> i32 {
     let u = unique();
+    // password_hash is NOT NULL with no default (001_initial_schema.sql) —
+    // this fixture never authenticates via password, so any non-empty value
+    // satisfies the constraint (pre-existing bug, unrelated to 2026-07-17
+    // R1-R5; discovered because those changes' `cargo test --workspace`
+    // baseline required this file to actually run against a real DB).
     let (id,): (i32,) = sqlx::query_as(
-        "INSERT INTO users (email, username) VALUES ($1, $2) RETURNING id",
+        "INSERT INTO users (email, username, password_hash) VALUES ($1, $2, $3) RETURNING id",
     )
     .bind(format!("qa+{u}@g002.local"))
     .bind(format!("qa_{u}"))
+    .bind("unused-qa-fixture-hash")
     .fetch_one(pool)
     .await
     .expect("insert qa user");

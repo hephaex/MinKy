@@ -282,6 +282,7 @@ mod tests {
             analyzed: true,
             topics: vec!["rust".to_string()],
             summary: Some("A test document.".to_string()),
+            replaced_document_id: None,
         };
 
         let response: IngestResponse = output.into();

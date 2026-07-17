@@ -47,6 +47,11 @@ pub struct PipelineConfig {
 
     /// Whether documents should be public
     pub is_public: bool,
+
+    /// S1 route semantics (2026-07-17 R2): archive the active predecessor at
+    /// `source_path` and insert atomically. See
+    /// `StorageConfig::archive_predecessor_on_source_path`.
+    pub archive_predecessor_on_source_path: bool,
 }
 
 impl Default for PipelineConfig {
@@ -63,6 +68,7 @@ impl Default for PipelineConfig {
             skip_storage: false,
             user_id: None,
             is_public: false,
+            archive_predecessor_on_source_path: false,
         }
     }
 }
@@ -170,6 +176,7 @@ impl DocumentPipeline {
                     .map(|a| a.topics.clone())
                     .unwrap_or_default(),
                 summary: analyzed_doc.analysis.as_ref().map(|a| a.summary.clone()),
+                replaced_document_id: None,
             });
         }
 
@@ -181,6 +188,7 @@ impl DocumentPipeline {
         let storage_config = super::stages::storage::StorageConfig {
             user_id: self.config.user_id,
             is_public: self.config.is_public,
+            archive_predecessor_on_source_path: self.config.archive_predecessor_on_source_path,
             ..Default::default()
         };
         let storage_stage = StorageStage::new(pool.clone(), storage_config);
@@ -333,6 +341,13 @@ impl DocumentPipelineBuilder {
     /// Skip storage (useful for testing)
     pub fn skip_storage(mut self) -> Self {
         self.config.skip_storage = true;
+        self
+    }
+
+    /// Enable S1 route semantics: archive the active predecessor at
+    /// `source_path` and insert atomically, in the same transaction (2026-07-17 R2).
+    pub fn archive_predecessor_on_source_path(mut self) -> Self {
+        self.config.archive_predecessor_on_source_path = true;
         self
     }
 

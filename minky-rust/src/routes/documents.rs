@@ -903,24 +903,11 @@ async fn upload_document(
 
     // S1: source_path-based upsert. The content_hash check above already
     // ruled out an identical-content match, so if an active document already
-    // occupies this source_path its content must differ — archive it in a
-    // single atomic UPDATE ... RETURNING so the new upload becomes the active
-    // version at this path instead of piling up as a separate document.
-    let mut replaced_document_id: Option<Uuid> = None;
-    if let Some(sp) = source_path.as_deref() {
-        let archived: Option<(Uuid,)> = sqlx::query_as(
-            "UPDATE documents SET archived = true, archived_at = NOW() \
-             WHERE user_id = $1 AND source_path = $2 AND archived = false \
-             RETURNING id",
-        )
-        .bind(principal.effective_user_id())
-        .bind(sp)
-        .fetch_optional(&state.db)
-        .await
-        .map_err(AppError::Database)?;
-        replaced_document_id = archived.map(|(id,)| id);
-    }
-
+    // occupies this source_path its content must differ. `.archive_predecessor_on_source_path()`
+    // (2026-07-17 R2) makes the archive of the old row and the INSERT of the
+    // new one commit atomically inside the storage stage's own transaction —
+    // a crash between them is impossible (either both happen or neither
+    // does), so there is nothing to compensate/restore here on failure.
     let upstage_key = std::env::var("UPSTAGE_API_KEY").unwrap_or_default();
     let mut builder = DocumentPipelineBuilder::new()
         .pool(state.db.clone())
@@ -928,6 +915,9 @@ async fn upload_document(
         .semantic_chunking(512)
         .user_id(principal.effective_user_id())
         .skip_analysis(); // always skip; analysis runs as a background task
+    if source_path.is_some() {
+        builder = builder.archive_predecessor_on_source_path();
+    }
     if upstage_key.is_empty() {
         builder = builder.skip_embedding();
     } else {
@@ -943,35 +933,6 @@ async fn upload_document(
         Ok(output) => output,
         Err(e) => {
             tracing::error!("Upload pipeline failed: {}", e);
-            // The archive UPDATE above already committed (pool autocommit), so a
-            // pipeline failure would otherwise leave this source_path with zero
-            // active documents — the previously good version silently gone.
-            // Best-effort restore, guarded so it never resurrects the old row
-            // when a newer active document (e.g. a concurrent upload) exists.
-            if let Some(prev_id) = replaced_document_id {
-                let restored = sqlx::query(
-                    "UPDATE documents SET archived = false, archived_at = NULL \
-                     WHERE id = $1 AND archived = true \
-                       AND NOT EXISTS (SELECT 1 FROM documents d2 \
-                            WHERE d2.user_id = documents.user_id \
-                              AND d2.source_path = documents.source_path \
-                              AND d2.archived = false)",
-                )
-                .bind(prev_id)
-                .execute(&state.db)
-                .await;
-                match restored {
-                    Ok(r) if r.rows_affected() == 1 => tracing::warn!(
-                        "restored archived predecessor {prev_id} after pipeline failure"
-                    ),
-                    Ok(_) => tracing::warn!(
-                        "predecessor {prev_id} not restored (a newer active document exists)"
-                    ),
-                    Err(db_e) => tracing::error!(
-                        "failed to restore archived predecessor {prev_id}: {db_e}"
-                    ),
-                }
-            }
             return Err(match e {
                 PipelineError::SourcePathConflict { source_path, existing_id } => {
                     AppError::SourcePathConflict { source_path, existing_id }
@@ -980,6 +941,7 @@ async fn upload_document(
             });
         }
     };
+    let replaced_document_id = output.replaced_document_id;
 
     enqueue_for_embedding(&state, output.document_id).await;
 
