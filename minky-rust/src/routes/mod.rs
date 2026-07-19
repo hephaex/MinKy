@@ -6,6 +6,7 @@ mod analytics;
 mod attachments;
 mod auth;
 mod categories;
+mod chat;
 mod comments;
 pub mod documents;
 pub mod embeddings;
@@ -48,6 +49,7 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/documents", documents::routes().merge(understanding::routes()))
         .nest("/tags", tags::routes())
         .nest("/categories", categories::routes())
+        .nest("/chat", chat::routes())
         .nest("/comments", comments::routes())
         .nest("/workflows", workflows::routes())
         .nest("/attachments", attachments::routes())

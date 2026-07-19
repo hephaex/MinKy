@@ -104,6 +104,23 @@ export const chatService = {
     await parseSSEStream(response.body, callbacks);
   },
 
+  /**
+   * Persist a message to a session so it survives a reload. Fire-and-forget
+   * from the caller's perspective — callers should not block the UI on this.
+   * @param {string} sessionId
+   * @param {{role: 'user'|'assistant', content: string, sources?: Array, tokensUsed?: number, model?: string}} message
+   */
+  appendMessage: async (sessionId, message) => {
+    const response = await api.post(`/chat/sessions/${sessionId}/messages`, {
+      role: message.role,
+      content: message.content,
+      sources: message.sources,
+      tokens_used: message.tokensUsed,
+      model: message.model,
+    });
+    return response.data.data || response.data;
+  },
+
   getSessions: async () => {
     const response = await api.get('/chat/sessions');
     return response.data.data || response.data || [];

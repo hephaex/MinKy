@@ -11,6 +11,7 @@ jest.mock('../services/chatService', () => ({
     deleteSession: jest.fn(),
     sendMessage: jest.fn(),
     sendMessageStream: jest.fn(),
+    appendMessage: jest.fn(),
   },
   generateId: () => `mock-id-${++mockIdCounter}`,
 }));
@@ -25,6 +26,7 @@ describe('useChat', () => {
       title: 'New Chat',
       updatedAt: new Date().toISOString(),
     });
+    chatService.appendMessage.mockResolvedValue({});
   });
 
   it('initializes with empty state', async () => {
@@ -103,6 +105,78 @@ describe('useChat', () => {
         onError: expect.any(Function),
       })
     );
+  });
+
+  it('persists the user and completed assistant message after streaming finishes', async () => {
+    // Reload-survival is the entire point of session persistence: once the
+    // stream finishes, both turns of this exchange must be written back so
+    // GET /chat/sessions/:id can reconstruct them later.
+    chatService.sendMessageStream.mockImplementation(async (question, options, callbacks) => {
+      callbacks.onDelta('Hello ');
+      callbacks.onDelta('there!');
+      callbacks.onDone({ tokensUsed: 10, model: 'solar-open2' });
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.sessions).toBeDefined());
+
+    await act(async () => {
+      await result.current.sendMessage('Hi');
+    });
+
+    expect(chatService.appendMessage).toHaveBeenCalledWith(
+      'new-session',
+      expect.objectContaining({ role: 'user', content: 'Hi' })
+    );
+    expect(chatService.appendMessage).toHaveBeenCalledWith(
+      'new-session',
+      expect.objectContaining({
+        role: 'assistant',
+        content: 'Hello there!',
+        tokensUsed: 10,
+        model: 'solar-open2',
+      })
+    );
+  });
+
+  it('does not persist an assistant message when streaming errors', async () => {
+    chatService.sendMessageStream.mockImplementation(async (question, options, callbacks) => {
+      callbacks.onError(new Error('Server error'));
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.sessions).toBeDefined());
+
+    await act(async () => {
+      await result.current.sendMessage('fail');
+    });
+
+    expect(chatService.appendMessage).toHaveBeenCalledWith(
+      'new-session',
+      expect.objectContaining({ role: 'user' })
+    );
+    expect(chatService.appendMessage).not.toHaveBeenCalledWith(
+      'new-session',
+      expect.objectContaining({ role: 'assistant' })
+    );
+  });
+
+  it('does not block the send flow when persistence fails', async () => {
+    chatService.appendMessage.mockRejectedValue(new Error('network down'));
+    chatService.sendMessageStream.mockImplementation(async (question, options, callbacks) => {
+      callbacks.onDelta('ok');
+      callbacks.onDone({});
+    });
+
+    const { result } = renderHook(() => useChat());
+    await waitFor(() => expect(result.current.sessions).toBeDefined());
+
+    await act(async () => {
+      await result.current.sendMessage('Hi');
+    });
+
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.error).toBeNull();
   });
 
   it('sets error message on sendMessage failure', async () => {

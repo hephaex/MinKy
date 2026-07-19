@@ -85,6 +85,7 @@ const DocumentView = () => {
   const [frontmatter, setFrontmatter] = useState({});
   const [processedContent, setProcessedContent] = useState('');
   const [tocMode, setTocMode] = useState(TOC_MODES.TOC);
+  const [tocVisible, setTocVisible] = useState(true);
   const [autoTaggingInProgress, setAutoTaggingInProgress] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState([]);
   const { toast, showToast, dismissToast } = useToast();
@@ -161,8 +162,11 @@ const DocumentView = () => {
           setProcessedContent(processed);
         }
 
-        // Auto-generate tags if document has no tags
-        if (data && (!data.tags || data.tags.length === 0) && data.markdown_content) {
+        // Auto-generate tags if document has no tags. Rust's single-document
+        // API returns `tag_names` (plain strings), not `tags` — check both so
+        // an already-tagged document isn't misread as untagged on every load.
+        const existingTags = data?.tags ?? data?.tag_names;
+        if (data && (!existingTags || existingTags.length === 0) && data.markdown_content) {
           await generateAndApplyTags(data);
         }
 
@@ -262,16 +266,23 @@ const DocumentView = () => {
             <div className="auto-tagging-status">🤖 Analyzing content and generating tags...</div>
           )}
 
-          {/* Tags display in 8pt font below title */}
-          {document.tags && document.tags.length > 0 && (
-            <div className="document-tags">
-              {document.tags.map((tag, index) => (
-                <span key={index} className="document-tag">
-                  {tag.name || tag}
-                </span>
-              ))}
-            </div>
-          )}
+          {/* Tags display in 8pt font below title. Rust's single-document API
+              returns `tag_names` (plain strings); legacy sent `tags`. */}
+          {(() => {
+            const tags = document.tags ?? document.tag_names;
+            return (
+              tags &&
+              tags.length > 0 && (
+                <div className="document-tags">
+                  {tags.map((tag, index) => (
+                    <span key={index} className="document-tag">
+                      {tag.name || tag}
+                    </span>
+                  ))}
+                </div>
+              )
+            );
+          })()}
 
           {/* Show recently applied AI tags */}
           {suggestedTags.length > 0 && !autoTaggingInProgress && (
@@ -319,6 +330,9 @@ const DocumentView = () => {
         </div>
 
         <div className="document-actions">
+          <button className="btn btn-secondary no-print" onClick={() => setTocVisible(!tocVisible)}>
+            {tocVisible ? '목차 숨기기' : '목차 보기'}
+          </button>
           <button className="btn btn-secondary" onClick={() => setShowMarkdown(!showMarkdown)}>
             {showMarkdown ? 'Show Rendered' : 'Show Markdown'}
           </button>
@@ -335,6 +349,15 @@ const DocumentView = () => {
       </div>
 
       <div className="document-body">
+        {!showMarkdown && tocVisible && (
+          <DocumentToc
+            headings={headings}
+            currentDocumentId={id}
+            mode={tocMode}
+            onModeChange={setTocMode}
+          />
+        )}
+
         <div className="document-content">
           {showMarkdown ? (
             <div className="markdown-source">
@@ -428,15 +451,6 @@ const DocumentView = () => {
             </div>
           )}
         </div>
-
-        {!showMarkdown && (
-          <DocumentToc
-            headings={headings}
-            currentDocumentId={id}
-            mode={tocMode}
-            onModeChange={setTocMode}
-          />
-        )}
       </div>
       {/* Bottom navigation: list / prev / next */}
       <div className="document-bottom-nav">

@@ -150,6 +150,116 @@ describe('DocumentView', () => {
     });
   });
 
+  describe('auto-tagging trigger', () => {
+    beforeEach(() => {
+      extractFrontmatter.mockReturnValue({ metadata: {}, content: '# hello' });
+    });
+
+    it('does not call suggest-tags when the document already has tag_names (Rust API shape)', async () => {
+      // The Rust single-document API returns `tag_names` (plain string array),
+      // not `tags` — a document with tag_names populated already has tags and
+      // must not be treated as untagged.
+      documentService.getDocument.mockResolvedValue({
+        id: 1,
+        title: 'Doc One',
+        markdown_content: '# hello',
+        tag_names: ['rust', 'axum'],
+        processing_status: 'completed',
+        author: null,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      });
+
+      render(<DocumentView />);
+
+      await screen.findByText('Doc One');
+      expect(api.post).not.toHaveBeenCalledWith('/ai/suggest-tags', expect.anything());
+    });
+
+    it('calls suggest-tags when the document has no tags and no tag_names', async () => {
+      documentService.getDocument.mockResolvedValue({
+        id: 1,
+        title: 'Doc One',
+        markdown_content: '# hello',
+        tag_names: [],
+        processing_status: 'completed',
+        author: null,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      });
+      api.post.mockResolvedValue({ data: { success: true, suggested_tags: [] } });
+
+      render(<DocumentView />);
+
+      await screen.findByText('Doc One');
+      await waitFor(() => {
+        expect(api.post).toHaveBeenCalledWith(
+          '/ai/suggest-tags',
+          expect.objectContaining({ title: 'Doc One' })
+        );
+      });
+    });
+  });
+
+  describe('table of contents sidebar', () => {
+    const loadedDoc = {
+      id: 1,
+      title: 'Doc One',
+      markdown_content: '# hello',
+      tags: [{ name: 'keep' }],
+      processing_status: 'completed',
+      author: null,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      extractFrontmatter.mockReturnValue({ metadata: {}, content: '# hello' });
+      documentService.getDocument.mockResolvedValue(loadedDoc);
+    });
+
+    it('renders the TOC panel before the document content (left side)', async () => {
+      const { container } = render(<DocumentView />);
+      await screen.findByText('Doc One');
+
+      const body = container.querySelector('.document-body');
+      const children = Array.from(body.children);
+      const tocIndex = children.findIndex((el) => el.classList.contains('document-toc'));
+      const contentIndex = children.findIndex((el) => el.classList.contains('document-content'));
+      expect(tocIndex).toBeGreaterThanOrEqual(0);
+      expect(tocIndex).toBeLessThan(contentIndex);
+    });
+
+    it('hides the TOC panel when the toggle button is clicked', async () => {
+      const { container } = render(<DocumentView />);
+      await screen.findByText('Doc One');
+      expect(container.querySelector('.document-toc')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /목차 숨기기/ }));
+
+      expect(container.querySelector('.document-toc')).not.toBeInTheDocument();
+    });
+
+    it('shows the TOC panel again when toggled back on', async () => {
+      const { container } = render(<DocumentView />);
+      await screen.findByText('Doc One');
+
+      fireEvent.click(screen.getByRole('button', { name: /목차 숨기기/ }));
+      fireEvent.click(screen.getByRole('button', { name: /목차 보기/ }));
+
+      expect(container.querySelector('.document-toc')).toBeInTheDocument();
+    });
+
+    it('does not render the TOC panel while viewing raw markdown source', async () => {
+      const { container } = render(<DocumentView />);
+      await screen.findByText('Doc One');
+
+      fireEvent.click(screen.getByText('Show Markdown'));
+
+      expect(container.querySelector('.document-toc')).not.toBeInTheDocument();
+    });
+  });
+
   describe('delete navigation', () => {
     const loadedDoc = {
       id: 1,

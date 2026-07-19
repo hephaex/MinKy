@@ -130,7 +130,13 @@ export const useChat = () => {
           // Add initial empty message for streaming
           setMessages((prev) => [...prev, buildAssistantMessage(aiMsgId, '', [], true)]);
 
-          // Sources are handled by streaming callbacks
+          // Persist the user's turn now; best-effort — a failed write here
+          // must not interrupt the in-flight streaming answer.
+          chatService
+            .appendMessage(sessionId, { role: 'user', content: userMsg.content })
+            .catch(() => {});
+
+          let latestSources = [];
 
           await chatService.sendMessageStream(
             content,
@@ -141,6 +147,7 @@ export const useChat = () => {
             },
             {
               onSources: (receivedSources) => {
+                latestSources = receivedSources;
                 setMessages((prev) =>
                   prev.map((msg) =>
                     msg.id === aiMsgId ? { ...msg, sources: receivedSources } : msg
@@ -168,6 +175,15 @@ export const useChat = () => {
                       : msg
                   )
                 );
+                chatService
+                  .appendMessage(sessionId, {
+                    role: 'assistant',
+                    content: streamingContentRef.current,
+                    sources: latestSources,
+                    tokensUsed,
+                    model,
+                  })
+                  .catch(() => {});
                 setStreamingMessageId(null);
                 streamingContentRef.current = '';
               },

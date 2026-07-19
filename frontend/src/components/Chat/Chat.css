@@ -782,50 +782,6 @@
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
 }
 
-/* ── Dark Mode ── */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --chat-bg: #111827;
-    --chat-sidebar-bg: #1f2937;
-    --chat-border: #374151;
-    --chat-text: #f9fafb;
-    --chat-text-muted: #9ca3af;
-    --chat-bubble-ai: #1f2937;
-    --chat-input-bg: #1f2937;
-    --chat-item-hover: #374151;
-    --chat-item-active: #1e3a5f;
-  }
-
-  .chat-message--user .chat-message__content {
-    background: #1d4ed8;
-  }
-
-  .chat-inline-code {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .chat-empty__suggestions li {
-    background: #1f2937;
-    border-color: #374151;
-    color: #d1d5db;
-  }
-
-  .chat-message__copy:hover {
-    background: #374151;
-    color: #d1d5db;
-  }
-
-  .chat-history__item-delete:hover {
-    color: #f87171;
-  }
-
-  .chat-error {
-    background: #2d1515;
-    border-color: #7f1d1d;
-    color: #fca5a5;
-  }
-}
-
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .chat-history {
