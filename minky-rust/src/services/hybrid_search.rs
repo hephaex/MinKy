@@ -16,6 +16,7 @@
 //! ```
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -348,13 +349,15 @@ pub struct VectorResult {
 pub struct HybridSearchService {
     pool: PgPool,
     rrf_config: RrfConfig,
+    embedding_service: Arc<crate::services::EmbeddingService>,
 }
 
 impl HybridSearchService {
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool, embedding_service: Arc<crate::services::EmbeddingService>) -> Self {
         Self {
             pool,
             rrf_config: RrfConfig::default(),
+            embedding_service,
         }
     }
 
@@ -546,29 +549,30 @@ impl HybridSearchService {
         limit: usize,
         collection_id: Option<Uuid>,
     ) -> AppResult<Vec<VectorResult>> {
-        // Get query embedding (simplified - in production, use embedding service)
-        let embedding = self.get_query_embedding(query).await?;
+        let (embedding, storage_model) = self.get_query_embedding(query).await?;
 
         let rows = sqlx::query_as::<_, VectorRow>(
             r#"
             SELECT
                 e.document_id,
-                e.chunk_id,
+                NULL::uuid as chunk_id,
                 d.title,
-                COALESCE(e.chunk_text, LEFT(d.content, 200)) as snippet,
-                1 - (e.embedding <=> $1::vector) as similarity,
+                LEFT(d.content, 200) as snippet,
+                (1 - (e.embedding <=> $1))::float4 as similarity,
                 c.context_path,
                 d.updated_at
             FROM document_embeddings e
             JOIN documents d ON d.id = e.document_id
             LEFT JOIN collection_contexts c ON c.document_id = d.id
             WHERE d.archived = false
-            AND ($2::uuid IS NULL OR d.collection_id = $2)
-            ORDER BY e.embedding <=> $1::vector
-            LIMIT $3
+            AND e.model = $2
+            AND ($3::uuid IS NULL OR d.collection_id = $3)
+            ORDER BY e.embedding <=> $1
+            LIMIT $4
             "#
         )
-        .bind(&embedding)
+        .bind(pgvector::Vector::from(embedding))
+        .bind(storage_model)
         .bind(collection_id)
         .bind(limit as i32)
         .fetch_all(&self.pool)
@@ -595,11 +599,17 @@ impl HybridSearchService {
         Ok(expansions)
     }
 
-    /// Get embedding for a query string
-    async fn get_query_embedding(&self, _query: &str) -> AppResult<Vec<f32>> {
-        // Placeholder - in production, call embedding service
-        // Return a dummy 1536-dimension vector
-        Ok(vec![0.0; 1536])
+    /// Get a query embedding plus the storage model to filter against.
+    ///
+    /// Delegates to `EmbeddingService::embed_query`, which resolves the
+    /// query/passage model split (e.g. Upstage Solar) so the returned
+    /// `storage_model` can be used as a `WHERE model = ...` filter and never
+    /// compares embeddings across incompatible vector spaces.
+    async fn get_query_embedding(
+        &self,
+        query: &str,
+    ) -> AppResult<(Vec<f32>, crate::models::EmbeddingModel)> {
+        self.embedding_service.embed_query(query, None).await
     }
 
     /// Re-rank results using LLM
@@ -830,5 +840,152 @@ mod tests {
         assert_eq!(config.k, 60.0);
         assert_eq!(config.fts_weight, 1.0);
         assert_eq!(config.vector_weight, 1.0);
+    }
+
+    /// Cross-model exclusion integration test (G002/C1b acceptance criteria).
+    ///
+    /// Seeds two 4096-dim embeddings for the same document under two
+    /// different `embedding_model` values, then asserts `vector_search`
+    /// only ever returns the row matching the resolved `storage_model` for
+    /// the query — proving the `AND e.model = $2` filter added to the SQL
+    /// prevents cross-model-incoherent similarity comparisons.
+    ///
+    /// Requires a live Postgres with the `minky` schema applied and
+    /// `UPSTAGE_API_KEY` set (Upstage Solar is the only 4096-dim model this
+    /// service can generate embeddings for without a local model).
+    /// Skipped in CI; run with:
+    ///   MINKY_DATABASE_URL=... UPSTAGE_API_KEY=... cargo test -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn vector_search_excludes_rows_from_other_embedding_models() {
+        use crate::models::EmbeddingModel;
+        use crate::services::embedding_service::{EmbeddingConfig, EmbeddingService};
+        use pgvector::Vector;
+        use sqlx::postgres::PgPoolOptions;
+
+        let upstage_api_key = match std::env::var("UPSTAGE_API_KEY") {
+            Ok(key) if !key.is_empty() => key,
+            _ => {
+                eprintln!("skipping: UPSTAGE_API_KEY not set");
+                return;
+            }
+        };
+
+        let database_url = std::env::var("MINKY_DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://minky:minky@localhost/minky".to_string());
+
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&database_url)
+            .await
+            .expect("Failed to connect to test database");
+
+        let config = EmbeddingConfig {
+            openai_api_key: None,
+            voyage_api_key: None,
+            upstage_api_key: Some(upstage_api_key),
+            default_model: EmbeddingModel::UpstaageSolarPassage,
+            chunk_size: 512,
+            chunk_overlap: 50,
+            local_embedding_enabled: false,
+        };
+        let embedding_service = Arc::new(EmbeddingService::new(pool.clone(), config));
+
+        // Seed a document and two 4096-dim embeddings under different models.
+        let user_id: i32 = sqlx::query_scalar(
+            "INSERT INTO users (email, username, password_hash) \
+             VALUES ($1, $2, 'x') \
+             ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email \
+             RETURNING id",
+        )
+        .bind("c1b-cross-model-test@minky.local")
+        .bind("c1b_cross_model_test")
+        .fetch_one(&pool)
+        .await
+        .expect("seed user");
+
+        let document_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO documents (title, content, user_id) VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind("C1b cross-model exclusion fixture")
+        .bind("The quick brown fox jumps over the lazy dog.")
+        .bind(user_id)
+        .fetch_one(&pool)
+        .await
+        .expect("seed document");
+
+        let dummy_vec = vec![0.001_f32; 4096];
+
+        sqlx::query(
+            "INSERT INTO document_embeddings (document_id, embedding, model) VALUES ($1, $2, $3)",
+        )
+        .bind(document_id)
+        .bind(Vector::from(dummy_vec.clone()))
+        .bind(EmbeddingModel::UpstaageSolarPassage)
+        .execute(&pool)
+        .await
+        .expect("seed upstage embedding");
+
+        sqlx::query(
+            "INSERT INTO document_embeddings (document_id, embedding, model) VALUES ($1, $2, $3)",
+        )
+        .bind(document_id)
+        .bind(Vector::from(dummy_vec))
+        .bind(EmbeddingModel::OpenaiTextEmbedding3Large)
+        .execute(&pool)
+        .await
+        .expect("seed openai embedding");
+
+        let service = HybridSearchService::new(pool.clone(), embedding_service);
+
+        let results = service
+            .vector_search("quick brown fox", 10, None)
+            .await
+            .expect("vector_search should succeed");
+
+        // Cleanup before asserting, so a failed assertion doesn't leave fixtures behind.
+        let cleanup = async {
+            sqlx::query("DELETE FROM document_embeddings WHERE document_id = $1")
+                .bind(document_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM documents WHERE id = $1")
+                .bind(document_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM users WHERE id = $1")
+                .bind(user_id)
+                .execute(&pool)
+                .await
+                .ok();
+        };
+        cleanup.await;
+
+        assert!(
+            !results.is_empty(),
+            "expected at least one match for the seeded document"
+        );
+        assert!(
+            results.iter().all(|r| r.document_id == document_id),
+            "unexpected document_id in results: {:?}",
+            results
+        );
+        // The resolved storage model for a Solar-default config is
+        // UpstaageSolarPassage; the OpenAI row must never surface here.
+        // We cannot directly read `model` off VectorResult (it isn't
+        // projected), so we assert indirectly: exactly one row came back
+        // for this document, which is only possible if the `AND e.model =
+        // $2` filter excluded the second (OpenAI) embedding row.
+        let matches_for_doc = results
+            .iter()
+            .filter(|r| r.document_id == document_id)
+            .count();
+        assert_eq!(
+            matches_for_doc, 1,
+            "expected exactly one row (the model-matching one) per document, got {}",
+            matches_for_doc
+        );
     }
 }

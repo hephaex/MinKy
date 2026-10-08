@@ -42,6 +42,11 @@ pub struct StoredDocument {
 
     /// Analysis results (if any)
     pub analysis: Option<super::analysis::DocumentAnalysis>,
+
+    /// Predecessor archived atomically with this document's creation, under
+    /// `archive_predecessor_on_source_path` (2026-07-17 R2). `None` for
+    /// plain inserts/updates and for callers not using S1 route semantics.
+    pub replaced_document_id: Option<Uuid>,
 }
 
 /// Storage stage configuration
@@ -64,6 +69,15 @@ pub struct StorageConfig {
 
     /// Document sensitivity: "confidential" | "internal" | "public"
     pub sensitivity: String,
+
+    /// S1 route semantics (2026-07-17 R2): when true and `source_path` is
+    /// set, archive the existing active row at that path and unconditionally
+    /// INSERT a new one, both in the SAME transaction as the advisory lock
+    /// below — a crash between the two is impossible (the transaction either
+    /// commits both or neither, so the predecessor is never left orphaned).
+    /// Only the HTTP upload route sets this; other `upsert: true` callers
+    /// (vault-sync/CLI) keep in-place-UPDATE semantics via `existing_id`.
+    pub archive_predecessor_on_source_path: bool,
 }
 
 impl Default for StorageConfig {
@@ -75,6 +89,7 @@ impl Default for StorageConfig {
             is_public: false,
             category_id: None,
             sensitivity: "internal".to_string(),
+            archive_predecessor_on_source_path: false,
         }
     }
 }
@@ -147,12 +162,15 @@ impl StorageStage {
         Ok(row.map(|(id,)| id))
     }
 
-    /// Store the document record
+    /// Store the document record. Returns `(document_id, replaced_document_id)`
+    /// — the latter is `Some` only under `archive_predecessor_on_source_path`
+    /// when a predecessor at the same source_path was archived atomically
+    /// alongside this insert (2026-07-17 R2).
     async fn store_document(
         &self,
         doc: &AnalyzedDocument,
         context: &PipelineContext,
-    ) -> PipelineResult<Uuid> {
+    ) -> PipelineResult<(Uuid, Option<Uuid>)> {
         let user_id = context.user_id.or(self.config.user_id).unwrap_or(1);
         let is_public = self.config.is_public;
         let source_path = doc.source_path.as_deref();
@@ -174,18 +192,67 @@ impl StorageStage {
             self.config.sensitivity.clone()
         };
 
-        // Check if document exists.
-        // Prefer matching by (user_id, source_path) when source_path is present so
-        // that vault re-ingests update the same row instead of creating duplicates.
-        // Fall back to (user_id, title) for plain-text / URL ingests.
-        let existing_id: Option<(Uuid,)> = if self.config.upsert {
+        // Compute content_hash once — used in both INSERT and UPDATE paths so the
+        // column always tracks the actual content (prevents stale hash after edits).
+        let content_hash = hex::encode(Sha256::digest(doc.original_content.as_bytes()));
+
+        // R4 (2026-07-17): the SELECT-then-UPDATE/INSERT below is a classic
+        // check-then-act race — two concurrent store_document calls for the
+        // same (user_id, source_path-or-title) can both miss each other's
+        // SELECT and both INSERT, producing duplicate active rows on the
+        // title branch (no unique index there — production already has
+        // pre-existing duplicate titles, so adding one is a separate,
+        // data-affecting change, not done here). A transaction-scoped
+        // advisory lock serializes callers on that key without requiring a
+        // new index or touching existing rows: same key -> only one caller
+        // proceeds past the lock at a time; released automatically on
+        // commit/rollback even if this function returns early via `?`.
+        let lock_key = match source_path {
+            Some(sp) => format!("mkydoc:sp:{user_id}:{sp}"),
+            None => format!("mkydoc:ti:{user_id}:{}", doc.title),
+        };
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(&lock_key)
+            .execute(&mut *tx)
+            .await?;
+
+        // R2 (2026-07-17): S1 route semantics — archive the active predecessor
+        // and unconditionally insert a new row, atomically (same `tx`, same
+        // lock already held above). Forces `existing_id = None` so the branch
+        // below always inserts; the archive and that insert commit or roll
+        // back together, so a crash here can never orphan-archive a document
+        // (the prior best-effort restore-after-failure workaround is gone —
+        // there is nothing to restore, the archive never committed alone).
+        let mut replaced_document_id: Option<Uuid> = None;
+        let existing_id: Option<(Uuid,)> = if self.config.archive_predecessor_on_source_path {
             if let Some(sp) = source_path {
-                sqlx::query_as(
-                    "SELECT id FROM documents WHERE user_id = $1 AND source_path = $2",
+                let archived: Option<(Uuid,)> = sqlx::query_as(
+                    "UPDATE documents SET archived = true, archived_at = NOW() \
+                     WHERE user_id = $1 AND source_path = $2 AND archived = false \
+                     RETURNING id",
                 )
                 .bind(user_id)
                 .bind(sp)
-                .fetch_optional(&self.pool)
+                .fetch_optional(&mut *tx)
+                .await?;
+                replaced_document_id = archived.map(|(id,)| id);
+            }
+            None
+        } else if self.config.upsert {
+            if let Some(sp) = source_path {
+                // archived=false: an upsert must never resurrect an archived
+                // row (S1's upload replace-on-conflict archives the old
+                // version before re-ingesting, and repeated re-uploads to the
+                // same source_path accumulate multiple archived rows sharing
+                // that path — this lookup must only ever match the single
+                // active one, never fall back to an arbitrary archived row).
+                sqlx::query_as(
+                    "SELECT id FROM documents WHERE user_id = $1 AND source_path = $2 AND archived = false",
+                )
+                .bind(user_id)
+                .bind(sp)
+                .fetch_optional(&mut *tx)
                 .await?
             } else {
                 // F.2 fix: scope the title lookup to rows that also have
@@ -197,16 +264,12 @@ impl StorageStage {
                 )
                 .bind(&doc.title)
                 .bind(user_id)
-                .fetch_optional(&self.pool)
+                .fetch_optional(&mut *tx)
                 .await?
             }
         } else {
             None
         };
-
-        // Compute content_hash once — used in both INSERT and UPDATE paths so the
-        // column always tracks the actual content (prevents stale hash after edits).
-        let content_hash = hex::encode(Sha256::digest(doc.original_content.as_bytes()));
 
         let document_id = if let Some((id,)) = existing_id {
             // Update existing document; recompute content_hash to match new content
@@ -224,12 +287,12 @@ impl StorageStage {
             .bind(source_path)
             .bind(&sensitivity)
             .bind(&content_hash)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
             id
         } else {
-            let (id,): (Uuid,) = sqlx::query_as(
+            let inserted: Result<(Uuid,), sqlx::Error> = sqlx::query_as(
                 r#"
                 INSERT INTO documents (title, content, category_id, user_id, is_public, source_path, sensitivity, content_hash)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -244,13 +307,50 @@ impl StorageStage {
             .bind(source_path)
             .bind(&sensitivity)
             .bind(&content_hash)
-            .fetch_one(&self.pool)
-            .await?;
+            .fetch_one(&mut *tx)
+            .await;
 
-            id
+            match inserted {
+                Ok((id,)) => id,
+                Err(e) => {
+                    // Losing the (user_id, source_path) active-unique race
+                    // (idx_documents_user_source_active, migration 024) should
+                    // be structurally impossible for a caller using this same
+                    // lock+tx (R2/R4 serialize it away), so reaching this arm
+                    // means some other writer touched the row outside this
+                    // function's lock scope — kept as a defensive fallback
+                    // rather than an internal error. The failed INSERT
+                    // poisons `tx`, so the winning
+                    // row is looked up on a fresh pool connection after
+                    // rollback (R3, 2026-07-17): give the caller a usable
+                    // existing_id instead of an empty conflict.
+                    let is_source_path_race = matches!(&e, sqlx::Error::Database(db)
+                        if db.code().as_deref() == Some("23505")
+                            && db.constraint() == Some("idx_documents_user_source_active"));
+                    tx.rollback().await.ok();
+                    if is_source_path_race {
+                        let sp = source_path.unwrap_or_default().to_string();
+                        let existing_id: Option<(Uuid,)> = sqlx::query_as(
+                            "SELECT id FROM documents WHERE user_id = $1 AND source_path = $2 AND archived = false",
+                        )
+                        .bind(user_id)
+                        .bind(&sp)
+                        .fetch_optional(&self.pool)
+                        .await
+                        .ok()
+                        .flatten();
+                        return Err(PipelineError::SourcePathConflict {
+                            source_path: sp,
+                            existing_id: existing_id.map(|(id,)| id),
+                        });
+                    }
+                    return Err(PipelineError::from(e));
+                }
+            }
         };
 
-        Ok(document_id)
+        tx.commit().await?;
+        Ok((document_id, replaced_document_id))
     }
 
     /// Store document-level embedding
@@ -443,9 +543,14 @@ impl PipelineStage<AnalyzedDocument, StoredDocument> for StorageStage {
         context: &mut PipelineContext,
     ) -> PipelineResult<StoredDocument> {
         // Store document record
-        let document_id = self.store_document(&input, context).await.map_err(|e| {
-            PipelineError::stage_failure("storage", format!("Failed to store document: {}", e))
-        })?;
+        let (document_id, replaced_document_id) =
+            self.store_document(&input, context).await.map_err(|e| match e {
+                // Must survive the generic stage_failure re-wrap so routes can map it to 409.
+                PipelineError::SourcePathConflict { .. } => e,
+                other => {
+                    PipelineError::stage_failure("storage", format!("Failed to store document: {}", other))
+                }
+            })?;
 
         // Update context with document ID
         context.set_document_id(document_id);
@@ -499,6 +604,7 @@ impl PipelineStage<AnalyzedDocument, StoredDocument> for StorageStage {
             has_analysis,
             created_at: Utc::now(),
             analysis: input.analysis,
+            replaced_document_id,
         })
     }
 }
@@ -560,6 +666,7 @@ mod tests {
             has_analysis: true,
             created_at: Utc::now(),
             analysis: None,
+            replaced_document_id: None,
         };
 
         assert_eq!(stored.chunks_count, 5);

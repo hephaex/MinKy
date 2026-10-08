@@ -52,6 +52,17 @@ pub enum PipelineError {
     /// Internal error
     #[error("Internal error: {0}")]
     Internal(String),
+
+    /// Lost the (user_id, source_path) active-unique race (migration 024):
+    /// a concurrent upload already created the active document at this path.
+    /// Routes map this to 409 Conflict rather than 500. `existing_id` is the
+    /// winning document, looked up right after the race is detected, so
+    /// callers get a usable id instead of an empty conflict (2026-07-17 R3).
+    #[error("Active document already exists for source_path '{source_path}'")]
+    SourcePathConflict {
+        source_path: String,
+        existing_id: Option<uuid::Uuid>,
+    },
 }
 
 impl PipelineError {
@@ -139,6 +150,9 @@ impl From<PipelineError> for AppError {
                 elapsed_secs
             )),
             PipelineError::Internal(msg) => AppError::Internal(anyhow::anyhow!(msg)),
+            PipelineError::SourcePathConflict { source_path, existing_id } => {
+                AppError::SourcePathConflict { source_path, existing_id }
+            }
         }
     }
 }

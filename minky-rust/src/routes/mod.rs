@@ -16,6 +16,7 @@ pub mod health;
 mod hybrid;
 pub mod knowledge;
 mod korean;
+mod mcp;
 mod ml;
 mod notifications;
 mod ocr;
@@ -74,6 +75,7 @@ pub fn api_routes() -> Router<AppState> {
         .nest("/pipeline", pipeline::router())
         .nest("/hybrid", hybrid::router())
         .nest("/vault", vault::router())
+        .nest("/mcp", mcp::router())
         .merge(ws::router())
         .merge(crate::openapi::router())
 }

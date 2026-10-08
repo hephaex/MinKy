@@ -27,10 +27,29 @@ pub struct SearchService {
     /// Raw OpenSearch URL for direct HTTP operations (bypasses opensearch-rs for bulk)
     opensearch_url: String,
     http: reqwest::Client,
+    /// Shared mecab-ko tokenizer used to pre-tokenize BOTH indexed documents
+    /// (see `bulk_index`/`index_document` callers) and incoming search
+    /// queries, keeping the two sides symmetric against the whitespace-only
+    /// OpenSearch analyzer (see `create_index`). Without tokenizing the
+    /// query side too, un-segmented Korean queries would never match the
+    /// segmented morpheme index. `None` falls back to sending the raw query
+    /// text, matching the whitespace-heuristic fallback used elsewhere when
+    /// no dictionary is configured.
+    korean_tokenizer: Option<crate::services::SharedKoreanTokenizer>,
 }
 
 impl SearchService {
     pub async fn new(config: &Config) -> Result<Self> {
+        Self::with_korean_tokenizer(config, None).await
+    }
+
+    /// Create a `SearchService` that also pre-tokenizes search queries with
+    /// the given shared mecab-ko tokenizer, matching the pre-tokenization
+    /// applied to indexed documents.
+    pub async fn with_korean_tokenizer(
+        config: &Config,
+        korean_tokenizer: Option<crate::services::SharedKoreanTokenizer>,
+    ) -> Result<Self> {
         let url = config
             .opensearch_url
             .as_ref()
@@ -45,7 +64,18 @@ impl SearchService {
             client,
             opensearch_url: url.trim_end_matches('/').to_string(),
             http: reqwest::Client::new(),
+            korean_tokenizer,
         })
+    }
+
+    /// Pre-tokenize `text` for OpenSearch (query or document side) using the
+    /// same mecab-ko morpheme-surface + whitespace-join logic as
+    /// `KoreanService::tokenize_for_lexical_index`, so both sides of the
+    /// whitespace-analyzed index stay symmetric. Falls back to returning
+    /// `text` unchanged when no tokenizer is configured, matching the
+    /// pre-existing (pre-mecab-ko) behavior for that case.
+    fn tokenize_for_search(&self, text: &str) -> String {
+        crate::services::tokenize_for_lexical_index_with(self.korean_tokenizer.as_ref(), text)
     }
 
     /// Create search index with mappings
@@ -61,13 +91,24 @@ impl SearchService {
             "settings": {
                 "number_of_shards": 1,
                 "number_of_replicas": 0,
-                "index.knn": true,
                 "analysis": {
                     "analyzer": {
+                        // Text is pre-tokenized on the Rust side (mecab-ko
+                        // morphological analysis, see
+                        // korean_service::KoreanService::tokenize) into
+                        // whitespace-joined morphemes before being sent to
+                        // OpenSearch, so lexical indexing only needs a plain
+                        // whitespace+lowercase analyzer here. This replaces
+                        // the previous nori_tokenizer/nori_part_of_speech
+                        // OpenSearch-side Korean analyzer (mechanism B2 per
+                        // the C2 plan: one shared tokenizer pipeline reused
+                        // for both lexical indexing and pre-embedding
+                        // preprocessing, instead of duplicating Korean NLP
+                        // logic in both Rust and an OpenSearch plugin).
                         "korean": {
                             "type": "custom",
-                            "tokenizer": "nori_tokenizer",
-                            "filter": ["lowercase", "nori_part_of_speech"]
+                            "tokenizer": "whitespace",
+                            "filter": ["lowercase"]
                         }
                     }
                 }
@@ -77,13 +118,25 @@ impl SearchService {
                     "id": { "type": "keyword" },
                     "title": {
                         "type": "text",
-                        "analyzer": "korean",
                         "fields": {
                             "keyword": { "type": "keyword" },
                             "suggest": { "type": "completion" }
                         }
                     },
                     "content": {
+                        "type": "text"
+                    },
+                    // Pre-tokenized (mecab-ko morpheme, whitespace-joined)
+                    // copies used for lexical matching/highlighting against
+                    // the whitespace-only "korean" analyzer above. "title"/
+                    // "content" above stay as the original readable text
+                    // (default analyzer) so _source retrieval never returns
+                    // corrupted/tokenized display text.
+                    "title_tokenized": {
+                        "type": "text",
+                        "analyzer": "korean"
+                    },
+                    "content_tokenized": {
                         "type": "text",
                         "analyzer": "korean"
                     },
@@ -96,16 +149,17 @@ impl SearchService {
                     "updated_at": { "type": "date" },
                     "view_count": { "type": "integer" },
                     "sensitivity": { "type": "keyword" },
-                    "is_public": { "type": "boolean" },
-                    "embedding": {
-                        "type": "knn_vector",
-                        "dimension": 1536,
-                        "method": {
-                            "name": "hnsw",
-                            "space_type": "cosinesimil",
-                            "engine": "faiss"
-                        }
-                    }
+                    "is_public": { "type": "boolean" }
+                    // NOTE: the previous "embedding": {"type": "knn_vector",
+                    // "dimension": 1536, ...} field is intentionally removed.
+                    // It was confirmed dead code: OpenSearch's knn_vector /
+                    // dense-vector path was never populated or queried —
+                    // Postgres/pgvector (see hybrid_search.rs) is the sole
+                    // vector-search source of truth, and 1536 was already
+                    // stale against the real 4096-dim embedding models
+                    // (see EmbeddingModel::dimension). Re-adding this field
+                    // without updating the dimension would silently break
+                    // against real vectors on first use.
                 }
             }
         });
@@ -139,6 +193,33 @@ impl SearchService {
         Err(anyhow::anyhow!(
             "Index creation returned unexpected status: {}",
             status
+        ))
+    }
+
+    /// Delete the search index if it exists. Used by the operator-triggered
+    /// full-reindex path to force a real mapping rebuild — `create_index`
+    /// alone silently no-ops when the index already exists (see its 400
+    /// `resource_already_exists_exception` handling), which is correct for
+    /// normal startup but wrong for an explicit reindex request. A missing
+    /// index (404) is treated as success since the end state (no index) is
+    /// what the caller wants either way.
+    pub async fn delete_index(&self) -> Result<()> {
+        let url = format!("{}/{}", self.opensearch_url, INDEX_NAME);
+        let response = self
+            .http
+            .delete(&url)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("Index delete request failed: {}", e))?;
+        let status = response.status();
+        if status.is_success() || status.as_u16() == 404 {
+            return Ok(());
+        }
+        let body = response.text().await.unwrap_or_default();
+        Err(anyhow::anyhow!(
+            "Index deletion returned unexpected status {}: {}",
+            status,
+            body
         ))
     }
 
@@ -229,13 +310,37 @@ impl SearchService {
         let limit = query.limit.unwrap_or(20).clamp(1, 100);
         let from = (page - 1).saturating_mul(limit);
 
-        // Build query
+        // Build query. `title_tokenized`/`content_tokenized` hold the
+        // mecab-ko-segmented, whitespace-joined copy of the readable
+        // `title`/`content` text and are the only fields analyzed by the
+        // whitespace `korean` analyzer (see create_index); `title`/`content`
+        // themselves keep the default analyzer and are used only for
+        // display, never for matching, so the query text must be tokenized
+        // the same way here and matched against the *_tokenized fields, or
+        // an un-segmented Korean query would never match the segmented
+        // morpheme index. `tags` is a `keyword`-typed field (exact match),
+        // so it always searches against the original raw query text.
+        let tokenized_query = self.tokenize_for_search(&query.q);
         let mut must_clauses = vec![json!({
-            "multi_match": {
-                "query": query.q,
-                "fields": ["title^3", "content", "tags^2"],
-                "type": "best_fields",
-                "fuzziness": "AUTO"
+            "bool": {
+                "should": [
+                    {
+                        "multi_match": {
+                            "query": tokenized_query,
+                            "fields": ["title_tokenized^3", "content_tokenized"],
+                            "type": "best_fields",
+                            "fuzziness": "AUTO"
+                        }
+                    },
+                    {
+                        "multi_match": {
+                            "query": query.q,
+                            "fields": ["tags^2"],
+                            "type": "best_fields"
+                        }
+                    }
+                ],
+                "minimum_should_match": 1
             }
         })];
 
@@ -319,9 +424,31 @@ impl SearchService {
             "from": from,
             "size": limit,
             "highlight": {
+                // Highlight against the ORIGINAL readable "title"/"content"
+                // fields (default analyzer), not "*_tokenized" — otherwise
+                // every Korean result would show morpheme-segmented,
+                // space-mangled display text (a display-level recurrence of
+                // the same _source-corruption class of bug fixed above).
+                // `require_field_match: false` lets highlighting run
+                // independently of which field the main query matched
+                // against (title_tokenized/content_tokenized), and
+                // `highlight_query` re-runs matching with the ORIGINAL raw
+                // query text against the readable fields so highlighted
+                // fragments are natural, un-tokenized text.
+                "require_field_match": false,
                 "fields": {
-                    "title": {},
-                    "content": { "fragment_size": 150, "number_of_fragments": 3 }
+                    "title": {
+                        "highlight_query": {
+                            "match": { "title": { "query": query.q } }
+                        }
+                    },
+                    "content": {
+                        "fragment_size": 150,
+                        "number_of_fragments": 3,
+                        "highlight_query": {
+                            "match": { "content": { "query": query.q } }
+                        }
+                    }
                 }
             },
             "aggs": {
@@ -372,7 +499,9 @@ impl SearchService {
                     id: uuid::Uuid::parse_str(source["id"].as_str().unwrap_or(""))
                         .unwrap_or_default(),
                     title: source["title"].as_str().unwrap_or("").to_string(),
-                    content_snippet: highlights.first().cloned().unwrap_or_default(),
+                    content_snippet: highlights.first().cloned().unwrap_or_else(|| {
+                        truncate_content(source["content"].as_str().unwrap_or(""), 200)
+                    }),
                     highlights,
                     score: hit["_score"].as_f64().unwrap_or(0.0) as f32,
                     category_name: source["category_name"].as_str().map(String::from),
@@ -790,5 +919,242 @@ mod tests {
         // user_id = 0 is still a valid authenticated user
         let filter = build_confidential_filter(Some(0));
         assert!(filter.is_none());
+    }
+
+    fn make_test_config() -> crate::config::Config {
+        use secrecy::SecretString;
+        crate::config::Config {
+            environment: "test".to_string(),
+            host: "127.0.0.1".to_string(),
+            port: 8000,
+            database_url: "postgres://localhost/test".to_string(),
+            database_max_connections: 5,
+            database_min_connections: 1,
+            database_acquire_timeout_secs: 30,
+            database_max_lifetime_secs: 1800,
+            database_idle_timeout_secs: 600,
+            jwt_secret: SecretString::from("test-secret"),
+            jwt_expiration_hours: 24,
+            opensearch_url: Some("http://localhost:9200".to_string()),
+            openai_api_key: None,
+            anthropic_api_key: None,
+            upstage_api_key: None,
+            git_repo_path: None,
+            slack_client_id: None,
+            slack_client_secret: None,
+            slack_redirect_uri: None,
+            slack_signing_secret: None,
+            cors_allowed_origins: "http://localhost:3000".to_string(),
+            local_embedding_enabled: false,
+            vault_watch: crate::config::VaultWatchConfig::default(),
+        }
+    }
+
+    /// Regression test for the C2/mecab-ko OpenSearch mapping change.
+    ///
+    /// Verifies against a live OpenSearch instance that:
+    /// 1. `create_index` succeeds without the removed `nori_tokenizer`
+    ///    (proving nori is no longer a hard dependency of index creation).
+    /// 2. The created index mapping has no `knn_vector` field (dead code
+    ///    removed) and no analyzer referencing `nori_tokenizer` or
+    ///    `nori_part_of_speech` (negative mapping assertion).
+    /// 3. A document indexed with pre-tokenized (whitespace-joined morpheme)
+    ///    title/content is retrievable via a lexical search on those terms,
+    ///    proving the whitespace analyzer path works end-to-end.
+    ///
+    /// Requires a live OpenSearch at OPENSEARCH_URL (default
+    /// http://localhost:9200). Skipped in CI; run with:
+    ///   cargo test -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn create_index_has_no_nori_dependency_and_no_dead_knn_field() {
+        let config = make_test_config();
+        let service = SearchService::new(&config)
+            .await
+            .expect("failed to connect to OpenSearch");
+
+        // Clean slate: delete the index if a prior run left it behind.
+        let delete_url = format!("{}/minky_documents", config.opensearch_url.as_ref().unwrap());
+        let _ = reqwest::Client::new().delete(&delete_url).send().await;
+
+        service
+            .create_index()
+            .await
+            .expect("create_index must succeed without nori_tokenizer installed/enabled");
+
+        // Fetch the actual mapping back from OpenSearch and assert on it directly
+        // (not just "no error"), proving the settings we sent are what's live.
+        let mapping_url = format!(
+            "{}/minky_documents/_mapping",
+            config.opensearch_url.as_ref().unwrap()
+        );
+        let mapping_resp: serde_json::Value = reqwest::Client::new()
+            .get(&mapping_url)
+            .send()
+            .await
+            .expect("mapping fetch failed")
+            .json()
+            .await
+            .expect("mapping response was not valid JSON");
+        let mapping_str = mapping_resp.to_string();
+        assert!(
+            !mapping_str.contains("nori_tokenizer"),
+            "mapping must not reference nori_tokenizer: {}",
+            mapping_str
+        );
+        assert!(
+            !mapping_str.contains("nori_part_of_speech"),
+            "mapping must not reference nori_part_of_speech: {}",
+            mapping_str
+        );
+        assert!(
+            !mapping_str.contains("knn_vector"),
+            "mapping must not contain the dead knn_vector field: {}",
+            mapping_str
+        );
+
+        let settings_url = format!(
+            "{}/minky_documents/_settings",
+            config.opensearch_url.as_ref().unwrap()
+        );
+        let settings_resp: serde_json::Value = reqwest::Client::new()
+            .get(&settings_url)
+            .send()
+            .await
+            .expect("settings fetch failed")
+            .json()
+            .await
+            .expect("settings response was not valid JSON");
+        assert!(
+            !settings_resp.to_string().contains("nori"),
+            "index settings must not reference nori in any form"
+        );
+
+        // Write-path proof: run un-spaced Korean text through the real
+        // KoreanService::tokenize_for_lexical_index preprocessing step
+        // (mecab-ko morphological analysis, or the whitespace fallback if
+        // MECAB_KO_DICDIR is unset) before indexing — mirroring exactly what
+        // routes/search.rs::reindex_all does. If mecab-ko is not actually
+        // invoked, "분석기입니다" stays a single unsplit token and would not
+        // match a search for the substring "분석" as a whole word below.
+        let korean_service =
+            crate::services::KoreanService::with_tokenizer(sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap(), crate::services::korean_service::load_shared_korean_tokenizer());
+        let raw_content = "한국어형태소분석기입니다";
+        let tokenized_content = korean_service.tokenize_for_lexical_index(raw_content);
+        assert_ne!(
+            tokenized_content, raw_content,
+            "tokenize_for_lexical_index must actually segment un-spaced Korean text (requires MECAB_KO_DICDIR to be set for this assertion to be meaningful)"
+        );
+
+        let doc = SearchDocument {
+            id: "c2-mecab-ko-fixture".to_string(),
+            title: "한국어 형태소 분석기".to_string(),
+            content: raw_content.to_string(),
+            title_tokenized: korean_service.tokenize_for_lexical_index("한국어 형태소 분석기"),
+            content_tokenized: tokenized_content,
+            category_id: None,
+            category_name: None,
+            tags: vec![],
+            user_id: 1,
+            author_name: "test".to_string(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            view_count: 0,
+            embedding: None,
+            sensitivity: "public".to_string(),
+            is_public: true,
+        };
+        service
+            .index_document(doc)
+            .await
+            .expect("index_document must succeed against the new mapping");
+
+        // OpenSearch refresh so the doc is immediately searchable.
+        let refresh_url = format!(
+            "{}/minky_documents/_refresh",
+            config.opensearch_url.as_ref().unwrap()
+        );
+        reqwest::Client::new()
+            .post(&refresh_url)
+            .send()
+            .await
+            .expect("refresh failed");
+
+        let search_url = format!(
+            "{}/minky_documents/_search",
+            config.opensearch_url.as_ref().unwrap()
+        );
+        let search_resp: serde_json::Value = reqwest::Client::new()
+            .post(&search_url)
+            .json(&serde_json::json!({ "query": { "match": { "content_tokenized": "형태소" } } }))
+            .send()
+            .await
+            .expect("search request failed")
+            .json()
+            .await
+            .expect("search response was not valid JSON");
+        let hits = search_resp["hits"]["total"]["value"].as_i64().unwrap_or(0);
+        assert_eq!(
+            hits, 1,
+            "expected exactly one hit for a pre-tokenized morpheme term, got response: {}",
+            search_resp
+        );
+
+        // The un-tokenized "content" field must retain the ORIGINAL raw
+        // (un-spaced) text — proving the write-path fix for the HIGH-severity
+        // architect finding that reindex previously overwrote _source with
+        // tokenized text, corrupting display data.
+        let hit_source = &search_resp["hits"]["hits"][0]["_source"];
+        assert_eq!(
+            hit_source["content"].as_str().unwrap_or(""),
+            raw_content,
+            "content field in _source must remain the original readable text, not the tokenized copy"
+        );
+
+        // Query-side proof (H1 fix): SearchService::search() must itself
+        // tokenize an UN-SPACED raw Korean query the same way documents are
+        // tokenized, or the query would never match the segmented morpheme
+        // index (the exact query/document asymmetry an architect review
+        // caught: the mechanism existed but the production /api/search
+        // handler wasn't wired to use it). Construct the service WITH the
+        // tokenizer (mirroring the fixed routes/search.rs::search handler)
+        // and search for the same un-spaced text used to build the index.
+        let search_service_with_tokenizer = SearchService::with_korean_tokenizer(
+            &config,
+            crate::services::load_shared_korean_tokenizer(),
+        )
+        .await
+        .expect("failed to construct SearchService with korean tokenizer");
+        let query_results = search_service_with_tokenizer
+            .search(
+                crate::models::SearchQuery {
+                    q: raw_content.to_string(),
+                    page: None,
+                    limit: None,
+                    category_id: None,
+                    tags: None,
+                    date_from: None,
+                    date_to: None,
+                    sort_by: None,
+                    sort_order: None,
+                },
+                Some(1),
+            )
+            .await
+            .expect("SearchService::search must succeed");
+        assert!(
+            query_results.total >= 1,
+            "SearchService::search with an un-spaced raw Korean query must match the tokenized index (H1 fix); got 0 hits, total={}",
+            query_results.total
+        );
+        assert!(
+            query_results.hits.iter().any(|h| h.title == "한국어 형태소 분석기"),
+            "expected the indexed fixture document (matched by title) among query results, got: {:?}",
+            query_results.hits
+        );
+
+        // Cleanup.
+        let _ = service.delete_document("c2-mecab-ko-fixture").await;
+        let _ = reqwest::Client::new().delete(&delete_url).send().await;
     }
 }

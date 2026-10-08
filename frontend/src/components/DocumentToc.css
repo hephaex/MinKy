@@ -1,0 +1,133 @@
+.document-toc {
+  position: sticky;
+  top: 20px;
+  width: 240px;
+  flex-shrink: 0;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+  padding: 12px;
+}
+
+.document-toc-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 8px;
+}
+
+.document-toc-tab {
+  flex: 1;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #666;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.document-toc-tab:hover {
+  background: #eef2f7;
+}
+
+.document-toc-tab.active {
+  background: #007bff;
+  color: #fff;
+  font-weight: 600;
+}
+
+.document-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.document-toc-item a {
+  display: block;
+  padding: 4px 6px;
+  color: #333;
+  text-decoration: none;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  border-radius: 4px;
+  overflow-wrap: break-word;
+}
+
+.document-toc-item a:hover,
+.document-toc-item a:focus {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.document-toc-item.level-1 a {
+  font-weight: 600;
+}
+
+.document-toc-item.level-2 a {
+  padding-left: 14px;
+}
+
+.document-toc-item.level-3 a {
+  padding-left: 26px;
+  font-size: 0.8rem;
+}
+
+.document-toc-item.level-4 a,
+.document-toc-item.level-5 a,
+.document-toc-item.level-6 a {
+  padding-left: 38px;
+  font-size: 0.8rem;
+  color: #777;
+}
+
+.document-toc-recent li {
+  margin-bottom: 4px;
+}
+
+.document-toc-recent a {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border-radius: 4px;
+  text-decoration: none;
+  color: #333;
+}
+
+.document-toc-recent a:hover {
+  background: #e3f2fd;
+}
+
+.document-toc-recent-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-toc-recent-date {
+  font-size: 0.7rem;
+  color: #999;
+}
+
+.document-toc-empty {
+  font-size: 0.8rem;
+  color: #999;
+  padding: 8px 4px;
+}
+
+@media (max-width: 768px) {
+  .document-toc {
+    position: static;
+    width: 100%;
+    max-height: none;
+    margin-bottom: 20px;
+  }
+}

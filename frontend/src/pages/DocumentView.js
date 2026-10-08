@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -14,11 +14,30 @@ import {
   processHashtags,
 } from '../utils/obsidianRenderer';
 import api, { documentService } from '../services/api';
+import DocumentToc, { TOC_MODES } from '../components/DocumentToc';
+import { extractHeadings } from '../utils/tocUtils';
 import Toast from '../components/Toast';
 import useToast from '../hooks/useToast';
 import useDocumentStatus from '../hooks/useDocumentStatus';
 import '../components/DocumentCard.css';
 import './DocumentView.css';
+
+/**
+ * ReactMarkdown heading renderer that assigns the `id` matching the DocumentToc
+ * panel's Nth-heading anchor (`nextIndex()` — a mutable per-render cursor owned
+ * by the caller — not a re-derived slug; see the `headingCursor` comment in
+ * DocumentView). `Tag` is a lowercase tag-name string ('h1'..'h6'); JSX renders
+ * it as a real DOM element because it's referenced via a capitalized variable.
+ */
+function renderHeadingWithId(Tag, props, headings, nextIndex) {
+  const { node: _node, children, ...rest } = props;
+  const heading = headings[nextIndex()];
+  return (
+    <Tag id={heading?.slug} {...rest}>
+      {children}
+    </Tag>
+  );
+}
 
 const DocumentView = () => {
   const { id } = useParams();
@@ -65,6 +84,7 @@ const DocumentView = () => {
   const [showMarkdown, setShowMarkdown] = useState(false);
   const [frontmatter, setFrontmatter] = useState({});
   const [processedContent, setProcessedContent] = useState('');
+  const [tocMode, setTocMode] = useState(TOC_MODES.TOC);
   const [autoTaggingInProgress, setAutoTaggingInProgress] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState([]);
   const { toast, showToast, dismissToast } = useToast();
@@ -77,6 +97,15 @@ const DocumentView = () => {
   } = useDocumentStatus(id);
 
   const processingStatus = liveStatus || document?.processing_status;
+
+  // Extracted from the exact string ReactMarkdown renders (post obsidian
+  // link/hashtag processing) so heading ids assigned during render (see the
+  // `components` prop below) line up 1:1, in order, with this list — the
+  // DocumentToc panel's anchors always resolve to the right heading.
+  const headings = useMemo(
+    () => extractHeadings(processedContent || document?.markdown_content),
+    [processedContent, document]
+  );
 
   const generateAndApplyTags = async (documentData) => {
     try {
@@ -210,6 +239,13 @@ const DocumentView = () => {
     );
   }
 
+  // Positional cursor consumed by the h1-h6 renderers below: React invokes
+  // them synchronously, in document order, once per render — so "the Nth
+  // heading rendered so far" always matches `headings[Nth]` from the useMemo
+  // above without the renderer needing to re-derive (and potentially
+  // diverge on) its own slug from React's processed `children` nodes.
+  let headingCursor = 0;
+
   return (
     <div className="document-view">
       <div className="document-header">
@@ -298,82 +334,108 @@ const DocumentView = () => {
         </div>
       </div>
 
-      <div className="document-content">
-        {showMarkdown ? (
-          <div className="markdown-source">
-            <h3>Markdown Source</h3>
-            <pre className="markdown-code">{document.markdown_content}</pre>
-          </div>
-        ) : (
-          <div className="markdown-rendered">
-            {/* 프론트매터 표시 */}
-            {Object.keys(frontmatter).length > 0 && (
-              <div className="frontmatter-display">
-                <h4>메타데이터</h4>
-                <div className="metadata-grid">
-                  {Object.entries(frontmatter).map(([key, value]) => (
-                    <div key={key} className="metadata-item">
-                      <strong>{key}:</strong>
-                      <span>{Array.isArray(value) ? value.join(', ') : String(value)}</span>
-                    </div>
-                  ))}
+      <div className="document-body">
+        <div className="document-content">
+          {showMarkdown ? (
+            <div className="markdown-source">
+              <h3>Markdown Source</h3>
+              <pre className="markdown-code">{document.markdown_content}</pre>
+            </div>
+          ) : (
+            <div className="markdown-rendered">
+              {/* 프론트매터 표시 */}
+              {Object.keys(frontmatter).length > 0 && (
+                <div className="frontmatter-display">
+                  <h4>메타데이터</h4>
+                  <div className="metadata-grid">
+                    {Object.entries(frontmatter).map(([key, value]) => (
+                      <div key={key} className="metadata-item">
+                        <strong>{key}:</strong>
+                        <span>{Array.isArray(value) ? value.join(', ') : String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                // 텍스트 노드에서 이미 처리된 HTML을 DOMPurify로 살균 후 렌더링
-                text({ children }) {
-                  if (
-                    typeof children === 'string' &&
-                    (children.includes('<a') || children.includes('<span'))
-                  ) {
-                    const sanitized = DOMPurify.sanitize(children, {
-                      ALLOWED_TAGS: ['a', 'span'],
-                      ALLOWED_ATTR: ['href', 'class', 'data-target', 'title'],
-                    });
-                    return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
-                  }
-                  return children;
-                },
-                // 이미지 컴포넌트 - 반응형 스타일링 보장
-                img({ src, alt, title, ...props }) {
-                  return (
-                    <img
-                      src={src}
-                      alt={alt}
-                      title={title}
-                      style={{
-                        maxWidth: '100%',
-                        height: 'auto',
-                        display: 'block',
-                        margin: '1em auto',
-                        borderRadius: '4px',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                      }}
-                      {...props}
-                    />
-                  );
-                },
-                code({ inline, className, children, ...props }) {
-                  const match = /language-(\w+)/.exec(className || '');
-                  return !inline && match ? (
-                    <SyntaxHighlighter style={tomorrow} language={match[1]} PreTag="div" {...props}>
-                      {String(children).replace(/\n$/, '')}
-                    </SyntaxHighlighter>
-                  ) : (
-                    <code className={className} {...props}>
-                      {children}
-                    </code>
-                  );
-                },
-              }}
-            >
-              {processedContent || document.markdown_content}
-            </ReactMarkdown>
-          </div>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  // 텍스트 노드에서 이미 처리된 HTML을 DOMPurify로 살균 후 렌더링
+                  text({ children }) {
+                    if (
+                      typeof children === 'string' &&
+                      (children.includes('<a') || children.includes('<span'))
+                    ) {
+                      const sanitized = DOMPurify.sanitize(children, {
+                        ALLOWED_TAGS: ['a', 'span'],
+                        ALLOWED_ATTR: ['href', 'class', 'data-target', 'title'],
+                      });
+                      return <span dangerouslySetInnerHTML={{ __html: sanitized }} />;
+                    }
+                    return children;
+                  },
+                  // 이미지 컴포넌트 - 반응형 스타일링 보장
+                  img({ src, alt, title, ...props }) {
+                    return (
+                      <img
+                        src={src}
+                        alt={alt}
+                        title={title}
+                        style={{
+                          maxWidth: '100%',
+                          height: 'auto',
+                          display: 'block',
+                          margin: '1em auto',
+                          borderRadius: '4px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        }}
+                        {...props}
+                      />
+                    );
+                  },
+                  code({ inline, className, children, ...props }) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    return !inline && match ? (
+                      <SyntaxHighlighter
+                        style={tomorrow}
+                        language={match[1]}
+                        PreTag="div"
+                        {...props}
+                      >
+                        {String(children).replace(/\n$/, '')}
+                      </SyntaxHighlighter>
+                    ) : (
+                      <code className={className} {...props}>
+                        {children}
+                      </code>
+                    );
+                  },
+                  // h1-h6: assign the id the DocumentToc panel links to. See
+                  // the `headingCursor` comment above `return (` — position,
+                  // not re-derived text, is the source of truth for which
+                  // `headings[]` entry a given rendered heading corresponds to.
+                  h1: (props) => renderHeadingWithId('h1', props, headings, () => headingCursor++),
+                  h2: (props) => renderHeadingWithId('h2', props, headings, () => headingCursor++),
+                  h3: (props) => renderHeadingWithId('h3', props, headings, () => headingCursor++),
+                  h4: (props) => renderHeadingWithId('h4', props, headings, () => headingCursor++),
+                  h5: (props) => renderHeadingWithId('h5', props, headings, () => headingCursor++),
+                  h6: (props) => renderHeadingWithId('h6', props, headings, () => headingCursor++),
+                }}
+              >
+                {processedContent || document.markdown_content}
+              </ReactMarkdown>
+            </div>
+          )}
+        </div>
+
+        {!showMarkdown && (
+          <DocumentToc
+            headings={headings}
+            currentDocumentId={id}
+            mode={tocMode}
+            onModeChange={setTocMode}
+          />
         )}
       </div>
       {/* Bottom navigation: list / prev / next */}

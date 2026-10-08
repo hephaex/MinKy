@@ -15,6 +15,9 @@ pub enum DocumentSource {
     Text {
         title: String,
         content: String,
+        /// Optional explicit source_path (e.g. upload's S1 source_path-based
+        /// upsert). `None` for plain-text ingests with no path identity.
+        source_path: Option<String>,
     },
 
     /// File path (local filesystem)
@@ -68,6 +71,29 @@ impl IngestionInput {
             source: DocumentSource::Text {
                 title: title.into(),
                 content: content.into(),
+                source_path: None,
+            },
+            options: IngestionOptions::default(),
+        }
+    }
+
+    /// Create input from raw text with an explicit `source_path`.
+    ///
+    /// Used by the upload endpoint's S1 source_path-based upsert: the file
+    /// content already lives in memory (not on disk, so `from_file` does not
+    /// apply), but the resulting document must still carry a `source_path` so
+    /// the storage stage's `(user_id, source_path)` upsert lookup treats
+    /// repeated uploads to the same path as versions of the same document.
+    pub fn from_text_with_source_path(
+        title: impl Into<String>,
+        content: impl Into<String>,
+        source_path: impl Into<String>,
+    ) -> Self {
+        Self {
+            source: DocumentSource::Text {
+                title: title.into(),
+                content: content.into(),
+                source_path: Some(source_path.into()),
             },
             options: IngestionOptions::default(),
         }
@@ -146,13 +172,18 @@ impl IngestionStage {
         Self { http_client: None }
     }
 
-    async fn ingest_text(&self, title: String, content: String) -> PipelineResult<RawDocument> {
+    async fn ingest_text(
+        &self,
+        title: String,
+        content: String,
+        source_path: Option<String>,
+    ) -> PipelineResult<RawDocument> {
         Ok(RawDocument {
             title,
             content,
             mime_type: "text/plain".to_string(),
             source_type: "text".to_string(),
-            source_path: None,
+            source_path,
         })
     }
 
@@ -262,7 +293,9 @@ impl PipelineStage<IngestionInput, RawDocument> for IngestionStage {
         context: &mut PipelineContext,
     ) -> PipelineResult<RawDocument> {
         let mut raw_doc = match input.source {
-            DocumentSource::Text { title, content } => self.ingest_text(title, content).await?,
+            DocumentSource::Text { title, content, source_path } => {
+                self.ingest_text(title, content, source_path).await?
+            }
             DocumentSource::File { path } => self.ingest_file(&path).await?,
             DocumentSource::Url { url } => self.ingest_url(&url).await?,
             DocumentSource::Bytes {
@@ -342,9 +375,27 @@ mod tests {
     fn test_ingestion_input_from_text() {
         let input = IngestionInput::from_text("Test", "Hello world");
         match input.source {
-            DocumentSource::Text { title, content } => {
+            DocumentSource::Text { title, content, source_path } => {
                 assert_eq!(title, "Test");
                 assert_eq!(content, "Hello world");
+                assert_eq!(source_path, None);
+            }
+            _ => panic!("Expected Text source"),
+        }
+    }
+
+    #[test]
+    fn test_ingestion_input_from_text_with_source_path() {
+        let input = IngestionInput::from_text_with_source_path(
+            "Test",
+            "Hello world",
+            "/uploads/test.md",
+        );
+        match input.source {
+            DocumentSource::Text { title, content, source_path } => {
+                assert_eq!(title, "Test");
+                assert_eq!(content, "Hello world");
+                assert_eq!(source_path.as_deref(), Some("/uploads/test.md"));
             }
             _ => panic!("Expected Text source"),
         }

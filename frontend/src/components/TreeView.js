@@ -86,6 +86,14 @@ const TreeNode = ({
           <span
             className={`tree-expand-icon ${isExpanded ? 'expanded' : ''}`}
             onClick={handleArrowClick}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleArrowClick(e);
+              }
+            }}
+            role="button"
+            tabIndex={-1}
             aria-label={isExpanded ? '접기' : '펼치기'}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">

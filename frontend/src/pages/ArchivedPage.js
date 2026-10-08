@@ -53,7 +53,19 @@ export default function ArchivedPage() {
       <div className="summary">총 {total}개 아카이브됨</div>
 
       {actionMsg && (
-        <div className="action-msg" onClick={() => setActionMsg(null)}>
+        <div
+          className="action-msg"
+          onClick={() => setActionMsg(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+              e.preventDefault();
+              setActionMsg(null);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="알림 닫기"
+        >
           {actionMsg}
         </div>
       )}

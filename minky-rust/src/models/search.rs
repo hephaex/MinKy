@@ -92,6 +92,18 @@ pub struct SearchDocument {
     pub id: String,
     pub title: String,
     pub content: String,
+    /// Pre-tokenized (mecab-ko morpheme, whitespace-joined) copy of `title`,
+    /// analyzed by the whitespace `korean` analyzer for lexical search.
+    /// `title` itself stores the original readable text unmodified so
+    /// `_source` retrieval never returns tokenized/corrupted display text.
+    #[serde(default)]
+    pub title_tokenized: String,
+    /// Pre-tokenized (mecab-ko morpheme, whitespace-joined) copy of
+    /// `content`, analyzed by the whitespace `korean` analyzer for lexical
+    /// search and highlighting. `content` itself stores the original
+    /// readable text unmodified.
+    #[serde(default)]
+    pub content_tokenized: String,
     pub category_id: Option<i32>,
     pub category_name: Option<String>,
     pub tags: Vec<String>,
@@ -272,21 +284,23 @@ mod tests {
     fn test_search_document_with_embedding_serializes() {
         use chrono::Utc;
         let doc = SearchDocument {
-            id: "doc-1".to_string(),
-            title: "RAG Guide".to_string(),
-            content: "content here".to_string(),
-            category_id: Some(3),
-            category_name: Some("AI".to_string()),
-            tags: vec!["rag".to_string(), "llm".to_string()],
-            user_id: 1,
-            author_name: "Alice".to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            view_count: 10,
-            embedding: Some(vec![0.1, 0.2, 0.3]),
-            sensitivity: "internal".to_string(),
-            is_public: false,
-        };
+                    id: "doc-1".to_string(),
+                    title: "RAG Guide".to_string(),
+                    content: "content here".to_string(),
+                    title_tokenized: String::new(),
+                    content_tokenized: String::new(),
+                    category_id: Some(3),
+                    category_name: Some("AI".to_string()),
+                    tags: vec!["rag".to_string(), "llm".to_string()],
+                    user_id: 1,
+                    author_name: "Alice".to_string(),
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                    view_count: 10,
+                    embedding: Some(vec![0.1, 0.2, 0.3]),
+                    sensitivity: "internal".to_string(),
+                    is_public: false,
+                };
         let json = serde_json::to_string(&doc).unwrap();
         assert!(json.contains("\"title\":\"RAG Guide\""));
         assert!(json.contains("\"embedding\":[0.1,0.2,0.3]"));
@@ -296,21 +310,23 @@ mod tests {
     fn test_search_document_without_embedding_serializes_null() {
         use chrono::Utc;
         let doc = SearchDocument {
-            id: "doc-2".to_string(),
-            title: "No Embedding".to_string(),
-            content: "content".to_string(),
-            category_id: None,
-            category_name: None,
-            tags: vec![],
-            user_id: 2,
-            author_name: "Bob".to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            view_count: 0,
-            embedding: None,
-            sensitivity: "internal".to_string(),
-            is_public: false,
-        };
+                    id: "doc-2".to_string(),
+                    title: "No Embedding".to_string(),
+                    content: "content".to_string(),
+                    title_tokenized: String::new(),
+                    content_tokenized: String::new(),
+                    category_id: None,
+                    category_name: None,
+                    tags: vec![],
+                    user_id: 2,
+                    author_name: "Bob".to_string(),
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                    view_count: 0,
+                    embedding: None,
+                    sensitivity: "internal".to_string(),
+                    is_public: false,
+                };
         let json = serde_json::to_string(&doc).unwrap();
         assert!(json.contains("\"embedding\":null"));
     }
@@ -319,21 +335,23 @@ mod tests {
     fn test_search_document_sensitivity_field_serializes() {
         use chrono::Utc;
         let doc = SearchDocument {
-            id: "doc-3".to_string(),
-            title: "Secret Doc".to_string(),
-            content: "classified".to_string(),
-            category_id: None,
-            category_name: None,
-            tags: vec![],
-            user_id: 1,
-            author_name: "Eve".to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            view_count: 0,
-            embedding: None,
-            sensitivity: "confidential".to_string(),
-            is_public: false,
-        };
+                    id: "doc-3".to_string(),
+                    title: "Secret Doc".to_string(),
+                    content: "classified".to_string(),
+                    title_tokenized: String::new(),
+                    content_tokenized: String::new(),
+                    category_id: None,
+                    category_name: None,
+                    tags: vec![],
+                    user_id: 1,
+                    author_name: "Eve".to_string(),
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                    view_count: 0,
+                    embedding: None,
+                    sensitivity: "confidential".to_string(),
+                    is_public: false,
+                };
         let json = serde_json::to_string(&doc).unwrap();
         assert!(json.contains("\"sensitivity\":\"confidential\""));
         assert!(json.contains("\"is_public\":false"));
@@ -343,21 +361,23 @@ mod tests {
     fn test_search_document_public_sensitivity_serializes() {
         use chrono::Utc;
         let doc = SearchDocument {
-            id: "doc-4".to_string(),
-            title: "Public Doc".to_string(),
-            content: "open content".to_string(),
-            category_id: None,
-            category_name: None,
-            tags: vec![],
-            user_id: 1,
-            author_name: "Alice".to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            view_count: 5,
-            embedding: None,
-            sensitivity: "public".to_string(),
-            is_public: true,
-        };
+                    id: "doc-4".to_string(),
+                    title: "Public Doc".to_string(),
+                    content: "open content".to_string(),
+                    title_tokenized: String::new(),
+                    content_tokenized: String::new(),
+                    category_id: None,
+                    category_name: None,
+                    tags: vec![],
+                    user_id: 1,
+                    author_name: "Alice".to_string(),
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                    view_count: 5,
+                    embedding: None,
+                    sensitivity: "public".to_string(),
+                    is_public: true,
+                };
         let json = serde_json::to_string(&doc).unwrap();
         assert!(json.contains("\"sensitivity\":\"public\""));
         assert!(json.contains("\"is_public\":true"));

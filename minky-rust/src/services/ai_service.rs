@@ -6,7 +6,7 @@ use crate::{
     config::Config,
     error::{AppError, AppResult},
     models::{
-        AIModelConfig, ChatMessage, ChatRole, EmbeddingResponse, LLMProvider,
+        AIModelConfig, ChatMessage, ChatRole, LLMProvider,
         SuggestionRequest, SuggestionResponse, SuggestionType,
     },
     services::anthropic_types::{AnthropicMessage, AnthropicRequest, AnthropicResponse},
@@ -224,43 +224,6 @@ impl AIService {
         Ok((content, tokens))
     }
 
-    /// Generate embeddings for semantic search
-    pub async fn generate_embedding(&self, text: &str) -> AppResult<EmbeddingResponse> {
-        let api_key = self.config.openai_api_key.as_ref()
-            .ok_or_else(|| AppError::Internal(anyhow::anyhow!("OpenAI API key not configured")))?;
-
-        let request = EmbeddingRequest {
-            model: "text-embedding-3-small".to_string(),
-            input: text.to_string(),
-        };
-
-        let response = self.client
-            .post("https://api.openai.com/v1/embeddings")
-            .header("Authorization", format!("Bearer {}", api_key.expose_secret()))
-            .header("content-type", "application/json")
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("API request failed: {}", e)))?;
-
-        if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(AppError::Internal(anyhow::anyhow!("OpenAI API error: {}", error_text)));
-        }
-
-        let result: EmbeddingAPIResponse = response.json().await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to parse response: {}", e)))?;
-
-        let embedding = result.data.first()
-            .map(|d| d.embedding.clone())
-            .unwrap_or_default();
-
-        Ok(EmbeddingResponse {
-            embedding: embedding.clone(),
-            dimensions: embedding.len(),
-            model: "text-embedding-3-small".to_string(),
-        })
-    }
 }
 
 
@@ -293,23 +256,6 @@ struct OpenAIChoice {
 #[derive(Debug, Deserialize)]
 struct OpenAIUsage {
     total_tokens: u32,
-}
-
-// Embedding API types
-#[derive(Debug, Serialize)]
-struct EmbeddingRequest {
-    model: String,
-    input: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct EmbeddingAPIResponse {
-    data: Vec<EmbeddingData>,
-}
-
-#[derive(Debug, Deserialize)]
-struct EmbeddingData {
-    embedding: Vec<f32>,
 }
 
 #[cfg(test)]

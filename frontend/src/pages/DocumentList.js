@@ -9,7 +9,7 @@ import Toast from '../components/Toast';
 import useToast from '../hooks/useToast';
 import useCategories from '../hooks/useCategories';
 import useTags from '../hooks/useTags';
-import { logError } from '../utils/logger';
+import { logError, logWarning } from '../utils/logger';
 import { formatDate } from '../utils/dateUtils';
 import { loadListState, saveListState } from '../utils/listStatePersistence';
 import './DocumentList.css';
@@ -71,6 +71,48 @@ const DocumentList = () => {
   const scrollRestored = useRef(false);
   const getScrollEl = () => listRef.current?.closest('.documents-content') || null;
 
+  const fetchDocuments = useCallback(
+    async (page = 1, search = '', categoryId = null, sort = sortBy, tags = selectedTags) => {
+      try {
+        setLoading(true);
+        const params = new URLSearchParams();
+        params.append('page', page);
+        params.append('per_page', 10);
+        if (search) params.append('search', search);
+        if (categoryId) params.append('category_id', categoryId);
+        if (sort) params.append('sort', sort);
+        if (tags && tags.length > 0) {
+          params.append('tags', tags.join(','));
+        }
+
+        const response = await api.get(`/documents?${params.toString()}`);
+        const docs = response.data.documents;
+        setDocuments(docs);
+        setPagination(response.data.pagination);
+        setCurrentPage(page);
+        setError(null);
+        // Store ordered doc IDs so DocumentView can show prev/next navigation.
+        try {
+          sessionStorage.setItem('docListContext', JSON.stringify({ ids: docs.map((d) => d.id) }));
+        } catch (storageErr) {
+          // Best-effort only (prev/next nav degrades gracefully to disabled
+          // buttons) — private-browsing/quota-exceeded sessionStorage
+          // failures must not break the actual document fetch above.
+          logWarning(
+            'DocumentList.fetchDocuments',
+            `failed to persist docListContext: ${storageErr}`
+          );
+        }
+      } catch (err) {
+        setError('Failed to fetch documents');
+        logError('DocumentList.fetchDocuments', err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [sortBy, selectedTags]
+  );
+
   const pollPendingDocs = useCallback(async () => {
     if (pendingDocIds.length === 0) return;
     const remaining = [];
@@ -96,7 +138,16 @@ const DocumentList = () => {
     if (remaining.length === 0) {
       fetchDocuments(currentPage, searchQuery, selectedCategory, sortBy, selectedTags);
     }
-  }, [pendingDocIds, showToast, currentPage, searchQuery, selectedCategory, sortBy, selectedTags]);
+  }, [
+    pendingDocIds,
+    showToast,
+    currentPage,
+    searchQuery,
+    selectedCategory,
+    sortBy,
+    selectedTags,
+    fetchDocuments,
+  ]);
 
   useEffect(() => {
     if (pendingDocIds.length > 0) {
@@ -150,43 +201,6 @@ const DocumentList = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
-
-  const fetchDocuments = async (
-    page = 1,
-    search = '',
-    categoryId = null,
-    sort = sortBy,
-    tags = selectedTags
-  ) => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      params.append('page', page);
-      params.append('per_page', 10);
-      if (search) params.append('search', search);
-      if (categoryId) params.append('category_id', categoryId);
-      if (sort) params.append('sort', sort);
-      if (tags && tags.length > 0) {
-        params.append('tags', tags.join(','));
-      }
-
-      const response = await api.get(`/documents?${params.toString()}`);
-      const docs = response.data.documents;
-      setDocuments(docs);
-      setPagination(response.data.pagination);
-      setCurrentPage(page);
-      setError(null);
-      // Store ordered doc IDs so DocumentView can show prev/next navigation.
-      try {
-        sessionStorage.setItem('docListContext', JSON.stringify({ ids: docs.map((d) => d.id) }));
-      } catch (_) {}
-    } catch (err) {
-      setError('Failed to fetch documents');
-      logError('DocumentList.fetchDocuments', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const isInitialMount = useRef(true);
   useEffect(() => {

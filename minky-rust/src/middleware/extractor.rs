@@ -8,7 +8,10 @@ use serde::Serialize;
 use serde_json::json;
 use std::{net::SocketAddr, sync::OnceLock};
 
-use crate::{services::AuthService, AppState};
+use crate::{
+    services::{ApiKeyIdentity, AuthService, SecurityService},
+    AppState,
+};
 
 /// Returns true when TRUSTED_PROXY=true env var is set.
 /// Same semantics as rate_limit.rs — cached after first read.
@@ -198,6 +201,68 @@ where
     }
 }
 
+/// Authenticated principal: either an interactive end user (JWT/cookie or
+/// BYPASS_AUTH admin) or a service identity backed by an API key.
+///
+/// Extraction order mirrors the rest of the auth stack:
+///   1. `BYPASS_AUTH` short-circuit → `User(bypass_admin_user())`
+///   2. Bearer JWT / `access_token` cookie (existing `AuthUser` logic) → `User`
+///   3. `X-API-Key` header validated against `api_keys` → `Service`
+///   4. otherwise → `401 Unauthorized`
+#[derive(Debug, Clone)]
+pub enum AuthPrincipal {
+    User(AuthUser),
+    Service(ApiKeyIdentity),
+}
+
+impl AuthPrincipal {
+    /// Effective acting user id for the principal.
+    ///
+    /// Service principals resolve to `api_keys.user_id`, which is `NOT NULL`.
+    pub fn effective_user_id(&self) -> i32 {
+        match self {
+            AuthPrincipal::User(user) => user.id,
+            AuthPrincipal::Service(identity) => identity.user_id,
+        }
+    }
+}
+
+impl<S> FromRequestParts<S> for AuthPrincipal
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = AuthError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        // (1) BYPASS_AUTH and (2) Bearer JWT / cookie are both handled by the
+        // existing AuthUser extractor, which short-circuits on BYPASS_AUTH before
+        // attempting JWT/cookie validation. This preserves the required ordering:
+        // BYPASS → Bearer JWT → X-API-Key → 401.
+        if let Ok(user) = AuthUser::from_request_parts(parts, state).await {
+            return Ok(AuthPrincipal::User(user));
+        }
+
+        // (3) X-API-Key header → validate against api_keys.
+        let app_state = AppState::from_ref(state);
+        if let Some(raw_key) = parts.headers.get("x-api-key").and_then(|h| h.to_str().ok()) {
+            let security = SecurityService::new(app_state.db.clone());
+            match security.validate_api_key(raw_key).await {
+                Ok(Some(identity)) => return Ok(AuthPrincipal::Service(identity)),
+                Ok(None) => {}
+                Err(e) => {
+                    // Fail closed (401), but keep infrastructure failures
+                    // distinguishable from bad credentials in the logs.
+                    tracing::warn!(error = %e, "api key validation failed due to backend error");
+                }
+            }
+        }
+
+        // (4) No valid credential of any kind.
+        Err(AuthError("Authentication required".to_string()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,6 +298,31 @@ mod tests {
         // "Admin" (capital A) is not the same as "admin"
         let user = make_user("Admin");
         assert!(!user.is_admin(), "Role check should be case-sensitive");
+    }
+
+    #[test]
+    fn test_effective_user_id_for_user_principal() {
+        let principal = AuthPrincipal::User(make_user("user"));
+        assert_eq!(principal.effective_user_id(), 1);
+    }
+
+    #[test]
+    fn test_effective_user_id_for_service_principal() {
+        let principal = AuthPrincipal::Service(ApiKeyIdentity {
+            key_id: 42,
+            user_id: 7,
+            name: "ci-bot".to_string(),
+        });
+        // Service principals resolve to api_keys.user_id, not the key id.
+        assert_eq!(principal.effective_user_id(), 7);
+    }
+
+    #[test]
+    fn test_auth_error_responds_401() {
+        // The AuthPrincipal rejection path returns AuthError, which must map to
+        // HTTP 401 for anonymous requests to protected endpoints.
+        let resp = AuthError("Authentication required".to_string()).into_response();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 }
 

@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::pipeline::{PipelineContext, PipelineError, PipelineResult, PipelineStage};
+use crate::pipeline::{PipelineContext, PipelineResult, PipelineStage};
 
 use super::storage::StoredDocument;
 use super::PipelineOutput;
@@ -176,15 +176,25 @@ impl PipelineStage<StoredDocument, PipelineOutput> for IndexingStage {
     ) -> PipelineResult<PipelineOutput> {
         let document_id = input.document_id;
 
-        // Link related documents
+        // R1 (2026-07-17): related-linking and auto-tagging are enrichments
+        // on a document that Storage (Stage 7) has already committed — a
+        // failure here must not turn an already-saved document into a 500
+        // for the caller (the client would retry, hit the S1 dedup 409, and
+        // never get a usable document id). Degrade gracefully instead: log
+        // and continue with an empty/zero result, same pattern as
+        // `update_job_status` below.
         let related_count = if self.config.link_related && input.has_document_embedding {
-            let related = self.link_related_documents(document_id).await.map_err(|e| {
-                PipelineError::stage_failure(
-                    "indexing",
-                    format!("Failed to link related documents: {}", e),
-                )
-            })?;
-            related.len()
+            match self.link_related_documents(document_id).await {
+                Ok(related) => related.len(),
+                Err(e) => {
+                    tracing::warn!(
+                        document_id = %document_id,
+                        error = %e,
+                        "indexing: failed to link related documents (non-fatal, document already stored)"
+                    );
+                    0
+                }
+            }
         } else {
             0
         };
@@ -192,13 +202,17 @@ impl PipelineStage<StoredDocument, PipelineOutput> for IndexingStage {
         // Create tags from topics
         let topics: Vec<String> = if self.config.auto_tag {
             if let Some(ref analysis) = input.analysis {
-                // Create tags from topics
-                self.create_tags(document_id, &analysis.topics)
-                    .await
-                    .map_err(|e| {
-                        PipelineError::stage_failure("indexing", format!("Failed to create tags: {}", e))
-                    })?;
-                analysis.topics.clone()
+                match self.create_tags(document_id, &analysis.topics).await {
+                    Ok(()) => analysis.topics.clone(),
+                    Err(e) => {
+                        tracing::warn!(
+                            document_id = %document_id,
+                            error = %e,
+                            "indexing: failed to create tags (non-fatal, document already stored)"
+                        );
+                        Vec::new()
+                    }
+                }
             } else {
                 Vec::new()
             }
@@ -225,6 +239,7 @@ impl PipelineStage<StoredDocument, PipelineOutput> for IndexingStage {
             analyzed: input.has_analysis,
             topics,
             summary,
+            replaced_document_id: input.replaced_document_id,
         })
     }
 }
@@ -251,6 +266,7 @@ mod tests {
             analyzed: true,
             topics: vec!["rust".to_string(), "programming".to_string()],
             summary: Some("A test document about Rust.".to_string()),
+            replaced_document_id: None,
         };
 
         assert_eq!(output.chunks_count, 3);

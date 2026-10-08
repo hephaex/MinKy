@@ -16,6 +16,7 @@ use crate::models::{
 use pgvector::Vector;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
@@ -112,6 +113,15 @@ impl EmbeddingService {
             http_client: reqwest::Client::new(),
             local_model,
         })
+    }
+
+    /// The configured default embedding model (Solar when `UPSTAGE_API_KEY` is
+    /// set at startup, OpenAI otherwise — see `lib.rs`). Callers that need a
+    /// single ad-hoc embedding without document/chunk semantics (e.g. a plain
+    /// `/api/ai/embedding` passthrough) should use this instead of assuming a
+    /// hardcoded provider.
+    pub fn default_model(&self) -> EmbeddingModel {
+        self.config.default_model
     }
 
     /// Generate embedding for text. Dispatches to the local fastembed model
@@ -368,28 +378,36 @@ impl EmbeddingService {
         Ok(results)
     }
 
-    /// Semantic search using vector similarity
-    pub async fn semantic_search(
+    /// Resolve the query/storage model split and generate a query embedding.
+    ///
+    /// Upstage Solar uses asymmetric embeddings: queries are embedded with
+    /// `UpstaageSolarQuery` but stored/compared against rows embedded with
+    /// `UpstaageSolarPassage`. Other models use the same model for both
+    /// sides. Returns `(query_embedding, storage_model)` so callers can bind
+    /// `storage_model` as a `WHERE model = $N` filter and avoid comparing
+    /// embeddings across incompatible vector spaces.
+    pub async fn embed_query(
         &self,
-        req: SemanticSearchRequest,
-    ) -> Result<Vec<SemanticSearchResult>> {
-        let requested_model = req.model.unwrap_or(self.config.default_model);
-        let query_model = if requested_model == EmbeddingModel::UpstaageSolarPassage {
-            EmbeddingModel::UpstaageSolarQuery
-        } else {
-            requested_model
-        };
-        let storage_model = if query_model == EmbeddingModel::UpstaageSolarQuery {
-            EmbeddingModel::UpstaageSolarPassage
-        } else {
-            query_model
-        };
+        query: &str,
+        requested_model: Option<EmbeddingModel>,
+    ) -> Result<(Vec<f32>, EmbeddingModel)> {
+        let (query_model, storage_model) =
+            resolve_query_storage_models(requested_model.unwrap_or(self.config.default_model));
+        let query_embedding = self.generate_embedding(query, query_model).await?;
+        Ok((query_embedding, storage_model))
+    }
 
-        // Generate query embedding
-        let query_embedding = self.generate_embedding(&req.query, query_model).await?;
-        let threshold = req.threshold.unwrap_or(0.7);
-
-        // Search in chunk embeddings with cosine similarity
+    /// Chunk-level candidates for a query embedding (original semantic_search
+    /// query, unchanged SQL — extracted so it can be unit/integration tested
+    /// without going through `embed_query`'s remote API call).
+    async fn query_chunk_hits(
+        &self,
+        query_embedding: Vector,
+        storage_model: EmbeddingModel,
+        threshold: f32,
+        user_id: Option<i32>,
+        limit: i32,
+    ) -> Result<Vec<SemanticSearchRow>> {
         let results = sqlx::query_as::<_, SemanticSearchRow>(
             r#"
             SELECT
@@ -409,15 +427,124 @@ impl EmbeddingService {
             LIMIT $5
             "#,
         )
-        .bind(Vector::from(query_embedding))
+        .bind(query_embedding)
         .bind(storage_model)
         .bind(threshold)
-        .bind(req.user_id)
-        .bind(req.limit)
+        .bind(user_id)
+        .bind(limit)
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(results
+        Ok(results)
+    }
+
+    /// Document-level candidates for a query embedding (C2).
+    ///
+    /// `chunk_embeddings` only covers a small fraction of documents that have
+    /// a `document_embeddings` row (e.g. 106 vs 7,765 in the lab-minky
+    /// corpus), so a chunk-only search returns near-empty results for most
+    /// queries. This mirrors `hybrid_search.rs::vector_search`'s SQL shape,
+    /// adding the same `threshold`/`archived`/`user_id` filters
+    /// `query_chunk_hits` already applies so the two result sets are
+    /// comparable and mergeable.
+    async fn query_document_hits(
+        &self,
+        query_embedding: Vector,
+        storage_model: EmbeddingModel,
+        threshold: f32,
+        user_id: Option<i32>,
+        limit: i32,
+    ) -> Result<Vec<SemanticSearchRow>> {
+        let results = sqlx::query_as::<_, SemanticSearchRow>(
+            r#"
+            SELECT
+                de.document_id,
+                NULL::uuid as chunk_id,
+                LEFT(d.content, 500) as chunk_text,
+                (1 - (de.embedding <=> $1))::float4 as similarity,
+                d.title as document_title
+            FROM document_embeddings de
+            JOIN documents d ON d.id = de.document_id
+            WHERE de.model = $2
+              AND de.embedding IS NOT NULL
+              AND d.archived = false
+              AND ($4::integer IS NULL OR d.user_id = $4)
+              AND 1 - (de.embedding <=> $1) >= $3
+            ORDER BY de.embedding <=> $1
+            LIMIT $5
+            "#,
+        )
+        .bind(query_embedding)
+        .bind(storage_model)
+        .bind(threshold)
+        .bind(user_id)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(results)
+    }
+
+    /// Merge chunk-level and document-level hits into one ranked list (C2).
+    ///
+    /// Dedups by `document_id`: a chunk-level hit always wins over a
+    /// document-level hit for the same document (more precise snippet +
+    /// location), so document-level hits only fill in documents with no
+    /// qualifying chunk. The merged set is re-sorted by similarity
+    /// descending and truncated to `limit` — a document-level hit can
+    /// outrank a chunk hit from a different document.
+    fn merge_search_hits(
+        chunk_hits: Vec<SemanticSearchRow>,
+        document_hits: Vec<SemanticSearchRow>,
+        limit: usize,
+    ) -> Vec<SemanticSearchRow> {
+        let mut by_document: HashMap<Uuid, SemanticSearchRow> =
+            HashMap::with_capacity(chunk_hits.len() + document_hits.len());
+
+        // chunk_hits arrive sorted best-first (ORDER BY distance ASC), so the
+        // first row per document is its best chunk — later (worse) chunks of
+        // the same document must not overwrite it.
+        for row in chunk_hits {
+            by_document.entry(row.document_id).or_insert(row);
+        }
+        for row in document_hits {
+            by_document.entry(row.document_id).or_insert(row);
+        }
+
+        let mut merged: Vec<SemanticSearchRow> = by_document.into_values().collect();
+        merged.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        merged.truncate(limit);
+        merged
+    }
+
+    /// Semantic search using vector similarity.
+    ///
+    /// Queries both `chunk_embeddings` and `document_embeddings` and merges
+    /// the results (C2) so documents with no chunk-level embedding (the
+    /// overwhelming majority of the corpus) still surface via their
+    /// document-level embedding instead of being silently excluded.
+    pub async fn semantic_search(
+        &self,
+        req: SemanticSearchRequest,
+    ) -> Result<Vec<SemanticSearchResult>> {
+        let (query_embedding, storage_model) = self.embed_query(&req.query, req.model).await?;
+        let threshold = req.threshold.unwrap_or(0.7);
+        let query_vector = Vector::from(query_embedding);
+
+        let chunk_hits = self
+            .query_chunk_hits(query_vector.clone(), storage_model, threshold, req.user_id, req.limit)
+            .await?;
+        let document_hits = self
+            .query_document_hits(query_vector, storage_model, threshold, req.user_id, req.limit)
+            .await?;
+
+        let merged = Self::merge_search_hits(chunk_hits, document_hits, req.limit.max(0) as usize);
+
+        Ok(merged
             .into_iter()
             .map(|r| SemanticSearchResult {
                 document_id: r.document_id,
@@ -750,6 +877,31 @@ impl EmbeddingService {
             }
         }
     }
+}
+
+/// Resolve the query-time embedding model and the storage model to filter
+/// against, given a requested (or default) model.
+///
+/// Upstage Solar uses asymmetric embeddings: a caller requesting
+/// `UpstaageSolarPassage` (the storage/indexing model) must actually embed
+/// their *query* text with `UpstaageSolarQuery`, then filter stored rows by
+/// `UpstaageSolarPassage`. Every other model uses the same model for both
+/// query and storage. Returns `(query_model, storage_model)`.
+#[inline]
+pub fn resolve_query_storage_models(
+    requested_model: EmbeddingModel,
+) -> (EmbeddingModel, EmbeddingModel) {
+    let query_model = if requested_model == EmbeddingModel::UpstaageSolarPassage {
+        EmbeddingModel::UpstaageSolarQuery
+    } else {
+        requested_model
+    };
+    let storage_model = if query_model == EmbeddingModel::UpstaageSolarQuery {
+        EmbeddingModel::UpstaageSolarPassage
+    } else {
+        query_model
+    };
+    (query_model, storage_model)
 }
 
 /// Returns `true` when the embedding worker should pause before processing the next item.
@@ -1152,5 +1304,566 @@ mod tests {
         // success
         consecutive = 0;
         assert!(!should_circuit_break(consecutive, 3), "should not break after reset");
+    }
+
+    #[test]
+    fn resolve_models_solar_passage_splits_into_query_and_passage() {
+        let (query_model, storage_model) =
+            resolve_query_storage_models(EmbeddingModel::UpstaageSolarPassage);
+        assert_eq!(query_model, EmbeddingModel::UpstaageSolarQuery);
+        assert_eq!(storage_model, EmbeddingModel::UpstaageSolarPassage);
+    }
+
+    #[test]
+    fn resolve_models_solar_query_resolves_storage_to_passage() {
+        let (query_model, storage_model) =
+            resolve_query_storage_models(EmbeddingModel::UpstaageSolarQuery);
+        assert_eq!(query_model, EmbeddingModel::UpstaageSolarQuery);
+        assert_eq!(storage_model, EmbeddingModel::UpstaageSolarPassage);
+    }
+
+    #[test]
+    fn resolve_models_symmetric_model_uses_same_model_both_sides() {
+        let (query_model, storage_model) =
+            resolve_query_storage_models(EmbeddingModel::OpenaiTextEmbedding3Small);
+        assert_eq!(query_model, EmbeddingModel::OpenaiTextEmbedding3Small);
+        assert_eq!(storage_model, EmbeddingModel::OpenaiTextEmbedding3Small);
+    }
+
+    #[test]
+    fn resolve_models_never_returns_incompatible_query_storage_pair() {
+        let all_models = [
+            EmbeddingModel::OpenaiTextEmbedding3Small,
+            EmbeddingModel::OpenaiTextEmbedding3Large,
+            EmbeddingModel::VoyageLarge2,
+            EmbeddingModel::VoyageCode2,
+            EmbeddingModel::NomicEmbedTextV15,
+            EmbeddingModel::UpstaageSolarPassage,
+            EmbeddingModel::UpstaageSolarQuery,
+        ];
+        for requested in all_models {
+            let (query_model, storage_model) = resolve_query_storage_models(requested);
+            // The storage model must never itself be the query-only variant.
+            assert_ne!(
+                storage_model,
+                EmbeddingModel::UpstaageSolarQuery,
+                "storage model resolved from {:?} must not be the query-only variant",
+                requested
+            );
+            // Re-resolving the storage model must be a no-op (idempotent / stable fixed point).
+            let (_, storage_again) = resolve_query_storage_models(storage_model);
+            assert_eq!(
+                storage_again, storage_model,
+                "resolving storage_model={:?} again must be stable",
+                storage_model
+            );
+            let _ = query_model;
+        }
+    }
+
+    /// Regression test for the float8-vs-f32 sqlx decode mismatch: pgvector's
+    /// `1 - (a <=> b)` distance expression returns `FLOAT8`/`double precision`,
+    /// but `SemanticSearchRow.similarity` is `f32`. Without an explicit
+    /// `::float4` cast in the SQL, `sqlx::query_as` fails at runtime with a
+    /// `ColumnDecode` error the moment a row is actually returned (this never
+    /// surfaced before because these paths were never exercised against real
+    /// data). Requires a live Postgres; skipped in CI. Run with:
+    ///   MINKY_DATABASE_URL=... UPSTAGE_API_KEY=... cargo test -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn semantic_search_and_find_similar_documents_decode_similarity_without_error() {
+        use sqlx::postgres::PgPoolOptions;
+
+        let upstage_api_key = match std::env::var("UPSTAGE_API_KEY") {
+            Ok(key) if !key.is_empty() => key,
+            _ => {
+                eprintln!("skipping: UPSTAGE_API_KEY not set");
+                return;
+            }
+        };
+
+        let database_url = std::env::var("MINKY_DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://minky:minky@localhost/minky".to_string());
+
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&database_url)
+            .await
+            .expect("Failed to connect to test database");
+
+        let config = EmbeddingConfig {
+            openai_api_key: None,
+            voyage_api_key: None,
+            upstage_api_key: Some(upstage_api_key),
+            default_model: EmbeddingModel::UpstaageSolarPassage,
+            chunk_size: 512,
+            chunk_overlap: 50,
+            local_embedding_enabled: false,
+        };
+        let service = EmbeddingService::new(pool.clone(), config);
+
+        // Seed a document with a chunk embedding and a document-level embedding,
+        // both on the storage model resolved from the default config.
+        let user_id: i32 = sqlx::query_scalar(
+            "INSERT INTO users (email, username, password_hash) \
+             VALUES ($1, $2, 'x') \
+             ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email \
+             RETURNING id",
+        )
+        .bind("float4-decode-test@minky.local")
+        .bind("float4_decode_test")
+        .fetch_one(&pool)
+        .await
+        .expect("seed user");
+
+        let document_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO documents (title, content, user_id) VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind("float4 decode fixture")
+        .bind("The quick brown fox jumps over the lazy dog.")
+        .bind(user_id)
+        .fetch_one(&pool)
+        .await
+        .expect("seed document");
+
+        let dummy_vec = vec![0.001_f32; 4096];
+
+        sqlx::query(
+            "INSERT INTO document_embeddings (document_id, embedding, model) VALUES ($1, $2, $3)",
+        )
+        .bind(document_id)
+        .bind(Vector::from(dummy_vec.clone()))
+        .bind(EmbeddingModel::UpstaageSolarPassage)
+        .execute(&pool)
+        .await
+        .expect("seed document embedding");
+
+        sqlx::query(
+            "INSERT INTO chunk_embeddings (document_id, chunk_index, chunk_text, chunk_start_offset, chunk_end_offset, embedding, model, token_count) \
+             VALUES ($1, 0, 'quick brown fox', 0, 15, $2, $3, 3)",
+        )
+        .bind(document_id)
+        .bind(Vector::from(dummy_vec))
+        .bind(EmbeddingModel::UpstaageSolarPassage)
+        .execute(&pool)
+        .await
+        .expect("seed chunk embedding");
+
+        let semantic_result = service
+            .semantic_search(SemanticSearchRequest {
+                query: "quick brown fox".to_string(),
+                model: None,
+                threshold: Some(-1.0),
+                user_id: None,
+                limit: 10,
+            })
+            .await;
+
+        let similar_result = service.find_similar_documents(document_id, 10).await;
+
+        // Cleanup before asserting, so a failed assertion doesn't leave fixtures behind.
+        sqlx::query("DELETE FROM chunk_embeddings WHERE document_id = $1")
+            .bind(document_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM document_embeddings WHERE document_id = $1")
+            .bind(document_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM documents WHERE id = $1")
+            .bind(document_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+
+        let semantic_results =
+            semantic_result.expect("semantic_search must decode rows without a ColumnDecode error");
+        assert!(
+            !semantic_results.is_empty(),
+            "expected at least one chunk match for the seeded document"
+        );
+
+        let similar_results =
+            similar_result.expect("find_similar_documents must decode rows without a ColumnDecode error");
+        // find_similar_documents excludes the source document itself and there is
+        // no other document seeded, so an empty result here is expected and still
+        // proves the query executed and decoded successfully (no panic/error).
+        let _ = similar_results;
+    }
+
+    // ── C2: semantic_search document-level merge ────────────────────────────
+
+    fn sample_row(document_id: Uuid, chunk_id: Option<Uuid>, similarity: f32) -> SemanticSearchRow {
+        SemanticSearchRow {
+            document_id,
+            chunk_id,
+            chunk_text: Some("snippet".to_string()),
+            similarity,
+            document_title: Some("title".to_string()),
+        }
+    }
+
+    #[test]
+    fn merge_search_hits_chunk_hit_wins_over_document_hit_for_same_document() {
+        let doc_id = Uuid::new_v4();
+        let chunk_hit = sample_row(doc_id, Some(Uuid::new_v4()), 0.9);
+        let document_hit = sample_row(doc_id, None, 0.5);
+
+        let merged = EmbeddingService::merge_search_hits(vec![chunk_hit], vec![document_hit], 10);
+
+        assert_eq!(merged.len(), 1, "must dedup by document_id");
+        assert!(
+            merged[0].chunk_id.is_some(),
+            "chunk hit must win over document hit for the same document"
+        );
+        assert_eq!(merged[0].similarity, 0.9, "the winning row's own similarity must be kept");
+    }
+
+    #[test]
+    fn merge_search_hits_keeps_best_chunk_when_document_has_multiple_chunks() {
+        // Regression (2026-07-17 review H1): chunk_hits arrive best-first; a
+        // later, worse chunk of the same document must not overwrite the best
+        // one — the document would otherwise be ranked/snippeted by its worst
+        // qualifying chunk.
+        let doc_id = Uuid::new_v4();
+        let best = sample_row(doc_id, Some(Uuid::new_v4()), 0.92);
+        let mid = sample_row(doc_id, Some(Uuid::new_v4()), 0.71);
+        let worst = sample_row(doc_id, Some(Uuid::new_v4()), 0.56);
+
+        let merged = EmbeddingService::merge_search_hits(vec![best, mid, worst], vec![], 10);
+
+        assert_eq!(merged.len(), 1, "must dedup to one row per document");
+        assert_eq!(
+            merged[0].similarity, 0.92,
+            "the best chunk (first in the DESC-sorted input) must survive the merge"
+        );
+    }
+
+    #[test]
+    fn merge_search_hits_document_hit_fills_in_when_no_chunk_hit() {
+        // The whole point of C2: a document with zero qualifying chunk hits
+        // (chunk_embeddings only covers a small fraction of the corpus) must
+        // still surface via its document-level embedding.
+        let doc_with_chunk = Uuid::new_v4();
+        let doc_without_chunk = Uuid::new_v4();
+
+        let chunk_hits = vec![sample_row(doc_with_chunk, Some(Uuid::new_v4()), 0.8)];
+        let document_hits = vec![
+            sample_row(doc_with_chunk, None, 0.3), // shadowed by the chunk hit
+            sample_row(doc_without_chunk, None, 0.7),
+        ];
+
+        let merged = EmbeddingService::merge_search_hits(chunk_hits, document_hits, 10);
+
+        assert_eq!(merged.len(), 2, "one row per distinct document_id");
+        let doc_ids: std::collections::HashSet<Uuid> =
+            merged.iter().map(|r| r.document_id).collect();
+        assert!(doc_ids.contains(&doc_with_chunk));
+        assert!(
+            doc_ids.contains(&doc_without_chunk),
+            "document with no chunk hit must still appear via its document-level hit"
+        );
+
+        let without_chunk_row = merged
+            .iter()
+            .find(|r| r.document_id == doc_without_chunk)
+            .unwrap();
+        assert!(
+            without_chunk_row.chunk_id.is_none(),
+            "document-level hit must have chunk_id = None"
+        );
+    }
+
+    #[test]
+    fn merge_search_hits_sorts_by_similarity_descending() {
+        let a = sample_row(Uuid::new_v4(), None, 0.2);
+        let b = sample_row(Uuid::new_v4(), None, 0.9);
+        let c = sample_row(Uuid::new_v4(), None, 0.5);
+
+        let merged = EmbeddingService::merge_search_hits(vec![], vec![a, b, c], 10);
+
+        let similarities: Vec<f32> = merged.iter().map(|r| r.similarity).collect();
+        assert_eq!(
+            similarities,
+            vec![0.9, 0.5, 0.2],
+            "merged results must be sorted by similarity desc"
+        );
+    }
+
+    #[test]
+    fn merge_search_hits_truncates_to_limit() {
+        let hits: Vec<SemanticSearchRow> = (0..5)
+            .map(|i| sample_row(Uuid::new_v4(), None, i as f32 / 10.0))
+            .collect();
+
+        let merged = EmbeddingService::merge_search_hits(vec![], hits, 2);
+
+        assert_eq!(merged.len(), 2, "merged result must be truncated to the requested limit");
+        assert_eq!(merged[0].similarity, 0.4, "the two highest-similarity rows must survive truncation");
+        assert_eq!(merged[1].similarity, 0.3);
+    }
+
+    #[test]
+    fn merge_search_hits_empty_inputs_yield_empty_output() {
+        let merged = EmbeddingService::merge_search_hits(vec![], vec![], 10);
+        assert!(merged.is_empty());
+    }
+
+    /// C2: a document with ONLY a `document_embeddings` row (zero
+    /// `chunk_embeddings` rows) must still be returned by
+    /// `query_document_hits` — this is the exact gap C2 closes (106 rows in
+    /// `chunk_embeddings` vs 7,765 in `document_embeddings` meant a
+    /// chunk-only search returned near-empty results for most of the
+    /// corpus). Bypasses `embed_query`'s remote API call entirely by calling
+    /// `query_document_hits` directly with a hand-built vector, so this
+    /// needs a live Postgres but no network/API key. Requires a live
+    /// Postgres; skipped in CI. Run with:
+    ///   MINKY_DATABASE_URL=... cargo test -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn query_document_hits_returns_document_with_no_chunk_embeddings() {
+        use sqlx::postgres::PgPoolOptions;
+
+        let database_url = std::env::var("MINKY_DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://minky:minky@localhost/minky".to_string());
+
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&database_url)
+            .await
+            .expect("Failed to connect to test database");
+
+        let service = EmbeddingService::new(pool.clone(), EmbeddingConfig::default());
+
+        let user_id: i32 = sqlx::query_scalar(
+            "INSERT INTO users (email, username, password_hash) \
+             VALUES ($1, $2, 'x') \
+             ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email \
+             RETURNING id",
+        )
+        .bind("c2-doc-level-test@minky.local")
+        .bind("c2_doc_level_test")
+        .fetch_one(&pool)
+        .await
+        .expect("seed user");
+
+        let document_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO documents (title, content, user_id) VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind("C2 doc-level fixture")
+        .bind("Content with no chunk-level embedding at all.")
+        .bind(user_id)
+        .fetch_one(&pool)
+        .await
+        .expect("seed document");
+
+        // Document-level embedding ONLY — deliberately no chunk_embeddings
+        // row, reproducing the exact gap C2 closes.
+        let query_vec = vec![1.0_f32; 4096];
+        sqlx::query(
+            "INSERT INTO document_embeddings (document_id, embedding, model) VALUES ($1, $2, $3)",
+        )
+        .bind(document_id)
+        .bind(Vector::from(query_vec.clone()))
+        .bind(EmbeddingModel::OpenaiTextEmbedding3Small)
+        .execute(&pool)
+        .await
+        .expect("seed document embedding");
+
+        let result = service
+            .query_document_hits(
+                Vector::from(query_vec),
+                EmbeddingModel::OpenaiTextEmbedding3Small,
+                0.5,
+                Some(user_id),
+                10,
+            )
+            .await;
+
+        // Cleanup before asserting, so a failed assertion doesn't leave fixtures behind.
+        sqlx::query("DELETE FROM document_embeddings WHERE document_id = $1")
+            .bind(document_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM documents WHERE id = $1")
+            .bind(document_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .ok();
+
+        let rows = result.expect("query_document_hits must succeed");
+        assert_eq!(
+            rows.len(),
+            1,
+            "the seeded document must be returned despite having no chunk_embeddings row"
+        );
+        assert_eq!(rows[0].document_id, document_id);
+        assert!(
+            rows[0].chunk_id.is_none(),
+            "document-level hit must have chunk_id = None"
+        );
+        assert_eq!(
+            rows[0].chunk_text.as_deref(),
+            Some("Content with no chunk-level embedding at all."),
+            "chunk_text must be a LEFT(content, 500) snippet"
+        );
+        assert!(
+            (rows[0].similarity - 1.0).abs() < 1e-4,
+            "identical vectors must have similarity ~1.0, got {}",
+            rows[0].similarity
+        );
+    }
+
+    /// C2: threshold + archived + user_id filters apply to
+    /// `query_document_hits` identically to how they already apply to
+    /// `query_chunk_hits` (same SQL shape). Requires a live Postgres;
+    /// skipped in CI. Run with: MINKY_DATABASE_URL=... cargo test -- --ignored
+    #[tokio::test]
+    #[ignore]
+    async fn query_document_hits_respects_threshold_archived_and_user_filters() {
+        use sqlx::postgres::PgPoolOptions;
+
+        let database_url = std::env::var("MINKY_DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://minky:minky@localhost/minky".to_string());
+
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&database_url)
+            .await
+            .expect("Failed to connect to test database");
+
+        let service = EmbeddingService::new(pool.clone(), EmbeddingConfig::default());
+
+        let user_a: i32 = sqlx::query_scalar(
+            "INSERT INTO users (email, username, password_hash) VALUES ($1, $2, 'x') \
+             ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email RETURNING id",
+        )
+        .bind("c2-filter-a@minky.local")
+        .bind("c2_filter_a")
+        .fetch_one(&pool)
+        .await
+        .expect("seed user a");
+
+        let user_b: i32 = sqlx::query_scalar(
+            "INSERT INTO users (email, username, password_hash) VALUES ($1, $2, 'x') \
+             ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email RETURNING id",
+        )
+        .bind("c2-filter-b@minky.local")
+        .bind("c2_filter_b")
+        .fetch_one(&pool)
+        .await
+        .expect("seed user b");
+
+        let doc_active: Uuid = sqlx::query_scalar(
+            "INSERT INTO documents (title, content, user_id) VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind("active doc")
+        .bind("active content")
+        .bind(user_a)
+        .fetch_one(&pool)
+        .await
+        .expect("seed active doc");
+
+        let doc_archived: Uuid = sqlx::query_scalar(
+            "INSERT INTO documents (title, content, user_id, archived) VALUES ($1, $2, $3, true) RETURNING id",
+        )
+        .bind("archived doc")
+        .bind("archived content")
+        .bind(user_a)
+        .fetch_one(&pool)
+        .await
+        .expect("seed archived doc");
+
+        let doc_other_user: Uuid = sqlx::query_scalar(
+            "INSERT INTO documents (title, content, user_id) VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind("other user doc")
+        .bind("other user content")
+        .bind(user_b)
+        .fetch_one(&pool)
+        .await
+        .expect("seed other-user doc");
+
+        let doc_low_sim: Uuid = sqlx::query_scalar(
+            "INSERT INTO documents (title, content, user_id) VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind("low similarity doc")
+        .bind("low similarity content")
+        .bind(user_a)
+        .fetch_one(&pool)
+        .await
+        .expect("seed low-sim doc");
+
+        let query_vec = vec![1.0_f32; 4096];
+        let opposite_vec = vec![-1.0_f32; 4096];
+
+        for (doc_id, vec) in [
+            (doc_active, query_vec.clone()),
+            (doc_archived, query_vec.clone()),
+            (doc_other_user, query_vec.clone()),
+            (doc_low_sim, opposite_vec),
+        ] {
+            sqlx::query(
+                "INSERT INTO document_embeddings (document_id, embedding, model) VALUES ($1, $2, $3)",
+            )
+            .bind(doc_id)
+            .bind(Vector::from(vec))
+            .bind(EmbeddingModel::OpenaiTextEmbedding3Small)
+            .execute(&pool)
+            .await
+            .expect("seed embedding");
+        }
+
+        let result = service
+            .query_document_hits(
+                Vector::from(query_vec),
+                EmbeddingModel::OpenaiTextEmbedding3Small,
+                0.5,
+                Some(user_a),
+                10,
+            )
+            .await;
+
+        // Cleanup before asserting.
+        for doc_id in [doc_active, doc_archived, doc_other_user, doc_low_sim] {
+            sqlx::query("DELETE FROM document_embeddings WHERE document_id = $1")
+                .bind(doc_id)
+                .execute(&pool)
+                .await
+                .ok();
+            sqlx::query("DELETE FROM documents WHERE id = $1")
+                .bind(doc_id)
+                .execute(&pool)
+                .await
+                .ok();
+        }
+        sqlx::query("DELETE FROM users WHERE id = $1").bind(user_a).execute(&pool).await.ok();
+        sqlx::query("DELETE FROM users WHERE id = $1").bind(user_b).execute(&pool).await.ok();
+
+        let rows = result.expect("query_document_hits must succeed");
+        let ids: Vec<Uuid> = rows.iter().map(|r| r.document_id).collect();
+        assert!(
+            ids.contains(&doc_active),
+            "active same-user above-threshold doc must be included"
+        );
+        assert!(!ids.contains(&doc_archived), "archived doc must be excluded");
+        assert!(
+            !ids.contains(&doc_other_user),
+            "other user's doc must be excluded by user_id filter"
+        );
+        assert!(!ids.contains(&doc_low_sim), "below-threshold doc must be excluded");
     }
 }
