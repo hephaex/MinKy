@@ -6,12 +6,13 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
+use std::sync::Arc;
 use validator::Validate;
 
 use secrecy::ExposeSecret;
 
 use crate::{error::{AppError, AppResult}, middleware::{AuthUser, OptionalAuthUser}, AppState};
-use crate::models::DuplicateGroup;
+use crate::models::{ChunkData, CreateChunkEmbeddingsRequest, DuplicateGroup};
 use crate::pipeline::{DocumentPipelineBuilder, IngestionInput};
 use crate::services::{EmbeddingConfig, EmbeddingService};
 
@@ -45,6 +46,7 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}/restore", post(restore_document))
         .route("/{id}/status", get(get_document_status))
         .route("/{id}/reprocess", post(reprocess_document))
+        .route("/reembed-chunks", post(reembed_all_chunks))
 }
 
 /// Query parameters for document listing
@@ -1674,6 +1676,114 @@ async fn reprocess_document(
             }))
         }
     }
+}
+
+
+#[derive(Debug, Serialize)]
+pub struct ReembedChunksResponse {
+    pub started: bool,
+    pub total_documents: i64,
+    pub message: String,
+}
+
+async fn reembed_all_chunks(
+    State(state): State<AppState>,
+) -> Result<Json<ReembedChunksResponse>, AppError> {
+    let (total,): (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM documents WHERE archived = false AND LENGTH(content) >= 10"
+    )
+    .fetch_one(&state.db)
+    .await?;
+
+    let db = state.db.clone();
+    let embedding_service = Arc::clone(&state.embedding_service);
+
+    tokio::spawn(async move {
+        tracing::info!(total = total, "reembed_all_chunks: start");
+        let batch_size: i64 = 50;
+        let mut offset: i64 = 0;
+        let mut processed: i64 = 0;
+        let mut failed: i64 = 0;
+
+        loop {
+            let fetch_sql =
+                "SELECT id, title, content FROM documents \
+                 WHERE archived = false AND LENGTH(content) >= 10 \
+                 ORDER BY id LIMIT $1 OFFSET $2";
+            let docs: Vec<(uuid::Uuid, String, String)> =
+                match sqlx::query_as(fetch_sql)
+                    .bind(batch_size)
+                    .bind(offset)
+                    .fetch_all(&db)
+                    .await
+                {
+                    Ok(d) => d,
+                    Err(e) => {
+                        tracing::error!(error = %e, "reembed_all_chunks: fetch failed");
+                        break;
+                    }
+                };
+
+            if docs.is_empty() {
+                break;
+            }
+
+            for (doc_id, title, content) in &docs {
+                let index_text = format!("{}\n\n{}", title.trim(), content.trim());
+                let chunk_data: Vec<ChunkData> = embedding_service.chunk_text(&index_text);
+
+                if chunk_data.is_empty() {
+                    continue;
+                }
+
+                let req = CreateChunkEmbeddingsRequest {
+                    document_id: *doc_id,
+                    chunks: chunk_data,
+                    model: None,
+                };
+
+                match embedding_service.create_chunk_embeddings(req).await {
+                    Ok(_) => {
+                        processed += 1;
+                        if processed % 500 == 0 {
+                            tracing::info!(
+                                processed = processed,
+                                failed = failed,
+                                total = total,
+                                "reembed_all_chunks: progress"
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            doc_id = %doc_id,
+                            error = %e,
+                            "reembed_all_chunks: chunk embed failed"
+                        );
+                        failed += 1;
+                    }
+                }
+            }
+
+            offset += batch_size;
+        }
+
+        tracing::info!(
+            processed = processed,
+            failed = failed,
+            total = total,
+            "reembed_all_chunks: done"
+        );
+    });
+
+    Ok(Json(ReembedChunksResponse {
+        started: true,
+        total_documents: total,
+        message: format!(
+            "Re-embedding started for {} documents. Monitor: docker logs minky-lab-rust-backend-1 -f",
+            total
+        ),
+    }))
 }
 
 #[cfg(test)]

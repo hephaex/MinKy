@@ -396,7 +396,7 @@ impl EmbeddingService {
                 ce.document_id,
                 ce.id as chunk_id,
                 ce.chunk_text,
-                1 - (ce.embedding <=> $1) as similarity,
+                (1 - (ce.embedding <=> $1))::float4 as similarity,
                 d.title as document_title
             FROM chunk_embeddings ce
             JOIN documents d ON d.id = ce.document_id
@@ -444,7 +444,7 @@ impl EmbeddingService {
                 de.document_id,
                 NULL::uuid as chunk_id,
                 NULL as chunk_text,
-                1 - (de.embedding <=> se.embedding) as similarity,
+                (1 - (de.embedding <=> se.embedding))::float4 as similarity,
                 d.title as document_title
             FROM document_embeddings de
             CROSS JOIN source_embedding se

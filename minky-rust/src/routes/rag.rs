@@ -16,7 +16,6 @@ use axum::{
     Json, Router,
 };
 use futures_util::stream::Stream;
-use secrecy::ExposeSecret;
 use serde::Serialize;
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -31,11 +30,27 @@ use crate::{
         SemanticSearchRequest,
     },
     services::{
-        anthropic_types::{AnthropicMessage, AnthropicStreamEvent, AnthropicStreamRequest},
+        anthropic_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmStreamChunk},
         RagService,
     },
     AppState,
 };
+
+/// Default Strix Halo endpoint for RAG answer generation (OpenAI-compatible,
+/// no API key required). Override with the `LLM_BASE_URL` env var.
+const DEFAULT_LLM_BASE_URL: &str = "http://100.64.0.15:8093/v1/chat/completions";
+/// Model name reported by the Strix Halo llama.cpp server. llama.cpp serves a
+/// single model per instance, so this value was informational only when this
+/// backend hit Strix directly (it ignores the request's `model` field and
+/// answers with whatever it has loaded). It stopped being informational once
+/// this backend was routed through CT211 (continuum-router, 2026-09-28):
+/// that router validates `model` against its registered backends and
+/// rejects an unregistered spelling outright (`{"error":{"message":"The
+/// specified model '...' is not available."}}`, confirmed live). CT211's
+/// `/v1/models` echoes back the id WITH the `/models/` mount prefix from
+/// llama.cpp's own `-m /models/<file>.gguf` launch argument, so this must
+/// carry that prefix to match.
+const DEFAULT_LLM_MODEL: &str = "/models/Qwen3.8-27B-UD-Q4_K_XL.gguf";
 
 // ---------------------------------------------------------------------------
 // Router
@@ -228,7 +243,8 @@ enum StreamEvent {
 /// POST /search/ask/stream
 ///
 /// Streaming version of the RAG Q&A endpoint. Returns Server-Sent Events
-/// with incremental text deltas as Claude generates the response.
+/// with incremental text deltas as Strix Halo (local llama.cpp) generates
+/// the response.
 ///
 /// # Request body
 /// Same as `/search/ask`
@@ -245,7 +261,7 @@ enum StreamEvent {
 /// data: {"type":"delta","text":"answer"}
 ///
 /// event: message
-/// data: {"type":"done","tokens_used":150,"model":"claude-haiku-4-5-20251101"}
+/// data: {"type":"done","tokens_used":150,"model":"Qwen3.8-27B-UD-Q4_K_XL.gguf"}
 /// ```
 async fn ask_stream(
     State(state): State<AppState>,
@@ -313,18 +329,9 @@ async fn ask_stream(
         // 3. Build context
         let context = build_context_string(&chunks);
 
-        // 4. Stream from Anthropic
-        let api_key = match state.config.anthropic_api_key.as_ref() {
-            Some(k) => k.expose_secret().to_string(),
-            None => {
-                yield Ok(Event::default().data(
-                    serde_json::to_string(&StreamEvent::Error {
-                        message: "Anthropic API key not configured".into(),
-                    }).unwrap_or_default()
-                ));
-                return;
-            }
-        };
+        // 4. Stream from Strix Halo (local llama.cpp, OpenAI-compatible, no API key)
+        let base_url = std::env::var("LLM_BASE_URL")
+            .unwrap_or_else(|_| DEFAULT_LLM_BASE_URL.to_string());
 
         let system_prompt = "\
 You are a helpful knowledge base assistant for a team. \
@@ -339,23 +346,27 @@ Always cite which source number(s) you used when possible.";
             format!("Context from the knowledge base:\n\n{}\n\n---\n\nQuestion: {}", context, payload.question)
         };
 
-        let request = AnthropicStreamRequest {
-            model: "claude-haiku-4-5-20251101".to_string(),
+        let request = LocalLlmRequest {
+            model: DEFAULT_LLM_MODEL.to_string(),
+            messages: vec![
+                LocalLlmMessage {
+                    role: "system".to_string(),
+                    content: system_prompt.to_string(),
+                },
+                LocalLlmMessage {
+                    role: "user".to_string(),
+                    content: user_content,
+                },
+            ],
             max_tokens: 1024,
-            system: Some(system_prompt.to_string()),
-            messages: vec![AnthropicMessage {
-                role: "user".to_string(),
-                content: user_content,
-            }],
-            stream: true,
+            temperature: Some(0.3),
+            stream: Some(true),
         };
 
         let http_client = reqwest::Client::new();
 
         let response = match http_client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &api_key)
-            .header("anthropic-version", "2023-06-01")
+            .post(&base_url)
             .header("content-type", "application/json")
             .json(&request)
             .send()
@@ -365,7 +376,7 @@ Always cite which source number(s) you used when possible.";
             Err(e) => {
                 yield Ok(Event::default().data(
                     serde_json::to_string(&StreamEvent::Error {
-                        message: format!("Anthropic API request failed: {}", e),
+                        message: format!("Strix LLM request failed: {}", e),
                     }).unwrap_or_default()
                 ));
                 return;
@@ -376,17 +387,17 @@ Always cite which source number(s) you used when possible.";
             let error_text = response.text().await.unwrap_or_default();
             yield Ok(Event::default().data(
                 serde_json::to_string(&StreamEvent::Error {
-                    message: format!("Anthropic API error: {}", error_text),
+                    message: format!("Strix LLM error: {}", error_text),
                 }).unwrap_or_default()
             ));
             return;
         }
 
-        // Parse SSE stream from Anthropic
+        // Parse SSE stream from Strix Halo (OpenAI-compatible chat.completion.chunk)
         let mut bytes_stream = response.bytes_stream();
         let mut buffer = String::new();
         let mut total_tokens: u32 = 0;
-        let mut model_name = String::new();
+        let mut model_name = DEFAULT_LLM_MODEL.to_string();
 
         while let Some(chunk_result) = bytes_stream.next().await {
             let chunk = match chunk_result {
@@ -412,45 +423,31 @@ Always cite which source number(s) you used when possible.";
                 for line in event_str.lines() {
                     if let Some(json_str) = line.strip_prefix("data: ") {
                         if json_str == "[DONE]" {
+                            yield Ok(Event::default().data(
+                                serde_json::to_string(&StreamEvent::Done {
+                                    tokens_used: total_tokens,
+                                    model: model_name.clone(),
+                                }).unwrap_or_default()
+                            ));
                             continue;
                         }
 
-                        if let Ok(event) = serde_json::from_str::<AnthropicStreamEvent>(json_str) {
-                            match event {
-                                AnthropicStreamEvent::MessageStart { message } => {
-                                    model_name = message.model;
-                                    if let Some(usage) = message.usage {
-                                        total_tokens += usage.input_tokens;
-                                    }
-                                }
-                                AnthropicStreamEvent::ContentBlockDelta { delta, .. } => {
-                                    if let Some(text) = delta.text {
+                        if let Ok(event) = serde_json::from_str::<LocalLlmStreamChunk>(json_str) {
+                            if let Some(m) = event.model {
+                                model_name = m;
+                            }
+                            if let Some(usage) = event.usage {
+                                total_tokens = usage.total_tokens;
+                            }
+                            for choice in &event.choices {
+                                if let Some(text) = choice.delta.content.clone() {
+                                    if !text.is_empty() {
                                         yield Ok(Event::default().data(
                                             serde_json::to_string(&StreamEvent::Delta { text })
                                                 .unwrap_or_default()
                                         ));
                                     }
                                 }
-                                AnthropicStreamEvent::MessageDelta { usage: Some(u), .. } => {
-                                    total_tokens += u.output_tokens;
-                                }
-                                AnthropicStreamEvent::MessageDelta { usage: None, .. } => {}
-                                AnthropicStreamEvent::MessageStop => {
-                                    yield Ok(Event::default().data(
-                                        serde_json::to_string(&StreamEvent::Done {
-                                            tokens_used: total_tokens,
-                                            model: model_name.clone(),
-                                        }).unwrap_or_default()
-                                    ));
-                                }
-                                AnthropicStreamEvent::Error { error } => {
-                                    yield Ok(Event::default().data(
-                                        serde_json::to_string(&StreamEvent::Error {
-                                            message: error.message,
-                                        }).unwrap_or_default()
-                                    ));
-                                }
-                                _ => {}
                             }
                         }
                     }

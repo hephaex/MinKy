@@ -8,7 +8,6 @@ pub mod routes;
 pub mod services;
 pub mod utils;
 
-
 use anyhow::Result;
 
 use axum::{middleware as axum_middleware, Router};
@@ -23,16 +22,10 @@ use tower_http::{
 use std::sync::Arc;
 
 use crate::config::Config;
-use crate::middleware::rate_limit_middleware;
+use crate::middleware::{fix_multipart_boundary, rate_limit_middleware};
 use crate::services::{EmbeddingConfig, EmbeddingService, WebSocketManager};
 use crate::models::EmbeddingModel;
 
-/// Application state shared across all handlers.
-///
-/// `vault_watcher` wraps the handle in `Arc<Mutex<Option<…>>>` so that:
-/// - `AppState` can derive `Clone` cheaply (Arc clone).
-/// - The reload endpoint can swap the handle under the mutex without needing
-///   a mutable reference to the whole state.
 #[derive(Clone)]
 pub struct AppState {
     pub db: sqlx::PgPool,
@@ -40,27 +33,21 @@ pub struct AppState {
     pub ws_manager: Arc<WebSocketManager>,
     pub embedding_service: Arc<EmbeddingService>,
     pub vault_watcher: Arc<tokio::sync::Mutex<Option<crate::services::vault_watcher_service::VaultWatcherHandle>>>,
-    /// Redis client for rate limiting and JWT revocation. None when REDIS_URL is unset.
     pub redis_client: Option<redis::Client>,
-    /// Shared HTTP client for external API calls (Solar, etc.). Created once at startup.
     pub http_client: reqwest::Client,
 }
 
-/// Create the application with all routes and middleware
 pub async fn create_app(config: Config) -> Result<Router> {
-    // Create database connection pool with production-ready settings
     let mut pool_options = PgPoolOptions::new()
         .max_connections(config.database_max_connections)
         .min_connections(config.database_min_connections)
         .acquire_timeout(std::time::Duration::from_secs(config.database_acquire_timeout_secs));
 
-    // Apply max lifetime if set (0 = unlimited)
     if config.database_max_lifetime_secs > 0 {
         pool_options = pool_options
             .max_lifetime(std::time::Duration::from_secs(config.database_max_lifetime_secs));
     }
 
-    // Apply idle timeout if set (0 = unlimited)
     if config.database_idle_timeout_secs > 0 {
         pool_options = pool_options
             .idle_timeout(std::time::Duration::from_secs(config.database_idle_timeout_secs));
@@ -70,20 +57,30 @@ pub async fn create_app(config: Config) -> Result<Router> {
         .connect(&config.database_url)
         .await?;
 
-    // Run migrations
     sqlx::migrate!("./migrations").run(&db).await?;
 
     let ws_manager = Arc::new(WebSocketManager::new());
 
-    // Initialize embedding service once at startup. When local_embedding_enabled
-    // is true this downloads ~270 MB (nomic-embed-text-v1.5) on first run.
     use secrecy::ExposeSecret;
-    let upstage_key = std::env::var("UPSTAGE_API_KEY").ok();
-    let default_model = if upstage_key.is_some() {
-        EmbeddingModel::UpstaageSolarPassage
-    } else {
-        EmbeddingModel::OpenaiTextEmbedding3Small
-    };
+    // Default embedding model is pinned to UpstaageSolarPassage: all real
+    // chunk_embeddings/document_embeddings rows are already tagged with
+    // this model (verified 2026-09-21, 4320 non-archived rows), because
+    // EMBEDDING_BASE_URL is overridden to Strix Halo's OpenAI-compatible
+    // endpoint, which needs no API key. Selecting OpenaiTextEmbedding3Small
+    // whenever UPSTAGE_API_KEY happened to be unset or empty (the previous
+    // behavior) tagged every newly generated embedding with the wrong
+    // model, breaking the WHERE ce.model = $2 filter in
+    // EmbeddingService::semantic_search for both writes and reads.
+    //
+    // The placeholder key below is only used to satisfy the is_upstage()
+    // fail-fast check in EmbeddingService::generate_embedding; the actual
+    // HTTP call goes to Strix Halo via EMBEDDING_BASE_URL, which ignores
+    // the Authorization header entirely.
+    let upstage_key = std::env::var("UPSTAGE_API_KEY")
+        .ok()
+        .filter(|k| !k.is_empty())
+        .or_else(|| Some("unused-strix-endpoint-ignores-this".to_string()));
+    let default_model = EmbeddingModel::UpstaageSolarPassage;
     let embedding_config = EmbeddingConfig {
         openai_api_key: config.openai_api_key.as_ref().map(|k| k.expose_secret().to_owned()),
         voyage_api_key: None,
@@ -95,7 +92,6 @@ pub async fn create_app(config: Config) -> Result<Router> {
     };
     let embedding_service = Arc::new(EmbeddingService::new_with_local(db.clone(), embedding_config).await?);
 
-    // Optionally start the vault file-system watcher based on configuration.
     let vault_watcher = if config.vault_watch.enabled {
         if let Some(user_id) = config.vault_watch.user_id {
             let watcher_svc = crate::services::vault_watcher_service::VaultWatcherService::new(
@@ -107,10 +103,7 @@ pub async fn create_app(config: Config) -> Result<Router> {
                 .await
             {
                 Ok(handle) => {
-                    tracing::info!(
-                        root_count = config.vault_watch.roots.len(),
-                        "Vault watcher started"
-                    );
+                    tracing::info!(root_count = config.vault_watch.roots.len(), "Vault watcher started");
                     Arc::new(tokio::sync::Mutex::new(Some(handle)))
                 }
                 Err(e) => {
@@ -119,18 +112,13 @@ pub async fn create_app(config: Config) -> Result<Router> {
                 }
             }
         } else {
-            tracing::warn!(
-                "vault_watch.enabled=true but user_id not set — watcher not started"
-            );
+            tracing::warn!("vault_watch.enabled=true but user_id not set — watcher not started");
             Arc::new(tokio::sync::Mutex::new(None))
         }
     } else {
         Arc::new(tokio::sync::Mutex::new(None))
     };
 
-    // Start the embedding queue background worker unless explicitly disabled.
-    // EMBEDDING_QUEUE_ENABLED=false disables it; EMBEDDING_QUEUE_INTERVAL_SECS sets the
-    // idle sleep between polls when the queue is empty (default 10 s, minimum 1 s).
     let queue_enabled = std::env::var("EMBEDDING_QUEUE_ENABLED")
         .map(|v| v.to_lowercase() != "false")
         .unwrap_or(true);
@@ -142,13 +130,9 @@ pub async fn create_app(config: Config) -> Result<Router> {
                     tracing::warn!(value = %s, error = %e, "EMBEDDING_QUEUE_INTERVAL_SECS invalid, using default 10 s");
                 }).ok()
             })
-            .map(|v| v.max(1))  // prevent busy-spin at 0
+            .map(|v| v.max(1))
             .unwrap_or(10);
         let worker = Arc::clone(&embedding_service);
-        // Note: release profile uses panic = "abort", so a worker panic aborts the whole
-        // process. Crash recovery depends on the process-level restarter (Docker restart
-        // policy / systemd Restart=always) combined with the startup stale-requeue in
-        // run_queue_worker which recovers 'processing' rows on the next boot.
         tokio::spawn(async move { worker.run_queue_worker(idle_secs).await });
         tracing::info!(idle_interval_secs = idle_secs, "Embedding queue worker started");
     }
@@ -172,7 +156,6 @@ pub async fn create_app(config: Config) -> Result<Router> {
         http_client,
     };
 
-    // Parse CORS allowed origins from config
     let cors_origins: Vec<_> = config
         .cors_allowed_origins
         .split(',')
@@ -196,10 +179,10 @@ pub async fn create_app(config: Config) -> Result<Router> {
         ])
         .allow_credentials(true);
 
-    // Build router with all routes and middleware
     let app = Router::new()
         .nest("/api", routes::api_routes())
         .with_state(state)
+        .layer(axum_middleware::from_fn(fix_multipart_boundary))
         .layer(axum_middleware::from_fn(rate_limit_middleware))
         .layer(TraceLayer::new_for_http())
         .layer(CompressionLayer::new())

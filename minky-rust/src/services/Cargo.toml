@@ -1,0 +1,125 @@
+[package]
+name = "minky"
+version = "0.1.0"
+edition = "2021"
+description = "MinKy Document Management System - Rust Backend"
+authors = ["Mario Cho <hephaex@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/hephaex/minky"
+
+[dependencies]
+# Web Framework
+axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
+axum-extra = { version = "0.10", features = ["typed-header", "cookie", "query"] }
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip", "limit"] }
+
+# Async Runtime
+tokio = { version = "1.43", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono", "uuid", "json"] }
+pgvector = { version = "=0.4.1", features = ["sqlx"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Authentication
+jsonwebtoken = "9.3"
+argon2 = "0.5"
+bcrypt = "0.15"
+uuid = { version = "1.11", features = ["v4", "serde"] }
+
+# Validation
+validator = { version = "0.19", features = ["derive"] }
+
+# Error Handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Logging & Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Date/Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Configuration
+config = "0.14"
+dotenvy = "0.15"
+
+# HTTP Client (for external APIs)
+reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
+
+# OpenSearch
+opensearch = "=2.3.0"
+
+# File Processing
+image = "0.25"
+mime_guess = "2.0"
+tempfile = "3.14"
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Security
+secrecy = { version = "0.10", features = ["serde"] }
+rand = "0.8"
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+
+# Redis (for caching and rate limiting)
+redis = { version = "0.28", features = ["tokio-comp", "connection-manager"] }
+
+# Text Processing
+regex = "1.11"
+pulldown-cmark = "0.9"
+scraper = "0.20"  # bumps must re-verify html5ever surrogate-NCR behavior — see S37-04/S38-03 tests in pipeline/stages/parsing.rs
+url = "2.5"
+futures-util = "0.3.32"
+tokio-stream = "0.1.18"
+async-stream = "0.3.6"
+html-escape = "0.2"  # bumps must re-verify peel-once + surrogate-preservation — see S37/S38/S39 tests in pipeline/stages/parsing.rs
+
+# Syntax Highlighting
+syntect = "5"
+
+# PDF Generation (via headless Chrome)
+headless_chrome = "1"
+
+# Local Embedding (fastembed-rs with ONNX Runtime)
+# Uses native TLS for macOS compatibility; downloads model from HuggingFace on first init.
+fastembed = { version = "5", default-features = false, features = ["hf-hub-native-tls", "ort-download-binaries-native-tls"] }
+
+# File-system watching (vault watcher)
+notify = "6"
+notify-debouncer-full = "0.3"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tower = { version = "0.5", features = ["util"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres"] }
+fake = { version = "3.0", features = ["derive"] }
+wiremock = "0.6"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "core_functions"
+harness = false
+
+[profile.release]
+lto = false
+codegen-units = 4
+panic = "abort"
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.dev.package."*"]
+opt-level = 3

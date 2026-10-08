@@ -2,22 +2,26 @@
 //!
 //! This service wires together:
 //! 1. `EmbeddingService` – generate query embeddings and run vector search
-//! 2. `AIService`        – call Claude to produce an answer from retrieved context
+//! 2. Strix Halo (local llama.cpp, OpenAI-compatible) – generate an answer from retrieved context
 //! 3. PostgreSQL         – persist search history and retrieve history entries
 //!
 //! # Pipeline
 //! ```text
 //! question
-//!   → embed question (OpenAI)
+//!   → embed question (OpenAI-compatible, see EMBEDDING_BASE_URL)
 //!   → vector search (pgvector, top-k chunks)
 //!   → assemble context
-//!   → Claude completion
+//!   → Strix Halo completion (LLM_BASE_URL, OpenAI-compatible /v1/chat/completions)
 //!   → persist to search_history
 //!   → return answer + sources
 //! ```
+//!
+//! Answer generation defaults to a local model served by Strix Halo
+//! (`LLM_BASE_URL`, default `http://100.64.0.15:8093/v1/chat/completions`,
+//! no API key required). This replaced the original Anthropic Claude
+//! integration (2026-09-21) so RAG works without an external LLM API key.
 
 use chrono::Utc;
-use secrecy::ExposeSecret;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -31,10 +35,24 @@ use crate::{
         SearchHistoryEntry, SearchHistoryQuery,
     },
     services::{
-        anthropic_types::{AnthropicMessage, AnthropicRequest, AnthropicResponse},
+        anthropic_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmResponse},
         EmbeddingConfig, EmbeddingService,
     },
 };
+
+/// Default Strix Halo endpoint for RAG answer generation (OpenAI-compatible,
+/// no API key required). Override with the `LLM_BASE_URL` env var.
+const DEFAULT_LLM_BASE_URL: &str = "http://100.64.0.15:8093/v1/chat/completions";
+/// Model name reported by the Strix Halo llama.cpp server. llama.cpp serves a
+/// single model per instance, so this value was informational only when this
+/// service hit Strix directly. It stopped being informational once routed
+/// through CT211 (continuum-router, 2026-09-28): that router validates
+/// `model` against its registered backends and rejects an unregistered
+/// spelling (`model '...' is not available`, confirmed live). CT211 echoes
+/// back the id WITH the `/models/` mount prefix from llama.cpp's own launch
+/// argument, so this must carry that prefix to match. Kept in sync with the
+/// identical constant in routes/rag.rs.
+const DEFAULT_LLM_MODEL: &str = "/models/Qwen3.8-27B-UD-Q4_K_XL.gguf";
 
 // ---------------------------------------------------------------------------
 // RAG Service
@@ -43,24 +61,39 @@ use crate::{
 /// Orchestrates the full RAG pipeline.
 pub struct RagService {
     pool: PgPool,
-    config: Config,
     embedding_service: EmbeddingService,
 }
 
 impl RagService {
-    /// Create a new `RagService`.
+    /// Create a new RagService.
+    ///
+    /// Default embedding model is pinned to UpstaageSolarPassage: all real
+    /// chunk_embeddings/document_embeddings rows are already tagged with
+    /// this model (verified 2026-09-21, 4320 non-archived rows), because
+    /// EMBEDDING_BASE_URL is overridden to Strix Halo's OpenAI-compatible
+    /// endpoint, which needs no API key. Selecting OpenaiTextEmbedding3Small
+    /// whenever UPSTAGE_API_KEY happened to be unset or empty (the previous
+    /// behavior) tags every query embedding with the wrong model, so the
+    /// WHERE ce.model = $2 filter in EmbeddingService::semantic_search
+    /// silently matches zero rows and RAG search always returns empty.
     pub fn new(pool: PgPool, config: Config) -> Self {
         let openai_key = config
             .openai_api_key
             .as_ref()
-            .map(|s| s.expose_secret().to_string());
+            .map(|s| secrecy::ExposeSecret::expose_secret(s).to_string());
 
-        let upstage_key = std::env::var("UPSTAGE_API_KEY").ok();
-        let default_model = if upstage_key.is_some() {
-            EmbeddingModel::UpstaageSolarPassage
-        } else {
-            EmbeddingModel::OpenaiTextEmbedding3Small
-        };
+        // EmbeddingService::generate_embedding requires Some(_) here for any
+        // model where is_upstage() is true (see is_upstage() check below),
+        // purely to fail fast when nothing is configured at all. The actual
+        // HTTP call is redirected to Strix Halo via EMBEDDING_BASE_URL, which
+        // ignores the Authorization header entirely (no auth required), so a
+        // placeholder value is safe and keeps the real UPSTAGE_API_KEY (when
+        // set) authoritative.
+        let upstage_key = std::env::var("UPSTAGE_API_KEY")
+            .ok()
+            .filter(|k| !k.is_empty())
+            .or_else(|| Some("unused-strix-endpoint-ignores-this".to_string()));
+        let default_model = EmbeddingModel::UpstaageSolarPassage;
         let embedding_config = EmbeddingConfig {
             openai_api_key: openai_key,
             voyage_api_key: None,
@@ -75,7 +108,6 @@ impl RagService {
 
         Self {
             pool,
-            config,
             embedding_service,
         }
     }
@@ -85,7 +117,7 @@ impl RagService {
     // -----------------------------------------------------------------------
 
     /// Full RAG pipeline: retrieve relevant chunks, then generate an answer
-    /// with Claude using those chunks as context.
+    /// with Strix Halo using those chunks as context.
     pub async fn ask(&self, req: RagAskRequest) -> AppResult<RagAskResponse> {
         let top_k = req.top_k.min(20);
 
@@ -120,7 +152,7 @@ impl RagService {
         // 3. Build context string
         let context = self.build_context(&chunks);
 
-        // 4. Generate answer with Claude
+        // 4. Generate answer with Strix Halo
         let (answer, tokens_used, model) = self
             .generate_answer(&req.question, &context)
             .await?;
@@ -262,18 +294,19 @@ impl RagService {
             .join("\n\n---\n\n")
     }
 
-    /// Call Claude (via `AIService`) to generate an answer grounded in
-    /// the provided context. Returns `(answer, tokens_used, model_name)`.
+    /// Call Strix Halo (local llama.cpp, OpenAI-compatible) to generate an
+    /// answer grounded in the provided context. Returns
+    /// `(answer, tokens_used, model_name)`.
+    ///
+    /// No API key is required — the endpoint is reachable only from the LAN
+    /// (Tailscale/CT network). Override the target with `LLM_BASE_URL`.
     async fn generate_answer(
         &self,
         question: &str,
         context: &str,
     ) -> AppResult<(String, u32, String)> {
-        let api_key = self
-            .config
-            .anthropic_api_key
-            .as_ref()
-            .ok_or_else(|| AppError::Configuration("Anthropic API key not configured".into()))?;
+        let base_url = std::env::var("LLM_BASE_URL")
+            .unwrap_or_else(|_| DEFAULT_LLM_BASE_URL.to_string());
 
         let system_prompt = "\
 You are a helpful knowledge base assistant for a team. \
@@ -292,53 +325,58 @@ Always cite which source number(s) you used when possible.";
             )
         };
 
-        let request = AnthropicRequest {
-            model: "claude-haiku-4-5-20251101".to_string(),
+        let request = LocalLlmRequest {
+            model: DEFAULT_LLM_MODEL.to_string(),
+            messages: vec![
+                LocalLlmMessage {
+                    role: "system".to_string(),
+                    content: system_prompt.to_string(),
+                },
+                LocalLlmMessage {
+                    role: "user".to_string(),
+                    content: user_content,
+                },
+            ],
             max_tokens: 1024,
-            system: Some(system_prompt.to_string()),
-            messages: vec![AnthropicMessage {
-                role: "user".to_string(),
-                content: user_content,
-            }],
+            temperature: Some(0.3),
+            stream: None,
         };
 
         let http_client = reqwest::Client::new();
 
         let response = http_client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", api_key.expose_secret())
-            .header("anthropic-version", "2023-06-01")
+            .post(&base_url)
             .header("content-type", "application/json")
             .json(&request)
             .send()
             .await
-            .map_err(|e| AppError::ExternalService(format!("Anthropic API request failed: {e}")))?;
+            .map_err(|e| AppError::ExternalService(format!("Strix LLM request failed: {e}")))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(AppError::ExternalService(format!(
-                "Anthropic API error: {error_text}"
+                "Strix LLM error: {error_text}"
             )));
         }
 
-        let result: AnthropicResponse = response
+        let result: LocalLlmResponse = response
             .json()
             .await
             .map_err(|e| {
-                AppError::ExternalService(format!("Failed to parse Anthropic response: {e}"))
+                AppError::ExternalService(format!("Failed to parse Strix LLM response: {e}"))
             })?;
 
-        let answer = result
-            .content
-            .first()
-            .map(|c| c.text.clone())
-            .unwrap_or_default();
+        let answer = result.first_text().unwrap_or_default().to_string();
 
         let tokens_used = result
             .usage
-            .map(|u| u.input_tokens + u.output_tokens)
+            .as_ref()
+            .map(|u| u.total_tokens)
             .unwrap_or(0);
-        let model = result.model.clone().unwrap_or_default();
+        let model = result
+            .model
+            .clone()
+            .unwrap_or_else(|| DEFAULT_LLM_MODEL.to_string());
 
         Ok((answer, tokens_used, model))
     }
@@ -469,6 +507,25 @@ mod tests {
         let result = build_context_for_test(&[chunk]);
         // Should not panic and should still contain the source reference
         assert!(result.contains("[Source 1]"), "Source label should still appear");
+    }
+
+    #[test]
+    fn test_default_llm_base_url_is_strix() {
+        assert!(DEFAULT_LLM_BASE_URL.contains("100.64.0.15:8093"));
+        assert!(DEFAULT_LLM_BASE_URL.contains("/v1/chat/completions"));
+    }
+
+    #[test]
+    fn test_default_llm_model_carries_ct211_mount_prefix() {
+        // Regression (2026-09-28): CT211 (continuum-router) rejects a model
+        // name that doesn't exactly match what it has registered, and it
+        // registers this backend's id WITH the `/models/` mount prefix
+        // llama.cpp reports (confirmed live via `curl .../v1/models`). This
+        // was a silent no-op when this backend hit Strix directly (llama.cpp
+        // ignores the request's `model` field), so the bare filename never
+        // surfaced as a bug until the CT211 migration.
+        assert!(DEFAULT_LLM_MODEL.starts_with("/models/"));
+        assert!(DEFAULT_LLM_MODEL.contains("Qwen3.8-27B-UD-Q4_K_XL.gguf"));
     }
 
     // Mirror of RagService::build_context for testing without a real pool.

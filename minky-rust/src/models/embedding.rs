@@ -64,8 +64,8 @@ impl EmbeddingModel {
             Self::VoyageLarge2 => "voyage-large-2",
             Self::VoyageCode2 => "voyage-code-2",
             Self::NomicEmbedTextV15 => "nomic-embed-text-v1.5",
-            Self::UpstaageSolarPassage => "embedding-passage",
-            Self::UpstaageSolarQuery => "embedding-query",
+            Self::UpstaageSolarPassage => "qwen3-embedding-8b",
+            Self::UpstaageSolarQuery => "qwen3-embedding-8b",
         }
     }
 
