@@ -1132,7 +1132,10 @@ async fn upload_document(
     if upstage_key.is_empty() {
         builder = builder.skip_embedding();
     } else {
-        builder = builder.upstage_embedding(upstage_key.clone());
+        // A provider outage (e.g. a suspended key) must not turn every upload
+        // into a 500. enqueue_for_embedding below backfills the document-level
+        // embedding only; chunk embeddings dropped here need reembed_all_chunks.
+        builder = builder.upstage_embedding(upstage_key.clone()).best_effort_embedding();
     }
     let pipeline = builder.build();
     let input = match source_path {
@@ -1500,7 +1503,8 @@ async fn upload_srt(
         if upstage_key.is_empty() {
             builder = builder.skip_embedding();
         } else {
-            builder = builder.upstage_embedding(upstage_key);
+            // Best-effort: see upload_document (queue backfills doc-level only).
+            builder = builder.upstage_embedding(upstage_key).best_effort_embedding();
         }
         let pipeline = builder.build();
         let input = IngestionInput::from_text(title.clone(), md_content);
@@ -1814,7 +1818,9 @@ fn embedding_service_from_state(state: &AppState) -> EmbeddingService {
 async fn enqueue_for_embedding(state: &AppState, document_id: Uuid) {
     let service = embedding_service_from_state(state);
     if let Err(e) = service.queue_document(document_id, 0).await {
-        tracing::warn!("Failed to enqueue document {} for embedding: {}", document_id, e);
+        // error, not warn: with best-effort upload embedding this can leave a
+        // stored document with no embeddings and no queue row to recover it.
+        tracing::error!("Failed to enqueue document {} for embedding: {}", document_id, e);
     }
 }
 

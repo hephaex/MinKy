@@ -39,6 +39,10 @@ pub struct PipelineConfig {
     /// Whether to skip embedding generation
     pub skip_embedding: bool,
 
+    /// Whether an embedding provider failure is non-fatal (document is stored
+    /// without embeddings). Only for callers that backfill via the embedding queue.
+    pub embedding_best_effort: bool,
+
     /// Whether to skip storage
     pub skip_storage: bool,
 
@@ -65,6 +69,7 @@ impl Default for PipelineConfig {
             anthropic_api_key: None,
             skip_analysis: false,
             skip_embedding: false,
+            embedding_best_effort: false,
             skip_storage: false,
             user_id: None,
             is_public: false,
@@ -150,6 +155,7 @@ impl DocumentPipeline {
                 EmbeddingProvider::None => EmbeddingStage::none(),
             }
         };
+        let embedding_stage = embedding_stage.best_effort(self.config.embedding_best_effort);
         let embedded_doc = StageExecutor::execute(&embedding_stage, chunked_doc, &mut context).await?;
 
         // Stage 6: AI Analysis
@@ -329,6 +335,13 @@ impl DocumentPipelineBuilder {
     /// Skip embedding generation
     pub fn skip_embedding(mut self) -> Self {
         self.config.skip_embedding = true;
+        self
+    }
+
+    /// Store the document even if the embedding provider fails. Use only when
+    /// the caller enqueues the stored document for embedding afterwards.
+    pub fn best_effort_embedding(mut self) -> Self {
+        self.config.embedding_best_effort = true;
         self
     }
 

@@ -106,6 +106,12 @@ pub struct EmbeddingStage {
     provider: EmbeddingProvider,
     http_client: reqwest::Client,
     batch_size: usize,
+    /// When `true`, a provider failure yields a document without embeddings
+    /// instead of failing the pipeline. Only for callers that enqueue the
+    /// stored document on the embedding queue afterwards (the upload routes).
+    /// The queue restores the document-level embedding only; dropped chunk
+    /// embeddings need `reembed_all_chunks`.
+    best_effort: bool,
 }
 
 impl EmbeddingStage {
@@ -115,7 +121,14 @@ impl EmbeddingStage {
             provider,
             http_client: reqwest::Client::new(),
             batch_size: 100, // OpenAI batch limit
+            best_effort: false,
         }
+    }
+
+    /// Make provider failures non-fatal (see the `best_effort` field).
+    pub fn best_effort(mut self, best_effort: bool) -> Self {
+        self.best_effort = best_effort;
+        self
     }
 
     /// Create with OpenAI provider
@@ -260,6 +273,25 @@ impl EmbeddingStage {
     }
 }
 
+/// Pass a chunked document through with no embeddings attached.
+fn without_embeddings(input: ChunkedDocument, model: EmbeddingModel) -> EmbeddedDocument {
+    EmbeddedDocument {
+        title: input.title,
+        plain_text: input.plain_text,
+        original_content: input.original_content,
+        mime_type: input.mime_type,
+        metadata: input.metadata,
+        embedded_chunks: Vec::new(),
+        document_embedding: None,
+        embedding_model: model,
+        headings: input.headings,
+        links: input.links,
+        code_blocks: input.code_blocks,
+        source_type: input.source_type,
+        source_path: input.source_path,
+    }
+}
+
 impl Default for EmbeddingStage {
     fn default() -> Self {
         Self::none()
@@ -297,21 +329,7 @@ impl PipelineStage<ChunkedDocument, EmbeddedDocument> for EmbeddingStage {
                 (*model, key)
             }
             EmbeddingProvider::None => {
-                return Ok(EmbeddedDocument {
-                    title: input.title,
-                    plain_text: input.plain_text,
-                    original_content: input.original_content,
-                    mime_type: input.mime_type,
-                    metadata: input.metadata,
-                    embedded_chunks: Vec::new(),
-                    document_embedding: None,
-                    embedding_model: EmbeddingModel::OpenaiTextEmbedding3Small,
-                    headings: input.headings,
-                    links: input.links,
-                    code_blocks: input.code_blocks,
-                    source_type: input.source_type,
-                    source_path: input.source_path,
-                });
+                return Ok(without_embeddings(input, EmbeddingModel::OpenaiTextEmbedding3Small));
             }
         };
 
@@ -319,24 +337,21 @@ impl PipelineStage<ChunkedDocument, EmbeddedDocument> for EmbeddingStage {
         let texts: Vec<String> = input.chunks.iter().map(|c| c.text.clone()).collect();
 
         if texts.is_empty() {
-            return Ok(EmbeddedDocument {
-                title: input.title,
-                plain_text: input.plain_text,
-                original_content: input.original_content,
-                mime_type: input.mime_type,
-                metadata: input.metadata,
-                embedded_chunks: Vec::new(),
-                document_embedding: None,
-                embedding_model: model,
-                headings: input.headings,
-                links: input.links,
-                code_blocks: input.code_blocks,
-                source_type: input.source_type,
-                source_path: input.source_path,
-            });
+            return Ok(without_embeddings(input, model));
         }
 
-        let embeddings = self.generate_embeddings_batch(&texts, model, &api_key).await?;
+        let embeddings = match self.generate_embeddings_batch(&texts, model, &api_key).await {
+            Ok(embeddings) => embeddings,
+            Err(e) if self.best_effort => {
+                tracing::warn!(
+                    error = %e,
+                    dropped_chunks = texts.len(),
+                    "embedding: provider failed; storing without embeddings (best-effort, queue backfills doc-level only)"
+                );
+                return Ok(without_embeddings(input, model));
+            }
+            Err(e) => return Err(e),
+        };
 
         // Combine chunks with their embeddings
         let embedded_chunks: Vec<EmbeddedChunk> = input
@@ -476,6 +491,57 @@ mod tests {
         assert!((avg[0] - 2.0).abs() < 0.001);
         assert!((avg[1] - 3.0).abs() < 0.001);
         assert!((avg[2] - 4.0).abs() < 0.001);
+    }
+
+    /// Upstage stage whose HTTP client is forced through a dead proxy, so the
+    /// provider call fails deterministically without touching the network.
+    fn failing_upstage_stage() -> EmbeddingStage {
+        let mut stage = EmbeddingStage::upstage("suspended-key");
+        stage.http_client = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:1").unwrap())
+            .build()
+            .unwrap();
+        stage
+    }
+
+    fn one_chunk_doc() -> ChunkedDocument {
+        let mut doc = make_chunked_doc(vec![Chunk {
+            index: 0,
+            text: "Only chunk".to_string(),
+            start_offset: 0,
+            end_offset: 10,
+            token_count: 2,
+            metadata: None,
+        }]);
+        doc.source_path = Some("notes/a.md".to_string());
+        doc
+    }
+
+    #[tokio::test]
+    async fn test_provider_failure_is_fatal_by_default() {
+        let stage = failing_upstage_stage();
+        let mut context = PipelineContext::new();
+
+        let result = stage.process(one_chunk_doc(), &mut context).await;
+
+        assert!(
+            matches!(result, Err(PipelineError::ExternalService(_))),
+            "strict stage must surface the provider error, got {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_provider_failure_is_non_fatal_when_best_effort() {
+        let stage = failing_upstage_stage().best_effort(true);
+        let mut context = PipelineContext::new();
+
+        let result = stage.process(one_chunk_doc(), &mut context).await.unwrap();
+
+        assert!(result.embedded_chunks.is_empty());
+        assert!(result.document_embedding.is_none());
+        assert_eq!(result.title, "Test");
+        assert_eq!(result.source_path.as_deref(), Some("notes/a.md"));
+        assert_eq!(result.embedding_model, EmbeddingModel::UpstaageSolarPassage);
     }
 
     #[test]
