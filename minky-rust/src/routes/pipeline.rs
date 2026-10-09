@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::error::AppError;
+use crate::middleware::AuthPrincipal;
 use crate::pipeline::{DocumentPipelineBuilder, IngestionInput, PipelineOutput};
 use crate::AppState;
 
@@ -22,9 +23,6 @@ pub struct IngestRequest {
 
     /// Document content (text or markdown)
     pub content: String,
-
-    /// Optional user ID for document ownership
-    pub user_id: Option<i32>,
 
     /// Whether document should be public
     #[serde(default)]
@@ -98,6 +96,7 @@ pub struct PipelineStatus {
 /// POST /api/pipeline/ingest
 pub async fn ingest_document(
     State(state): State<AppState>,
+    principal: AuthPrincipal,
     Json(request): Json<IngestRequest>,
 ) -> Result<Json<IngestResponse>, AppError> {
     // Build the pipeline based on request options
@@ -131,10 +130,8 @@ pub async fn ingest_document(
         builder = builder.skip_analysis();
     }
 
-    // Set user ID and visibility
-    if let Some(user_id) = request.user_id {
-        builder = builder.user_id(user_id);
-    }
+    // Ownership always comes from the authenticated principal, never the body.
+    builder = builder.user_id(principal.effective_user_id());
 
     if request.is_public {
         builder = builder.public();
@@ -146,9 +143,11 @@ pub async fn ingest_document(
     let input = IngestionInput::from_text(request.title, request.content);
 
     // Process through the pipeline
+    // Keep the error kind: rejected input (e.g. a blocked SSRF target) is a 4xx,
+    // not a 500. `From<PipelineError> for AppError` maps InvalidInput -> Validation.
     let output = pipeline.process(input).await.map_err(|e| {
         tracing::error!("Pipeline processing failed: {}", e);
-        AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", e))
+        AppError::from(e)
     })?;
 
     Ok(Json(output.into()))
@@ -159,6 +158,7 @@ pub async fn ingest_document(
 /// GET /api/pipeline/jobs/{job_id}
 pub async fn get_pipeline_status(
     State(state): State<AppState>,
+    _principal: AuthPrincipal,
     Path(job_id): Path<Uuid>,
 ) -> Result<Json<PipelineStatus>, AppError> {
     type PipelineJobRow = (String, Option<String>, Option<Uuid>, Option<String>);
@@ -196,9 +196,6 @@ pub struct IngestUrlRequest {
     /// URL to fetch and ingest
     pub url: String,
 
-    /// Optional user ID for document ownership
-    pub user_id: Option<i32>,
-
     /// Whether document should be public
     #[serde(default)]
     pub is_public: bool,
@@ -206,6 +203,7 @@ pub struct IngestUrlRequest {
 
 pub async fn ingest_from_url(
     State(state): State<AppState>,
+    principal: AuthPrincipal,
     Json(request): Json<IngestUrlRequest>,
 ) -> Result<Json<IngestResponse>, AppError> {
     // Build the pipeline
@@ -226,10 +224,8 @@ pub async fn ingest_from_url(
         builder = builder.anthropic_api_key(api_key.expose_secret());
     }
 
-    // Set user ID and visibility
-    if let Some(user_id) = request.user_id {
-        builder = builder.user_id(user_id);
-    }
+    // Ownership always comes from the authenticated principal, never the body.
+    builder = builder.user_id(principal.effective_user_id());
 
     if request.is_public {
         builder = builder.public();
@@ -241,9 +237,11 @@ pub async fn ingest_from_url(
     let input = IngestionInput::from_url(&request.url);
 
     // Process through the pipeline
+    // Keep the error kind: rejected input (e.g. a blocked SSRF target) is a 4xx,
+    // not a 500. `From<PipelineError> for AppError` maps InvalidInput -> Validation.
     let output = pipeline.process(input).await.map_err(|e| {
         tracing::error!("Pipeline processing failed: {}", e);
-        AppError::Internal(anyhow::anyhow!("Pipeline processing failed: {}", e))
+        AppError::from(e)
     })?;
 
     Ok(Json(output.into()))

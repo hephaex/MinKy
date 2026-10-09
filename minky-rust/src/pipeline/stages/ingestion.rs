@@ -153,6 +153,108 @@ pub struct RawDocument {
     pub source_path: Option<String>,
 }
 
+/// Maximum redirects followed by [`fetch_public`]; each hop is re-validated.
+const MAX_REDIRECTS: usize = 5;
+
+/// `true` only for globally routable unicast addresses. Rejects loopback, private
+/// (RFC1918, ULA), link-local (incl. cloud metadata 169.254.169.254), CGNAT,
+/// unspecified, multicast, broadcast, documentation and IPv4-mapped equivalents.
+fn is_public_ip(ip: std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            !(v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_multicast()
+                || v4.is_documentation()
+                || o[0] == 0
+                || (o[0] == 100 && (64..=127).contains(&o[1])) // CGNAT 100.64/10
+                || (o[0] == 192 && o[1] == 0 && o[2] == 0) // IETF protocol 192.0.0/24
+                || (o[0] == 198 && (o[1] == 18 || o[1] == 19)) // benchmarking 198.18/15
+                || o[0] >= 240) // reserved 240/4
+        }
+        IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                return is_public_ip(IpAddr::V4(v4));
+            }
+            let seg = v6.segments();
+            !(v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                || (seg[0] & 0xfe00) == 0xfc00 // ULA fc00::/7
+                || (seg[0] & 0xffc0) == 0xfe80 // link-local fe80::/10
+                || (seg[0] == 0x2001 && seg[1] == 0x0db8) // documentation
+                || (seg[0] == 0x0064 && seg[1] == 0xff9b)) // NAT64 64:ff9b::/96
+        }
+    }
+}
+
+/// GET `url` with SSRF protection: http(s) only, no userinfo, the host must resolve
+/// exclusively to public IPs, the connection is pinned to the validated address
+/// (no DNS-rebinding window) and every redirect hop is re-validated.
+async fn fetch_public(url: &str) -> PipelineResult<reqwest::Response> {
+    let mut current = url::Url::parse(url)
+        .map_err(|e| PipelineError::InvalidInput(format!("Invalid URL: {}", e)))?;
+
+    for _ in 0..=MAX_REDIRECTS {
+        if !matches!(current.scheme(), "http" | "https") {
+            return Err(PipelineError::InvalidInput("Only http(s) URLs are allowed".into()));
+        }
+        if !current.username().is_empty() || current.password().is_some() {
+            return Err(PipelineError::InvalidInput("URL credentials are not allowed".into()));
+        }
+        let port = current.port_or_known_default().unwrap_or(80);
+        // Parse via `Host` so IP literals (incl. bracketed IPv6) skip DNS entirely.
+        let (host, addrs): (String, Vec<std::net::SocketAddr>) = match current.host() {
+            Some(url::Host::Ipv4(ip)) => (ip.to_string(), vec![(ip, port).into()]),
+            Some(url::Host::Ipv6(ip)) => (ip.to_string(), vec![(ip, port).into()]),
+            Some(url::Host::Domain(d)) => {
+                let found = tokio::net::lookup_host((d, port))
+                    .await
+                    .map_err(|e| PipelineError::ExternalService(format!("Failed to resolve host: {}", e)))?
+                    .collect();
+                (d.to_string(), found)
+            }
+            None => return Err(PipelineError::InvalidInput("URL has no host".into())),
+        };
+        if addrs.is_empty() || addrs.iter().any(|a| !is_public_ip(a.ip())) {
+            return Err(PipelineError::InvalidInput(
+                "URL host resolves to a non-public address".into(),
+            ));
+        }
+
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(std::time::Duration::from_secs(30))
+            .resolve(&host, addrs[0])
+            .build()
+            .map_err(|e| PipelineError::Configuration(format!("HTTP client: {}", e)))?;
+        let response = client
+            .get(current.clone())
+            .send()
+            .await
+            .map_err(|e| PipelineError::ExternalService(format!("Failed to fetch URL: {}", e)))?;
+
+        if response.status().is_redirection() {
+            let location = response
+                .headers()
+                .get(reqwest::header::LOCATION)
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| PipelineError::ExternalService("Redirect without Location".into()))?;
+            current = current
+                .join(location)
+                .map_err(|e| PipelineError::InvalidInput(format!("Invalid redirect URL: {}", e)))?;
+            continue;
+        }
+        return Ok(response);
+    }
+    Err(PipelineError::ExternalService("Too many redirects".into()))
+}
+
 /// Ingestion stage - reads documents from various sources
 #[derive(Debug, Clone, Default)]
 pub struct IngestionStage {
@@ -212,16 +314,11 @@ impl IngestionStage {
     }
 
     async fn ingest_url(&self, url: &str) -> PipelineResult<RawDocument> {
-        let client = self
-            .http_client
-            .as_ref()
-            .ok_or_else(|| PipelineError::Configuration("HTTP client not configured".into()))?;
+        if self.http_client.is_none() {
+            return Err(PipelineError::Configuration("HTTP client not configured".into()));
+        }
 
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| PipelineError::ExternalService(format!("Failed to fetch URL: {}", e)))?;
+        let response = fetch_public(url).await?;
 
         if !response.status().is_success() {
             return Err(PipelineError::ExternalService(format!(
@@ -444,6 +541,32 @@ mod tests {
         let input = IngestionInput::from_text("Title", "   ");
         let result = stage.validate(&input);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_is_public_ip_rejects_internal_ranges() {
+        for s in [
+            "127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.254", "192.168.29.22", "169.254.169.254",
+            "100.64.0.1", "0.0.0.0", "224.0.0.1", "255.255.255.255", "198.18.0.1", "240.0.0.1",
+            "::1", "::", "fe80::1", "fc00::1", "fd12::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "ff02::1",
+        ] {
+            assert!(!is_public_ip(s.parse().unwrap()), "{} must be rejected", s);
+        }
+        for s in ["8.8.8.8", "1.1.1.1", "93.184.216.34", "172.32.0.1", "2606:4700:4700::1111", "::ffff:8.8.8.8"] {
+            assert!(is_public_ip(s.parse().unwrap()), "{} must be allowed", s);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fetch_public_blocks_internal_and_bad_schemes() {
+        for u in [
+            "http://127.0.0.1:1/", "http://localhost/", "http://169.254.169.254/latest/meta-data/",
+            "http://[::1]/", "http://192.168.29.22/", "http://10.0.0.1/",
+            "file:///etc/passwd", "ftp://example.com/", "http://user:pw@example.com/",
+        ] {
+            let err = fetch_public(u).await.expect_err(u);
+            assert!(matches!(err, PipelineError::InvalidInput(_)), "{} -> {:?}", u, err);
+        }
     }
 
     #[test]
