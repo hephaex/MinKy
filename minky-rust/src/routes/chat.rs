@@ -21,7 +21,7 @@ use validator::Validate;
 
 use crate::{
     error::{AppError, AppResult},
-    middleware::AuthUser,
+    middleware::AuthPrincipal,
     models::{RagAskRequest, RagSource},
     services::RagService,
     AppState,
@@ -57,12 +57,12 @@ pub struct SessionSummary {
 
 async fn list_sessions(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    principal: AuthPrincipal,
 ) -> AppResult<Json<Envelope<Vec<SessionSummary>>>> {
     let sessions: Vec<SessionSummary> = sqlx::query_as(
         "SELECT id, title, updated_at FROM chat_sessions WHERE user_id = $1 ORDER BY updated_at DESC",
     )
-    .bind(auth_user.id)
+    .bind(principal.effective_user_id())
     .fetch_all(&state.db)
     .await?;
 
@@ -77,7 +77,7 @@ pub struct CreateSessionRequest {
 
 async fn create_session(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    principal: AuthPrincipal,
     Json(payload): Json<CreateSessionRequest>,
 ) -> AppResult<Json<Envelope<SessionSummary>>> {
     payload.validate().map_err(|e| AppError::Validation(e.to_string()))?;
@@ -85,7 +85,7 @@ async fn create_session(
     let session: SessionSummary = sqlx::query_as(
         "INSERT INTO chat_sessions (user_id, title) VALUES ($1, $2) RETURNING id, title, updated_at",
     )
-    .bind(auth_user.id)
+    .bind(principal.effective_user_id())
     .bind(&payload.title)
     .fetch_one(&state.db)
     .await?;
@@ -95,12 +95,12 @@ async fn create_session(
 
 async fn delete_session(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    principal: AuthPrincipal,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<Envelope<bool>>> {
     let result = sqlx::query("DELETE FROM chat_sessions WHERE id = $1 AND user_id = $2")
         .bind(id)
-        .bind(auth_user.id)
+        .bind(principal.effective_user_id())
         .execute(&state.db)
         .await?;
 
@@ -164,14 +164,14 @@ pub struct SessionDetail {
 
 async fn get_session(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    principal: AuthPrincipal,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<Envelope<SessionDetail>>> {
     let session: Option<SessionSummary> = sqlx::query_as(
         "SELECT id, title, updated_at FROM chat_sessions WHERE id = $1 AND user_id = $2",
     )
     .bind(id)
-    .bind(auth_user.id)
+    .bind(principal.effective_user_id())
     .fetch_optional(&state.db)
     .await?;
 
@@ -216,7 +216,7 @@ fn validate_role(role: &str) -> AppResult<()> {
 
 async fn append_message(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    principal: AuthPrincipal,
     Path(session_id): Path<Uuid>,
     Json(payload): Json<AppendMessageRequest>,
 ) -> AppResult<Json<Envelope<MessageOut>>> {
@@ -226,7 +226,7 @@ async fn append_message(
     let owned: Option<(Uuid,)> =
         sqlx::query_as("SELECT id FROM chat_sessions WHERE id = $1 AND user_id = $2")
             .bind(session_id)
-            .bind(auth_user.id)
+            .bind(principal.effective_user_id())
             .fetch_optional(&state.db)
             .await?;
     if owned.is_none() {
@@ -277,7 +277,7 @@ pub struct SendMessageResponse {
 
 async fn send_message(
     State(state): State<AppState>,
-    auth_user: AuthUser,
+    principal: AuthPrincipal,
     Json(payload): Json<SendMessageRequest>,
 ) -> AppResult<Json<SendMessageResponse>> {
     // ── 입력 검증 (rag.rs::ask 핸들러와 동일 패턴) ──────────────────────
@@ -294,7 +294,7 @@ async fn send_message(
     let owned: Option<(Uuid,)> =
         sqlx::query_as("SELECT id FROM chat_sessions WHERE id = $1 AND user_id = $2")
             .bind(payload.session_id)
-            .bind(auth_user.id)
+            .bind(principal.effective_user_id())
             .fetch_optional(&state.db)
             .await?;
     if owned.is_none() {
@@ -321,16 +321,15 @@ async fn send_message(
     // ── RAG 호출 (non-streaming) ─────────────────────────────────────────
     // NOTE: RagService::ask() internally calls persist_history(), writing a
     // search_history row for this chat turn. This is accepted behavior;
-    // chat turns will appear in search history attributed to auth_user.id.
-    // user_id: Some(auth_user.id) is type-correct (AuthUser.id: i32,
-    // RagAskRequest.user_id: Option<i32>).
+    // chat turns will appear in search history attributed to the principal's
+    // effective user (the JWT user, or api_keys.user_id for a service key).
     let rag = RagService::new(state.db.clone(), state.config.clone());
     let rag_resp = rag
         .ask(RagAskRequest {
             question: payload.content.clone(),
             top_k: 5,
             threshold: 0.7,
-            user_id: Some(auth_user.id),
+            user_id: Some(principal.effective_user_id()),
             include_sources: true,
         })
         .await?;

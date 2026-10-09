@@ -6,6 +6,8 @@
 //!   - No Authorization header / API key → 401.
 //!   - Other user's session_id → 404 (session existence must not be leaked).
 //!   - Valid UUID session_id absent from DB → 404.
+//!   - JWT (Bearer) and API-key principals are both accepted; ownership uses the
+//!     principal's effective user id; a forged JWT → 401.
 //!   - Happy path: request passes all guards; response is a FLAT JSON object
 //!     (no `success`/`data` wrapper) with `tokensUsed` in camelCase.
 //!
@@ -23,8 +25,10 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
+use chrono::{Duration, Utc};
+use jsonwebtoken::{encode, EncodingKey, Header};
 use secrecy::SecretString;
-use serde_json::Value;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
@@ -154,7 +158,7 @@ fn test_config(pool_url: &str) -> Config {
         database_acquire_timeout_secs: 30,
         database_max_lifetime_secs: 1800,
         database_idle_timeout_secs: 600,
-        jwt_secret: SecretString::from("chatqa-secret"),
+        jwt_secret: SecretString::from(JWT_SECRET),
         jwt_expiration_hours: 24,
         opensearch_url: None,
         openai_api_key: None,
@@ -197,10 +201,34 @@ fn app(state: AppState) -> Router {
 // HTTP helper
 // ---------------------------------------------------------------------------
 
-/// POST `/api/chat/message` with an optional `X-Api-Key` header and a JSON body.
+const JWT_SECRET: &str = "chatqa-secret";
+
+/// Mint an access JWT signed with the test config's secret.
+fn mint_jwt(user_id: i32) -> String {
+    let now = Utc::now();
+    let claims = json!({
+        "sub": user_id.to_string(),
+        "email": format!("chatqa-jwt+{user_id}@qa.local"),
+        "role": "user",
+        "token_type": "access",
+        "exp": (now + Duration::hours(1)).timestamp(),
+        "iat": now.timestamp(),
+    });
+    encode(&Header::default(), &claims, &EncodingKey::from_secret(JWT_SECRET.as_bytes()))
+        .expect("mint jwt")
+}
+
+/// How a test request authenticates.
+enum Auth<'a> {
+    None,
+    ApiKey(&'a str),
+    Bearer(&'a str),
+}
+
+/// POST `/api/chat/message` with the given authentication and a JSON body.
 async fn post_message(
     app: Router,
-    api_key: Option<&str>,
+    auth: Auth<'_>,
     body: serde_json::Value,
 ) -> (StatusCode, Value) {
     let mut builder = Request::builder()
@@ -208,8 +236,10 @@ async fn post_message(
         .uri("/api/chat/message")
         .header("content-type", "application/json");
 
-    if let Some(k) = api_key {
-        builder = builder.header("x-api-key", k);
+    match auth {
+        Auth::None => {}
+        Auth::ApiKey(k) => builder = builder.header("x-api-key", k),
+        Auth::Bearer(t) => builder = builder.header("authorization", format!("Bearer {t}")),
     }
 
     let req = builder
@@ -240,7 +270,7 @@ async fn case1_empty_content_is_400() {
     // Sub-case A: truly empty string
     let (status, body) = post_message(
         app(state.clone()),
-        Some(&key),
+        Auth::ApiKey(&key),
         serde_json::json!({ "session_id": session_id, "content": "" }),
     )
     .await;
@@ -253,7 +283,7 @@ async fn case1_empty_content_is_400() {
     // Sub-case B: whitespace-only — trim() must catch this before RAG
     let (status, body) = post_message(
         app(state),
-        Some(&key),
+        Auth::ApiKey(&key),
         serde_json::json!({ "session_id": session_id, "content": "   " }),
     )
     .await;
@@ -280,7 +310,7 @@ async fn case2_overlength_content_is_400() {
     let over_limit = "x".repeat(2001);
     let (status, body) = post_message(
         app(state),
-        Some(&key),
+        Auth::ApiKey(&key),
         serde_json::json!({ "session_id": session_id, "content": over_limit }),
     )
     .await;
@@ -305,7 +335,7 @@ async fn case3_unauthenticated_request_is_401() {
     // No api_key passed → None
     let (status, body) = post_message(
         app(state),
-        None, // no X-Api-Key, no Authorization header
+        Auth::None, // no X-Api-Key, no Authorization header
         serde_json::json!({ "session_id": session_id, "content": "hello" }),
     )
     .await;
@@ -335,7 +365,7 @@ async fn case4_other_users_session_is_404() {
 
     let (status, body) = post_message(
         app(state),
-        Some(&key_b),
+        Auth::ApiKey(&key_b),
         serde_json::json!({ "session_id": session_id_a, "content": "hello" }),
     )
     .await;
@@ -369,7 +399,7 @@ async fn case5_nonexistent_session_uuid_is_404() {
     let ghost_id = Uuid::new_v4();
     let (status, body) = post_message(
         app(state),
-        Some(&key),
+        Auth::ApiKey(&key),
         serde_json::json!({ "session_id": ghost_id, "content": "hello" }),
     )
     .await;
@@ -395,7 +425,7 @@ async fn case6_happy_path_passes_all_guards_and_flat_json_shape() {
 
     let (status, body) = post_message(
         app(state),
-        Some(&key),
+        Auth::ApiKey(&key),
         serde_json::json!({ "session_id": session_id, "content": "What is MinKy?" }),
     )
     .await;
@@ -455,4 +485,86 @@ async fn case6_happy_path_passes_all_guards_and_flat_json_shape() {
              Shape assertions skipped — run with valid AI keys for full 200 path coverage."
         );
     }
+}
+
+// ===========================================================================
+// CASE 7 — JWT principal still works after the AuthUser → AuthPrincipal switch
+// ===========================================================================
+
+#[tokio::test]
+async fn case7_jwt_principal_passes_guards_on_own_session() {
+    let Some(pool) = setup().await else { return };
+    let uid = make_user(&pool).await;
+    let session_id = make_session(&pool, uid).await;
+    let jwt = mint_jwt(uid);
+    let state = build_state(pool);
+
+    let (status, body) = post_message(
+        app(state),
+        Auth::Bearer(&jwt),
+        serde_json::json!({ "session_id": session_id, "content": "What is MinKy?" }),
+    )
+    .await;
+
+    // Guards passed: not 401 (auth), 400 (validation) or 404 (ownership).
+    // Without AI keys RagService fails afterwards, which is outside this contract.
+    for rejected in [StatusCode::UNAUTHORIZED, StatusCode::BAD_REQUEST, StatusCode::NOT_FOUND] {
+        assert_ne!(status, rejected, "JWT owner request must pass guards; body={body}");
+    }
+}
+
+// ===========================================================================
+// CASE 8 — JWT principal on another user's session → 404 (ownership uses the
+//           JWT user id, not a key owner)
+// ===========================================================================
+
+#[tokio::test]
+async fn case8_jwt_principal_other_users_session_is_404() {
+    let Some(pool) = setup().await else { return };
+    let uid_a = make_user(&pool).await;
+    let session_id_a = make_session(&pool, uid_a).await;
+    let uid_b = make_user(&pool).await;
+    let jwt_b = mint_jwt(uid_b);
+    let state = build_state(pool);
+
+    let (status, body) = post_message(
+        app(state),
+        Auth::Bearer(&jwt_b),
+        serde_json::json!({ "session_id": session_id_a, "content": "hello" }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::NOT_FOUND, "foreign session via JWT must be 404; body={body}");
+}
+
+// ===========================================================================
+// CASE 9 — JWT signed with the wrong secret → 401 (no API-key fallback leak)
+// ===========================================================================
+
+#[tokio::test]
+async fn case9_forged_jwt_is_401() {
+    let Some(pool) = setup().await else { return };
+    let uid = make_user(&pool).await;
+    let session_id = make_session(&pool, uid).await;
+    let now = Utc::now();
+    let forged = encode(
+        &Header::default(),
+        &json!({
+            "sub": uid.to_string(), "email": "x@qa.local", "role": "user",
+            "token_type": "access", "exp": (now + Duration::hours(1)).timestamp(),
+            "iat": now.timestamp(),
+        }),
+        &EncodingKey::from_secret(b"not-the-server-secret"),
+    )
+    .expect("mint forged jwt");
+    let state = build_state(pool);
+
+    let (status, body) = post_message(
+        app(state),
+        Auth::Bearer(&forged),
+        serde_json::json!({ "session_id": session_id, "content": "hello" }),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "forged JWT must be 401; body={body}");
 }
