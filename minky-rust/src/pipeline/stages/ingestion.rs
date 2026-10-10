@@ -156,6 +156,9 @@ pub struct RawDocument {
 /// Maximum redirects followed by [`fetch_public`]; each hop is re-validated.
 const MAX_REDIRECTS: usize = 5;
 
+/// Upper bound for a fetched body (memory-exhaustion guard for `ingest/url`).
+const MAX_FETCH_BYTES: u64 = 10 * 1024 * 1024;
+
 /// `true` only for globally routable unicast addresses. Rejects loopback, private
 /// (RFC1918, ULA), link-local (incl. cloud metadata 169.254.169.254), CGNAT,
 /// unspecified, multicast, broadcast, documentation and IPv4-mapped equivalents.
@@ -228,6 +231,9 @@ async fn fetch_public(url: &str) -> PipelineResult<reqwest::Response> {
         }
 
         let client = reqwest::Client::builder()
+            // No proxy: HTTP(S)_PROXY would hand the hostname to the proxy and defeat the
+            // address pinning below.
+            .no_proxy()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(std::time::Duration::from_secs(30))
             .resolve(&host, addrs[0])
@@ -334,10 +340,22 @@ impl IngestionStage {
             .unwrap_or("text/html")
             .to_string();
 
-        let content = response
-            .text()
+        if response.content_length().is_some_and(|n| n > MAX_FETCH_BYTES) {
+            return Err(PipelineError::InvalidInput("Response body too large".into()));
+        }
+        let mut stream = response;
+        let mut buf: Vec<u8> = Vec::new();
+        while let Some(chunk) = stream
+            .chunk()
             .await
-            .map_err(|e| PipelineError::ExternalService(format!("Failed to read response: {}", e)))?;
+            .map_err(|e| PipelineError::ExternalService(format!("Failed to read response: {}", e)))?
+        {
+            if (buf.len() + chunk.len()) as u64 > MAX_FETCH_BYTES {
+                return Err(PipelineError::InvalidInput("Response body too large".into()));
+            }
+            buf.extend_from_slice(&chunk);
+        }
+        let content = String::from_utf8_lossy(&buf).into_owned();
 
         // Extract title from URL
         let title = url::Url::parse(url)
