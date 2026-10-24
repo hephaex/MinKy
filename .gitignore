@@ -93,7 +93,12 @@ Claude_*
 postgresdata/
 # Untracked scripts
 check-env.sh
+# One-shot batch notifiers (read Telegram creds from scripts/.env)
+scripts/notify_on_*.sh
 
 # GJC session runtime state
 .gjc/
 /backups/
+
+# redteam/QA throwaway artifacts
+.*-artifacts/

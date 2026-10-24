@@ -19,6 +19,7 @@ import { extractHeadings } from '../utils/tocUtils';
 import Toast from '../components/Toast';
 import useToast from '../hooks/useToast';
 import useDocumentStatus from '../hooks/useDocumentStatus';
+import MermaidDiagram from '../components/MermaidDiagram';
 import '../components/DocumentCard.css';
 import './DocumentView.css';
 
@@ -419,6 +420,9 @@ const DocumentView = () => {
                   },
                   code({ inline, className, children, ...props }) {
                     const match = /language-(\w+)/.exec(className || '');
+                    if (!inline && match && match[1] === 'mermaid') {
+                      return <MermaidDiagram code={String(children).replace(/\n$/, '')} />;
+                    }
                     return !inline && match ? (
                       <SyntaxHighlighter
                         style={tomorrow}
