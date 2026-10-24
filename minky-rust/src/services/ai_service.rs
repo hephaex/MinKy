@@ -24,7 +24,7 @@ impl AIService {
         Self {
             client: Client::new(),
             config,
-            model_config: AIModelConfig::default(),
+            model_config: AIModelConfig::from_env(),
         }
     }
 

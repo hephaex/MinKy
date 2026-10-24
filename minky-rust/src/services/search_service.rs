@@ -1,7 +1,6 @@
 use anyhow::Result;
 use opensearch::{
     http::{
-        response::Response,
         transport::{SingleNodeConnectionPool, TransportBuilder},
     },
     indices::{IndicesCreateParts},

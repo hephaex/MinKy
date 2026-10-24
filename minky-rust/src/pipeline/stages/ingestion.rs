@@ -185,15 +185,46 @@ fn is_public_ip(ip: std::net::IpAddr) -> bool {
                 return is_public_ip(IpAddr::V4(v4));
             }
             let seg = v6.segments();
+            // Embedded IPv4 forms: judge the v4 payload with the v4 rules.
+            // 6to4 2002:AABB:CCDD::/48 carries the v4 in segments 1-2.
+            if seg[0] == 0x2002 {
+                let v4 = std::net::Ipv4Addr::new((seg[1] >> 8) as u8, seg[1] as u8, (seg[2] >> 8) as u8, seg[2] as u8);
+                return is_public_ip(IpAddr::V4(v4));
+            }
+            // IPv4-compatible ::a.b.c.d (deprecated, first 96 bits zero; ::/::1 handled below).
+            if seg[..6] == [0; 6] && (seg[6] != 0 || seg[7] > 1) {
+                let v4 = std::net::Ipv4Addr::new((seg[6] >> 8) as u8, seg[6] as u8, (seg[7] >> 8) as u8, seg[7] as u8);
+                return is_public_ip(IpAddr::V4(v4));
+            }
+            // SIIT ::ffff:0:a.b.c.d (RFC 6145): judge by the embedded v4.
+            if seg[..4] == [0; 4] && seg[4] == 0xffff && seg[5] == 0 {
+                let v4 = std::net::Ipv4Addr::new((seg[6] >> 8) as u8, seg[6] as u8, (seg[7] >> 8) as u8, seg[7] as u8);
+                return is_public_ip(IpAddr::V4(v4));
+            }
             !(v6.is_loopback()
                 || v6.is_unspecified()
                 || v6.is_multicast()
+                || (seg[0] == 0x0100 && seg[1] == 0 && seg[2] == 0 && seg[3] == 0) // discard-only 100::/64
                 || (seg[0] & 0xfe00) == 0xfc00 // ULA fc00::/7
                 || (seg[0] & 0xffc0) == 0xfe80 // link-local fe80::/10
                 || (seg[0] == 0x2001 && seg[1] == 0x0db8) // documentation
-                || (seg[0] == 0x0064 && seg[1] == 0xff9b)) // NAT64 64:ff9b::/96
+                || (seg[0] == 0x2001 && seg[1] < 0x0200) // IETF protocol assignments 2001::/23 (incl. Teredo 2001::/32)
+                || (seg[0] & 0xffc0) == 0xfec0 // site-local fec0::/10 (deprecated)
+                || (seg[0] == 0x0064 && seg[1] == 0xff9b)) // NAT64 64:ff9b::/32 (covers /96 and 64:ff9b:1::/48)
         }
     }
+}
+
+/// Minimum wall-clock time of a resolution-stage rejection. An unresolvable name fails
+/// instantly while a name that resolves to a private address pays a DNS round trip, so an
+/// authenticated caller could tell internal hostnames apart by latency. Every rejection
+/// caused by resolution/address validation therefore waits until this floor has elapsed.
+const REJECT_FLOOR: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Reject with the unified message, but never before `REJECT_FLOOR` has passed since `started`.
+async fn reject_unreachable(started: tokio::time::Instant) -> PipelineError {
+    tokio::time::sleep_until(started + REJECT_FLOOR).await;
+    PipelineError::InvalidInput("URL host is not reachable or not a public address".into())
 }
 
 /// GET `url` with SSRF protection: http(s) only, no userinfo, the host must resolve
@@ -211,23 +242,24 @@ async fn fetch_public(url: &str) -> PipelineResult<reqwest::Response> {
             return Err(PipelineError::InvalidInput("URL credentials are not allowed".into()));
         }
         let port = current.port_or_known_default().unwrap_or(80);
+        let started = tokio::time::Instant::now();
         // Parse via `Host` so IP literals (incl. bracketed IPv6) skip DNS entirely.
         let (host, addrs): (String, Vec<std::net::SocketAddr>) = match current.host() {
             Some(url::Host::Ipv4(ip)) => (ip.to_string(), vec![(ip, port).into()]),
             Some(url::Host::Ipv6(ip)) => (ip.to_string(), vec![(ip, port).into()]),
             Some(url::Host::Domain(d)) => {
+                // A resolution failure is reported exactly like a non-public result so an
+                // authenticated caller cannot enumerate internal hostnames (NXDOMAIN vs 400).
                 let found = tokio::net::lookup_host((d, port))
                     .await
-                    .map_err(|e| PipelineError::ExternalService(format!("Failed to resolve host: {}", e)))?
-                    .collect();
+                    .map(|it| it.collect())
+                    .unwrap_or_else(|_| Vec::new());
                 (d.to_string(), found)
             }
             None => return Err(PipelineError::InvalidInput("URL has no host".into())),
         };
         if addrs.is_empty() || addrs.iter().any(|a| !is_public_ip(a.ip())) {
-            return Err(PipelineError::InvalidInput(
-                "URL host resolves to a non-public address".into(),
-            ));
+            return Err(reject_unreachable(started).await);
         }
 
         let client = reqwest::Client::builder()
@@ -573,6 +605,97 @@ mod tests {
         for s in ["8.8.8.8", "1.1.1.1", "93.184.216.34", "172.32.0.1", "2606:4700:4700::1111", "::ffff:8.8.8.8"] {
             assert!(is_public_ip(s.parse().unwrap()), "{} must be allowed", s);
         }
+    }
+
+    #[test]
+    fn test_is_public_ip_rejects_embedded_and_transition_ipv6() {
+        for s in [
+            "2002:7f00:0001::", // 6to4 of 127.0.0.1
+            "2002:0a00:0001::", // 6to4 of 10.0.0.1
+            "2002:a9fe:a9fe::", // 6to4 of 169.254.169.254
+            "2002:c0a8:1d16::1", // 6to4 of 192.168.29.22
+            "::7f00:1", // IPv4-compatible 127.0.0.1
+            "::a00:1", // IPv4-compatible 10.0.0.1
+            "::a9fe:a9fe", // IPv4-compatible metadata address
+            "2001::1", // Teredo
+            "2001:0:4136:e378:8000:63bf:3fff:fdd2",
+            "fec0::1", // site-local
+            "feff::1",
+            "64:ff9b::7f00:1", // NAT64 /96
+            "64:ff9b:1::1", // NAT64 local-use /48
+            "::ffff:0:7f00:1", // SIIT of 127.0.0.1
+            "::ffff:0:a00:1", // SIIT of 10.0.0.1
+            "::ffff:0:a9fe:a9fe", // SIIT of the metadata address
+            "100::1", // discard-only 100::/64
+            "100::ffff:ffff:ffff:ffff",
+            "2001:1::1", // inside 2001::/23
+            "2001:1ff:ffff::1", // last /32 of 2001::/23
+        ] {
+            assert!(!is_public_ip(s.parse().unwrap()), "{} must be rejected", s);
+        }
+        // A 6to4 or IPv4-compatible address wrapping a PUBLIC v4 stays allowed.
+        for s in ["2002:0808:0808::1", "::808:808", "2606:4700:4700::1111", "::ffff:0:808:808"] {
+            assert!(is_public_ip(s.parse().unwrap()), "{} must be allowed", s);
+        }
+        // Neighbours of the newly rejected ranges stay public.
+        for s in [
+            "2001:200::1", // first address after 2001::/23
+            "2001:4860:4860::8888", // Google DNS
+            "2001:db9::1", // just past documentation 2001:db8::/32 is still outside 2001::/23
+            "100:0:0:1::1", // outside the 100::/64 discard prefix
+            "2a00:1450:4001::1",
+        ] {
+            assert!(is_public_ip(s.parse().unwrap()), "{} must be allowed", s);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_resolution_rejections_share_a_time_floor() {
+        // Every resolution-stage rejection must take at least REJECT_FLOOR. The unresolvable
+        // name is only checked against the floor (its resolver latency is environment-dependent,
+        // e.g. several seconds on a CI box with DNS blocked); the spread assertion uses only the
+        // cases that need no external DNS (IP literals and `localhost`).
+        let t = std::time::Instant::now();
+        let err = fetch_public("http://nonexistent-host.invalid/").await.unwrap_err();
+        assert!(matches!(err, PipelineError::InvalidInput(_)), "{err:?}");
+        assert!(t.elapsed() >= REJECT_FLOOR, "unresolvable name rejected below the floor");
+
+        let mut took = Vec::new();
+        for u in ["http://127.0.0.1:1/", "http://[::1]:1/", "http://localhost/"] {
+            let t = std::time::Instant::now();
+            let err = fetch_public(u).await.unwrap_err();
+            let dt = t.elapsed();
+            assert!(matches!(err, PipelineError::InvalidInput(_)), "{u}: {err:?}");
+            assert!(dt >= REJECT_FLOOR, "{u} rejected after {dt:?}, below the floor");
+            took.push(dt);
+        }
+        let (min, max) = (took.iter().min().unwrap(), took.iter().max().unwrap());
+        assert!(
+            *max - *min < std::time::Duration::from_millis(250),
+            "rejection latency leaks the target kind: {took:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_successful_validation_is_not_delayed_by_floor() {
+        // reject_unreachable is only on the rejection path: a started instant that is already
+        // older than the floor must not wait.
+        let started = tokio::time::Instant::now() - REJECT_FLOOR * 2;
+        let t = std::time::Instant::now();
+        let err = reject_unreachable(started).await;
+        assert!(t.elapsed() < std::time::Duration::from_millis(50));
+        assert!(matches!(err, PipelineError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_public_resolution_failure_matches_non_public_error() {
+        // An unresolvable name must produce the same variant AND message as a
+        // non-public target, so the two cases cannot be told apart by a caller.
+        let unresolved = fetch_public("http://nonexistent-host.invalid/").await.unwrap_err();
+        let internal = fetch_public("http://127.0.0.1:1/").await.unwrap_err();
+        assert!(matches!(unresolved, PipelineError::InvalidInput(_)), "{:?}", unresolved);
+        assert!(matches!(internal, PipelineError::InvalidInput(_)), "{:?}", internal);
+        assert_eq!(unresolved.to_string(), internal.to_string());
     }
 
     #[tokio::test]

@@ -20,6 +20,41 @@ pub struct AIModelConfig {
     pub temperature: f32,
 }
 
+impl AIModelConfig {
+    /// Provider/model from environment when present, otherwise the hardcoded
+    /// defaults. `LLM_PROVIDER` accepts `openai` or `anthropic`
+    /// (case-insensitive); `AI_MODEL` overrides the default model name.
+    pub fn from_env() -> Self {
+        dotenvy::dotenv().ok();
+        let model_override = std::env::var("AI_MODEL")
+            .ok()
+            .map(|m| m.trim().to_string())
+            .filter(|m| !m.is_empty());
+        let mut cfg = match std::env::var("LLM_PROVIDER")
+            .map(|p| p.to_lowercase())
+            .as_deref()
+        {
+            Ok("openai") => Self {
+                provider: LLMProvider::OpenAI,
+                model: model_override.clone().unwrap_or_else(|| "gpt-4o-mini".to_string()),
+                ..Self::default()
+            },
+            Ok("anthropic") => Self {
+                provider: LLMProvider::Anthropic,
+                model: model_override
+                    .clone()
+                    .unwrap_or_else(|| "claude-sonnet-4-20250514".to_string()),
+                ..Self::default()
+            },
+            _ => Self::default(),
+        };
+        if let Some(m) = model_override {
+            cfg.model = m;
+        }
+        cfg
+    }
+}
+
 impl Default for AIModelConfig {
     fn default() -> Self {
         Self {
@@ -120,6 +155,25 @@ mod tests {
     #[test]
     fn test_llm_provider_default_is_anthropic() {
         assert_eq!(LLMProvider::default(), LLMProvider::Anthropic);
+    }
+    #[test]
+    fn test_ai_model_config_from_env() {
+        // env-var mutation is process-global; the two scenarios run sequentially in
+        // one test so parallel tests cannot race on LLM_PROVIDER / AI_MODEL.
+        std::env::set_var("LLM_PROVIDER", "OpenAI");
+        std::env::remove_var("AI_MODEL");
+        let config = AIModelConfig::from_env();
+        assert_eq!(config.provider, LLMProvider::OpenAI);
+        assert_eq!(config.model, "gpt-4o-mini");
+
+        std::env::set_var("LLM_PROVIDER", "openai");
+        std::env::set_var("AI_MODEL", "gpt-4.1");
+        let config = AIModelConfig::from_env();
+        assert_eq!(config.provider, LLMProvider::OpenAI);
+        assert_eq!(config.model, "gpt-4.1");
+
+        std::env::remove_var("LLM_PROVIDER");
+        std::env::remove_var("AI_MODEL");
     }
 
     #[test]

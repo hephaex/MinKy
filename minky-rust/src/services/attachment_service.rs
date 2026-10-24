@@ -113,7 +113,7 @@ impl AttachmentService {
     /// Get total storage used by a user
     pub async fn get_user_storage(&self, user_id: i32) -> Result<i64> {
         let result: (i64,) = sqlx::query_as(
-            "SELECT COALESCE(SUM(file_size), 0) FROM attachments WHERE user_id = $1",
+            "SELECT COALESCE(SUM(file_size), 0)::bigint FROM attachments WHERE user_id = $1",
         )
         .bind(user_id)
         .fetch_one(&self.db)
@@ -125,7 +125,7 @@ impl AttachmentService {
     /// Get total storage used for a document
     pub async fn get_document_storage(&self, document_id: Uuid) -> Result<i64> {
         let result: (i64,) = sqlx::query_as(
-            "SELECT COALESCE(SUM(file_size), 0) FROM attachments WHERE document_id = $1",
+            "SELECT COALESCE(SUM(file_size), 0)::bigint FROM attachments WHERE document_id = $1",
         )
         .bind(document_id)
         .fetch_one(&self.db)
