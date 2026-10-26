@@ -125,16 +125,12 @@ if [ -f "$ENV_FILE" ]; then
         warn "OPENAI_API_KEY: not set (needed for embeddings)"
     fi
 
-    # ANTHROPIC_API_KEY
-    if grep -q "ANTHROPIC_API_KEY" "$ENV_FILE" && [ -n "$(grep 'ANTHROPIC_API_KEY' "$ENV_FILE" | grep -v '^#' | cut -d= -f2-)" ]; then
-        ANTH_KEY=$(grep "ANTHROPIC_API_KEY" "$ENV_FILE" | grep -v '^#' | cut -d= -f2-)
-        if [[ "$ANTH_KEY" == sk-ant-* ]]; then
-            pass "ANTHROPIC_API_KEY: set (sk-ant-...${ANTH_KEY: -4})"
-        else
-            warn "ANTHROPIC_API_KEY: set but format looks unexpected"
-        fi
+    # DEEPSEEK_API_KEY
+    if grep -q "DEEPSEEK_API_KEY" "$ENV_FILE" && [ -n "$(grep 'DEEPSEEK_API_KEY' "$ENV_FILE" | grep -v '^#' | cut -d= -f2-)" ]; then
+        DS_KEY=$(grep "DEEPSEEK_API_KEY" "$ENV_FILE" | grep -v '^#' | cut -d= -f2-)
+        pass "DEEPSEEK_API_KEY: set (...${DS_KEY: -4})"
     else
-        warn "ANTHROPIC_API_KEY: not set (needed for document understanding)"
+        warn "DEEPSEEK_API_KEY: not set (needed for the deepseek LLM provider)"
     fi
 
     # SERVER_PORT

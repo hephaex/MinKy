@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class ProviderType(Enum):
     """Supported LLM provider types."""
     OPENAI = "openai"
-    ANTHROPIC = "anthropic"
+    DEEPSEEK = "deepseek"
     GOOGLE = "google"
     LOCAL = "local"
     SOLAR = "solar"

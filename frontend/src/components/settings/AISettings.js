@@ -56,14 +56,14 @@ const OCR_PROVIDERS = [
 
 const LLM_PROVIDERS = [
   { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic (Claude)' },
+  { value: 'deepseek', label: 'DeepSeek' },
   { value: 'google', label: 'Google (Gemini)' },
   { value: 'local', label: 'Local LLM' },
 ];
 
 const LLM_MODELS = {
   openai: ['gpt-4o', 'gpt-4-turbo', 'gpt-4'],
-  anthropic: ['claude-sonnet-4', 'claude-opus-4'],
+  deepseek: ['deepseek-ai/DeepSeek-V4.1-Flash'],
   google: ['gemini-pro', 'gemini-pro-vision'],
   local: ['llama2', 'llama3', 'mistral', 'codellama', 'custom'],
 };

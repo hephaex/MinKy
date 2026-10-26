@@ -15,13 +15,13 @@ logger = logging.getLogger(__name__)
 ALLOWED_CONFIG_KEYS = {
     'llmEnabled', 'llmProvider', 'llmModel', 'llmApiKey',
     'ocrEnabled', 'ocrService', 'ocrApiKey', 'ocrLanguage',
-    'openaiApiKey', 'anthropicApiKey', 'googleApiKey',
+    'openaiApiKey', 'deepseekApiKey', 'googleApiKey',
     'maxTokens', 'temperature', 'summaryEnabled', 'tagsEnabled'
 }
 
 # Keys that contain sensitive data and should be encrypted
 SENSITIVE_KEYS = {
-    'llmApiKey', 'ocrApiKey', 'openaiApiKey', 'anthropicApiKey', 'googleApiKey'
+    'llmApiKey', 'ocrApiKey', 'openaiApiKey', 'deepseekApiKey', 'googleApiKey'
 }
 
 # Maximum value length to prevent DoS

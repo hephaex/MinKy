@@ -28,7 +28,7 @@ def execute_agent_task():
     {
         "agent_type": "research|writing|coding",
         "input_data": {...},
-        "provider": "openai|anthropic",
+        "provider": "openai|deepseek",
         "model": "optional-model-override"
     }
 
@@ -313,10 +313,10 @@ def list_llm_providers():
                 'models': ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo'],
                 'default_model': 'gpt-4o-mini'
             },
-            'anthropic': {
-                'description': 'Anthropic Claude 4 models',
-                'models': ['claude-opus-4-20250514', 'claude-sonnet-4-20250514'],
-                'default_model': 'claude-sonnet-4-20250514'
+            'deepseek': {
+                'description': 'DeepSeek models (OpenAI-compatible gateway)',
+                'models': ['deepseek-ai/DeepSeek-V4.1-Flash'],
+                'default_model': 'deepseek-ai/DeepSeek-V4.1-Flash'
             }
         }
 

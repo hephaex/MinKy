@@ -9,7 +9,7 @@ Example:
     from app.services.llm_providers import get_provider
 
     # Get a provider
-    provider = get_provider('anthropic', api_key='sk-ant-...')
+    provider = get_provider('deepseek', api_key='...')
 
     # Get an agent
     agent = get_agent('research', provider)

@@ -35,7 +35,7 @@ def register_provider(name: str):
     """Decorator to register a provider class.
 
     Args:
-        name: Unique identifier for the provider (e.g., 'openai', 'anthropic')
+        name: Unique identifier for the provider (e.g., 'openai', 'deepseek')
 
     Example:
         @register_provider('openai')
@@ -60,7 +60,7 @@ def get_provider(
     """Factory function to create a provider instance.
 
     Args:
-        name: Provider identifier (e.g., 'openai', 'anthropic')
+        name: Provider identifier (e.g., 'openai', 'deepseek')
         api_key: API key for authentication
         base_url: Optional custom base URL
         **kwargs: Additional provider-specific configuration
@@ -110,9 +110,9 @@ except ImportError as e:
     logger.warning(f"OpenAI provider not available: {e}")
 
 try:
-    from .anthropic_provider import AnthropicProvider
+    from .deepseek_provider import DeepSeekProvider
 except ImportError as e:
-    logger.debug(f"Anthropic provider not available: {e}")
+    logger.debug(f"DeepSeek provider not available: {e}")
 
 try:
     from .gemini_provider import GeminiProvider

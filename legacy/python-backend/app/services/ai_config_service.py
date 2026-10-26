@@ -14,7 +14,7 @@ def get_env_keys() -> Dict[str, str]:
     """Load API keys from environment variables"""
     return {
         'openai': os.getenv('OPENAI_API_KEY', ''),
-        'anthropic': os.getenv('ANTHROPIC_API_KEY', ''),
+        'deepseek': os.getenv('DEEPSEEK_API_KEY', ''),
         'google': os.getenv('GOOGLE_API_KEY', ''),
         'local': os.getenv('LOCAL_LLM_URL', 'http://localhost:8080'),
         'solar': os.getenv('UPSTAGE_API_KEY', ''),
@@ -29,6 +29,8 @@ def get_default_config(env_keys: Dict[str, str]) -> Dict[str, Any]:
         default_llm_model = os.getenv('LOCAL_LLM_MODEL', 'llama2')
     elif default_llm_provider in ('solar', 'upstage'):
         default_llm_model = os.getenv('DEFAULT_LLM_MODEL', 'solar-open2-260528')
+    elif default_llm_provider == 'deepseek':
+        default_llm_model = os.getenv('DEFAULT_LLM_MODEL', 'deepseek-ai/DeepSeek-V4.1-Flash')
     else:
         default_llm_model = os.getenv('DEFAULT_LLM_MODEL', 'gpt-3.5-turbo')
 
@@ -103,22 +105,16 @@ def test_llm_connection(config_data: Dict) -> Dict:
                 'message': 'OpenAI API key format is valid'
             }
 
-        elif provider == 'anthropic':
-            if not api_key.startswith('sk-ant-'):
+        elif provider == 'deepseek':
+            if len(api_key) < 10:
                 return {
                     'success': False,
-                    'error': 'Invalid Anthropic API key format. Keys should start with "sk-ant-"'
-                }
-
-            if len(api_key) < 30:
-                return {
-                    'success': False,
-                    'error': 'Anthropic API key appears to be too short'
+                    'error': 'DeepSeek API key appears to be too short'
                 }
 
             return {
                 'success': True,
-                'message': 'Anthropic (Claude) API key format is valid'
+                'message': 'DeepSeek API key format is valid'
             }
 
         elif provider == 'google':

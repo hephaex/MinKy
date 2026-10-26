@@ -185,7 +185,7 @@ class AgentService:
                 {'agent_type': 'writing', 'use_previous_output': True,
                  'input_data': {'task': 'summarize'}},
             ]
-            results = service.execute_chain(steps, 'anthropic', api_key)
+            results = service.execute_chain(steps, 'deepseek', api_key)
         """
         results: List[AgentTask] = []
         previous_output: Optional[Dict[str, Any]] = None

@@ -354,7 +354,7 @@ def save_ai_config():
                 }), 400
 
         # SECURITY: Validate config field values
-        VALID_LLM_PROVIDERS = {'openai', 'anthropic', 'google', 'local'}
+        VALID_LLM_PROVIDERS = {'openai', 'deepseek', 'google', 'local'}
         VALID_OCR_SERVICES = {'tesseract', 'google-vision', 'none'}
         MAX_MODEL_NAME_LENGTH = 100
 
