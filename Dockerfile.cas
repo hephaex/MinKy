@@ -1,2 +1,2 @@
-# Dockerfile.cas uses the same python:3.11-slim base as docker-compose.yml.
+# Dockerfile.cas uses the same python:3.12-slim base as Dockerfile.
 # If you bump the base image version in one place, update it in both.

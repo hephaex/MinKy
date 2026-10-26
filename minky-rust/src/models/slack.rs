@@ -20,27 +20,7 @@ impl std::fmt::Display for MessagingPlatform {
     }
 }
 
-/// Platform connection configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlatformConfig {
-    pub id: i32,
-    pub platform: MessagingPlatform,
-    pub workspace_id: String,
-    pub workspace_name: String,
-    pub bot_token: String,
-    pub is_active: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
 
-/// Request to create a platform connection
-#[derive(Debug, Deserialize)]
-pub struct CreatePlatformConfig {
-    pub platform: MessagingPlatform,
-    pub workspace_id: String,
-    pub workspace_name: String,
-    pub bot_token: String,
-}
 
 /// A message captured from a messaging platform
 #[derive(Debug, Clone, Serialize, Deserialize)]

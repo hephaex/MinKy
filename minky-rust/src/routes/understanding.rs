@@ -4,7 +4,7 @@
 //!
 //! # Endpoints
 //!
-//! - `POST /api/documents/{id}/understand` — Trigger Claude analysis for a document
+//! - `POST /api/documents/{id}/understand` — Trigger Solar analysis for a document
 //! - `GET  /api/documents/{id}/understanding` — Retrieve cached analysis result
 
 use axum::{
@@ -45,7 +45,7 @@ pub struct CachedUnderstandingResponse {
 ///
 /// `POST /api/documents/{id}/understand`
 ///
-/// Calls Claude to extract topics, summary, insights, technologies, and target
+/// Calls Solar to extract topics, summary, insights, technologies, and target
 /// roles from the document. The result is upserted so subsequent `GET` calls
 /// return the cached value immediately. Requires authentication.
 async fn analyze_document(
@@ -255,7 +255,7 @@ mod tests {
                 relevant_for: vec!["devops".to_string()],
                 related_document_ids: vec![],
                 analyzed_at: chrono::Utc::now(),
-                analyzer_model: Some("claude-haiku".to_string()),
+                analyzer_model: Some("solar-open2-260528".to_string()),
             },
         };
         let json = serde_json::to_string(&response).unwrap();

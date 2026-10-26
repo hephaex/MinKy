@@ -1,15 +1,15 @@
 //! Query Expansion Service
 //!
-//! Uses Claude to generate alternative query phrasings for improved search recall.
-//! Inspired by QMD's query expansion model approach.
+//! Uses Upstage Solar to generate alternative query phrasings for improved
+//! search recall. Inspired by QMD's query expansion model approach.
 
 use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 
+use crate::services::local_llm_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmResponse};
 use crate::{
     config::Config,
     error::{AppError, AppResult},
-    services::anthropic_types::{AnthropicMessage, AnthropicRequest, AnthropicResponse},
     services::reasoning::strip_reasoning,
 };
 
@@ -113,75 +113,9 @@ impl QueryExpansionService {
 
     /// Expand a query into multiple alternative phrasings.
     ///
-    /// Prefers the Upstage Solar reasoning model when configured, otherwise
-    /// falls back to Anthropic Claude.
+    /// Uses the Upstage Solar reasoning model (solar-open2), which is
+    /// OpenAI-compatible; the fenced reasoning is stripped before parsing.
     pub async fn expand(&self, req: QueryExpansionRequest) -> AppResult<QueryExpansionResponse> {
-        if self.config.upstage_api_key.is_some() {
-            return self.expand_with_upstage(req).await;
-        }
-
-        let api_key = self.config.anthropic_api_key.as_ref()
-            .ok_or_else(|| AppError::Configuration("Anthropic API key not configured".into()))?;
-
-        let user_content = build_expansion_user_content(
-            &req.query,
-            req.num_expansions,
-            req.domain.as_deref(),
-        );
-
-        let request = AnthropicRequest {
-            model: "claude-haiku-4-5-20251101".to_string(),
-            max_tokens: 256,
-            system: Some(EXPANSION_SYSTEM_PROMPT.to_string()),
-            messages: vec![AnthropicMessage {
-                role: "user".to_string(),
-                content: user_content,
-            }],
-        };
-
-        let response = self.http_client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", api_key.expose_secret())
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| AppError::ExternalService(format!("API request failed: {e}")))?;
-
-        if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(AppError::ExternalService(format!("API error: {error_text}")));
-        }
-
-        let result: AnthropicResponse = response.json().await
-            .map_err(|e| AppError::ExternalService(format!("Failed to parse response: {e}")))?;
-
-        let text = result.content.first()
-            .map(|c| c.text.clone())
-            .unwrap_or_default();
-
-        let expansions = parse_expansions(&text, &req.query);
-
-        let tokens_used = result.usage
-            .map(|u| u.input_tokens + u.output_tokens)
-            .unwrap_or(0);
-
-        Ok(QueryExpansionResponse {
-            original: req.query,
-            expansions,
-            tokens_used,
-        })
-    }
-
-    /// Expand a query using the Upstage Solar reasoning model (solar-open2).
-    ///
-    /// Upstage is OpenAI-compatible; the model emits `<think>` reasoning, which
-    /// is stripped before the alternatives are parsed.
-    async fn expand_with_upstage(
-        &self,
-        req: QueryExpansionRequest,
-    ) -> AppResult<QueryExpansionResponse> {
         let api_key = self.config.upstage_api_key.as_ref()
             .ok_or_else(|| AppError::Configuration("Upstage API key not configured".into()))?;
 
@@ -191,17 +125,18 @@ impl QueryExpansionService {
             req.domain.as_deref(),
         );
 
-        let request = OpenAiChatRequest {
-            // Reasoning model: budget for <think> output so the answer survives.
+        let request = LocalLlmRequest {
+            // Reasoning model: budget for fenced output so the answer survives.
             model: SOLAR_MODEL.to_string(),
             max_tokens: 2048,
-            temperature: 0.2,
+            temperature: Some(0.2),
+            stream: None,
             messages: vec![
-                OpenAiChatMessage {
+                LocalLlmMessage {
                     role: "system".to_string(),
                     content: EXPANSION_SYSTEM_PROMPT.to_string(),
                 },
-                OpenAiChatMessage {
+                LocalLlmMessage {
                     role: "user".to_string(),
                     content: user_content,
                 },
@@ -222,14 +157,12 @@ impl QueryExpansionService {
             return Err(AppError::ExternalService(format!("API error: {error_text}")));
         }
 
-        let result: OpenAiChatResponse = response.json().await
+        let result: LocalLlmResponse = response.json().await
             .map_err(|e| AppError::ExternalService(format!("Failed to parse response: {e}")))?;
 
-        let raw_text = result.choices.first()
-            .map(|c| c.message.content.clone())
-            .unwrap_or_default();
+        let raw_text = result.first_text().unwrap_or_default().to_string();
 
-        // Strip the reasoning model's <think> output before parsing.
+        // Strip the reasoning model's fenced output before parsing.
         let text = strip_reasoning(&raw_text);
         let expansions = parse_expansions(&text, &req.query);
 
@@ -369,50 +302,6 @@ fn remove_qualifiers(query: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// OpenAI-compatible types (Upstage Solar)
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Serialize)]
-struct OpenAiChatRequest {
-    model: String,
-    messages: Vec<OpenAiChatMessage>,
-    max_tokens: u32,
-    temperature: f32,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiChatMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiChatResponse {
-    choices: Vec<OpenAiChatChoice>,
-    #[serde(default)]
-    usage: Option<OpenAiUsage>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiChatChoice {
-    message: OpenAiResponseMessage,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiResponseMessage {
-    #[serde(default)]
-    content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct OpenAiUsage {
-    #[serde(default)]
-    prompt_tokens: u32,
-    #[serde(default)]
-    completion_tokens: u32,
-}
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -436,7 +325,6 @@ mod tests {
             jwt_expiration_hours: 24,
             opensearch_url: None,
             openai_api_key: None,
-            anthropic_api_key: None,
             upstage_api_key: None,
             git_repo_path: None,
             slack_client_id: None,
@@ -529,8 +417,8 @@ mod tests {
 
     #[test]
     fn test_parse_expansions_after_reasoning_strip() {
-        // Solar (solar-open2) wraps its answer in <think> reasoning output.
-        let raw = "<think>let me consider synonyms</think>resolve the bug\nfix the issue";
+        // Solar (solar-open2) wraps its answer in fenced reasoning output.
+        let raw = "<think>let me consider synonyms</think>\nresolve the bug\nfix the issue";
         let cleaned = crate::services::reasoning::strip_reasoning(raw);
         let expansions = parse_expansions(&cleaned, "fix error");
 

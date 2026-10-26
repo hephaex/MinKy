@@ -135,70 +135,8 @@ impl NotificationService {
         Ok(())
     }
 
-    /// Delete old notifications (cleanup)
-    pub async fn cleanup_old(&self, days: i32) -> Result<i64> {
-        let result = sqlx::query(
-            r#"
-            DELETE FROM notifications
-            WHERE is_read = true AND created_at < NOW() - INTERVAL '1 day' * $1
-            "#,
-        )
-        .bind(days)
-        .execute(&self.db)
-        .await?;
 
-        Ok(result.rows_affected() as i64)
-    }
 
-    /// Notify user of a new comment on their document
-    pub async fn notify_comment(
-        &self,
-        document_owner_id: i32,
-        commenter_name: &str,
-        document_title: &str,
-        document_id: &str,
-    ) -> Result<()> {
-        use crate::models::NotificationType;
-
-        self.create(CreateNotification {
-            user_id: document_owner_id,
-            notification_type: NotificationType::Comment,
-            title: format!("{} commented on your document", commenter_name),
-            message: Some(format!("New comment on \"{}\"", document_title)),
-            data: Some(serde_json::json!({
-                "document_id": document_id,
-                "commenter": commenter_name
-            })),
-        })
-        .await?;
-
-        Ok(())
-    }
-
-    /// Notify user of a mention
-    pub async fn notify_mention(
-        &self,
-        mentioned_user_id: i32,
-        mentioner_name: &str,
-        context: &str,
-        document_id: &str,
-    ) -> Result<()> {
-        use crate::models::NotificationType;
-
-        self.create(CreateNotification {
-            user_id: mentioned_user_id,
-            notification_type: NotificationType::Mention,
-            title: format!("{} mentioned you", mentioner_name),
-            message: Some(context.to_string()),
-            data: Some(serde_json::json!({
-                "document_id": document_id,
-                "mentioner": mentioner_name
-            })),
-        })
-        .await?;
-
-        Ok(())
-    }
 }
 
 /// Pure functions for building notification messages (testable without DB)

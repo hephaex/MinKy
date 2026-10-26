@@ -62,7 +62,7 @@ This writes `.gjc/mcp.json` at the repo root (`--project` scope):
 }
 ```
 
-## Registering with Claude Code
+## Registering with an MCP Client (Claude Code / GJC)
 
 Claude Code reads MCP servers from its own config
 (`claude_desktop_config.json` on macOS, or a project-local

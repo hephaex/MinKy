@@ -4,7 +4,7 @@
 //! - Generating embeddings via OpenAI/Voyage API
 //! - Storing embeddings in pgvector
 //! - Semantic similarity search
-//! - Document understanding with Claude
+//! - Document understanding with Solar
 
 use crate::error::{AppError, Result};
 use crate::models::{

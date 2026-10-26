@@ -421,7 +421,7 @@ MinKy는 3~9명 소규모 팀의 **암묵지(tacit knowledge)를 형식지로 �
 │     - Markdown/HTML/PDF parsing                              │
 │     - Metadata extraction                                    │
 │                                                              │
-│  2. AI Understanding (Claude)                                │
+│  2. AI Understanding (Upstage Solar)                         │
 │     - 핵심 주제 추출                                          │
 │     - 해결한 문제 식별                                        │
 │     - 관련 기술/도구 태깅                                     │
@@ -448,7 +448,7 @@ MinKy는 3~9명 소규모 팀의 **암묵지(tacit knowledge)를 형식지로 �
 │                   RAG Search Layer                           │
 ├─────────────────────────────────────────────────────────────┤
 │  User Question → Query Understanding → Vector Search         │
-│       → Context Assembly → Claude Generation → Answer        │
+│       → Context Assembly → Solar Generation → Answer         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -460,8 +460,8 @@ MinKy는 3~9명 소규모 팀의 **암묵지(tacit knowledge)를 형식지로 �
 - **Framework**: Axum 0.8
 - **Database**: PostgreSQL + pgvector
 - **Vector Search**: pgvector (primary) / Qdrant (optional)
-- **AI**: Claude API (Anthropic)
-- **Embedding**: OpenAI text-embedding-3-small / Voyage AI
+- **AI**: Upstage Solar (OpenAI-compatible, solar-open2-260528) / Strix Halo local llama.cpp
+- **Embedding**: Upstage Solar (solar-open2, 4096-dim) / Strix Halo local llama.cpp
 - **Async Runtime**: Tokio
 
 ### Frontend
@@ -584,7 +584,7 @@ minky/
    - [ ] 청크 분할 (semantic chunking)
 
 2. **AI Document Analysis**
-   - [ ] Claude로 문서 분석
+   - [ ] Upstage Solar로 문서 분석
    - [ ] 핵심 주제 3-5개 추출
    - [ ] 해결한 문제/인사이트 식별
    - [ ] 관련 기술/도구 자동 태깅
@@ -599,7 +599,7 @@ minky/
 4. **RAG Search API**
    - [ ] 자연어 질문 → 벡터 검색
    - [ ] 컨텍스트 조합
-   - [ ] Claude 답변 생성
+   - [ ] Upstage Solar 답변 생성
    - [ ] 출처 문서 링크
 
 5. **Chat Interface**
@@ -744,7 +744,7 @@ test: 테스트
 ## References
 
 ### 외부 참조
-- [RAG Best Practices](https://docs.anthropic.com/claude/docs/retrieval-augmented-generation)
+- [Upstage Solar API](https://api.upstage.ai/v1/chat/completions)
 - [pgvector Documentation](https://github.com/pgvector/pgvector)
 - [Building a Second Brain](https://www.buildingasecondbrain.com/)
 

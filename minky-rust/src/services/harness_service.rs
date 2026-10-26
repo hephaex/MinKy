@@ -1001,7 +1001,6 @@ mod tests {
             jwt_expiration_hours: 24,
             opensearch_url: None,
             openai_api_key: None,
-            anthropic_api_key: None,
             upstage_api_key: None,
             git_repo_path: None,
             slack_client_id: None,

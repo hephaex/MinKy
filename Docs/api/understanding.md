@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Document Understanding API provides AI-powered document analysis using Claude. It extracts key insights, topics, technologies, and potential audience from documents, transforming raw content into structured knowledge metadata.
+The Document Understanding API provides AI-powered document analysis using the Upstage Solar reasoning model (solar-open2, OpenAI-compatible). It extracts key insights, topics, technologies, and potential audience from documents, transforming raw content into structured knowledge metadata.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ The Document Understanding API provides AI-powered document analysis using Claud
 
 ## Analyze Document
 
-Trigger AI analysis for a document. This calls the Claude API to extract structured insights and persists the results for future retrieval.
+Trigger AI analysis for a document. This calls the Upstage Solar chat API to extract structured insights and persists the results for future retrieval.
 
 ### Endpoint
 
@@ -78,8 +78,8 @@ curl -X POST http://localhost:3000/api/documents/550e8400-e29b-41d4-a716-4466554
 ### How It Works
 
 1. **Content Retrieval** - Fetches the document content from the database
-2. **AI Analysis** - Sends content to Claude with a structured prompt
-3. **Insight Extraction** - Claude extracts topics, summary, insights, etc.
+2. **AI Analysis** - Sends content to the Solar reasoning model with a structured prompt
+3. **Insight Extraction** - Solar extracts topics, summary, insights, etc.
 4. **Persistence** - Results are saved to the `document_understanding` table
 5. **Response** - Returns the analysis results
 
@@ -93,7 +93,7 @@ Analysis typically takes 2-5 seconds depending on document length. For batch pro
 |--------|-------------|
 | 404 | Document not found |
 | 500 | AI analysis failed |
-| 502 | Claude API unavailable |
+| 502 | Upstage Solar API unavailable |
 
 ---
 
@@ -161,7 +161,7 @@ curl -X GET http://localhost:3000/api/documents/550e8400-e29b-41d4-a716-44665544
       "550e8400-e29b-41d4-a716-446655440008"
     ],
     "analyzed_at": "2024-01-20T10:30:00Z",
-    "analyzer_model": "claude-sonnet-4-20250514"
+    "analyzer_model": "solar-open2-260528"
   }
 }
 ```
@@ -191,7 +191,7 @@ interface DocumentUnderstanding {
   relevant_for: string[];           // Target roles/audiences
   related_document_ids: string[];   // UUIDs of similar documents
   analyzed_at: string;              // ISO 8601 timestamp
-  analyzer_model: string | null;    // Claude model used
+  analyzer_model: string | null;    // Solar model used
 }
 ```
 
@@ -506,7 +506,7 @@ Understanding results are cached in the database. The GET endpoint returns cache
 
 ### 4. Cost Considerations
 
-Each analysis makes an API call to Claude. For cost optimization:
+Each analysis makes an API call to Upstage Solar. For cost optimization:
 - Analyze documents selectively (important/high-value content)
 - Use batch processing during off-peak hours
 - Consider implementing analysis quotas per user/team

@@ -88,23 +88,6 @@ pub struct UpdateWorkflowAssignment {
     pub notes: Option<String>,
 }
 
-/// Workflow with document and user info
-#[derive(Debug, Serialize)]
-pub struct WorkflowWithDetails {
-    pub id: i32,
-    pub document_id: Uuid,
-    pub document_title: String,
-    pub status: String,
-    pub assigned_to: Option<i32>,
-    pub assignee_name: Option<String>,
-    pub due_date: Option<DateTime<Utc>>,
-    pub priority: i32,
-    pub notes: Option<String>,
-    pub created_by: i32,
-    pub creator_name: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
 
 /// Valid workflow transitions
 pub fn get_valid_transitions(current: &WorkflowStatus) -> Vec<WorkflowStatus> {

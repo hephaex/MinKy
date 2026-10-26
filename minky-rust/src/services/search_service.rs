@@ -7,6 +7,7 @@ use opensearch::{
     DeleteParts, IndexParts, OpenSearch, SearchParts,
 };
 use serde_json::{json, Value};
+use std::collections::HashSet;
 use std::time::Instant;
 
 use crate::{
@@ -108,6 +109,24 @@ impl SearchService {
                             "type": "custom",
                             "tokenizer": "whitespace",
                             "filter": ["lowercase"]
+                        },
+                        "cjk_bigram_korean": {
+                            "type": "custom",
+                            "tokenizer": "whitespace",
+                            "filter": ["lowercase", "cjk_bigram"]
+                        },
+                        "ngram_2": {
+                            "type": "custom",
+                            "tokenizer": "ngram_tokenizer",
+                            "filter": ["lowercase"]
+                        }
+                    },
+                    "tokenizer": {
+                        "ngram_tokenizer": {
+                            "type": "ngram",
+                            "min_gram": 2,
+                            "max_gram": 2,
+                            "token_chars": ["letter", "digit"]
                         }
                     }
                 }
@@ -131,13 +150,39 @@ impl SearchService {
                     // "content" above stay as the original readable text
                     // (default analyzer) so _source retrieval never returns
                     // corrupted/tokenized display text.
+                    //
+                    // The cjk_bigram/ngram multi-field subfields add
+                    // 2-character windows over the same text so a query can
+                    // still match a substring of a compound morpheme (e.g.
+                    // "쿠버" inside "쿠버네티스") when no whole morpheme
+                    // token matches.
                     "title_tokenized": {
                         "type": "text",
-                        "analyzer": "korean"
+                        "analyzer": "korean",
+                        "fields": {
+                            "cjk_bigram": {
+                                "type": "text",
+                                "analyzer": "cjk_bigram_korean"
+                            },
+                            "ngram": {
+                                "type": "text",
+                                "analyzer": "ngram_2"
+                            }
+                        }
                     },
                     "content_tokenized": {
                         "type": "text",
-                        "analyzer": "korean"
+                        "analyzer": "korean",
+                        "fields": {
+                            "cjk_bigram": {
+                                "type": "text",
+                                "analyzer": "cjk_bigram_korean"
+                            },
+                            "ngram": {
+                                "type": "text",
+                                "analyzer": "ngram_2"
+                            }
+                        }
                     },
                     "category_id": { "type": "integer" },
                     "category_name": { "type": "keyword" },
@@ -320,15 +365,28 @@ impl SearchService {
         // morpheme index. `tags` is a `keyword`-typed field (exact match),
         // so it always searches against the original raw query text.
         let tokenized_query = self.tokenize_for_search(&query.q);
+
+        // Subfields (see create_index) are unboosted: whole-morpheme matches
+        // on the main *_tokenized fields naturally outrank 2-char-window
+        // subfield hits, and the subfields only decide a match when no whole
+        // morpheme token matches (the compound-substring miss case, e.g.
+        // 쿠버 inside 쿠버네티스). AUTO fuzziness is intentionally disabled
+        // for Korean queries — fuzzy matching mangles non-Latin text.
         let mut must_clauses = vec![json!({
             "bool": {
                 "should": [
                     {
                         "multi_match": {
                             "query": tokenized_query,
-                            "fields": ["title_tokenized^3", "content_tokenized"],
-                            "type": "best_fields",
-                            "fuzziness": "AUTO"
+                            "fields": [
+                                "title_tokenized^3",
+                                "content_tokenized",
+                                "title_tokenized.cjk_bigram",
+                                "title_tokenized.ngram",
+                                "content_tokenized.cjk_bigram",
+                                "content_tokenized.ngram"
+                            ],
+                            "type": "best_fields"
                         }
                     },
                     {
@@ -523,6 +581,13 @@ impl SearchService {
                 }
             })
             .collect();
+
+        // Same-title documents can dominate a query's top results (e.g.
+        // reindexed copies). Deduplicate client-side, keeping the
+        // highest-scored hit per title. NOTE: `total` intentionally stays
+        // the raw matching count — pagination offsets still operate on the
+        // full result set, so duplicate titles may reappear on later pages.
+        let hits = dedupe_same_title(hits);
 
         // Parse facets
         let category_facets: Vec<FacetCount> = result["aggregations"]["categories"]["buckets"]
@@ -766,6 +831,15 @@ pub fn build_confidential_filter(user_id: Option<i32>) -> Option<serde_json::Val
         None
     }
 }
+/// Remove duplicate hits that share the same title, keeping the first
+/// (highest-scored) occurrence. Hits are assumed to already be sorted by
+/// score. Pure function — testable without OpenSearch.
+pub fn dedupe_same_title(hits: Vec<SearchHit>) -> Vec<SearchHit> {
+    let mut seen: HashSet<String> = HashSet::new();
+    hits.into_iter()
+        .filter(|hit| seen.insert(hit.title.clone()))
+        .collect()
+}
 
 #[cfg(test)]
 mod tests {
@@ -920,6 +994,49 @@ mod tests {
         assert!(filter.is_none());
     }
 
+    fn make_hit(id: uuid::Uuid, title: &str, score: f32) -> SearchHit {
+        SearchHit {
+            id,
+            title: title.to_string(),
+            content_snippet: String::new(),
+            highlights: vec![],
+            score,
+            category_name: None,
+            tags: vec![],
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Same-title dedup tests
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn test_dedupe_same_title_keeps_first() {
+        let id_a = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        let id_b = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+        let hits = vec![
+            make_hit(id_a, "중복 제목", 2.5),
+            make_hit(id_b, "중복 제목", 1.0),
+        ];
+        let deduped = dedupe_same_title(hits);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].score, 2.5);
+    }
+
+    #[test]
+    fn test_dedupe_same_title_distinct_titles_unchanged() {
+        let id_a = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        let id_b = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+        let hits = vec![
+            make_hit(id_a, "제목 A", 3.0),
+            make_hit(id_b, "제목 B", 2.0),
+        ];
+        let deduped = dedupe_same_title(hits);
+        assert_eq!(deduped.len(), 2);
+    }
+
     fn make_test_config() -> crate::config::Config {
         use secrecy::SecretString;
         crate::config::Config {
@@ -936,7 +1053,6 @@ mod tests {
             jwt_expiration_hours: 24,
             opensearch_url: Some("http://localhost:9200".to_string()),
             openai_api_key: None,
-            anthropic_api_key: None,
             upstage_api_key: None,
             git_repo_path: None,
             slack_client_id: None,

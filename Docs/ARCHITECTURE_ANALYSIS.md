@@ -105,7 +105,7 @@ app/
 
 ```
 ai_service
-├── depends on: LLM Providers (OpenAI, Anthropic)
+├── depends on: LLM Providers (Upstage Solar, OpenAI-compatible)
 ├── used by: ai_suggestions routes
 └── complexity: HIGH
 
@@ -141,7 +141,7 @@ ocr_service
 ┌─────────────────┐     ┌─────────────────┐
 │  Services (14)  │────►│  External APIs  │
 └────────┬────────┘     │  - OpenAI       │
-         │              │  - Anthropic    │
+         │              │  - Upstage      │
          │              │  - Google OCR   │
          ▼              └─────────────────┘
 ┌─────────────────┐
@@ -167,7 +167,7 @@ ocr_service
 - Flask-SocketIO
 
 **AI/ML:**
-- openai, anthropic
+- openai (legacy Python backend; Rust backend uses Upstage Solar, solar-open2)
 - scikit-learn, nltk, textblob
 - konlpy (Korean NLP)
 

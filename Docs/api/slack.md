@@ -20,7 +20,7 @@ Authorization: Bearer <token>
 
 ### POST /api/slack/extract
 
-Extract knowledge from a conversation thread using Claude AI.
+Extract knowledge from a conversation thread using the Upstage Solar reasoning model (OpenAI-compatible).
 
 **Request Body:**
 
@@ -113,7 +113,7 @@ Extract knowledge from a conversation thread using Claude AI.
 | Status | Condition |
 |--------|-----------|
 | 400 Bad Request | Invalid request body or missing required fields |
-| 502 Bad Gateway | Anthropic API unavailable |
+| 502 Bad Gateway | Upstage Solar API unavailable |
 
 ---
 
@@ -420,4 +420,4 @@ All errors follow the standard format:
 | 404 | Resource not found |
 | 429 | Rate limit exceeded |
 | 500 | Internal server error |
-| 502 | External service (Slack, Anthropic) unavailable |
+| 502 | External service (Slack, Upstage Solar) unavailable |

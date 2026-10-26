@@ -30,7 +30,7 @@ use crate::{
         SemanticSearchRequest,
     },
     services::{
-        anthropic_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmStreamChunk},
+        local_llm_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmStreamChunk},
         RagService,
     },
     AppState,
@@ -95,7 +95,7 @@ struct HistoryResponseBody {
 /// POST /search/ask
 ///
 /// Accepts a natural-language question, retrieves relevant document chunks via
-/// vector search, and generates a grounded answer using Claude.
+/// vector search, and generates a grounded answer using the local LLM.
 ///
 /// # Request body
 /// ```json
@@ -115,7 +115,7 @@ struct HistoryResponseBody {
 ///     "answer": "...",
 ///     "sources": [...],
 ///     "tokens_used": 312,
-///     "model": "claude-haiku-4-5-20251101"
+///     "model": "local-llm"
 ///   }
 /// }
 /// ```
@@ -502,7 +502,7 @@ mod tests {
                 answer: "Test answer".to_string(),
                 sources: vec![],
                 tokens_used: 100,
-                model: "claude-haiku-4-5-20251101".to_string(),
+                model: "local-llm".to_string(),
             },
         };
         let json = serde_json::to_string(&body).unwrap();
@@ -595,12 +595,12 @@ mod tests {
     fn test_stream_event_done() {
         let event = StreamEvent::Done {
             tokens_used: 150,
-            model: "claude-haiku".to_string(),
+            model: "local-llm".to_string(),
         };
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains("\"type\":\"done\""));
         assert!(json.contains("\"tokens_used\":150"));
-        assert!(json.contains("\"model\":\"claude-haiku\""));
+        assert!(json.contains("\"model\":\"local-llm\""));
     }
 
     #[test]

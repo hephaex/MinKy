@@ -1,7 +1,7 @@
 mod admin_service;
 mod agent_service;
 mod ai_service;
-pub mod anthropic_types;
+pub mod local_llm_types;
 mod analytics_service;
 mod attachment_service;
 mod audit_service;

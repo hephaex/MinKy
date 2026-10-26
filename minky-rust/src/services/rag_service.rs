@@ -18,8 +18,8 @@
 //!
 //! Answer generation defaults to a local model served by Strix Halo
 //! (`LLM_BASE_URL`, default `http://100.64.0.15:8093/v1/chat/completions`,
-//! no API key required). This replaced the original Anthropic Claude
-//! integration (2026-09-21) so RAG works without an external LLM API key.
+//! no API key required). The Anthropic Claude integration was removed
+//! (2026-09-21) so RAG works without an external LLM API key.
 
 use chrono::Utc;
 use sqlx::PgPool;
@@ -35,7 +35,7 @@ use crate::{
         SearchHistoryEntry, SearchHistoryQuery,
     },
     services::{
-        anthropic_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmResponse},
+        local_llm_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmResponse},
         EmbeddingConfig, EmbeddingService,
     },
 };

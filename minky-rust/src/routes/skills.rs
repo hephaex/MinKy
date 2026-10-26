@@ -384,13 +384,13 @@ mod tests {
             "skill_type": "debugger",
             "description": "Debugging skill",
             "system_prompt": "Debug code",
-            "model": "claude-3-opus",
+            "model": "solar-open2-260528",
             "temperature": 0.3,
             "max_tokens": 4000,
             "priority": 10
         }"#;
         let create: CreateSkill = serde_json::from_str(json).unwrap();
-        assert_eq!(create.model, Some("claude-3-opus".to_string()));
+        assert_eq!(create.model, Some("solar-open2-260528".to_string()));
         assert_eq!(create.temperature, Some(0.3));
         assert_eq!(create.priority, Some(10));
     }

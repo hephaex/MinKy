@@ -26,7 +26,7 @@ pub enum PipelineError {
     #[error("Document not found: {0}")]
     DocumentNotFound(Uuid),
 
-    /// External service error (embedding API, Claude API, etc.)
+    /// External service error (embedding API, Solar API, etc.)
     #[error("External service error: {0}")]
     ExternalService(String),
 

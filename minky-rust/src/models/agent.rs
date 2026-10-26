@@ -141,16 +141,6 @@ pub enum MessageRole {
     Tool,
 }
 
-/// Agent conversation
-#[derive(Debug, Serialize)]
-pub struct AgentConversation {
-    pub id: String,
-    pub agent_id: i32,
-    pub user_id: i32,
-    pub messages: Vec<AgentMessage>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
 
 #[cfg(test)]
 mod tests {

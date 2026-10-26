@@ -36,7 +36,7 @@ MinKy captures knowledge from various sources, uses AI to understand context and
 
 ### Phase 1: Knowledge Understanding (Current)
 
-- **AI Document Analysis**: Claude analyzes uploaded documents to extract topics, summaries, and insights
+- **AI Document Analysis**: Upstage Solar (`solar-open2-260528`) analyzes uploaded documents to extract topics, summaries, and insights
 - **Vector Embeddings**: Documents stored with pgvector for semantic similarity search
 - **Automatic Connections**: Related documents linked based on content similarity, not manual tags
 
@@ -105,8 +105,8 @@ Key configuration options:
 ```env
 DATABASE_URL=postgres://user:password@localhost:5432/minky
 JWT_SECRET=your-secure-secret-key
-ANTHROPIC_API_KEY=sk-ant-...  # For AI features
 OPENAI_API_KEY=sk-...         # For embeddings
+UPSTAGE_API_KEY=              # Upstage Solar (OpenAI-compatible), for AI features & query expansion
 ```
 
 ### 4. Run Database Migrations
@@ -160,7 +160,7 @@ curl http://localhost:8000/health
                     +--------------+--------------+
                     |              |              |
               +-----v----+  +------v-----+  +-----v-----+
-              | Claude   |  | OpenSearch |  | OpenAI    |
+              | Solar    |  | OpenSearch |  | OpenAI    |
               | (AI)     |  | (Search)   |  | Embedding |
               +----------+  +------------+  +-----------+
 ```
@@ -174,8 +174,8 @@ curl http://localhost:8000/health
 | **Database** | PostgreSQL | Primary data storage |
 | **Vector DB** | pgvector | Semantic embeddings |
 | **Search** | OpenSearch | Full-text search |
-| **AI** | Claude API | Document understanding, Q&A |
-| **Embedding** | OpenAI API | Vector generation |
+| **AI** | Upstage Solar (OpenAI-compatible) | Document understanding, Q&A, query expansion |
+| **Embedding** | Upstage Solar (solar-open2, 4096-dim) | Vector generation |
 
 ### Key Components
 
@@ -331,7 +331,7 @@ minky/
 | `JWT_EXPIRATION_HOURS` | 24 | Token expiration |
 | `OPENSEARCH_URL` | - | OpenSearch server |
 | `OPENAI_API_KEY` | - | For embeddings |
-| `ANTHROPIC_API_KEY` | - | For AI analysis |
+| `UPSTAGE_API_KEY` | - | Upstage Solar (OpenAI-compatible), for AI analysis & query expansion |
 | `RUST_LOG` | info | Logging level |
 
 ---
@@ -463,7 +463,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- [Anthropic Claude](https://www.anthropic.com/) - AI document understanding
+- [Upstage Solar](https://www.upstage.ai/) - AI document understanding (solar-open2)
 - [pgvector](https://github.com/pgvector/pgvector) - Vector similarity search
 - [Axum](https://github.com/tokio-rs/axum) - Rust web framework
 

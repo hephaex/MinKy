@@ -115,23 +115,7 @@ impl IngestionInput {
         }
     }
 
-    /// Create input from bytes
-    pub fn from_bytes(data: Vec<u8>, mime_type: impl Into<String>) -> Self {
-        Self {
-            source: DocumentSource::Bytes {
-                data,
-                mime_type: mime_type.into(),
-                filename: None,
-            },
-            options: IngestionOptions::default(),
-        }
-    }
 
-    /// Set options
-    pub fn with_options(mut self, options: IngestionOptions) -> Self {
-        self.options = options;
-        self
-    }
 }
 
 /// Raw document output from ingestion

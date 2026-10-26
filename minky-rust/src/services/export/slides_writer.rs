@@ -289,16 +289,6 @@ fn html_escape(text: &str) -> String {
         .replace('"', "&quot;")
 }
 
-/// Slides export options
-#[derive(Debug, Clone, Default)]
-pub struct SlidesExportOptions {
-    pub theme: Option<String>,
-    pub reveal_theme: Option<String>,
-    pub transition: Option<String>,
-    pub show_controls: Option<bool>,
-    pub show_progress: Option<bool>,
-    pub center: Option<bool>,
-}
 
 #[cfg(test)]
 mod tests {

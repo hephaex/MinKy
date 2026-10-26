@@ -15,13 +15,14 @@ use crate::{error::{AppError, AppResult}, middleware::{AuthPrincipal, AuthUser, 
 use crate::models::{ChunkData, CreateChunkEmbeddingsRequest, DuplicateGroup};
 use crate::pipeline::{DocumentPipelineBuilder, IngestionInput, PipelineError};
 use crate::services::{EmbeddingConfig, EmbeddingService};
+use crate::services::local_llm_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmResponse};
 
 const MAX_UPLOAD_SIZE: usize = 10 * 1024 * 1024; // 10MB
 const MAX_SRT_SIZE: usize = 20 * 1024 * 1024;    // 20MB (자막 파일은 더 클 수 있음)
 const MAX_SRT_CHUNKS: usize = 50;                 // F1: Solar API 호출 상한
 
 const UPSTAGE_CHAT_URL: &str = "https://api.upstage.ai/v1/chat/completions";
-const SOLAR_MODEL: &str = "solar-open2";
+const SOLAR_MODEL: &str = "solar-open2-260528";
 const SRT_CHUNK_CHARS: usize = 2500;
 const SRT_NARRATIVE_SYSTEM: &str = "\
 당신은 경제·투자 대담 자막을 서술형 글로 변환하는 전문 편집자입니다.\n\
@@ -1332,53 +1333,24 @@ fn strip_solar_think(text: &str) -> String {
     strip_reasoning(text)
 }
 
-#[derive(Debug, Serialize)]
-struct SolarChatRequest {
-    model: String,
-    messages: Vec<SolarMessage>,
-    max_tokens: u32,
-    temperature: f32,
-}
-
-#[derive(Debug, Serialize)]
-struct SolarMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct SolarChatResponse {
-    choices: Vec<SolarChoice>,
-}
-
-#[derive(Debug, Deserialize)]
-struct SolarChoice {
-    message: SolarResponseMessage,
-}
-
-#[derive(Debug, Deserialize)]
-struct SolarResponseMessage {
-    #[serde(default)]
-    content: String,
-}
-
 /// Upstage Solar-Open2 API 단일 청크 호출.
 async fn call_solar_narrative(
     client: &reqwest::Client,
     api_key: &str,
     chunk: &str,
 ) -> AppResult<String> {
-    let payload = SolarChatRequest {
+    let payload = LocalLlmRequest {
         model: SOLAR_MODEL.to_string(),
         messages: vec![
-            SolarMessage { role: "system".to_string(), content: SRT_NARRATIVE_SYSTEM.to_string() },
-            SolarMessage {
+            LocalLlmMessage { role: "system".to_string(), content: SRT_NARRATIVE_SYSTEM.to_string() },
+            LocalLlmMessage {
                 role: "user".to_string(),
                 content: format!("다음 자막을 서술형 글로 작성하세요:\n\n{chunk}"),
             },
         ],
         max_tokens: 4096,
-        temperature: 0.3,
+        temperature: Some(0.3),
+        stream: None,
     };
 
     let resp = client
@@ -1397,12 +1369,12 @@ async fn call_solar_narrative(
         return Err(AppError::ExternalService("Solar API request failed".to_string()));
     }
 
-    let body: SolarChatResponse = resp
+    let body: LocalLlmResponse = resp
         .json()
         .await
         .map_err(|e| AppError::ExternalService(format!("Solar API parse error: {e}")))?;
 
-    let raw = body.choices.first().map(|c| c.message.content.as_str()).unwrap_or("");
+    let raw = body.first_text().unwrap_or("");
     Ok(strip_solar_think(raw))
 }
 
@@ -1499,7 +1471,7 @@ async fn upload_srt(
             .app_config(state.config.clone())
             .semantic_chunking(512)
             .user_id(auth_user.id)
-            .anthropic_api_key(upstage_key.clone());
+            .upstage_api_key(upstage_key.clone());
         if upstage_key.is_empty() {
             builder = builder.skip_embedding();
         } else {

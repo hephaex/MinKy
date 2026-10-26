@@ -153,7 +153,7 @@ impl AgentService {
         .bind(&create.description)
         .bind(&agent_type_str)
         .bind(&create.system_prompt)
-        .bind(create.model.as_deref().unwrap_or("claude-sonnet-4-20250514"))
+        .bind(create.model.as_deref().unwrap_or("solar-open2-260528"))
         .bind(create.temperature.unwrap_or(0.7))
         .bind(create.max_tokens.unwrap_or(4096))
         .bind(tools_json)
@@ -336,42 +336,6 @@ impl AgentService {
 mod tests {
     use super::*;
     use chrono::Utc;
-    use secrecy::SecretString;
-
-    #[allow(dead_code)]
-    fn make_config() -> Config {
-        Config {
-            environment: "test".to_string(),
-            host: "127.0.0.1".to_string(),
-            port: 8000,
-            database_url: "postgres://localhost/test_db".to_string(),
-            database_max_connections: 1,
-            database_min_connections: 1,
-            database_acquire_timeout_secs: 30,
-            database_max_lifetime_secs: 1800,
-            database_idle_timeout_secs: 600,
-            jwt_secret: SecretString::from("test-secret"),
-            jwt_expiration_hours: 24,
-            opensearch_url: None,
-            openai_api_key: None,
-            anthropic_api_key: None,
-            upstage_api_key: None,
-            git_repo_path: None,
-            slack_client_id: None,
-            slack_client_secret: None,
-            slack_redirect_uri: None,
-            slack_signing_secret: None,
-            cors_allowed_origins: "http://localhost:3000".to_string(),
-            local_embedding_enabled: false,
-            vault_watch: crate::config::VaultWatchConfig::default(),
-        }
-    }
-
-    #[allow(dead_code)]
-    fn make_service() -> AgentService {
-        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/test_db").unwrap();
-        AgentService::new(pool, make_config())
-    }
 
     #[test]
     fn test_agent_row_structure() {
@@ -382,7 +346,7 @@ mod tests {
             Some("A test agent".to_string()),
             "custom".to_string(),
             "You are a test agent".to_string(),
-            "claude-3-sonnet".to_string(),
+            "solar-open2-260528".to_string(),
             0.7,
             4096,
             None,
@@ -405,7 +369,7 @@ mod tests {
             description: Some("My agent".to_string()),
             agent_type: AgentType::Custom,
             system_prompt: "System message".to_string(),
-            model: Some("claude-3-opus".to_string()),
+            model: Some("solar-open2-260528".to_string()),
             temperature: Some(0.5),
             max_tokens: Some(2000),
             tools: None,
@@ -424,7 +388,7 @@ mod tests {
             description: Some("Test".to_string()),
             agent_type: AgentType::CodeReviewer,
             system_prompt: "Review code".to_string(),
-            model: "claude-3-sonnet".to_string(),
+            model: "solar-open2-260528".to_string(),
             temperature: 0.3,
             max_tokens: 4096,
             tools: vec![],

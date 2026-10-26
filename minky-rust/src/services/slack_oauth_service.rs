@@ -199,31 +199,6 @@ impl SlackOAuthService {
         })
     }
 
-    /// Retrieve stored credentials for a workspace.
-    pub async fn get_workspace_credentials(
-        pool: &PgPool,
-        workspace_id: &str,
-    ) -> Result<Option<WorkspaceCredentials>, AppError> {
-        let row = sqlx::query(
-            r#"
-            SELECT id, workspace_id, workspace_name, is_active
-            FROM platform_configs
-            WHERE platform = 'slack' AND workspace_id = $1
-            "#,
-        )
-        .bind(workspace_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(AppError::Database)?;
-
-        use sqlx::Row;
-        Ok(row.map(|r| WorkspaceCredentials {
-            platform_config_id: r.get::<i32, _>("id"),
-            workspace_id: r.get::<String, _>("workspace_id"),
-            workspace_name: r.get::<String, _>("workspace_name"),
-            is_active: r.get::<bool, _>("is_active"),
-        }))
-    }
 
     /// Build the Slack OAuth authorization URL to redirect users to.
     pub fn build_auth_url(

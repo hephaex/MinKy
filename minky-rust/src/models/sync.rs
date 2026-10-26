@@ -127,16 +127,6 @@ pub struct SyncError {
     pub retryable: bool,
 }
 
-/// Sync file info
-#[derive(Debug, Serialize)]
-pub struct SyncFileInfo {
-    pub path: String,
-    pub size: i64,
-    pub modified: DateTime<Utc>,
-    pub checksum: String,
-    pub sync_status: FileSyncStatus,
-    pub last_synced: Option<DateTime<Utc>>,
-}
 
 /// File sync status
 #[derive(Debug, Clone, Serialize, Deserialize)]

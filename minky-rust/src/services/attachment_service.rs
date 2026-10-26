@@ -110,17 +110,6 @@ impl AttachmentService {
         Ok(())
     }
 
-    /// Get total storage used by a user
-    pub async fn get_user_storage(&self, user_id: i32) -> Result<i64> {
-        let result: (i64,) = sqlx::query_as(
-            "SELECT COALESCE(SUM(file_size), 0)::bigint FROM attachments WHERE user_id = $1",
-        )
-        .bind(user_id)
-        .fetch_one(&self.db)
-        .await?;
-
-        Ok(result.0)
-    }
 
     /// Get total storage used for a document
     pub async fn get_document_storage(&self, document_id: Uuid) -> Result<i64> {
@@ -150,10 +139,6 @@ impl AttachmentService {
         self.upload_dir.join(filename)
     }
 
-    /// Check if file exists
-    pub fn file_exists(&self, filename: &str) -> bool {
-        self.get_file_path(filename).exists()
-    }
 }
 
 #[cfg(test)]

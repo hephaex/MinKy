@@ -168,7 +168,7 @@ mod tests {
             description: Some("Summarizes documents".to_string()),
             agent_type: AgentType::Summarizer,
             system_prompt: "You are a helpful summarizer.".to_string(),
-            model: "claude-3-haiku".to_string(),
+            model: "solar-open2-260528".to_string(),
             temperature: 0.7,
             max_tokens: 1000,
             tools: vec![],
@@ -192,7 +192,7 @@ mod tests {
             description: None,
             agent_type: AgentType::Researcher,
             system_prompt: "You research topics.".to_string(),
-            model: "claude-3-sonnet".to_string(),
+            model: "solar-open2-260528".to_string(),
             temperature: 0.5,
             max_tokens: 4000,
             tools: vec![
@@ -243,14 +243,14 @@ mod tests {
             "description": "Reviews code for issues",
             "agent_type": "code_reviewer",
             "system_prompt": "Review the following code.",
-            "model": "claude-3-opus",
+            "model": "solar-open2-260528",
             "temperature": 0.3,
             "max_tokens": 2000,
             "tools": [{"name": "analyze", "description": "Analyze code"}]
         }"#;
         let create: CreateAgent = serde_json::from_str(json).unwrap();
         assert_eq!(create.name, "Code Reviewer");
-        assert_eq!(create.model, Some("claude-3-opus".to_string()));
+        assert_eq!(create.model, Some("solar-open2-260528".to_string()));
         assert_eq!(create.temperature, Some(0.3));
         assert!(create.tools.is_some());
     }

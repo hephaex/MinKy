@@ -272,32 +272,6 @@ impl ContextBuilder {
         parts.join("\n")
     }
 
-    /// Build a collection context summary
-    pub fn build_collection_context(collection: &Collection) -> String {
-        let mut parts = Vec::new();
-
-        parts.push(format!("Collection: {}", collection.name));
-
-        if let Some(desc) = &collection.description {
-            parts.push(format!("Description: {}", desc));
-        }
-
-        if let Some(summary) = &collection.context.summary {
-            parts.push(format!("Summary: {}", summary));
-        }
-
-        if !collection.context.topics.is_empty() {
-            parts.push(format!("Topics: {}", collection.context.topics.join(", ")));
-        }
-
-        if !collection.context.audience.is_empty() {
-            parts.push(format!("Audience: {}", collection.context.audience.join(", ")));
-        }
-
-        parts.push(format!("Documents: {}", collection.document_count));
-
-        parts.join("\n")
-    }
 }
 
 // ---------------------------------------------------------------------------

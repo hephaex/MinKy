@@ -1,6 +1,6 @@
 //! Document Understanding Service
 //!
-//! Analyzes documents using the Claude API to extract:
+//! Analyzes documents using the Upstage Solar API to extract:
 //! - Core topics (3-5 key themes)
 //! - One-line summary
 //! - Problem solved (if applicable)
@@ -29,10 +29,10 @@ use crate::{
     config::Config,
     error::{AppError, AppResult},
     models::{DocumentUnderstandingRequest, DocumentUnderstandingResponse},
-    services::anthropic_types::{AnthropicMessage, AnthropicRequest, AnthropicResponse},
+    services::local_llm_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmResponse},
 };
 
-/// Service for AI-powered document understanding using Claude
+/// Service for AI-powered document understanding using Upstage Solar
 pub struct UnderstandingService {
     client: Client,
     config: Config,
@@ -47,12 +47,12 @@ impl UnderstandingService {
         }
     }
 
-    /// Analyze a document using Claude and return structured understanding
+    /// Analyze a document using Upstage Solar and return structured understanding
     ///
     /// # Errors
     ///
-    /// Returns [`AppError::Configuration`] if the Anthropic API key is not set.
-    /// Returns [`AppError::ExternalService`] if the Claude API call fails.
+    /// Returns [`AppError::Configuration`] if the Upstage API key is not set.
+    /// Returns [`AppError::ExternalService`] if the Solar API call fails.
     /// Returns [`AppError::Validation`] if the AI response cannot be parsed.
     pub async fn analyze_document(
         &self,
@@ -60,56 +60,58 @@ impl UnderstandingService {
     ) -> AppResult<DocumentUnderstandingResponse> {
         let api_key = self
             .config
-            .anthropic_api_key
+            .upstage_api_key
             .as_ref()
-            .ok_or_else(|| AppError::Configuration("Anthropic API key not configured".into()))?;
+            .ok_or_else(|| AppError::Configuration("Upstage API key not configured".into()))?;
 
         let system_prompt = build_system_prompt();
         let user_prompt = build_user_prompt(&request);
 
-        let body = AnthropicRequest {
-            model: "claude-3-5-haiku-20241022".to_string(),
+        let body = LocalLlmRequest {
+            model: "solar-open2-260528".to_string(),
             max_tokens: 1024,
-            system: Some(system_prompt),
-            messages: vec![AnthropicMessage {
-                role: "user".to_string(),
-                content: user_prompt,
-            }],
+            messages: vec![
+                LocalLlmMessage {
+                    role: "system".to_string(),
+                    content: system_prompt,
+                },
+                LocalLlmMessage {
+                    role: "user".to_string(),
+                    content: user_prompt,
+                },
+            ],
+            temperature: None,
+            stream: None,
         };
 
         let response = self
             .client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", api_key.expose_secret())
-            .header("anthropic-version", "2023-06-01")
+            .post("https://api.upstage.ai/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", api_key.expose_secret()))
             .header("content-type", "application/json")
             .json(&body)
             .send()
             .await
-            .map_err(|e| AppError::ExternalService(format!("Claude API request failed: {e}")))?;
+            .map_err(|e| AppError::ExternalService(format!("Solar API request failed: {e}")))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(AppError::ExternalService(format!(
-                "Claude API error: {error_text}"
+                "Solar API error: {error_text}"
             )));
         }
 
-        let anthropic_response: AnthropicResponse = response
+        let solar_response: LocalLlmResponse = response
             .json()
             .await
-            .map_err(|e| AppError::ExternalService(format!("Failed to parse Claude response: {e}")))?;
+            .map_err(|e| AppError::ExternalService(format!("Failed to parse Solar response: {e}")))?;
 
-        let raw_text = anthropic_response
-            .content
-            .first()
-            .map(|c| c.text.as_str())
-            .unwrap_or("");
+        let raw_text = solar_response.first_text().unwrap_or("");
 
         parse_understanding_response(raw_text)
     }
 
-    /// Analyze a document by fetching its content from the database and calling Claude
+    /// Analyze a document by fetching its content from the database and calling Solar
     ///
     /// # Errors
     ///
@@ -139,7 +141,7 @@ impl UnderstandingService {
     }
 }
 
-/// Build the system prompt that instructs Claude to respond with structured JSON
+/// Build the system prompt that instructs Solar to respond with structured JSON
 fn build_system_prompt() -> String {
     r#"You are a knowledge analyst for a team knowledge platform. Your task is to deeply understand documents and extract structured insights.
 
@@ -173,7 +175,7 @@ fn build_user_prompt(request: &DocumentUnderstandingRequest) -> String {
     format!("{title_section}Content:\n{}", request.content)
 }
 
-/// Parse the raw JSON text from Claude into a [`DocumentUnderstandingResponse`]
+/// Parse the raw JSON text from Solar into a [`DocumentUnderstandingResponse`]
 fn parse_understanding_response(raw: &str) -> AppResult<DocumentUnderstandingResponse> {
     // Strip markdown code fences if present (defensive parsing)
     let cleaned = raw
@@ -302,7 +304,7 @@ mod tests {
         let prompt = build_system_prompt();
         assert!(
             prompt.contains("JSON"),
-            "System prompt should instruct Claude to respond with JSON"
+            "System prompt should instruct Solar to respond with JSON"
         );
     }
 

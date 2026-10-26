@@ -68,7 +68,7 @@ MinKy is a knowledge intelligence platform built on a modern Rust backend with a
 │   PostgreSQL     │  │   OpenSearch     │  │   External APIs  │
 │   + pgvector     │  │   (Optional)     │  │                  │
 │                  │  │                  │  │  ┌────────────┐  │
-│  - Documents     │  │  - Full-text     │  │  │  Claude    │  │
+│  - Documents     │  │  - Full-text     │  │  │  Solar     │  │
 │  - Users         │  │    Search        │  │  │  API       │  │
 │  - Embeddings    │  │  - Aggregations  │  │  └────────────┘  │
 │  - Audit Logs    │  │                  │  │  ┌────────────┐  │
@@ -96,7 +96,7 @@ User -> Folder -> Find User -> Ask Question -> AI Search -> Answer
 
 - Primary data stored in PostgreSQL (local or self-hosted)
 - Vector embeddings in pgvector (no external vector DB required)
-- Cloud APIs only for AI inference (Claude, OpenAI)
+- Cloud APIs only for AI inference (Upstage Solar; OpenAI-compatible. Local llama.cpp optional)
 
 ### 3. Progressive Enhancement
 
@@ -156,7 +156,7 @@ minky-rust/src/
 │   ├── embedding_service.rs
 │   ├── understanding_service.rs  # AI document analysis
 │   ├── rag_service.rs           # RAG search
-│   ├── ai_service.rs            # Claude integration
+│   ├── ai_service.rs            # Upstage Solar (OpenAI-compatible) integration
 │   └── ...              # (20+ service files)
 │
 ├── middleware/          # Request processing
@@ -241,7 +241,7 @@ frontend/src/
 ┌──────────────┐                 ┌──────────────┐
 │   Store in   │                 │   AI        │
 │  PostgreSQL  │                 │  Analysis   │
-│              │                 │  (Claude)   │
+│              │                 │  (Solar)    │
 └──────┬───────┘                 └──────┬──────┘
        │                                │
        │                                ▼
@@ -318,9 +318,9 @@ frontend/src/
        │
        ▼
 ┌──────────────┐     ┌─────────────────────────────┐
-│   Generate   │────►│   Claude API                │
+│   Generate   │────►│   Solar API (OpenAI-compat) │
 │   Answer     │     │   - Context: [documents]    │
-│   (Claude)   │     │   - Question: [user query]  │
+│   (Solar)    │     │   - Question: [user query]  │
 │              │     │   - Instructions: [prompt]  │
 └──────┬───────┘     └─────────────────────────────┘
        │
@@ -358,16 +358,16 @@ frontend/src/
 
 For teams storing <1M vectors, pgvector offers simplicity without sacrificing performance.
 
-### Why Claude for AI?
+### Why Upstage Solar (OpenAI-compatible) for AI?
 
-| Factor | Claude | GPT-4 |
+| Factor | Solar | GPT-4 |
 |--------|--------|-------|
 | **Context Window** | 200K tokens | 128K tokens |
 | **Document Analysis** | Excellent | Excellent |
 | **Reasoning** | Strong | Strong |
 | **API Reliability** | High | High |
 
-Both are excellent choices. Claude's larger context window helps with document analysis.
+Solar's 32K context window and OpenAI-compatible chat API cover document analysis and query expansion.
 
 ---
 
@@ -781,7 +781,7 @@ Future considerations for SaaS deployment:
 
 - [Axum Documentation](https://docs.rs/axum)
 - [pgvector GitHub](https://github.com/pgvector/pgvector)
-- [RAG Best Practices (Anthropic)](https://docs.anthropic.com/claude/docs/retrieval-augmented-generation)
+- [Upstage Solar API](https://api.upstage.ai/v1/chat/completions) / [Strix Halo local llama.cpp]
 - [sqlx Documentation](https://docs.rs/sqlx)
 
 ---

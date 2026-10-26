@@ -216,21 +216,6 @@ impl SecurityService {
         Ok(())
     }
 
-    /// Check if IP is blocked
-    pub async fn is_ip_blocked(&self, ip_address: &str) -> Result<bool> {
-        let row: Option<(i64,)> = sqlx::query_as(
-            r#"
-            SELECT id FROM ip_blocks
-            WHERE ip_address = $1
-              AND (is_permanent = true OR expires_at > NOW())
-            "#,
-        )
-        .bind(ip_address)
-        .fetch_optional(&self.db)
-        .await?;
-
-        Ok(row.is_some())
-    }
 
     /// Get blocked IPs
     pub async fn get_blocked_ips(&self) -> Result<Vec<IpBlock>> {

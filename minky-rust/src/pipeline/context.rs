@@ -112,11 +112,6 @@ impl PipelineContext {
         });
     }
 
-    /// Get elapsed time since pipeline started
-    pub fn elapsed_ms(&self) -> u64 {
-        let elapsed = Utc::now() - self.started_at;
-        elapsed.num_milliseconds().max(0) as u64
-    }
 
     /// Check if the pipeline has been cancelled
     pub fn is_cancelled(&self) -> bool {

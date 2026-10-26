@@ -30,8 +30,8 @@ pub struct PipelineConfig {
     /// OpenAI API key for embeddings
     pub openai_api_key: Option<String>,
 
-    /// Anthropic API key for analysis
-    pub anthropic_api_key: Option<String>,
+    /// Upstage Solar API key for analysis
+    pub upstage_api_key: Option<String>,
 
     /// Whether to skip AI analysis
     pub skip_analysis: bool,
@@ -66,7 +66,7 @@ impl Default for PipelineConfig {
             chunking_strategy: ChunkingStrategy::default(),
             embedding_provider: EmbeddingProvider::None,
             openai_api_key: None,
-            anthropic_api_key: None,
+            upstage_api_key: None,
             skip_analysis: false,
             skip_embedding: false,
             embedding_best_effort: false,
@@ -161,7 +161,7 @@ impl DocumentPipeline {
         // Stage 6: AI Analysis
         let analysis_stage = if self.config.skip_analysis {
             AIAnalysisStage::skip()
-        } else if let Some(ref api_key) = self.config.anthropic_api_key {
+        } else if let Some(ref api_key) = self.config.upstage_api_key {
             AIAnalysisStage::with_api_key(api_key)
         } else {
             AIAnalysisStage::skip()
@@ -217,11 +217,6 @@ impl DocumentPipeline {
         self.process(input).await
     }
 
-    /// Process a document from a file path
-    pub async fn process_file(&self, path: impl Into<String>) -> PipelineResult<PipelineOutput> {
-        let input = IngestionInput::from_file(path);
-        self.process(input).await
-    }
 
     /// Get the pipeline configuration
     pub fn config(&self) -> &PipelineConfig {
@@ -256,9 +251,9 @@ impl DocumentPipelineBuilder {
             use secrecy::ExposeSecret;
             self.config.openai_api_key = Some(key.expose_secret().to_string());
         }
-        if let Some(ref key) = config.anthropic_api_key {
+        if let Some(ref key) = config.upstage_api_key {
             use secrecy::ExposeSecret;
-            self.config.anthropic_api_key = Some(key.expose_secret().to_string());
+            self.config.upstage_api_key = Some(key.expose_secret().to_string());
         }
         self.config.app_config = Some(config);
         self
@@ -301,20 +296,6 @@ impl DocumentPipelineBuilder {
         self
     }
 
-    /// Use OpenAI embeddings with specific model
-    pub fn openai_embedding_with_model(
-        mut self,
-        api_key: impl Into<String>,
-        model: EmbeddingModel,
-    ) -> Self {
-        let key = api_key.into();
-        self.config.openai_api_key = Some(key.clone());
-        self.config.embedding_provider = EmbeddingProvider::OpenAI {
-            model,
-            api_key: Some(key),
-        };
-        self
-    }
 
     /// Use Upstage Solar embeddings (4096 dims)
     pub fn upstage_embedding(mut self, api_key: impl Into<String>) -> Self {
@@ -326,9 +307,9 @@ impl DocumentPipelineBuilder {
         self
     }
 
-    /// Set Anthropic API key for analysis
-    pub fn anthropic_api_key(mut self, api_key: impl Into<String>) -> Self {
-        self.config.anthropic_api_key = Some(api_key.into());
+    /// Set Upstage Solar API key for analysis
+    pub fn upstage_api_key(mut self, api_key: impl Into<String>) -> Self {
+        self.config.upstage_api_key = Some(api_key.into());
         self
     }
 

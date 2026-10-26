@@ -300,7 +300,7 @@ mod tests {
                 suggestion: "Generated Title".to_string(),
                 suggestion_type: SuggestionType::Title,
                 tokens_used: 50,
-                model: "claude-3-haiku".to_string(),
+                model: "solar-open2-260528".to_string(),
             },
         };
         let json = serde_json::to_string(&response).unwrap();

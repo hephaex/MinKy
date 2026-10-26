@@ -1,6 +1,6 @@
 ---
 title: "Upload Test Document"
-author: "Claude Code"
+author: "Minky Sample"
 tags: ["test", "upload", "markdown"]
 public: true
 date: "2025-07-11"

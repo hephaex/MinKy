@@ -41,13 +41,6 @@ impl PdfWriter {
         }
     }
 
-    /// Create with custom HTML renderer
-    pub fn with_renderer(html_renderer: HtmlRenderer, engine: PdfEngine) -> Self {
-        Self {
-            html_renderer,
-            engine,
-        }
-    }
 
     /// Generate PDF from Markdown content
     pub fn render(&self, markdown: &str) -> Result<Vec<u8>> {

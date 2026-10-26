@@ -9,42 +9,6 @@ use serde_json::json;
 
 use crate::{services::AuthService, AppState};
 
-/// Extract user ID from JWT token in Authorization header
-pub async fn auth_middleware(
-    State(state): State<AppState>,
-    mut request: Request,
-    next: Next,
-) -> Result<Response, (StatusCode, Json<serde_json::Value>)> {
-    let auth_header = request
-        .headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|h| h.to_str().ok());
-
-    let token = match auth_header {
-        Some(h) if h.starts_with("Bearer ") => &h[7..],
-        _ => {
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(json!({ "error": "Missing or invalid Authorization header" })),
-            ))
-        }
-    };
-
-    let auth_service = AuthService::new(state.db.clone(), state.config.clone());
-
-    match auth_service.validate_token(token) {
-        Ok(claims) => {
-            // Insert user ID (as String) into request extensions for handlers to access
-            request.extensions_mut().insert(claims.sub);
-            request.extensions_mut().insert(claims.role);
-            Ok(next.run(request).await)
-        }
-        Err(_) => Err((
-            StatusCode::UNAUTHORIZED,
-            Json(json!({ "error": "Invalid or expired token" })),
-        )),
-    }
-}
 
 /// Optional auth - doesn't fail if no token, but extracts user if present
 pub async fn optional_auth_middleware(

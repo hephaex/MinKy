@@ -284,14 +284,6 @@ fn html_escape(text: &str) -> String {
         .replace('\'', "&#x27;")
 }
 
-/// HTML export options
-#[derive(Debug, Clone, Default)]
-pub struct HtmlExportOptions {
-    pub theme: Option<String>,
-    pub include_toc: bool,
-    pub standalone: bool,
-    pub custom_css: Option<String>,
-}
 
 #[cfg(test)]
 mod tests {

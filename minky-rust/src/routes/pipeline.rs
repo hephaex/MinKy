@@ -114,10 +114,10 @@ pub async fn ingest_document(
     }
 
     // Configure analysis if API key is available
-    if let Some(ref api_key) = state.config.anthropic_api_key {
+    if let Some(ref api_key) = state.config.upstage_api_key {
         use secrecy::ExposeSecret;
         if !request.skip_analysis {
-            builder = builder.anthropic_api_key(api_key.expose_secret());
+            builder = builder.upstage_api_key(api_key.expose_secret());
         }
     }
 
@@ -219,9 +219,9 @@ pub async fn ingest_from_url(
     }
 
     // Configure analysis if API key is available
-    if let Some(ref api_key) = state.config.anthropic_api_key {
+    if let Some(ref api_key) = state.config.upstage_api_key {
         use secrecy::ExposeSecret;
-        builder = builder.anthropic_api_key(api_key.expose_secret());
+        builder = builder.upstage_api_key(api_key.expose_secret());
     }
 
     // Ownership always comes from the authenticated principal, never the body.

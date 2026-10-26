@@ -64,13 +64,6 @@ pub enum EventType {
     MaintenanceScheduled,
 }
 
-/// Channel subscription
-#[derive(Debug, Clone)]
-pub struct ChannelSubscription {
-    pub channel: String,
-    pub user_id: i32,
-    pub subscribed_at: DateTime<Utc>,
-}
 
 /// Presence info
 #[derive(Debug, Clone, Serialize)]

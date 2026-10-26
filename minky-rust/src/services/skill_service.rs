@@ -188,7 +188,7 @@ impl SkillService {
                 SkillCapability::AnalyzeCode,
                 SkillCapability::GenerateCode,
             ],
-            model: "claude-sonnet-4-20250514".to_string(),
+            model: "solar-open2-260528".to_string(),
             temperature: 0.3,
             max_tokens: 4096,
             is_active: true,
@@ -578,7 +578,7 @@ impl SkillService {
         .bind(&create.system_prompt)
         .bind(triggers_json)
         .bind(capabilities_json)
-        .bind(create.model.as_deref().unwrap_or("claude-sonnet-4-20250514"))
+        .bind(create.model.as_deref().unwrap_or("solar-open2-260528"))
         .bind(create.temperature.unwrap_or(0.3))
         .bind(create.max_tokens.unwrap_or(4096))
         .bind(create.priority.unwrap_or(0))
@@ -730,7 +730,6 @@ mod tests {
             jwt_expiration_hours: 24,
             opensearch_url: None,
             openai_api_key: None,
-            anthropic_api_key: None,
             upstage_api_key: None,
             git_repo_path: None,
             slack_client_id: None,

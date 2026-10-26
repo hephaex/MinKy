@@ -6,10 +6,8 @@ use crate::{
     config::Config,
     error::{AppError, AppResult},
     models::{
-        AIModelConfig, ChatMessage, ChatRole, LLMProvider,
-        SuggestionRequest, SuggestionResponse, SuggestionType,
+        AIModelConfig, ChatMessage, ChatRole, SuggestionRequest, SuggestionResponse, SuggestionType,
     },
-    services::anthropic_types::{AnthropicMessage, AnthropicRequest, AnthropicResponse},
 };
 
 /// AI service for LLM interactions
@@ -28,10 +26,6 @@ impl AIService {
         }
     }
 
-    pub fn with_model_config(mut self, model_config: AIModelConfig) -> Self {
-        self.model_config = model_config;
-        self
-    }
 
     /// Generate a suggestion based on content
     pub async fn generate_suggestion(&self, request: SuggestionRequest) -> AppResult<SuggestionResponse> {
@@ -108,72 +102,10 @@ impl AIService {
         prompt
     }
 
-    /// Make chat completion API call
     async fn chat_completion(&self, messages: Vec<ChatMessage>) -> AppResult<(String, u32)> {
-        match self.model_config.provider {
-            LLMProvider::Anthropic => self.anthropic_completion(messages).await,
-            LLMProvider::OpenAI => self.openai_completion(messages).await,
-        }
+        self.openai_completion(messages).await
     }
 
-    /// Anthropic Claude API call
-    async fn anthropic_completion(&self, messages: Vec<ChatMessage>) -> AppResult<(String, u32)> {
-        let api_key = self.config.anthropic_api_key.as_ref()
-            .ok_or_else(|| AppError::Internal(anyhow::anyhow!("Anthropic API key not configured")))?;
-
-        let system_msg = messages.iter()
-            .find(|m| matches!(m.role, ChatRole::System))
-            .map(|m| m.content.clone())
-            .unwrap_or_default();
-
-        let user_messages: Vec<_> = messages.iter()
-            .filter(|m| !matches!(m.role, ChatRole::System))
-            .map(|m| AnthropicMessage {
-                role: match m.role {
-                    ChatRole::User => "user".to_string(),
-                    ChatRole::Assistant => "assistant".to_string(),
-                    _ => "user".to_string(),
-                },
-                content: m.content.clone(),
-            })
-            .collect();
-
-        let request = AnthropicRequest {
-            model: self.model_config.model.clone(),
-            max_tokens: self.model_config.max_tokens,
-            system: Some(system_msg),
-            messages: user_messages,
-        };
-
-        let response = self.client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", api_key.expose_secret())
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("API request failed: {}", e)))?;
-
-        if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(AppError::Internal(anyhow::anyhow!("Anthropic API error: {}", error_text)));
-        }
-
-        let result: AnthropicResponse = response.json().await
-            .map_err(|e| AppError::Internal(anyhow::anyhow!("Failed to parse response: {}", e)))?;
-
-        let content = result.content.first()
-            .map(|c| c.text.clone())
-            .unwrap_or_default();
-
-        let tokens = result
-            .usage
-            .map(|u| u.input_tokens + u.output_tokens)
-            .unwrap_or(0);
-
-        Ok((content, tokens))
-    }
 
     /// OpenAI API call
     async fn openai_completion(&self, messages: Vec<ChatMessage>) -> AppResult<(String, u32)> {
@@ -278,7 +210,6 @@ mod tests {
             jwt_expiration_hours: 24,
             opensearch_url: None,
             openai_api_key: None,
-            anthropic_api_key: None,
             upstage_api_key: None,
             git_repo_path: None,
             slack_client_id: None,

@@ -23,11 +23,11 @@ minky-gyeol memory integration plan.
   from being embedded and made searchable in a durable backend rather than
   living only in flat files.
 
-### 2. Claude Code Auto-Memory — ephemeral per-project state
+### 2. CLI Agent Auto-Memory — ephemeral per-project state
 
-- **What it is**: Claude Code's own per-project working memory/state,
+- **What it is**: the CLI agent's (Claude Code / GJC) per-project working memory/state,
   scoped to a single coding session or project context.
-- **Storage today**: managed entirely by Claude Code itself, outside minky.
+- **Storage today**: managed entirely by the CLI agent itself, outside minky.
 - **Cold-eligibility**: **explicitly EXCLUDED from the cold backend.** This
   memory is ephemeral and project-scoped by design; promoting it into a
   durable, cross-session, cross-LLM-vendor backend like minky would violate
@@ -59,7 +59,7 @@ minky-gyeol memory integration plan.
 | System                          | Cold-eligible | Attribution in minky                                  | Lifecycle                          |
 |----------------------------------|:-------------:|---------------------------------------------------------|-------------------------------------|
 | gyeol `.memory/` (SOUL)          | ✅ Yes        | `documents.category_id` in the `memory-*` category set  | Durable, cross-session, cross-tool  |
-| Claude Code Auto-Memory          | ❌ **No**     | N/A — never ingested into minky                          | Ephemeral, project/session-scoped   |
+| CLI Agent Auto-Memory            | ❌ **No**     | N/A — never ingested into minky                          | Ephemeral, project/session-scoped   |
 | `~/.gjc/references/` corpus      | ✅ Yes        | `documents.source_path` under the references-root prefix | Durable, rarely-changing            |
 | Everything else (documents not matching either predicate above) | ❌ No (excluded from MCP scope) | Neither predicate | N/A |
 
@@ -69,7 +69,7 @@ The MCP federation surface (`services::mcp_server`) enforces this exact
 boundary at query time: a document is visible over MCP if and only if it
 matches the gyeol memory-* category predicate OR the references source_path
 predicate. Documents matching neither — which by construction includes
-anything derived from Claude Code Auto-Memory, since that system is never
+anything derived from CLI Agent Auto-Memory, since that system is never
 ingested into minky at all — are excluded from every MCP tool's results
 (`minky_search`, `minky_vsearch`, `minky_deep_search`, `minky_get`,
 `minky_multi_get`). See `services::mcp_server::MCP_SOURCE_SCOPE_SQL` for the
@@ -89,6 +89,6 @@ deferred and are NOT addressed by this document or the MCP handler:
 - Any MCP-extension completion criteria beyond what is stated in the C4 goal
   itself (the six `minky_*` tools, source-scope filtering, and this
   role-separation document).
-- The external Python `minky-mcp.py` server and Claude Code Auto-Memory are
+- The external Python `minky-mcp.py` server and CLI Agent Auto-Memory are
   explicitly out of scope for the Rust MCP surface implemented in
   `services::mcp_server` / `routes::mcp`.

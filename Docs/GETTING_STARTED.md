@@ -207,7 +207,7 @@ OPENSEARCH_URL=http://localhost:9200
 
 # AI API Keys (optional - required for AI features)
 OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+UPSTAGE_API_KEY=up-...
 
 # Git Integration (optional)
 # GIT_REPO_PATH=/path/to/your/obsidian/vault
@@ -228,11 +228,11 @@ RUST_LOG=minky=debug,tower_http=debug
 | `JWT_EXPIRATION_HOURS` | No | Token expiration (default: 24) |
 | `OPENSEARCH_URL` | No | OpenSearch server URL |
 | `OPENAI_API_KEY` | No* | Required for embedding generation |
-| `ANTHROPIC_API_KEY` | No* | Required for AI document analysis |
+| `UPSTAGE_API_KEY` | No* | Upstage Solar (OpenAI-compatible), required for AI document analysis & query expansion |
 | `GIT_REPO_PATH` | No | Path for Git sync feature |
 | `RUST_LOG` | No | Logging level configuration |
 
-*Required for AI features to work
+*Required for AI features to work (Upstage Solar for document analysis; OPENAI_API_KEY for embedding generation)
 
 ### Frontend Configuration
 
@@ -494,7 +494,7 @@ Add your API keys to `.env`:
 
 ```env
 OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+UPSTAGE_API_KEY=up-...
 ```
 
 ### 4. Try RAG Search

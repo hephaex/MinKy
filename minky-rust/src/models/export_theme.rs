@@ -99,21 +99,7 @@ impl ExportTheme {
     }
 }
 
-/// Request to create a custom theme
-#[derive(Debug, Deserialize)]
-pub struct CreateThemeRequest {
-    pub name: String,
-    pub css: String,
-    pub fonts: Option<Vec<String>>,
-}
 
-/// Request to update a theme
-#[derive(Debug, Deserialize)]
-pub struct UpdateThemeRequest {
-    pub name: Option<String>,
-    pub css: Option<String>,
-    pub fonts: Option<Vec<String>>,
-}
 
 /// Theme summary for API responses
 #[derive(Debug, Serialize)]

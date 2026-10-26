@@ -29,7 +29,7 @@ The RAG pipeline operates as follows:
 2. **Embedding Generation**: Local fastembed-rs (NomicEmbedTextV1.5, 768-dim) embeds document chunks
 3. **Vector Storage**: Embeddings stored in PostgreSQL pgvector table
 4. **Semantic Search**: User queries are embedded and matched against stored vectors
-5. **RAG Response**: Top K relevant chunks are assembled into context for Claude API
+5. **RAG Response**: Top K relevant chunks are assembled into context for the Upstage Solar reasoning model (OpenAI-compatible)
 
 ## Step 1: Start PostgreSQL with pgvector
 
@@ -486,7 +486,7 @@ Typical performance on a 2021 MacBook Pro (16GB RAM, M1 Pro):
 | Operation | Time | Notes |
 |-----------|------|-------|
 | Ingest 10 documents (50 chunks) | 5-8s | Local fastembed |
-| Single RAG query (k=3) | 200-300ms | Vector search + Claude |
+| Single RAG query (k=3) | 200-300ms | Vector search + Upstage Solar |
 | Bulk insert 1000 embeddings | 15-20s | Batch insert with pgvector |
 
 ## Next Steps

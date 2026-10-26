@@ -5,9 +5,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum LLMProvider {
-    OpenAI,
     #[default]
-    Anthropic,
+    OpenAI,
 }
 
 
@@ -22,7 +21,7 @@ pub struct AIModelConfig {
 
 impl AIModelConfig {
     /// Provider/model from environment when present, otherwise the hardcoded
-    /// defaults. `LLM_PROVIDER` accepts `openai` or `anthropic`
+    /// defaults. `LLM_PROVIDER` accepts `openai` (case-insensitive);
     /// (case-insensitive); `AI_MODEL` overrides the default model name.
     pub fn from_env() -> Self {
         dotenvy::dotenv().ok();
@@ -39,13 +38,6 @@ impl AIModelConfig {
                 model: model_override.clone().unwrap_or_else(|| "gpt-4o-mini".to_string()),
                 ..Self::default()
             },
-            Ok("anthropic") => Self {
-                provider: LLMProvider::Anthropic,
-                model: model_override
-                    .clone()
-                    .unwrap_or_else(|| "claude-sonnet-4-20250514".to_string()),
-                ..Self::default()
-            },
             _ => Self::default(),
         };
         if let Some(m) = model_override {
@@ -58,8 +50,8 @@ impl AIModelConfig {
 impl Default for AIModelConfig {
     fn default() -> Self {
         Self {
-            provider: LLMProvider::Anthropic,
-            model: "claude-sonnet-4-20250514".to_string(),
+            provider: LLMProvider::OpenAI,
+            model: "gpt-4o-mini".to_string(),
             max_tokens: 4096,
             temperature: 0.7,
         }
@@ -153,8 +145,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_llm_provider_default_is_anthropic() {
-        assert_eq!(LLMProvider::default(), LLMProvider::Anthropic);
+    fn test_llm_provider_default_is_openai() {
+        assert_eq!(LLMProvider::default(), LLMProvider::OpenAI);
     }
     #[test]
     fn test_ai_model_config_from_env() {
@@ -177,9 +169,9 @@ mod tests {
     }
 
     #[test]
-    fn test_ai_model_config_default_provider_is_anthropic() {
+    fn test_ai_model_config_default_provider_is_openai() {
         let config = AIModelConfig::default();
-        assert_eq!(config.provider, LLMProvider::Anthropic);
+        assert_eq!(config.provider, LLMProvider::OpenAI);
     }
 
     #[test]
@@ -206,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_llm_provider_serde_roundtrip() {
-        let providers = [LLMProvider::OpenAI, LLMProvider::Anthropic];
+        let providers = [LLMProvider::OpenAI];
         for p in &providers {
             let json = serde_json::to_string(p).unwrap();
             let back: LLMProvider = serde_json::from_str(&json).unwrap();

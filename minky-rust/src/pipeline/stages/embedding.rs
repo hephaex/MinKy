@@ -160,50 +160,6 @@ impl EmbeddingStage {
         Self::new(EmbeddingProvider::None)
     }
 
-    /// Generate embedding for a single text
-    #[allow(dead_code)]
-    async fn generate_embedding(
-        &self,
-        text: &str,
-        model: EmbeddingModel,
-        api_key: &str,
-    ) -> PipelineResult<Vec<f32>> {
-        let request = OpenAIEmbeddingRequest {
-            input: text.to_string(),
-            model: model.api_model_id().to_string(),
-        };
-
-        let url = model.api_base_url();
-        let response = self
-            .http_client
-            .post(url)
-            .header("Authorization", format!("Bearer {}", api_key))
-            .header("Content-Type", "application/json")
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| PipelineError::ExternalService(format!("Embedding API error: {}", e)))?;
-
-        if !response.status().is_success() {
-            let error_text = response.text().await.unwrap_or_default();
-            return Err(PipelineError::ExternalService(format!(
-                "Embedding API error: {}",
-                error_text
-            )));
-        }
-
-        let response: OpenAIEmbeddingResponse = response
-            .json()
-            .await
-            .map_err(|e| PipelineError::ExternalService(format!("Failed to parse response: {}", e)))?;
-
-        response
-            .data
-            .first()
-            .map(|d| d.embedding.clone())
-            .ok_or_else(|| PipelineError::ExternalService("No embedding returned".into()))
-    }
-
     /// Generate embeddings for multiple texts (batch)
     async fn generate_embeddings_batch(
         &self,
@@ -391,13 +347,6 @@ impl PipelineStage<ChunkedDocument, EmbeddedDocument> for EmbeddingStage {
 }
 
 // OpenAI API types
-
-#[derive(Serialize)]
-#[allow(dead_code)]
-struct OpenAIEmbeddingRequest {
-    input: String,
-    model: String,
-}
 
 #[derive(Serialize)]
 struct OpenAIBatchEmbeddingRequest {

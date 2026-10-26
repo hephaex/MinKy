@@ -154,27 +154,6 @@ impl VersionService {
         Ok(count.0)
     }
 
-    /// Delete old versions (keep latest N versions)
-    pub async fn cleanup_old_versions(&self, document_id: Uuid, keep_count: i32) -> Result<i64> {
-        let result = sqlx::query(
-            r#"
-            DELETE FROM document_versions
-            WHERE document_id = $1
-            AND version_number NOT IN (
-                SELECT version_number FROM document_versions
-                WHERE document_id = $1
-                ORDER BY version_number DESC
-                LIMIT $2
-            )
-            "#,
-        )
-        .bind(document_id)
-        .bind(keep_count)
-        .execute(&self.db)
-        .await?;
-
-        Ok(result.rows_affected() as i64)
-    }
 
     /// Compare two versions (simple diff)
     pub fn compare_versions(old_content: &str, new_content: &str) -> VersionDiff {

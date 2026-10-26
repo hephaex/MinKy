@@ -82,8 +82,6 @@ pub struct Config {
 
     pub openai_api_key: Option<SecretString>,
 
-    pub anthropic_api_key: Option<SecretString>,
-
     /// Upstage Solar API key (OpenAI-compatible; enables solar-open2 search)
     pub upstage_api_key: Option<SecretString>,
 
@@ -200,7 +198,6 @@ mod tests {
             jwt_expiration_hours: 24,
             opensearch_url: None,
             openai_api_key: None,
-            anthropic_api_key: None,
             upstage_api_key: None,
             git_repo_path: None,
             slack_client_id: None,
@@ -286,7 +283,6 @@ mod tests {
         let config = make_config("s");
         assert!(config.opensearch_url.is_none());
         assert!(config.openai_api_key.is_none());
-        assert!(config.anthropic_api_key.is_none());
         assert!(config.git_repo_path.is_none());
         assert!(config.slack_client_id.is_none());
         assert!(config.slack_client_secret.is_none());

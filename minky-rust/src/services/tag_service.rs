@@ -1,6 +1,5 @@
 use anyhow::Result;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::{
     error::{AppError, AppResult},
@@ -169,57 +168,8 @@ impl TagService {
         Ok(())
     }
 
-    /// Add tags to a document
-    pub async fn add_to_document(&self, document_id: Uuid, tag_ids: Vec<i32>, user_id: i32) -> Result<()> {
-        for tag_id in tag_ids {
-            // Verify tag ownership
-            let _ = self.get(tag_id, user_id).await?;
 
-            sqlx::query(
-                r#"
-                INSERT INTO document_tags (document_id, tag_id)
-                VALUES ($1, $2)
-                ON CONFLICT DO NOTHING
-                "#,
-            )
-            .bind(document_id)
-            .bind(tag_id)
-            .execute(&self.db)
-            .await?;
-        }
 
-        Ok(())
-    }
-
-    /// Remove tags from a document
-    pub async fn remove_from_document(&self, document_id: Uuid, tag_ids: Vec<i32>) -> Result<()> {
-        for tag_id in tag_ids {
-            sqlx::query("DELETE FROM document_tags WHERE document_id = $1 AND tag_id = $2")
-                .bind(document_id)
-                .bind(tag_id)
-                .execute(&self.db)
-                .await?;
-        }
-
-        Ok(())
-    }
-
-    /// Get tags for a document
-    pub async fn get_document_tags(&self, document_id: Uuid) -> Result<Vec<Tag>> {
-        let tags = sqlx::query_as::<_, Tag>(
-            r#"
-            SELECT t.* FROM tags t
-            JOIN document_tags dt ON t.id = dt.tag_id
-            WHERE dt.document_id = $1
-            ORDER BY t.name
-            "#,
-        )
-        .bind(document_id)
-        .fetch_all(&self.db)
-        .await?;
-
-        Ok(tags)
-    }
 }
 
 // ---- Pure helper functions (testable without DB) ----

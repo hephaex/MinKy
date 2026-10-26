@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 
 use crate::models::{
-    BroadcastMessage, CollaborationSession, CursorPosition, EventType,
+    BroadcastMessage, EventType,
     PresenceInfo, WsEvent, WsMessage,
 };
 
@@ -137,61 +137,8 @@ impl WebSocketManager {
         self.broadcast(&channel, event, Some(user_id)).await;
     }
 
-    /// Emit notification event
-    pub async fn emit_notification(&self, user_id: i32, payload: serde_json::Value) {
-        let channel = format!("user:{}", user_id);
-        let event = WsEvent {
-            event_type: EventType::NotificationCreated,
-            channel: channel.clone(),
-            payload,
-            timestamp: Utc::now(),
-            user_id: Some(user_id),
-        };
 
-        self.broadcast(&channel, event, None).await;
-    }
 
-    /// Get collaboration session for document
-    pub async fn get_collaboration_session(
-        &self,
-        document_id: uuid::Uuid,
-    ) -> Result<CollaborationSession> {
-        let channel = format!("document:{}", document_id);
-        let user_ids = self.get_channel_users(&channel).await;
-        let participants = self.get_presence(&user_ids).await;
-
-        Ok(CollaborationSession {
-            document_id,
-            participants,
-            started_at: Utc::now(), // TODO: Track actual start time
-        })
-    }
-
-    /// Handle cursor position update
-    pub async fn update_cursor(
-        &self,
-        user_id: i32,
-        document_id: uuid::Uuid,
-        position: CursorPosition,
-    ) -> Result<()> {
-        let channel = format!("document:{}", document_id);
-
-        let payload = serde_json::json!({
-            "user_id": user_id,
-            "position": position
-        });
-
-        let event = WsEvent {
-            event_type: EventType::CursorMoved,
-            channel: channel.clone(),
-            payload,
-            timestamp: Utc::now(),
-            user_id: Some(user_id),
-        };
-
-        self.broadcast(&channel, event, Some(user_id)).await;
-        Ok(())
-    }
 }
 
 impl Default for WebSocketManager {
@@ -233,88 +180,10 @@ impl WebSocketEventService {
         }
     }
 
-    /// Notify document created
-    pub async fn notify_document_created(
-        &self,
-        document_id: uuid::Uuid,
-        user_id: i32,
-        title: &str,
-        category_id: Option<i32>,
-    ) {
-        let payload = serde_json::json!({
-            "document_id": document_id,
-            "title": title,
-            "category_id": category_id
-        });
 
-        self.manager
-            .emit_document_event(EventType::DocumentCreated, document_id, user_id, payload)
-            .await;
-    }
 
-    /// Notify document updated
-    pub async fn notify_document_updated(
-        &self,
-        document_id: uuid::Uuid,
-        user_id: i32,
-        changes: serde_json::Value,
-    ) {
-        self.manager
-            .emit_document_event(EventType::DocumentUpdated, document_id, user_id, changes)
-            .await;
-    }
 
-    /// Notify document deleted
-    pub async fn notify_document_deleted(&self, document_id: uuid::Uuid, user_id: i32) {
-        let payload = serde_json::json!({
-            "document_id": document_id
-        });
 
-        self.manager
-            .emit_document_event(EventType::DocumentDeleted, document_id, user_id, payload)
-            .await;
-    }
-
-    /// Notify workflow state changed
-    pub async fn notify_workflow_changed(
-        &self,
-        document_id: uuid::Uuid,
-        user_id: i32,
-        old_state: &str,
-        new_state: &str,
-    ) {
-        let payload = serde_json::json!({
-            "old_state": old_state,
-            "new_state": new_state
-        });
-
-        self.manager
-            .emit_document_event(
-                EventType::WorkflowStateChanged,
-                document_id,
-                user_id,
-                payload,
-            )
-            .await;
-    }
-
-    /// Notify comment added
-    pub async fn notify_comment_added(
-        &self,
-        document_id: uuid::Uuid,
-        comment_id: i32,
-        user_id: i32,
-        content: &str,
-    ) {
-        let payload = serde_json::json!({
-            "comment_id": comment_id,
-            "content": content
-        });
-
-        self.manager
-            .emit_document_event(EventType::CommentAdded, document_id, user_id, payload)
-            .await;
-    }
 }
 
 #[cfg(test)]

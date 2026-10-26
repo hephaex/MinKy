@@ -2,7 +2,7 @@
 //!
 //! This module provides request/response types for the RAG search API,
 //! including natural language question answering backed by vector search
-//! and Claude AI generation.
+//! and Solar AI generation.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -61,7 +61,7 @@ pub struct RagSource {
 /// Response from a RAG question-answer request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RagAskResponse {
-    /// The generated answer from Claude.
+    /// The generated answer from the LLM.
     pub answer: String,
 
     /// Source documents/chunks used to generate the answer.
@@ -260,7 +260,7 @@ mod tests {
             answer: "Rust is a systems programming language".to_string(),
             sources: vec![],
             tokens_used: 150,
-            model: "claude-3-sonnet".to_string(),
+            model: "solar-open2-260528".to_string(),
         };
 
         assert_eq!(response.answer, "Rust is a systems programming language");
@@ -354,7 +354,7 @@ mod tests {
                 },
             ],
             tokens_used: 300,
-            model: "claude-3-opus".to_string(),
+            model: "solar-open2-260528".to_string(),
         };
 
         assert_eq!(response.sources.len(), 2);

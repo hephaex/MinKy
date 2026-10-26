@@ -57,12 +57,10 @@ reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
 opensearch = "=2.3.0"
 
 # File Processing
-image = "0.25"
 mime_guess = "2.0"
 tempfile = "3.14"
 
 # Async utilities
-futures = "0.3"
 async-trait = "0.1"
 
 # Security

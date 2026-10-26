@@ -67,7 +67,6 @@ MinKy는 Flask 기반 문서 관리 시스템으로, 140+ API 엔드포인트, 1
 | Python | Rust | Notes |
 |--------|------|-------|
 | openai | async-openai | Full API parity |
-| anthropic | anthropic-rs | Claude models |
 | scikit-learn | ndarray + linfa | Basic ML only |
 | nltk/textblob | rust-bert / candle | Limited NLP |
 
@@ -219,8 +218,7 @@ impl WorkflowStatus {
 목표: AI/ML 및 검색 기능
 
 ├── LLM Provider Abstraction
-│   ├── OpenAI (async-openai)
-│   ├── Anthropic (anthropic-rs)
+│   ├── OpenAI 호환 (Upstage Solar, async-openai)
 │   └── Provider trait 정의
 ├── OpenSearch Integration
 │   ├── 인덱싱 서비스
@@ -253,8 +251,7 @@ pub trait LLMProvider: Send + Sync {
     fn provider_name(&self) -> &'static str;
 }
 
-pub struct OpenAIProvider { client: async_openai::Client }
-pub struct AnthropicProvider { client: anthropic::Client }
+pub struct UpstageProvider { client: async_openai::Client }  // OpenAI 호환
 
 // 컴파일 타임에 인터페이스 준수 검증
 ```
@@ -396,8 +393,7 @@ minky-rust/
 │   │   ├── ai/
 │   │   │   ├── mod.rs
 │   │   │   ├── provider.rs
-│   │   │   ├── openai.rs
-│   │   │   └── anthropic.rs
+│   │   │   └── openai.rs
 │   │   ├── collaboration.rs
 │   │   ├── search.rs
 │   │   ├── ocr.rs

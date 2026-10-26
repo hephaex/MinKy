@@ -5,7 +5,7 @@
 //!   2. Filter them with `SlackService::apply_filter`
 //!   3. Decide if the thread is worth analysing
 //!   4. Build an LLM prompt via `SlackService::build_conversation_prompt`
-//!   5. Call the Anthropic / OpenAI Claude API
+//!   5. Call the Upstage Solar API
 //!   6. Parse the response into `ExtractedKnowledge`
 //!   7. Classify and return the extraction result
 //!
@@ -19,7 +19,7 @@ use crate::{
     error::AppError,
     models::{ExtractedKnowledge, ExtractionStatus, MessageFilter, PlatformMessage},
     services::{
-        anthropic_types::{AnthropicMessage, AnthropicRequest, AnthropicResponse},
+        local_llm_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmResponse},
         ConversationStats, SlackService,
     },
 };
@@ -31,8 +31,8 @@ use crate::{
 /// Runtime configuration for the extraction pipeline.
 #[derive(Debug, Clone)]
 pub struct ExtractionConfig {
-    /// Anthropic API key (Claude).  Takes precedence when present.
-    pub anthropic_api_key: Option<String>,
+    /// Upstage Solar API key. Takes precedence when present.
+    pub upstage_api_key: Option<String>,
 
     /// Minimum reply count for a thread to be eligible (default: 1).
     pub min_replies: usize,
@@ -40,7 +40,7 @@ pub struct ExtractionConfig {
     /// Minimum total character count across all messages (default: 100).
     pub min_chars: usize,
 
-    /// Claude model to use.
+    /// Solar model to use.
     pub model: String,
 
     /// Maximum tokens to request from the LLM.
@@ -50,10 +50,10 @@ pub struct ExtractionConfig {
 impl Default for ExtractionConfig {
     fn default() -> Self {
         Self {
-            anthropic_api_key: None,
+            upstage_api_key: None,
             min_replies: 1,
             min_chars: 100,
-            model: "claude-3-5-haiku-20241022".to_string(),
+            model: "solar-open2-260528".to_string(),
             max_tokens: 1024,
         }
     }
@@ -182,53 +182,57 @@ Guidelines:
     async fn call_llm(&self, conversation_text: &str) -> Result<String, AppError> {
         let api_key = self
             .config
-            .anthropic_api_key
+            .upstage_api_key
             .as_deref()
-            .ok_or_else(|| AppError::Configuration("ANTHROPIC_API_KEY not configured".to_string()))?;
+            .ok_or_else(|| AppError::Configuration("Upstage API key not configured".to_string()))?;
 
-        let request_body = AnthropicRequest {
+        let request_body = LocalLlmRequest {
             model: self.config.model.clone(),
             max_tokens: self.config.max_tokens,
-            system: Some(Self::build_system_prompt()),
-            messages: vec![AnthropicMessage {
-                role: "user".to_string(),
-                content: format!(
-                    "Extract knowledge from this conversation:\n\n{}",
-                    conversation_text
-                ),
-            }],
+            messages: vec![
+                LocalLlmMessage {
+                    role: "system".to_string(),
+                    content: Self::build_system_prompt(),
+                },
+                LocalLlmMessage {
+                    role: "user".to_string(),
+                    content: format!(
+                        "Extract knowledge from this conversation:\n\n{}",
+                        conversation_text
+                    ),
+                },
+            ],
+            temperature: None,
+            stream: None,
         };
 
         let response = self
             .http
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", api_key)
-            .header("anthropic-version", "2023-06-01")
+            .post("https://api.upstage.ai/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", api_key))
             .header("content-type", "application/json")
             .json(&request_body)
             .send()
             .await
-            .map_err(|e| AppError::ExternalService(format!("Anthropic API request failed: {e}")))?;
+            .map_err(|e| AppError::ExternalService(format!("Solar API request failed: {e}")))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             return Err(AppError::ExternalService(format!(
-                "Anthropic API error {status}: {body}"
+                "Solar API error {status}: {body}"
             )));
         }
 
-        let anthropic_resp: AnthropicResponse = response
+        let solar_resp: LocalLlmResponse = response
             .json()
             .await
-            .map_err(|e| AppError::ExternalService(format!("Failed to parse Anthropic response: {e}")))?;
+            .map_err(|e| AppError::ExternalService(format!("Failed to parse Solar response: {e}")))?;
 
-        anthropic_resp
-            .content
-            .into_iter()
-            .next()
-            .map(|c| c.text)
-            .ok_or_else(|| AppError::ExternalService("Anthropic returned empty content".to_string()))
+        solar_resp
+            .first_text()
+            .map(|t| t.to_string())
+            .ok_or_else(|| AppError::ExternalService("Solar returned empty content".to_string()))
     }
 }
 
@@ -245,14 +249,14 @@ mod tests {
         let config = ExtractionConfig::default();
         assert_eq!(config.min_replies, 1);
         assert_eq!(config.min_chars, 100);
-        assert!(config.anthropic_api_key.is_none());
+        assert!(config.upstage_api_key.is_none());
         assert_eq!(config.max_tokens, 1024);
     }
 
     #[test]
-    fn test_extraction_config_model_is_claude_haiku() {
+    fn test_extraction_config_model_is_solar() {
         let config = ExtractionConfig::default();
-        assert!(config.model.contains("claude"));
+        assert!(config.model.contains("solar"));
     }
 
     #[test]
@@ -280,10 +284,10 @@ mod tests {
     #[test]
     fn test_service_creation_with_custom_config() {
         let config = ExtractionConfig {
-            anthropic_api_key: Some("sk-test".to_string()),
+            upstage_api_key: Some("sk-test".to_string()),
             min_replies: 2,
             min_chars: 200,
-            model: "claude-3-5-sonnet-20241022".to_string(),
+            model: "solar-open2-260528".to_string(),
             max_tokens: 2048,
         };
         let service = ConversationExtractionService::new(config.clone());
@@ -295,11 +299,11 @@ mod tests {
     #[test]
     fn test_extraction_config_clone() {
         let config = ExtractionConfig {
-            anthropic_api_key: Some("key".to_string()),
+            upstage_api_key: Some("key".to_string()),
             ..Default::default()
         };
         let cloned = config.clone();
-        assert_eq!(cloned.anthropic_api_key, config.anthropic_api_key);
+        assert_eq!(cloned.upstage_api_key, config.upstage_api_key);
         assert_eq!(cloned.min_replies, config.min_replies);
     }
 
@@ -372,10 +376,10 @@ mod tests {
     #[test]
     fn test_extraction_config_custom_model_stored() {
         let config = ExtractionConfig {
-            model: "claude-opus-4-20250131".to_string(),
+            model: "solar-pro2-260528".to_string(),
             ..Default::default()
         };
-        assert_eq!(config.model, "claude-opus-4-20250131");
+        assert_eq!(config.model, "solar-pro2-260528");
     }
 
     #[test]
@@ -390,7 +394,7 @@ mod tests {
     #[test]
     fn test_extraction_config_no_api_key_means_none() {
         let config = ExtractionConfig::default();
-        assert!(config.anthropic_api_key.is_none());
+        assert!(config.upstage_api_key.is_none());
     }
 
     #[test]

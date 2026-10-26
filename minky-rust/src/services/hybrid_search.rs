@@ -3,7 +3,7 @@
 //! Combines three search strategies with Reciprocal Rank Fusion:
 //! 1. BM25 Full-Text Search (PostgreSQL FTS)
 //! 2. Vector Semantic Search (pgvector)
-//! 3. LLM Re-ranking (Claude)
+//! 3. LLM Re-ranking (Solar)
 //!
 //! # Pipeline
 //! ```text
@@ -361,10 +361,6 @@ impl HybridSearchService {
         }
     }
 
-    pub fn with_rrf_config(mut self, config: RrfConfig) -> Self {
-        self.rrf_config = config;
-        self
-    }
 
     /// Perform hybrid search with the specified mode
     pub async fn search(&self, req: HybridSearchRequest) -> AppResult<HybridSearchResponse> {
@@ -591,10 +587,10 @@ impl HybridSearchService {
         }).collect())
     }
 
-    /// Expand query using Claude to generate alternative phrasings
+    /// Expand query using Solar to generate alternative phrasings
     async fn expand_query(&self, query: &str) -> AppResult<Vec<String>> {
         // For now, return simple expansions
-        // In production, this would call Claude for semantic expansion
+        // In production, this would call Solar for semantic expansion
         let expansions = generate_query_expansions(query);
         Ok(expansions)
     }
@@ -618,7 +614,7 @@ impl HybridSearchService {
         _query: &str,
         mut results: Vec<HybridSearchResult>,
     ) -> AppResult<Vec<HybridSearchResult>> {
-        // Placeholder - in production, call Claude for re-ranking
+        // Placeholder - in production, call Solar for re-ranking
         // For now, just add a rerank score based on existing scores
         for (i, result) in results.iter_mut().enumerate() {
             let position_factor = 1.0 - (i as f32 * 0.02);

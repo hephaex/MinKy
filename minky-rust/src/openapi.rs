@@ -39,7 +39,7 @@ pub fn openapi_spec() -> Value {
             { "name": "search",     "description": "Semantic search and RAG queries" },
             { "name": "knowledge",  "description": "Knowledge graph and team expertise" },
             { "name": "slack",      "description": "Slack/Teams integration and knowledge extraction" },
-            { "name": "understanding", "description": "AI document analysis (Claude)" }
+            { "name": "understanding", "description": "AI document analysis (Solar)" }
         ],
         "paths": {
             "/health": {
@@ -313,7 +313,7 @@ pub fn openapi_spec() -> Value {
                 "post": {
                     "tags": ["understanding"],
                     "summary": "Analyse document with AI",
-                    "description": "Uses Claude to extract topics, summary, insights and technologies from the document.",
+                    "description": "Uses Solar to extract topics, summary, insights and technologies from the document.",
                     "operationId": "understandDocument",
                     "security": [{ "bearerAuth": [] }],
                     "parameters": [
@@ -322,7 +322,7 @@ pub fn openapi_spec() -> Value {
                     "responses": {
                         "200": { "description": "AI analysis result" },
                         "404": { "description": "Document not found" },
-                        "502": { "description": "Anthropic API error" }
+                        "502": { "description": "LLM API error" }
                     }
                 }
             },
@@ -379,7 +379,7 @@ pub fn openapi_spec() -> Value {
                 "post": {
                     "tags": ["search"],
                     "summary": "RAG natural-language Q&A",
-                    "description": "Ask a question in natural language. The system retrieves relevant documents via vector search and generates an answer using Claude.",
+                    "description": "Ask a question in natural language. The system retrieves relevant documents via vector search and generates an answer using the local LLM.",
                     "operationId": "ragAsk",
                     "security": [{ "bearerAuth": [] }],
                     "requestBody": {
@@ -397,7 +397,7 @@ pub fn openapi_spec() -> Value {
                     },
                     "responses": {
                         "200": { "description": "AI-generated answer with source references" },
-                        "502": { "description": "Anthropic or OpenAI API error" }
+                        "502": { "description": "LLM or OpenAI API error" }
                     }
                 }
             },
@@ -478,7 +478,7 @@ pub fn openapi_spec() -> Value {
                 "post": {
                     "tags": ["slack"],
                     "summary": "Extract knowledge from conversation",
-                    "description": "Analyses a Slack/Teams conversation thread and extracts structured knowledge using Claude.",
+                    "description": "Analyses a Slack/Teams conversation thread and extracts structured knowledge using Solar.",
                     "operationId": "slackExtract",
                     "security": [{ "bearerAuth": [] }],
                     "requestBody": {
@@ -491,7 +491,7 @@ pub fn openapi_spec() -> Value {
                     },
                     "responses": {
                         "200": { "description": "Extraction result" },
-                        "502": { "description": "Anthropic API error" }
+                        "502": { "description": "LLM API error" }
                     }
                 }
             },

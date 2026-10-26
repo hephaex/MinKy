@@ -46,7 +46,7 @@ pub enum FunctionBody {
     Builtin(String),
     /// User-defined template with placeholders
     Template(String),
-    /// AI-powered function using Claude
+    /// AI-powered function using Solar
     AiPowered { prompt: String },
 }
 
@@ -66,23 +66,7 @@ pub struct FunctionCall {
     pub raw_text: String,
 }
 
-/// Request to create a new function
-#[derive(Debug, Deserialize)]
-pub struct CreateFunctionRequest {
-    pub name: String,
-    pub parameters: Vec<FunctionParameter>,
-    pub body: FunctionBody,
-    pub description: Option<String>,
-}
 
-/// Request to update a function
-#[derive(Debug, Deserialize)]
-pub struct UpdateFunctionRequest {
-    pub name: Option<String>,
-    pub parameters: Option<Vec<FunctionParameter>>,
-    pub body: Option<FunctionBody>,
-    pub description: Option<String>,
-}
 
 /// Function execution context
 #[derive(Debug, Clone, Default)]

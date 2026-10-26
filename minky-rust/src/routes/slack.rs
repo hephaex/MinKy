@@ -290,7 +290,7 @@ pub fn extract_messages_from_event(
 /// POST /api/slack/extract
 ///
 /// Extract knowledge from a conversation thread.
-/// Requires `ANTHROPIC_API_KEY` to be configured in the environment.
+/// Requires `UPSTAGE_API_KEY` to be configured in the environment.
 async fn extract_knowledge(
     State(state): State<AppState>,
     _auth_user: AuthUser,
@@ -300,12 +300,12 @@ async fn extract_knowledge(
 
     let api_key = state
         .config
-        .anthropic_api_key
+        .upstage_api_key
         .as_ref()
         .map(|k| k.expose_secret().to_owned());
 
     let config = ExtractionConfig {
-        anthropic_api_key: api_key,
+        upstage_api_key: api_key,
         ..Default::default()
     };
 
@@ -534,14 +534,14 @@ async fn slack_webhook(
             if let Some((conversation_id, messages)) = extract_messages_from_event(&payload) {
                 let api_key = state
                     .config
-                    .anthropic_api_key
+                    .upstage_api_key
                     .as_ref()
                     .map(|k| k.expose_secret().to_owned());
 
                 // Spawn background task – acknowledge Slack immediately
                 tokio::spawn(async move {
                     let config = ExtractionConfig {
-                        anthropic_api_key: api_key,
+                        upstage_api_key: api_key,
                         ..Default::default()
                     };
                     let service = ConversationExtractionService::new(config);

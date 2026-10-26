@@ -121,15 +121,6 @@ pub struct DashboardData {
     pub activity_timeline: Vec<TimeSeriesPoint>,
 }
 
-/// Report generation request
-#[derive(Debug, Deserialize)]
-pub struct ReportRequest {
-    pub report_type: ReportType,
-    pub start_date: DateTime<Utc>,
-    pub end_date: DateTime<Utc>,
-    pub format: ReportFormat,
-    pub include_charts: bool,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -1,4 +1,4 @@
-//! AI Analysis stage - uses Claude to analyze documents
+//! AI Analysis stage - uses Upstage Solar to analyze documents
 //!
 //! Extracts structured understanding from documents:
 //! - Topics
@@ -12,16 +12,17 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::pipeline::{PipelineContext, PipelineError, PipelineResult, PipelineStage};
+use crate::services::local_llm_types::{LocalLlmMessage, LocalLlmRequest, LocalLlmResponse};
 
 use super::embedding::EmbeddedDocument;
 
 /// Configuration for AI analysis
 #[derive(Debug, Clone)]
 pub struct AIAnalysisConfig {
-    /// Anthropic API key
+    /// Upstage Solar API key
     pub api_key: Option<String>,
 
-    /// Model to use (default: claude-3-5-haiku)
+    /// Model to use (default: solar-open2)
     pub model: String,
 
     /// Maximum tokens for response
@@ -152,25 +153,26 @@ impl AIAnalysisStage {
         self.analyze(title, content).await
     }
 
-    /// Analyze document using Claude
+    /// Analyze document using Upstage Solar
     async fn analyze(&self, title: &str, content: &str) -> PipelineResult<DocumentAnalysis> {
         let api_key = self
             .config
             .api_key
             .as_ref()
-            .ok_or_else(|| PipelineError::Configuration("Anthropic API key not configured".into()))?;
+            .ok_or_else(|| PipelineError::Configuration("Upstage API key not configured".into()))?;
 
         let system_prompt = self.build_system_prompt();
         let user_prompt = self.build_user_prompt(title, content);
 
-        let body = AnthropicRequest {
+        let body = LocalLlmRequest {
             model: self.config.model.clone(),
             max_tokens: self.config.max_tokens,
-            system: None,
             messages: vec![
-                AnthropicMessage { role: "system".to_string(), content: system_prompt },
-                AnthropicMessage { role: "user".to_string(), content: user_prompt },
+                LocalLlmMessage { role: "system".to_string(), content: system_prompt },
+                LocalLlmMessage { role: "user".to_string(), content: user_prompt },
             ],
+            temperature: None,
+            stream: None,
         };
 
         let response = self
@@ -181,26 +183,22 @@ impl AIAnalysisStage {
             .json(&body)
             .send()
             .await
-            .map_err(|e| PipelineError::ExternalService(format!("Claude API request failed: {}", e)))?;
+            .map_err(|e| PipelineError::ExternalService(format!("Solar API request failed: {}", e)))?;
 
         if !response.status().is_success() {
             let error_text = response.text().await.unwrap_or_default();
             return Err(PipelineError::ExternalService(format!(
-                "Claude API error: {}",
+                "Solar API error: {}",
                 error_text
             )));
         }
 
-        let anthropic_response: AnthropicResponse = response
+        let solar_response: LocalLlmResponse = response
             .json()
             .await
             .map_err(|e| PipelineError::ExternalService(format!("Failed to parse analysis response: {}", e)))?;
 
-        let raw_text = anthropic_response
-            .choices
-            .first()
-            .map(|c| c.message.content.as_str())
-            .unwrap_or("");
+        let raw_text = solar_response.first_text().unwrap_or("");
 
         self.parse_response(raw_text)
     }
@@ -325,38 +323,6 @@ impl PipelineStage<EmbeddedDocument, AnalyzedDocument> for AIAnalysisStage {
             source_path: input.source_path,
         })
     }
-}
-
-// Anthropic API types
-
-#[derive(Serialize)]
-struct AnthropicRequest {
-    model: String,
-    max_tokens: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    system: Option<String>,
-    messages: Vec<AnthropicMessage>,
-}
-
-#[derive(Serialize)]
-struct AnthropicMessage {
-    role: String,
-    content: String,
-}
-
-#[derive(Deserialize)]
-struct AnthropicResponse {
-    choices: Vec<OpenAIChoice>,
-}
-
-#[derive(Deserialize)]
-struct OpenAIChoice {
-    message: OpenAIMessage,
-}
-
-#[derive(Deserialize)]
-struct OpenAIMessage {
-    content: String,
 }
 
 #[derive(Deserialize)]
